@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LinkPending } from "@/components/link-pending";
 import type { Metadata } from "next";
 import { SearchResults } from "@/components/search-results";
+import { SearchRetry } from "@/components/search-recovery";
 import { contentRepository } from "@/lib/content";
 import { MAX_QUERY, readQuery, searchHref, searchKinds } from "@/lib/search";
 import { isEnabledContentKind } from "../../../config/features.ts";
@@ -56,7 +57,7 @@ export default async function SearchPage({ searchParams }: Props) {
       <div className="search__body">
         {!typed ? null
           : !query ? <div className="state"><p>这个关键词太长，或者包含无法搜索的字符。缩短一些再试。</p></div>
-          : problem ? <div className="state"><p>{problem === "busy" ? "暂时搜不了，请稍后再试。" : "这次搜索没有成功，请稍后再试。"}</p></div>
+          : problem ? <SearchRetry key={`${query}:${kind ?? "all"}`} busy={problem === "busy"} />
           : results ? <SearchResults key={`${query}:${kind ?? "all"}`} initial={results} query={query} kind={kind} pageSize={PAGE_SIZE} />
           : null}
       </div>

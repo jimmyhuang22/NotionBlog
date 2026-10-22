@@ -34,6 +34,7 @@ export function SearchPalette() {
   const [active, setActive] = useState(-1);
   // Text being composed by an input method is not a query yet; the search waits until it is committed.
   const [composing, setComposing] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const listId = useId();
   const query = readQuery(text);
   // Input changes render before the debounce runs; only the current query can offer options.
@@ -87,7 +88,7 @@ export function SearchPalette() {
       }
     }, DELAY);
     return () => { clearTimeout(timer); control.abort(); };
-  }, [open, query, composing]);
+  }, [open, query, composing, attempt]);
 
   function close() { dialog.current?.close(); }
   function go(href: string) { close(); router.push(href); }
@@ -115,6 +116,7 @@ export function SearchPalette() {
   }
 
   const waiting = !!query && !composing && (results.query !== query || results.status === "idle" || results.status === "loading");
+  const retryable = !!query && !composing && results.query === query && (results.status === "busy" || results.status === "failed");
   const message = !query ? (text.trim() ? "这个关键词太长，或者包含无法搜索的字符。" : "输入关键词，搜标题和正文。")
     : composing ? null
     : waiting ? "正在搜索…"
@@ -174,7 +176,20 @@ export function SearchPalette() {
               ) : null}
             </ul>
             {/* Before any typing the hint would only repeat the placeholder on screen; it is still read out (X-03). */}
-            <p className={!query && !text.trim() ? "palette__status visually-hidden" : "palette__status"} role="status">{message}</p>
+            <div className={!query && !text.trim() ? "palette__status visually-hidden" : "palette__status"}>
+              <p role="status">{message}</p>
+              {retryable ? (
+                <button type="button" className="search-recovery__action" onClick={() => {
+                  if (!retryable) return;
+                  setResults({ status: "loading", query, hits: [], total: null });
+                  setActive(-1);
+                  setAttempt(current => current + 1);
+                  input.current?.focus();
+                }}>重新搜索</button>
+              ) : showingResults && !results.hits.length ? (
+                <button type="button" className="search-recovery__action" onClick={() => { input.current?.focus(); input.current?.select(); }}>修改关键词</button>
+              ) : null}
+            </div>
             <p className="palette__foot" aria-hidden="true"><span>↑↓ 选择</span><span>回车 打开</span><span>/ 或 ⌘K 随时搜索</span></p>
           </div>
         ) : null}
