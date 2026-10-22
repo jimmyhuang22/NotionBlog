@@ -167,11 +167,14 @@ export function SearchPalette() {
                 <li key={`${hit.kind}:${hit.id}`} id={`${listId}-${index}`} className="palette__option" role="option" aria-selected={index === selected} onPointerMove={() => setActive(index)}>
                   <Link href={searchResultHref(hit)} aria-label={searchResultLabel(hit)} prefetch={false} tabIndex={-1} onClick={close}>
                     <span className="tag">{kindLabels[hit.kind] ?? "内容"}</span>
-                    <span className="palette__content">
+                    {hit.context ? <span className="palette__content">
                       <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
                       <SearchContextLine context={hit.context} />
                       {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
-                    </span>
+                    </span> : <>
+                      <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
+                      {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
+                    </>}
                   </Link>
                 </li>
               )) : null}
