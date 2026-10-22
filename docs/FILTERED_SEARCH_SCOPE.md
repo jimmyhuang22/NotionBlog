@@ -2,6 +2,8 @@
 
 `DATABASE_SEARCH_PROJECTION=filtered-scope` 是独立、默认关闭的候选模式，要求 `DATABASE_READ_PROJECTION=scoped`。未设置时仍为 `on-demand`；原 `filtered`、`precomputed` 的入口和能力检查保持。代码可用不代表数据库已安装、生产已启用或性能验收完成。
 
+S13 历史测量、当前成本覆盖及后续原词三次验收见[搜索验收说明](SEARCH_PERFORMANCE_ACCEPTANCE.md)。
+
 直接构造 repository 时，`filteredScopeSearch: false` 会覆盖环境中的 `filtered-scope`，恢复片段按需读取，不隐式启用旧 `filtered`。原 `filteredSearch: false` 也保留关闭环境预筛的用途；显式启用选项须与 scoped reader 选择一致。选项在构造时解析，已有实例不会随环境变量变化而重建。
 
 ## 读取行为
