@@ -6,7 +6,7 @@ import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, Timeli
 import { CONTENT_KINDS, type ContentFeatures } from "../../../config/features.ts";
 import { statusTimeZone, statusPreview } from "./status.ts";
 import { contentYear, supportsYear } from "./years.ts";
-import { gameBrowsingDate } from "./game-date.ts";
+import { gameActivityDate, gameBrowsingDate } from "./game-date.ts";
 import { validateLibraryYearsQuery } from "./query.ts";
 import type { FeedSnapshot } from "../../../contracts/home-feed.ts";
 
@@ -62,6 +62,7 @@ function timelineDate(item: AnyContent, zone: string): DateRange | null {
     const date = item.playedDate;
     return date ? { start: date.end ?? date.start, end: null, precision: date.precision } : null;
   }
+  if (item.kind === "game") return gameActivityDate(item, zone);
   return contentDate(item, zone);
 }
 export function compareContent(a: AnyContent, b: AnyContent, order: ListQuery["order"] = "date-desc", timeZone = "UTC"): number {

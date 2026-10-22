@@ -39,18 +39,20 @@ const page = await contentRepository.list("movie", {
 
 ## 日期与分页
 
-影视用 `watchedDate.start`，书籍用 `readingDate.start`。游戏使用服务端 `archiveDate`：人工 `playedDate` 有结束日取结束日，否则取开始日，再与 `lastPlayedDate` 比较，取较晚的一天；只知一侧用该侧，两侧未知才归无日期。游戏年份统计、筛选、日期升降序与列表分组均使用这个日，人工体验范围不改写。其他类型的日期范围仍取起始日。
+影视用 `watchedDate.start`，书籍用 `readingDate.start`。游戏使用服务端 `archiveDate`：人工 `playedDate` 有结束日取结束日，否则取开始日；所有状态缺少人工体验日期时归无日期，`lastPlayedDate` 不参与归年。游戏年份统计、筛选、日期升降序与列表分组均使用这个日，人工体验范围不改写。其他类型的日期范围仍取起始日。
 
 | Game 字段（列表／详情／元数据／快照均提供） | 含义与兼容 |
 | --- | --- |
 | `playedDate: DateRange \| null` | 原人工体验范围，保留原精度；不是平台日期的写入目标 |
 | `lastPlayedDate?: DateRange \| null` | 可靠关联平台的最近游玩；只到日，缺失或未知公开为 null |
 | `firstPlayedDate?: DateRange \| null` | 可靠关联平台真实首次的最早日期；只到日，Steam 不存在的数据保持 null |
-| `archiveDate?: DateRange \| null` | 当前服务端计算的归档日；日期 `YYYY-MM-DD`、`precision=date`、`end=null`，两侧未知为 null |
+| `archiveDate?: DateRange \| null` | 当前服务端计算的归档日；日期 `YYYY-MM-DD`、`precision=date`、`end=null`，人工体验日期未知为 null |
 
 平台日期在所有 provider 的公开输出转换到配置的站点 `timeZone`，旧数据库时刻同样截断；已有纯日期不再作 UTC 换日。原始平台时刻不会通过列表、详情、快照、首页等输出。`archiveDate` 在读取时重算，不沿用存储中的旧派生值；客户端用该字段，兼容旧服务时沿共用 helper 回到人工日期。所有新增字段均可在旧存储快照中缺失。
 
 没有浏览日期归入 `undatedCount`，用 `year=undated` 筛选；不从发行、编辑、账户同步、首次游玩或时长推断归档日期。想看、想读、想玩有真实日期仍按该日期归类。最近游玩不证明通关或逐年活动历史，首次也不代表通关日期。
+
+在玩游戏的时间线仍可跟随平台最近活动，游戏通关／白金继续使用 F44 手填结束端规则；这两类活动日期不参与栏目年份统计。新 `experience-day-v3` 分页身份拒绝旧归年规则的游戏列表游标。
 
 列表 `year` 接受 1–9999 的整数或 `undated`，可以组合已有的 `status`、`order` 及该类型支持的其他条件。切换状态、年份、排序、分页大小或时区须清空游标；内容批次或资格变化导致游标失效时，沿用一次从第一页重载的处理。年份应进入列表组件的 `key`、翻页查询以及返回恢复的缓存标识。
 
