@@ -11,7 +11,7 @@ import { Cover } from "@/components/library-grid";
 import { PlatformChips } from "@/components/platform-chips";
 import { contentRepository } from "@/lib/content";
 import { dateParts, rangeLabel, ratingLabel } from "@/lib/format";
-import { librarySections, progressWidth, ratingDots, workSentence, workFactText, itemDate, type LibraryItem, cardTimeLabel, platformChip, type PlatformChip } from "@/lib/library";
+import { librarySections, progressWidth, ratingDots, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChip, type PlatformChip } from "@/lib/library";
 import { getSiteConfig } from "@/lib/site";
 import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
@@ -63,9 +63,10 @@ function facts(item: LibraryItem, timeZone: string): Facts {
   const date = (label: string, value: Parameters<typeof rangeLabel>[0]): [string, string] => [label, rangeLabel(value, timeZone) ?? "日期未记录"];
   const optional = (label: string, value: string | null | undefined): [string, string][] => (value ? [[label, value]] : []);
   if (item.kind === "movie") {
+    const publicRating = movieRatingFact(item);
     return { said: workSentence(item, rangeLabel(item.watchedDate, timeZone)), rating: item.rating, progress: null, platforms: [], rest: [
       ...optional("类型", item.mediaType), ...optional("导演", item.director), ...optional("主演", item.actors.join("、")),
-      ...optional("上映", rangeLabel(item.releaseDate, timeZone)), ...optional("豆瓣评分", item.doubanRating === null ? null : String(item.doubanRating)),
+      ...optional("上映", rangeLabel(item.releaseDate, timeZone)), ...(publicRating ? [publicRating] : []),
     ] };
   }
   if (item.kind === "book") {
@@ -188,7 +189,7 @@ export default async function LibraryDetailPage(props: Props) {
           {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
           <p className="work__said">{summary.said}</p>
           <Lead {...summary} />
-          {summary.rest.length ? <p className="work__line">{summary.rest.map(([label, value]) => <span key={label}>{workFactText(label, value)}</span>)}</p> : null}
+          {summary.rest.length ? <p className="work__line">{summary.rest.map(([label, value]) => <span key={label}>{workFactText(label, value, item.kind)}</span>)}</p> : null}
           {external ? <p><a className="rt-link" href={external} target="_blank" rel="noopener noreferrer">查看外部条目</a></p> : null}
         </div>
       </div>
