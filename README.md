@@ -2,9 +2,9 @@
 
 <h1>NotionBlog</h1>
 
-<p><strong>继续在 Notion 里写，访客看到的是一个真正属于你的网站。</strong></p>
+<p><strong>继续在 Notion 里写，访客看到的是你自己的网站。</strong></p>
 
-<p>动态、课程笔记、书影游、相册，连同发在 B 站和小红书的作品，汇成一个快速、好看的个人网站。<br />只公开你允许的内容——不再是 notion.site，也不用担心子页面被一起看见。</p>
+<p>动态、课程笔记、书影游、相册，还有发在 B 站和小红书的作品，都汇进一个好看、打开就快的个人网站。<br />只公开你允许的内容，不会连着子页面一起被看见。</p>
 
 <p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
@@ -26,51 +26,51 @@
 
 ![NotionBlog 墨水主题：个人首页与动态时间线](docs/assets/readme/home-ink.png)
 
-<p align="center"><sub>截图来自本机离线演示：虚构记录、通用身份、本地素材。克隆后一条命令就能看到同样的页面。</sub></p>
+<p align="center"><sub>截图来自离线演示，内容都是虚构的。</sub></p>
 
 ## 为什么需要它
 
-Notion 很适合记录，却不太适合拿来给别人看。把页面直接“发布到网页”，很快会碰到这些问题：
+Notion 适合记录，却不适合直接给人看。把页面“发布到网页”，很快就会碰到这些问题：
 
-| 直接分享 Notion 页面时 | NotionBlog 的做法 |
+| 直接分享 Notion 页面 | 用 NotionBlog |
 | --- | --- |
-| **公开一个页面，下面的子页面也跟着能被打开**，私人笔记容易被顺带看到。 | 每个来源单独设定公开规则：**父页面公开不代表子页面公开**。没公开的链接显示为不可点击，绝不跳回你的 Notion。 |
-| **看上去就是 Notion**：同样的界面、同样的域名，很难有自己的风格。 | 四套主题与明暗模式，动态、课程、书影游、相册、作品各有专门设计的页面。 |
-| **打开要加载整个 Notion 页面应用**，在部分网络环境下又慢又不稳定。 | 可由独立同步程序把已发布内容存进你自己的 PostgreSQL，访客打开页面时不用等 Notion。 |
-| **图片链接会过期**，转存到别处后还容易失效。 | 图片走站内地址，原图可放进自己的对象存储，列表与封面使用 400／800 像素小图。 |
-| **层级很深的课程笔记**，分享出去后读者只能一页页点进去，很快迷路。 | 保留“学期 → 课程 → 周次 → 知识点”的层级，提供目录树、面包屑和上一篇／下一篇。 |
-| **生活散落在各处**：动态在一个库、书影游在另一个库，作品发在别的平台。 | 首页一条时间线串起动态、书影游、相册更新和外部平台作品，各栏目也能单独浏览。 |
+| **公开一页，下面的子页面也能被点开**，私人笔记容易被顺带看到。 | 每个来源单独设公开规则，**父页面公开不代表子页面公开**。没公开的链接点不了，也不会跳回你的 Notion。 |
+| **一看就是 Notion**，域名也不是你的。 | 四套主题和深色模式，绑定你自己的域名。 |
+| **打开慢**，有些网络下干脆打不开。 | 内容提前同步到你自己的数据库，打开页面不用等 Notion。 |
+| **图片链接一小时就过期**，转发出去很快变成裂图。 | 图片存原件、走站内地址，不会过期；列表用小图，加载更快。 |
+| **课程笔记层级一深**，读者点几层就迷路。 | 保留“学期 → 课程 → 周次 → 知识点”，有目录树、面包屑和上一篇／下一篇。 |
+| **动态、书影游、作品散在各处。** | 首页一条时间线全串起来，每个栏目也能单独看。 |
 
-内容仍在 Notion 中维护，表格、关系、汇总和富文本编辑照常使用；NotionBlog 只负责把你允许公开的部分，变成好读的网站。
+内容照旧在 Notion 里写，NotionBlog 只把你允许公开的部分做成网站。
 
 ## 功能一览
 
 ### 一条时间线，装下日常
 
-首页以动态为主线，按时间穿插影视、书籍、游戏、相册的更新，以及发在 B 站、小红书的作品与合集（附播放或点赞数）。动态可展开正文、查看图片，也能按年份回看。
+首页以动态为主线，穿插你看过的电影、读完的书、玩过的游戏、新的相册，还有发在 B 站和小红书的作品。动态可以展开全文、点开大图，也能按年份往回翻。
 
 ### 课程笔记，按原来的层级读
 
-学习区保留笔记在 Notion 中的父子关系。进入一篇笔记后，可以沿侧边目录、页内目录和上一篇／下一篇连续阅读。
+笔记在 Notion 里怎么嵌套，网站上就怎么排。左边是课程目录，正文旁有页内目录，读完一篇直接点下一篇。
 
 ![学习笔记：课程目录、父子页面、面包屑与阅读导航](docs/assets/readme/reading.png)
 
-### 认真排版的正文
+### 正文排版
 
-支持 17 类 Notion 正文块：代码高亮、数学公式、表格、分栏、折叠、提示框、待办、目录等，图片可点开看大图。
+支持 17 种 Notion 正文块：代码高亮、数学公式、表格、分栏、折叠、提示框、待办……图片点开能看大图。
 
 <details>
-<summary><strong>查看正文组件预览</strong></summary>
+<summary><strong>看看正文效果</strong></summary>
 
 ![离线正文组件预览，使用虚构内容展示多种正文块](docs/assets/readme/blocks.png)
 
-运行演示后访问 [`/preview/blocks`](http://127.0.0.1:3000/preview/blocks) 即可查看，此页只在离线演示中提供。
+运行演示后打开 [`/preview/blocks`](http://127.0.0.1:3000/preview/blocks) 就能看到。
 
 </details>
 
-### 四套主题，一键切换
+### 四套主题
 
-同一份内容、同一套页面结构，从页头的主题菜单切换。墨水、苹果、岛屿有浅色和深色，千禧只有浅色。
+墨水、苹果、岛屿、千禧，在页头一键切换。前三套还有深色模式。
 
 <table>
   <tr>
@@ -83,17 +83,13 @@ Notion 很适合记录，却不太适合拿来给别人看。把页面直接“�
   </tr>
 </table>
 
-<sub>截图取景与来源见[截图说明](docs/assets/readme/README.md)。</sub>
+### 搜索与分享
 
-### 找得到，也分享得出去
-
-- **站内搜索**：按栏目筛选、结果高亮；任意页面按 `/` 或 `⌘K` 呼出快捷搜索。
-- **订阅与收录**：自带 RSS、站点地图和 robots，分享链接时带上标题、摘要和封面。
-- **缺什么就说什么**：没有日期、封面、评分或正文时如实显示，不编造；加载失败只影响出错的那一块，可以重试。
+按 `/` 或 `⌘K` 随时搜索。自带 RSS 和站点地图，分享链接时会带上标题、摘要和封面。
 
 ## 快速开始
 
-准备 **Node.js 24 LTS** 与 npm，不需要 Notion 账号、数据库或任何云服务：
+装好 **Node.js 24 LTS**，四行命令就能在本机看到完整网站，不需要 Notion 账号、数据库或任何云服务：
 
 ```sh
 git clone https://github.com/jimmyhuang22/NotionBlog.git
@@ -102,121 +98,117 @@ npm ci
 npm run dev
 ```
 
-打开 **[http://127.0.0.1:3000](http://127.0.0.1:3000)**，就能浏览首页、[动态](http://127.0.0.1:3000/status)和[学习区](http://127.0.0.1:3000/study)，切换主题、搜索演示内容。
-
-演示只用虚构数据与本地图片，不会连接任何真实来源。首次安装依赖需要访问 npm registry；离线时外部字体会回退到系统字体。
+打开 **[http://127.0.0.1:3000](http://127.0.0.1:3000)**，逛逛首页、[动态](http://127.0.0.1:3000/status)和[学习区](http://127.0.0.1:3000/study)，换换主题。演示用的都是虚构数据，不会连接任何真实来源。
 
 <details>
-<summary><strong>常用命令与完整验证</strong></summary>
-
-游戏平台同步工具有独立锁文件，运行完整检查前还需安装其依赖：
-
-```sh
-npm ci --prefix scripts/game-sync --ignore-scripts
-```
+<summary><strong>常用命令</strong></summary>
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run dev` | 启动隔离的离线演示 |
-| `npm run dev -- --port 3100` | 使用其他本机端口 |
-| `npm run check` | 类型、协议、测试与源码隐私检查 |
-| `npm run build` | 生产构建与服务端追踪隐私检查 |
-| `npm start` | 启动本机构建，仍使用隔离演示 |
-| `npm run privacy:check -- --staged` | 检查实际暂存内容 |
+| `npm run dev` | 启动离线演示 |
+| `npm run dev -- --port 3100` | 换一个端口 |
+| `npm run check` | 类型、测试与隐私检查 |
+| `npm run build` | 生产构建 |
+| `npm start` | 运行本机构建 |
 
-普通开发、测试、本机构建与启动会隔离真实环境输入：即使已有 `.env.local` 或改了 `CONTENT_PROVIDER`，也不会自动接通真实来源。真实联调使用[独立受限入口](docs/DEVELOPMENT_ISOLATION.md)。完整 Node 版本约束见 [package.json](package.json)。
+跑 `npm run check` 前，还要装一次游戏同步工具的依赖：`npm ci --prefix scripts/game-sync --ignore-scripts`。
+
+本机开发默认和真实数据隔离：就算有 `.env.local`，也不会连到真实来源。需要真实联调时见[开发隔离](docs/DEVELOPMENT_ISOLATION.md)。
 
 </details>
 
 ## 接入自己的 Notion
 
-先跑通演示，再决定网站从哪里读内容。三种方式共用同一套页面，切换时不用改前端。
+### 1. 把内容整理成 Notion 数据库
 
-| 方式 | 适合 | 从哪里开始 |
-| --- | --- | --- |
-| **`mock` · 离线演示** | 体验页面、调整样式、跑回归检查 | 默认启用 |
-| **`notion` · 直接读取** | 在本机核对自己的字段、正文和公开规则 | [Notion 接入指南](docs/NOTION_SETUP.md) |
-| **`database` · 数据库读取** | 正式上线：同步程序定时把已发布内容写入 PostgreSQL，网站只读数据库 | [数据库接入](docs/WEBSITE_DATABASE_SETUP.md) → [同步运行](docs/NOTION_SYNC_WORKER.md) |
+网站按数据库读取：每类内容一个数据库，例如动态、课程、游戏、影视、书籍，每条记录一行。课程笔记放在课程页面下的笔记数据库里，笔记下面的子页面照原样嵌套就行。
 
-接入分三步：
+列名不用照着改：在配置里写明哪一列是标题、哪一列是日期、哪一列是评分即可，格式见[来源示例](config/notion-website.example.json)。
 
-1. **连接 Notion，划定公开范围。** 创建只读连接，只授权需要的数据库，再为每个来源写公开规则。格式见[来源示例](config/notion-sources.example.json)与[网站来源示例](config/notion-website.example.json)。
-2. **填写个人资料，选择栏目。** 参照[站点配置示例](config/site.example.json)设置名称、简介、头像、社交链接、时区和学习项目；栏目开关见 [config/features.ts](config/features.ts)。真实值放在被忽略的 `config/site.json` 或服务端 `SITE_CONFIG_JSON`，不进仓库。
-3. **核对后上线。** 确认正文、目录、图片和下架行为，再按[部署与恢复指南](docs/REFACTOR_ROLLOUT.md)接线。网站与各个同步任务分别使用权限受限的凭据。
+还没在 Notion 里的旧记录（比如在其他网站标记过的书和电影、零散的笔记），要先导进去。Notion 可以直接导入 CSV，也可以先让 AI 帮你整理成表格，再批量导入。
 
-目前以 Vercel 托管网站、PostgreSQL 存内容，图片存储可替换。具体步骤见[部署试验说明](docs/VERCEL_SUPABASE_TRIAL.md)。
+### 2. 连接 Notion，选择公开范围
+
+在 Notion 里建一个只读连接，只授权需要展示的数据库，再给每个来源设好公开规则。步骤见 [Notion 接入指南](docs/NOTION_SETUP.md)。
+
+### 3. 填写个人资料
+
+参照[站点配置示例](config/site.example.json)填名称、简介、头像、社交链接和时区；有哪些栏目可以打开，见 [config/features.ts](config/features.ts)。真实配置放在被 Git 忽略的 `config/site.json`，不会进仓库。
+
+### 4. 运行同步，上线网站
+
+**数据库不用手动导入。** 同步程序第一次运行时，会把允许公开的内容全部写进 PostgreSQL，之后按你设定的间隔自动更新。网站目前用 Vercel 部署，只读数据库。步骤见[数据库接入](docs/WEBSITE_DATABASE_SETUP.md)、[同步程序](docs/NOTION_SYNC_WORKER.md)和[部署说明](docs/VERCEL_SUPABASE_TRIAL.md)。
+
+| 读取方式 | 什么时候用 |
+| --- | --- |
+| `mock` | 离线演示，默认使用 |
+| `notion` | 本机直接读 Notion，核对字段和公开规则 |
+| `database` | 正式上线，网站只读你的 PostgreSQL |
 
 ## 内容怎样到达页面
 
-```mermaid
-flowchart LR
-    N[Notion<br/>继续在这里写] --> S[同步程序<br/>按公开规则筛选]
-    S --> DB[(你的 PostgreSQL)]
-    N -. 本机核对 .-> NP[直接读取]
-    F[虚构演示数据] --> MP[离线演示]
-    DB --> C[统一内容接口]
-    NP --> C
-    MP --> C
-    C --> UI[网站页面]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.png" />
+  <img src="docs/assets/readme/architecture-light.png" alt="内容流向：在 Notion 里写，同步程序在你的电脑上按公开规则筛选，写进你的 PostgreSQL 和对象存储，网站从这里读取并展示给访客；游戏平台的游玩时长写回 Notion，B 站与小红书作品由作品采集程序单独写入" />
+</picture>
 
-公开资格、数据库读取与图片处理都在服务端完成，页面只拿到已经允许公开的内容。来源出错时明确报错，不会悄悄换成演示数据；未知的日期、评分和封面保持为空。
+公开与否在同步和读取时就判断好，网站拿到的只有允许公开的内容。缺日期、封面或评分时如实留空，不会编造。
 
 <details>
 <summary><strong>工程目录</strong></summary>
 
 ```text
-contracts/              内容 DTO、正文 AST 与接口契约
-src/app/                页面路由与 API
+contracts/              内容格式与接口约定
+src/app/                页面与 API
 src/components/         组件、主题与阅读交互
-src/lib/content/        前端使用的统一内容入口
-src/server/             Notion、数据库、公开资格与媒体实现
-scripts/                独立同步任务与开发验证工具
-database/               数据库协议与权限
-supabase/migrations/    增量迁移
-config/                 通用配置示例与栏目定义
+src/lib/content/        页面使用的统一内容入口
+src/server/             Notion、数据库、公开规则与图片处理
+scripts/                同步程序与开发工具
+database/               数据库结构与权限
+supabase/migrations/    数据库迁移
+config/                 配置示例与栏目开关
 fixtures/               虚构演示内容
-tests/                  契约、权限、同步、读取与隐私回归
+tests/                  测试
 ```
 
 </details>
 
 ## 项目状态
 
-NotionBlog 已在作者自己的网站上日常运行：首页时间线、动态、学习、作品、影视、书籍、游戏和相册都使用真实数据。博客与项目页面已经做好，但还没接真实来源，只在演示数据下验证过。
+作者自己的网站已经在用它：首页、动态、学习、作品、影视、书籍、游戏、相册都是真实数据。博客和项目页面做好了，还没接真实数据。
 
-项目仍在持续开发，**尚未发布稳定版本**，配置和接口可能变化；**目前没有一键建库或一键部署**，上线需要自己配置来源、权限、数据库和同步任务。仓库暂时保持私人，获取代码需要相应访问权限。
+还没有稳定版本，配置可能会变；也没有一键部署，上线要自己配好 Notion 连接、数据库和同步程序。仓库暂时是私人的。
 
-**适合你，如果：** 已经在 Notion 里记录动态、课程笔记或书影游，想要一个独立的个人网站；在意哪些内容能被看到；愿意自己部署 Next.js 和 PostgreSQL。
+**适合你，如果**已经在 Notion 里记录动态、课程笔记或书影游，想要一个自己的网站，在意哪些内容能被看到，也愿意自己部署。
 
-**暂时不适合，如果：** 只想点一下就上线，或者只需要一个简单的单页博客——这时 Notion 自带的发布功能会更省事。
+**暂时不适合，如果**只想点一下就上线，或只需要一个简单博客——Notion 自带的发布会更省事。
 
-## 按需要继续阅读
+## 更多文档
 
-| 我想…… | 文档入口 |
+| 我想…… | 看这里 |
 | --- | --- |
-| 了解全部文档与接入顺序 | [文档导航](docs/README.md) |
-| 配置学习项目与笔记公开规则 | [学习区规则](docs/STUDY_PUBLICATION.md) |
-| 修改页面、主题或正文渲染 | [前端开发指南](docs/FRONTEND_GUIDE.md) |
-| 接入游戏账户或社交作品 | [游戏同步](docs/GAME_ACCOUNT_SYNC.md)、[社交同步](docs/SOCIAL_SYNC.md) |
-| 处理图片与缩略图 | [媒体与预览](docs/MEDIA_THUMBNAILS.md) |
-| 了解同步、部署与回退 | [同步运行器](docs/WEBSITE_SYNC_RUNTIME.md)、[重构交接](docs/REFACTOR_ROLLOUT.md) |
-| 核对隐私与源码公开准备 | [隐私约定](docs/PRIVACY.md)、[公开准备](docs/PUBLIC_READINESS.md) |
+| 看全部文档 | [文档导航](docs/README.md) |
+| 设置课程笔记的公开规则 | [学习区规则](docs/STUDY_PUBLICATION.md) |
+| 改页面、主题或正文样式 | [前端开发指南](docs/FRONTEND_GUIDE.md) |
+| 同步游戏时长或社交作品 | [游戏同步](docs/GAME_ACCOUNT_SYNC.md)、[社交同步](docs/SOCIAL_SYNC.md) |
+| 处理图片与小图 | [图片与小图](docs/MEDIA_THUMBNAILS.md) |
+| 了解同步、部署与回退 | [同步运行](docs/WEBSITE_SYNC_RUNTIME.md)、[上线与恢复](docs/REFACTOR_ROLLOUT.md) |
+| 了解隐私约定 | [隐私约定](docs/PRIVACY.md) |
 
 ## 常见问题
 
-**会不会把我整个 Notion 工作区都公开出去？** 不会。网站只读取你授权给只读连接的数据库，再按每个来源的公开规则筛选。父页面、普通链接、提及和关系都不会自动带出关联内容；来源授权与导航栏目开关也分开管理。
+**会把我整个 Notion 工作区公开吗？** 不会。网站只读你授权给只读连接的数据库，再按每个来源的公开规则筛一遍。父页面、链接、提及和关系都不会把别的内容带出来。
 
-**为什么刚启动时只看到动态与学习？** 这是默认演示范围。影视、书籍、游戏、相册、作品等栏目需要相应配置和已授权来源；体验网站不需要运行任何同步任务。
+**为什么演示里只有动态和学习？** 这是默认打开的栏目。影视、书籍、游戏、相册、作品要接上你自己的数据后再打开。
 
-**以后不想用 Notion 了怎么办？** 页面只依赖统一的内容接口，不直接读 Notion。数据库模式下，网站读的是你自己的 PostgreSQL，Notion 只承担编辑；以后换一种编辑方式，页面不用重写。
+**以后不想用 Notion 了怎么办？** 页面只认统一的内容格式，不直接读 Notion。正式上线后网站读的是你自己的 PostgreSQL，以后换一种写作方式，页面不用重做。
 
 ## 参与开发
 
-从 [AGENTS.md](AGENTS.md)、[项目需求](docs/REQUIREMENTS.md)与相关[决策](docs/decisions/README.md)开始。改动通过短期分支提交到 `develop`；正式发布走 `develop → main` 的发布 PR。
+先看 [AGENTS.md](AGENTS.md) 和[项目需求](docs/REQUIREMENTS.md)。改动走短期分支合进 `develop`，正式发布由 `develop` 合进 `main`。
 
-应用改动运行 `npm run check` 与 `npm run build`；纯文档改动按影响验证记录、链接、差异与隐私。反馈问题时请附复现步骤、Node 版本和脱敏错误信息，不要提交真实配置、凭据、数据库导出或个人正文。
+改了代码请跑 `npm run check` 和 `npm run build`。提问题时附上复现步骤、Node 版本和去掉隐私的报错，不要贴真实配置、密钥或个人正文。
 
 ## 许可
 
-项目原创源码采用 [MIT License](LICENSE)。个人内容、头像与真实站点资料不随源码授权；第三方依赖、字体和媒体遵守各自许可。
+源码采用 [MIT License](LICENSE)。个人内容、头像和真实站点资料不在授权范围内；第三方依赖、字体和媒体遵守各自的许可。

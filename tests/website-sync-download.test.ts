@@ -203,11 +203,11 @@ test("v2 terminal failure preserves the failing redirect only in a separate priv
   const privateUrl = "https://images.example.test/private.png?signed=fixture-only";
   const download = createWebsiteImageDownloader({ resolve: dns, request: async () => ++calls === 1 ?
     response(302, (async function* () {})(), { location: privateUrl }) : response(403)
-  }, { wait: async () => assert.fail("A denial must stop") });
+  }, { wait: async () => assert.fail("A denial must stop"), now: () => 100 });
   await assert.rejects(download(url), code("IMAGE_UNAVAILABLE"));
   assert.equal(calls, 2);
-  assert.deepEqual(download.failure(), { inputUrl: url, requestUrl: privateUrl, attempt: 1,
-    httpStatus: 403, transportCode: undefined, phase: "response" });
+  assert.deepEqual(download.failure(), { inputUrl: url, requestUrl: privateUrl, requestHost: "images.example.test", attempt: 1,
+    httpStatus: 403, transportCode: undefined, phase: "response", elapsedMs: 0, attemptElapsedMs: 0, attemptTimeoutMs: 20000 });
   assert.equal(JSON.stringify(download.statistics()).includes("signed"), false);
   assert.equal(JSON.stringify(download.statistics()).includes("example.test"), false);
 });

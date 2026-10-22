@@ -1,0 +1,27 @@
+{
+  "producer": {
+    "scripts/website-sync/run.ts": "export const fixtureRuntime = 'producer';\n",
+    "scripts/website-sync/run-private.mjs": "export const fixtureHost = true;\n",
+    "scripts/website-sync/release.mjs": "export const fixtureRelease = true;\n",
+    "scripts/website-sync/runtime-reader.ts": "export const fixtureReader = true;\n",
+    "scripts/website-sync/download.ts": "export const fixtureDownload = true;\n",
+    "scripts/website-sync/image-cache.ts": "export const fixtureCache = true;\n",
+    "src/server/notion/website-repository.ts": "export const fixtureProjection = 'old-course';\n",
+    "package-lock.json": "{\"fixtureLock\":true}\n",
+    "database/website-protocol.json": "{\"fixtureProtocol\":true}\n",
+    "database/website-media-protocol.json": "{\"fixtureMedia\":true}\n"
+  },
+  "consumer": {
+    "scripts/website-sync/run.ts": "export const fixtureRuntime = 'consumer';\n",
+    "scripts/website-sync/run-private.mjs": "export const fixtureHost = true;\n",
+    "scripts/website-sync/release.mjs": "export const fixtureRelease = true;\n",
+    "scripts/website-sync/runtime-reader.ts": "export const fixtureReader = true;\n",
+    "scripts/website-sync/download.ts": "export const fixtureDownload = true;\n",
+    "scripts/website-sync/image-cache.ts": "export const fixtureCache = true;\n",
+    "src/server/notion/website-repository.ts": "export const fixtureProjection = 'fresh-course';\n",
+    "package-lock.json": "{\"fixtureLock\":true}\n",
+    "database/website-protocol.json": "{\"fixtureProtocol\":true}\n",
+    "database/website-media-protocol.json": "{\"fixtureMedia\":true}\n",
+    "database/capture-recovery-compatibility.json": "{\"fixtureCatalog\":true}\n"
+  }
+}
