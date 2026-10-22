@@ -111,6 +111,12 @@ test("a game card names its platforms short in their makers' colours, writes tim
   assert.equal(cardTimeLabel({ value: 0, unit: "hour" }), null);
   assert.equal(cardTimeLabel(null), null);
   assert.equal(cardTimeLabel({ value: 210, unit: "minute" }), "210 分钟");
+  // A time that rounds to nothing is left out as well, never written as "0 小时" (S13-4).
+  assert.equal(cardTimeLabel({ value: 0.0167, unit: "hour" }), null);
+  assert.equal(cardTimeLabel({ value: 0.04, unit: "hour" }), null);
+  assert.equal(cardTimeLabel({ value: 0.05, unit: "hour" }), "0.1 小时");
+  assert.equal(cardTimeLabel({ value: 0.94, unit: "hour" }), "0.9 小时");
+  assert.equal(cardTimeLabel({ value: 0.4, unit: "minute" }), null);
   const game = fixtureItems.game[0]!;
   assert.equal(coverBadge({ ...game, status: "platinumed" }), "白金");
   assert.equal(coverBadge({ ...game, status: "clear" }), null);

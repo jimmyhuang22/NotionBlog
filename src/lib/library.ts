@@ -128,12 +128,14 @@ export function platformChip(platform: string): PlatformChip {
 
 /**
  * Time played as a game card writes it: whole hours from a hundred on, one decimal below, nothing for
- * none at all (a game bought and not played) or an unknown time. Minutes as they are.
+ * none at all (a game bought and not played) or an unknown time. Minutes as they are. A time that
+ * rounds to nothing (a game opened for a minute or two, 0.02 hours) is left out too: "0 小时" reads as
+ * unplayed, and none at all is what the owner chose for that (F24; S13-4, 2026-10-23).
  */
 export function cardTimeLabel(amount: TimeAmount | null): string | null {
-  if (!amount || !(amount.value > 0)) return null;
-  if (amount.unit !== "hour") return `${Math.round(amount.value)} 分钟`;
-  return `${amount.value >= 100 ? Math.round(amount.value) : Math.round(amount.value * 10) / 10} 小时`;
+  if (!amount) return null;
+  const shown = amount.unit !== "hour" || amount.value >= 100 ? Math.round(amount.value) : Math.round(amount.value * 10) / 10;
+  return shown > 0 ? `${shown} ${amount.unit === "hour" ? "小时" : "分钟"}` : null;
 }
 
 /** A game card's second line: its platforms, time played and rating; an unknown one is left out, not written as missing. */
