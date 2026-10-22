@@ -7,6 +7,7 @@ import { kindLabels, kindMarks, readableExcerpt, searchResultHref, splitMatch } 
 import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { ARRIVING_ROWS, arrivalStyle, useFilterArrival } from "./use-filter-arrival";
+import { SearchEmpty } from "./search-recovery";
 
 /** The excerpt is plain text from the search entry; the match is marked here, never taken as markup. */
 export function Marked({ text, query }: { text: string; query: string }) {
@@ -19,7 +20,7 @@ export function SearchResults({ initial, query, kind, pageSize }: { initial: Pag
   const { items, restarted, total, paged, ...paging } = usePagedList<SearchHit>("/api/search", request, initial);
   // A new kind or a new search: the first results come in one after another (motion.css).
   const arriving = useFilterArrival();
-  if (!items.length) return <div className="state"><p>没有找到包含“{query}”的内容。换一个词，或者选“全部”再试。</p></div>;
+  if (!items.length) return <SearchEmpty query={query} kind={kind} />;
   return (
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 16 }}>内容有更新，已重新搜索。</p> : null}
