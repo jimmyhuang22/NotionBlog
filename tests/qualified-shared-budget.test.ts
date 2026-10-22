@@ -189,12 +189,12 @@ for (const qualification of ["original", "fresh"]) for (const crossVersion of [f
   if(crossVersion){
     // This fixture exercises the historical expiry-only compatibility transition.
     const fixedWorker="scripts/website-sync/worker.ts", consumerManifest=join(f.root,"manifest.json");
-    await writeFile(join(f.project,fixedWorker),execFileSync("git",["show",`6760363:${fixedWorker}`],{cwd:rootProject}),{mode:0o644});
+    await writeFile(join(f.project,fixedWorker),await readFile(new URL("./fixtures/capture-expiry-compatibility/consumer-worker.ts.txt",import.meta.url)),{mode:0o644});
     const fixed=JSON.parse(await readFile(consumerManifest,"utf8"));fixed.files.find((v:{path:string})=>v.path===fixedWorker).sha256=digest(await readFile(join(f.project,fixedWorker)));
     await writeFile(consumerManifest,JSON.stringify(fixed),{mode:0o600});
     const project=join(f.root,"producer"),manifest=join(f.root,"producer-manifest.json");await cp(f.project,project,{recursive:true});await chmod(project,0o700);
     const worker="scripts/website-sync/worker.ts";
-    await writeFile(join(project,worker),execFileSync("git",["show",`${producerCommit}:${worker}`],{cwd:rootProject}),{mode:0o644});
+    await writeFile(join(project,worker),await readFile(new URL("./fixtures/capture-expiry-compatibility/producer-worker.ts.txt",import.meta.url)),{mode:0o644});
     const old=JSON.parse(await readFile(join(f.root,"manifest.json"),"utf8"));old.commit=producerCommit;
     old.files.find((v:{path:string})=>v.path===worker).sha256=digest(await readFile(join(project,worker)));
     const bytes=JSON.stringify(old);await writeFile(manifest,bytes,{mode:0o600});resumeProducer={project,manifest,manifestSha256:digest(bytes)};
