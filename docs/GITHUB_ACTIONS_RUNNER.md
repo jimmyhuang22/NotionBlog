@@ -9,6 +9,8 @@
 
 私人阶段的 PR 事件跳过此任务；需要验收时，由所有者在 Actions → Repository checks → Run workflow 选择实际候选分支。运行结束核对实际仓库、SHA、运行器及全部步骤，不能把跳过的 PR、排队或本机通过视为 Actions 已通过。初始导入不自动触发 push 或定时检查。
 
+2026-10-22 迁移验收结束后，专用原生运行器已退役：新旧仓库均无原生注册，系统服务已卸载并持久停用，本机注册文件已清理，账户、目录与守卫保留。上表描述工作流选择规则，当前私人仓库已经没有可承接任务的原生运行器，**不要再次手动派发私人检查**。如需继续私人 CI，须先单独审查和配置新的私人运行环境；公开后的标准托管检查仍需实际验收。见[清理记录](progress/2026-10-22-private-ci-retirement.md)。
+
 工作流安装根目录与 `scripts/game-sync/` 两份锁文件的依赖，再执行 `npm run check` 和 `npm run build`。检查使用离线 fixtures、隔离 PGlite 和本地媒体；不配置 Notion、数据库、媒体或生产部署凭据。Token 仅有 contents 读取权限，checkout 不保留凭据。私人运行器保留专用非管理员账户、受管服务、磁盘与任务前守卫，不使用开发检出，不迁入个人环境。
 
 ## 复用既有运行器
@@ -24,5 +26,7 @@
 公开之前先停止并移除此仓库的原生自托管注册，核对无在途任务和无残留注册；只改 `runs-on` 或依赖 PR 条件不能阻止他人提交修改工作流。保留旧私人运行根及可恢复的受管配置。需要继续私人 CI 时，在保持私人的仓库单独管理，不将外部 PR 分派到个人机器。
 
 随后核对标准托管运行器路径、主分支保护与实际平台检查，并审查私人阶段 CI 日志中可能出现的机器或文件路径信息。工作流通过不自动授权公开仓库、部署或恢复业务同步；正式发布仍按 [AGENTS.md](../AGENTS.md) 执行。
+
+本轮已按具体授权删除该次自托管验收的云端日志和单个可重建 npm 缓存；删除后日志不可读取，仓库 Actions 缓存与产物均为零。验收成功状态、步骤结果和受检提交元数据仍保留，原始日志与复核材料仅存私人目录。这项清理不代表已经删除所有平台历史或公开仓库。
 
 GitHub 当前将自托管运行器和公开仓库标准托管运行器列为免费使用；私人仓库的托管分钟额度与之不同。官方说明：[计费](https://docs.github.com/en/billing/concepts/product-billing/github-actions)、[仓库级运行器范围](https://docs.github.com/en/actions/concepts/runners/self-hosted-runners)、[原生运行器安全边界](https://docs.github.com/en/actions/reference/security/secure-use)。
