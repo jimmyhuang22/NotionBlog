@@ -52,14 +52,17 @@ function fixture(legacy = false) {
 
 test("movie score labels preserve provenance, real zero and explicit unknowns without guessing legacy sources", async () => {
   for (const [source, label] of [["douban", "豆瓣评分"], ["bangumi", "Bangumi 评分"], ["1905", "1905电影网评分"]] as const) {
-    assert.deepEqual(movieRatingFact({ publicRating: 8.2, ratingSource: source, doubanRating: 9.1 }), [label, "8.2"]);
+    const fact = movieRatingFact({ publicRating: 8.2, ratingSource: source, doubanRating: 9.1 })!;
+    assert.deepEqual(fact, [label, "8.2"]);
+    assert.equal(workFactText(...fact, "movie"), `${label} 8.2`);
   }
   assert.deepEqual(movieRatingFact({ publicRating: 0, ratingSource: "1905", doubanRating: 9.1 }), ["1905电影网评分", "0"]);
   assert.equal(movieRatingFact({ publicRating: null, ratingSource: "bangumi", doubanRating: 9.1 }), null);
   assert.deepEqual(movieRatingFact({ doubanRating: 8.2 }), ["公共评分", "8.2"]);
   assert.deepEqual(movieRatingFact({ publicRating: 8.2, ratingSource: null, doubanRating: null }), ["公共评分", "8.2"]);
   assert.equal(movieRatingFact({ doubanRating: null }), null);
-  assert.equal(workFactText(...movieRatingFact({ publicRating: 8.2, ratingSource: "bangumi", doubanRating: null })!), "Bangumi 评分 8.2");
+  assert.equal(workFactText(...movieRatingFact({ publicRating: 8.2, ratingSource: null, doubanRating: null })!, "movie"), "公共评分 8.2");
+  assert.equal(workFactText("豆瓣评分", "8.2", "book"), "豆瓣 8.2");
   assert.equal(normalizeMovieRatingSource(" Douban "), "douban");
   assert.equal(normalizeMovieRatingSource("1905电影网"), "1905");
   assert.equal(normalizeMovieRatingSource("unverified source with private notes"), null);

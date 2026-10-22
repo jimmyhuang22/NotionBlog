@@ -189,7 +189,7 @@ export default async function LibraryDetailPage(props: Props) {
           {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
           <p className="work__said">{summary.said}</p>
           <Lead {...summary} />
-          {summary.rest.length ? <p className="work__line">{summary.rest.map(([label, value]) => <span key={label}>{workFactText(label, value)}</span>)}</p> : null}
+          {summary.rest.length ? <p className="work__line">{summary.rest.map(([label, value]) => <span key={label}>{workFactText(label, value, item.kind)}</span>)}</p> : null}
           {external ? <p><a className="rt-link" href={external} target="_blank" rel="noopener noreferrer">查看外部条目</a></p> : null}
         </div>
       </div>

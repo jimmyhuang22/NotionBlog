@@ -73,7 +73,8 @@ const factWords: Record<string, (value: string) => string> = {
   已玩时长: value => `玩了 ${value}`, 预计时长: value => `预计 ${value}`,
 };
 
-export function workFactText(label: string, value: string): string {
+export function workFactText(label: string, value: string, kind?: LibraryKind): string {
+  if (kind === "movie" && label === "豆瓣评分") return `${label} ${value}`;
   return (factWords[label] ?? (text => `${label} ${text}`))(value);
 }
 
