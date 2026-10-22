@@ -1,0 +1,7 @@
+{
+  "capability": "notionblog-search-filtered-scope-v1",
+  "migration": {
+    "file": "20261022220429_filtered_search_scope.sql",
+    "sha256": "3705d6809c70a45cfce7db1a5eb6d2e78ce06640c6c5d045ce371def41929c73"
+  }
+}

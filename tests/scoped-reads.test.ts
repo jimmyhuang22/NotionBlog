@@ -240,10 +240,10 @@ test("all content kinds keep their DTOs and search ranking through the scoped re
     for (const q of ["Common", "中文", "missing"])
       assert.deepEqual(await fast.search!({ q }), await legacy.search!({ q }));
     assert.deepEqual(await fast.getCourseTree(fixtureItems.course[0].slug), await legacy.getCourseTree(fixtureItems.course[0].slug));
-    // Neither optional extension is installed in this database. A search switch
+    // No optional extension is installed in this database. A search switch
     // must not turn unrelated course reads into an extension dependency.
-    for (const mode of ["filtered", "precomputed"] as const) {
-      const optional = createWebsiteDatabaseRepository(scopedReader(f.reader, "qualified", mode), { scoped: true, filteredSearch: mode === "filtered" });
+    for (const mode of ["filtered", "precomputed", "filtered-scope"] as const) {
+      const optional = createWebsiteDatabaseRepository(scopedReader(f.reader, "qualified", mode), { scoped: true, filteredSearch: mode === "filtered", filteredScopeSearch: mode === "filtered-scope" });
       assert.deepEqual(await optional.get("course", fixtureItems.course[0].slug), await legacy.get("course", fixtureItems.course[0].slug));
       assert.deepEqual(await optional.getCourseTree(fixtureItems.course[0].slug), await legacy.getCourseTree(fixtureItems.course[0].slug));
       await assert.rejects(optional.search!({ q: "Common" }), { code: "CONTENT_UNAVAILABLE" });

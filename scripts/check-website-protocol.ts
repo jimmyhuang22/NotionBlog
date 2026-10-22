@@ -43,3 +43,8 @@ const freshQualification=JSON.parse(await readFile(new URL("../database/fresh-qu
 if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${freshQualification.migration.file}`,import.meta.url))).digest("hex")!==freshQualification.migration.sha256)
   throw new Error("Fresh collection qualification extension differs from its manifest.");
 console.log("Fresh collection qualification verified; no historical deadlines are updated.");
+
+const filteredScope=JSON.parse(await readFile(new URL("../database/search-filtered-scope-protocol.json",import.meta.url),"utf8")) as {migration:{file:string;sha256:string}};
+if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${filteredScope.migration.file}`,import.meta.url))).digest("hex")!==filteredScope.migration.sha256)
+  throw new Error("Filtered search scope extension differs from its manifest.");
+console.log("Independent filtered search scope extension verified; existing migrations unchanged.");

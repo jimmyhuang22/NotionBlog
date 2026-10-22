@@ -13,7 +13,7 @@ import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../../lib/content/status.ts";
 import { WEBSITE_CONTENT_SQL, WEBSITE_SNAPSHOT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "./website-projection.ts";
 import { measureContentRead, measureContentReadAsync } from "../content-read-timing.ts";
-import { SCOPED_INDEX_SQL, SCOPED_SEARCH_SQL, SCOPED_FILTERED_SEARCH_SQL, SCOPED_SELECTED_SQL, SCOPED_VERSION_SQL, SCOPED_STATUS_INDEX_SQL } from "./scoped-reads.ts";
+import { SCOPED_INDEX_SQL, SCOPED_SEARCH_SQL, SCOPED_FILTERED_SEARCH_SQL, SCOPED_FILTERED_SCOPE_SEARCH_SQL, SCOPED_SELECTED_SQL, SCOPED_VERSION_SQL, SCOPED_STATUS_INDEX_SQL } from "./scoped-reads.ts";
 import { contentReadBudgetIdentity } from "../content-read-budget.ts";
 import { STUDY_DIRECTORY_SQL, STUDY_NOTE_ELIGIBILITY_SQL, STUDY_NOTE_DETAIL_SQL } from "./study-reads.ts";
 interface Projection { runId: string; revision: string; schemaDigest: string; records: ContentDetail<AnyContent>[]; links: string[]; mediaIds: string[]; hasMore?: boolean }
@@ -41,6 +41,7 @@ function project<T>(value: T, snapshot: Projection, timeZone: string): T {
 export interface WebsiteReadOptions extends StatusReadOptions {
   scoped?: boolean;
   filteredSearch?: boolean;
+  filteredScopeSearch?: boolean;
   /** Explicit operator export only. Ordinary website readers keep the SQL snapshot cap. */
   snapshotPageSize?: number;
   maxSnapshotBytes?: number;
@@ -48,10 +49,12 @@ export interface WebsiteReadOptions extends StatusReadOptions {
 
 /** Qualified SQL projections without a persistent publication cache or Notion calls. */
 export function createWebsiteDatabaseRepository(db: SqlExecutor, options: WebsiteReadOptions = {}): ContentRepository {
-  // Resolve the same existing option as scopedReader, once per repository. The
-  // shared runtime factory and its frozen producer compatibility pins stay intact.
+  // Resolve the same opt-in as scopedReader, once per repository.
   const filteredSearch = options.filteredSearch ?? (options.scoped === true && process.env.DATABASE_SEARCH_PROJECTION === "filtered");
-  if (filteredSearch && !options.scoped) throw new ContentServiceError("MISCONFIGURED", "Filtered search requires scoped reads.");
+  const filteredScopeSearch = options.filteredScopeSearch ?? (options.scoped === true && process.env.DATABASE_SEARCH_PROJECTION === "filtered-scope");
+  if (((filteredSearch || filteredScopeSearch) && !options.scoped) || (filteredSearch && filteredScopeSearch))
+    throw new ContentServiceError("MISCONFIGURED", "Select one filtered search projection with scoped reads.");
+  const filteredSearchSql = filteredScopeSearch ? SCOPED_FILTERED_SCOPE_SEARCH_SQL : SCOPED_FILTERED_SEARCH_SQL;
   const zone=()=>statusTimeZone(options);
   const pageSize=options.snapshotPageSize, maxSnapshotBytes=options.maxSnapshotBytes??16*1024*1024;
   if ((pageSize!==undefined&&(!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>100))||
@@ -169,9 +172,10 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
       validateSearchQuery(query);
       const selected = [...new Set(query.kinds ?? CONTENT_KINDS)].sort();
       if (options.scoped) {
-        const patterns = filteredSearch ? (await import("./search-filter.ts")).searchFilterPatterns(query.q) : undefined;
+        const patterns = filteredSearch || filteredScopeSearch ? (await import("./search-filter.ts")).searchFilterPatterns(query.q) : undefined;
         const p = await measureContentReadAsync("search-read", () => callSql<Omit<Projection, "records"> & { records: (ContentDetail<AnyContent> & { parts: unknown[] })[] }>(db,
-          patterns ? SCOPED_FILTERED_SEARCH_SQL : SCOPED_SEARCH_SQL, patterns ? [selected, patterns] : [selected]));
+          patterns ? filteredSearchSql : SCOPED_SEARCH_SQL,
+          patterns ? [selected, patterns] : [selected]));
         const records = measureContentRead("search-text", () => {
           validate(p);
           const links = new Set(p.links), images = new Set(p.mediaIds);

@@ -19,8 +19,8 @@ test("malformed search cursors are rejected before legacy and scoped SQL or capa
   const never: SqlExecutor = { async query() { calls++; throw Error("Unexpected SQL read"); } };
   const readers = [createWebsiteDatabaseRepository(never),
     ...(["qualified", "published"] as const).flatMap(mode =>
-      (["on-demand", "filtered", "precomputed"] as const).map(projection =>
-        createWebsiteDatabaseRepository(scopedReader(never, mode, projection), { scoped: true, filteredSearch: projection === "filtered" }))),
+      (["on-demand", "filtered", "precomputed", "filtered-scope"] as const).map(projection =>
+        createWebsiteDatabaseRepository(scopedReader(never, mode, projection), { scoped: true, filteredSearch: projection === "filtered", filteredScopeSearch: projection === "filtered-scope" }))),
   ];
   for (const reader of readers) for (const cursor of malformed)
     await assert.rejects(reader.search!({ q: "Java", cursor }), { code: "INVALID_QUERY" });

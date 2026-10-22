@@ -10,19 +10,22 @@ import { scopedReader } from "../src/server/database/scoped-reads.ts";
 import { mediaIdentity } from "../src/server/database/website-validation.ts";
 import { setupSearchProjection, status, body } from "./helpers/search-precomputed.ts";
 import protocol from "../database/search-filtered-protocol.json" with { type: "json" };
+import scopeProtocol from "../database/search-filtered-scope-protocol.json" with { type: "json" };
 
 async function setup() {
   const f = await setupSearchProjection();
-  const bytes = await readFile(new URL("../supabase/migrations/" + protocol.migration.file, import.meta.url));
-  assert.equal(createHash("sha256").update(bytes).digest("hex"), protocol.migration.sha256);
-  await f.db.exec(bytes.toString());
-  await f.db.query("UPDATE nb_read.migrations SET digest=$1 WHERE version=4", [protocol.migration.sha256]);
+  for (const [version, extension] of [[4, protocol], [5, scopeProtocol]] as const) {
+    const bytes = await readFile(new URL("../supabase/migrations/" + extension.migration.file, import.meta.url));
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), extension.migration.sha256);
+    await f.db.exec(bytes.toString());
+    await f.db.query("UPDATE nb_read.migrations SET digest=$1 WHERE version=$2", [extension.migration.sha256, version]);
+  }
   await f.register();
   const readers = () => (["qualified", "published"] as const).flatMap(mode =>
-    (["on-demand", "filtered", "precomputed"] as const).map(projection => ({
+    (["on-demand", "filtered", "precomputed", "filtered-scope"] as const).map(projection => ({
       label: `${mode}/${projection}`,
-      repo: projection === "filtered"
-        ? createWebsiteDatabaseRepository(scopedReader(f.reader, mode, "filtered"), { scoped: true, filteredSearch: true })
+      repo: projection === "filtered" || projection === "filtered-scope"
+        ? createWebsiteDatabaseRepository(scopedReader(f.reader, mode, projection), { scoped: true, filteredSearch: projection === "filtered", filteredScopeSearch: projection === "filtered-scope" })
         : f.repo(mode, projection === "precomputed"),
     })));
   return { ...f, readers };
@@ -90,10 +93,11 @@ test("unchanged searches keep identical, complete pagination across every projec
       const actual = await walk(repo, limit); assert.equal(actual.length, 37);
       expected ??= actual; assert.deepEqual(actual, expected);
     }
-    const [old, filtered, precomputed] = f.readers();
+    const [old, filtered, precomputed, scope] = f.readers();
     const first = await old.repo.search!({ q: "Java", limit: 12 }); assert.ok(first.nextCursor);
     const query = { q: "Java", limit: 12, cursor: first.nextCursor! };
     assert.deepEqual(await filtered.repo.search!(query), await old.repo.search!(query));
     assert.deepEqual(await precomputed.repo.search!(query), await old.repo.search!(query));
+    assert.deepEqual(await scope.repo.search!(query), await old.repo.search!(query));
   } finally { await f.db.close(); }
 });
