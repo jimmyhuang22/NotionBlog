@@ -5,7 +5,9 @@ import { WorkerError } from "../notion-sync/errors.ts";
 /** Planning estimates are not permission or an upper bound for unseen content.
  * Actual attempts (including SDK retries) remain charged by the shared ledger. */
 export function collectionResumePlan(pages: CollectedPage[], currentIds?: string[], pendingVerificationRequests?: number) {
-  if (!pages.length) throw new WorkerError("CHECKPOINT_FAILED");
+  // A reviewed recovery may discard every old course projection. Zero reusable
+  // pages means all current members are unseen work, not an empty old capture.
+  // Historical provenance and the new lease are enforced by the host/worker.
   const reads = new Map<string, number>(); let largestPageReads = 0, media = 0, converted = 0;
   for (const page of pages) {
     if (!page.sourceReads) throw new WorkerError("CHECKPOINT_FAILED");

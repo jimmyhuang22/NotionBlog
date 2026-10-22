@@ -8,13 +8,33 @@ import { createImageDownloader, type Address, type DownloadOptions, type ImageRe
 import { WorkerError, checkSignal } from "../notion-sync/errors.ts";
 import { imageCacheKey, imageCacheVary, strongImageEtag, type WebsiteImageCache, type ImageCacheReceipt } from "./image-cache.ts";
 
-const NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "ABORT_ERR"]);
-interface Observation { network: boolean; status?: number; url?: string; transportCode?: string; phase?: string; retryAfterMs?: number }
+const NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ABORT_ERR"]);
+interface Observation { network: boolean; status?: number; url?: string; host?: string; transportCode?: string; phase?: string; retryAfterMs?: number; timeoutKind?: "image" | "headers" }
 interface WebsiteDownloadOptions extends DownloadOptions { wikimediaUserAgent?: string }
+export interface WebsiteImageContext {
+  ownerPageId: string;
+  locator: { kind: "cover" } | { kind: "property"; name: string } | { kind: "block"; id: string };
+}
 export interface WebsiteImageFailure {
   inputUrl: string; requestUrl?: string; attempt: number; httpStatus?: number;
-  transportCode?: string; phase: string;
+  requestHost?: string; transportCode?: string; phase: string;
+  elapsedMs: number; attemptElapsedMs: number; attemptTimeoutMs: number;
+  timeoutKind?: "image" | "headers";
+  context?: WebsiteImageContext;
   retryAfterSeconds?: number;
+}
+// Bind diagnostics to the error that actually escapes the collector. A shared
+// last-failure slot can be reset while already-started peers finish other pages.
+// Weak keys also avoid retaining signed URLs for successful later operations.
+const failures = new WeakMap<object, WebsiteImageFailure>();
+export function websiteImageFailure(error: unknown): WebsiteImageFailure | undefined {
+  const value = error && typeof error === "object" ? failures.get(error) : undefined;
+  return value && structuredClone(value);
+}
+export function addWebsiteImageContext(error: unknown, context: WebsiteImageContext): void {
+  if (!error || typeof error !== "object") return;
+  const value = failures.get(error);
+  if (value) value.context = structuredClone({ ownerPageId: context.ownerPageId, locator: context.locator });
 }
 interface RetryPorts {
   wait?(milliseconds: number, signal?: AbortSignal): Promise<void>;
@@ -22,6 +42,7 @@ interface RetryPorts {
   cache?: WebsiteImageCache;
   /** Charge every received wire chunk, including unsuccessful attempts. */
   onReceivedBytes?(bytes: number): void;
+  now?(): number;
 }
 const noStore = (value: string | undefined) => /(?:^|,)\s*no-store\s*(?:,|$)/i.test(value ?? "");
 function retryAfterMilliseconds(value: string | undefined): number | undefined {
@@ -79,21 +100,37 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
     return known ? [...addresses.filter(a => a.address === known), ...addresses.filter(a => a.address !== known)] : addresses;
   };
   const wait = ports.wait ?? (async (ms, signal) => { await delay(ms, undefined, { signal }); });
+  const now = ports.now ?? (() => performance.now());
   const statistics = { requests: 0, receivedBodyBytes: 0, revalidatedImages: 0, reusedBytes: 0, downloadedImages: 0,
     rateLimitResponses: 0, lastRetryAfterSeconds: null as number | null };
   let failure: WebsiteImageFailure | undefined;
   let activeDownloads = 0;
   const performDownload = async (input: string, parentSignal?: AbortSignal) => {
     checkSignal(parentSignal);
+    const started = now();
     for (let attempt = 0; attempt < 3; attempt++) {
+      const attemptStarted = now();
       // A slow TLS/header handshake should get a longer bounded opportunity
       // on retry. The existing total per-image deadline still caps each round.
       const headerTimeoutMs = Math.min(options.timeoutMs ?? 20_000,
         (options.headerTimeoutMs ?? Math.min(5000, options.timeoutMs ?? 20_000)) * 2 ** attempt);
       let last: Observation = { network: false };
       let reused = false, receipt: Omit<ImageCacheReceipt, "sha256" | "byteSize" | "mime"> | undefined;
-      const download = createImageDownloader({ ...options, headerTimeoutMs, resolve, request: async (url, address, signal, headers) => {
-        const observation: Observation = { network: false, url: url.href, phase: "cache" }; last = observation;
+      const download = createImageDownloader({ ...options, headerTimeoutMs,
+        convertHeic: options.convertHeic ? async (bytes, signal) => {
+          last.phase = "conversion";
+          try { return await options.convertHeic!(bytes, signal); }
+          catch (error) {
+            if (signal.aborted && !parentSignal?.aborted) last.timeoutKind = "image";
+            throw error;
+          }
+        } : undefined,
+        resolve: async host => {
+        const observation: Observation = { network: false, host, phase: "dns" }; last = observation;
+        try { return await resolve(host); }
+        catch (error) { observation.network = networkError(error); observation.transportCode = transportCode(error); throw error; }
+      }, request: async (url, address, signal, headers) => {
+        const observation: Observation = { network: false, url: url.href, host: url.hostname, phase: "cache" }; last = observation;
         try {
           // Scope the operator's contact identity to this image host. Changing
           // unrelated User-Agent cache keys would discard reusable originals.
@@ -136,6 +173,9 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
         } catch (error) {
           observation.network = networkError(error);
           observation.transportCode = transportCode(error);
+          if (signal.aborted && !parentSignal?.aborted) {
+            observation.timeoutKind = signal.reason?.name === "TimeoutError" ? "image" : "headers";
+          }
           if (observation.network && preferred.get(url.hostname) === address.address) preferred.delete(url.hostname);
           throw error instanceof WorkerError ? error : new WorkerError("IMAGE_UNAVAILABLE");
         }
@@ -145,29 +185,45 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
         if (reused) { statistics.revalidatedImages++; statistics.reusedBytes += image.bytes.length; }
         else {
           statistics.downloadedImages++;
-          if (ports.cache && receipt && !image.transformed) await ports.cache.write({ ...receipt,
-            sha256: createHash("sha256").update(image.bytes).digest("hex"), byteSize: image.bytes.length, mime: image.mime }, image, parentSignal);
+          if (ports.cache && receipt && !image.transformed) {
+            last.phase = "cache-write";
+            await ports.cache.write({ ...receipt,
+              sha256: createHash("sha256").update(image.bytes).digest("hex"), byteSize: image.bytes.length, mime: image.mime }, image, parentSignal);
+          }
         }
         return image;
       }
       catch (error) {
         checkSignal(parentSignal);
+        // The parent is still live. CANCELLED here is an internal image/header
+        // deadline (including cache/DNS work), not cancellation of the run.
+        const ownDeadline = error instanceof WorkerError && error.code === "CANCELLED";
         const denied = last.status !== undefined && last.status >= 400 && last.status < 500;
         const limited = [429, 529].includes(last.status ?? 0) && last.retryAfterMs !== undefined;
-        const transient = !denied && (last.network || [502, 503, 504].includes(last.status ?? 0));
+        const transient = !denied && (ownDeadline || last.network || [502, 503, 504].includes(last.status ?? 0));
         if (attempt === 2 || !(error instanceof WorkerError) ||
             !(limited && error.code === "RATE_LIMITED" || transient && ["IMAGE_UNAVAILABLE", "CANCELLED"].includes(error.code))) {
-          failure ??= { inputUrl: input, requestUrl: last.url, attempt: attempt + 1, httpStatus: last.status,
+          const detail: WebsiteImageFailure = { inputUrl: input, requestUrl: last.url, requestHost: last.host,
+            attempt: attempt + 1, httpStatus: last.status,
             transportCode: last.transportCode, phase: last.phase ?? "validation-or-dns",
+            elapsedMs: Math.max(0, now() - started), attemptElapsedMs: Math.max(0, now() - attemptStarted),
+            attemptTimeoutMs: options.timeoutMs ?? 20_000,
+            ...(ownDeadline || last.timeoutKind ? { timeoutKind: last.timeoutKind ?? "image" as const } : {}),
             ...(limited ? { retryAfterSeconds: last.retryAfterMs! / 1000 } : {}) };
+          failure ??= detail;
           // The caller's cancellation was checked above. An image's own
           // bounded deadline cannot be reported as cancelling the whole run.
-          if (error instanceof WorkerError && error.code === "CANCELLED") throw new WorkerError("IMAGE_UNAVAILABLE");
-          throw error;
+          const terminal = ownDeadline ? new WorkerError("IMAGE_UNAVAILABLE") : error;
+          if (terminal && typeof terminal === "object") failures.set(terminal, detail);
+          throw terminal;
         }
         ports.onRetry?.({ attempt: attempt + 1, networkFailure: last.network, httpStatus: last.status });
         try { await wait(limited ? last.retryAfterMs! : attempt === 0 ? 2000 : 5000, parentSignal); }
-        catch { throw new WorkerError("CANCELLED"); }
+        catch (error) {
+          checkSignal(parentSignal);
+          // A broken wait port is not evidence that the operator cancelled.
+          throw error;
+        }
         checkSignal(parentSignal);
       }
     }
@@ -183,5 +239,5 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
   };
   // URLs may contain private identities or signed parameters. Only the private
   // runtime's failure sidecar consumes them; never add them to numeric metrics.
-  return Object.assign(downloadImage, { statistics: () => ({ ...statistics }), failure: () => failure && ({ ...failure }) });
+  return Object.assign(downloadImage, { statistics: () => ({ ...statistics }), failure: () => failure && structuredClone(failure), close: () => agent.destroy() });
 }

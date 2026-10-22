@@ -17,6 +17,8 @@ import { createCollectionCapture } from "../scripts/website-sync/collection-capt
 import { bindFreshCollectionDeadline, prepareCollectionResume } from "../scripts/website-sync/collection-revalidation.ts";
 import { courseRatingRemoval, applyCourseRatingRemovalPolicy } from "../scripts/website-sync/mapped-capture.ts";
 import { recoveryFixture } from "./helpers/capture-recovery-fixture.ts";
+import { createWebsiteImageDownloader, websiteImageFailure } from "../scripts/website-sync/download.ts";
+import { finalizeWebsiteRun } from "../scripts/website-sync/finalize-run.ts";
 import revalidation from "../database/qualified-revalidation-protocol.json" with { type: "json" };
 import fresh from "../database/fresh-qualification-protocol.json" with { type: "json" };
 import mapped from "../database/mapped-capture-protocol.json" with { type: "json" };
@@ -200,16 +202,39 @@ test("fresh mapping recovery blocks late revocation or movement and rejected ima
       }
       return blocks;
     }};
-    let staged=0;
+    const download=createWebsiteImageDownloader({resolve:async()=>[{address:"8.8.8.8",family:4}],request:async url=>({
+      status:url.pathname==="/rejected.png"?403:200,headers:{"content-type":"image/png"},
+      bytes:(async function*(){yield DEMO_PNG;})(),cancel(){},
+    })});
+    t.after(download.close);
+    let staged=0,escaped:unknown;
     await assert.rejects(runWebsiteSync({config:f.nextConfig,client,mode:"publish",storage,resumeCollection:resume,
       writer:{...f.writer,begin:(_id,digest)=>f.writer.begin(nextId,digest),stage:async(...args)=>{staged++;await f.writer.stage(...args);}},
-      download:async()=>{throw new Error("Synthetic image rejection");},
+      download,
       captureCollection:await createCollectionCapture(join(f.root,"new"),{...f.identity,runId:nextId,sourceSha256:mapping.currentSourceSha256,
-        configDigest:mapping.currentConfigDigest,releaseCommit:"d".repeat(40)})}));
+        configDigest:mapping.currentConfigDigest,releaseCommit:"d".repeat(40)})}),error=>{escaped=error;return true;});
     assert.equal(staged,0);
     assert.equal((await f.db.query<{n:number}>("SELECT count(*)::int AS n FROM nb_v2.records WHERE run_id=$1",[nextId])).rows[0].n,0);
     assert.equal((await f.db.query<{current_run:string}>("SELECT current_run::text FROM nb_v2.state")).rows[0].current_run,f.previousLease.runId);
     assert.deepEqual((await f.db.query("SELECT to_jsonb(r) AS row FROM nb_v2.runs r WHERE id=$1",[f.previousLease.runId])).rows,f.oldRun);
+    if(scenario==="bad-image"){
+      await download("https://assets.example.test/ok.png");
+      assert.equal(download.failure(),undefined,"Later success must not replace the escaping error's diagnostic");
+      const diagnostic=websiteImageFailure(escaped)!;assert.equal(diagnostic.httpStatus,403);
+      assert.deepEqual(diagnostic.context,{ownerPageId:demoId(1000),locator:{kind:"block",id:demoId(18000)}});
+      const report:Record<string,unknown>={runId:nextId,published:false,promoteRequested:false};
+      const closed:string[]=[],saved=new Map<string,unknown>();let receipts=0;
+      assert.equal(await finalizeWebsiteRun({report,imageFailure:diagnostic,
+        save:async(name,value)=>{if(name==="receipt-private.json"&&++receipts===1)throw new Error("Synthetic interim receipt failure");saved.set(name,structuredClone(value));},
+        closeImageTransport:()=>{download.close();closed.push("image");},
+        closeWriter:async()=>{closed.push("writer");throw new Error("Synthetic writer close failure");},
+        closeReader:async()=>{closed.push("reader");},
+      }),false);
+      assert.deepEqual(closed,["image","writer","reader"]);
+      assert.deepEqual(report.cleanupFailures,["writer"]);assert.equal(report.interimReceiptWriteFailed,true);
+      assert.deepEqual((saved.get("image-failure-private.json") as {context:unknown}).context,diagnostic.context);
+      for(const privateValue of ["assets.example.test",demoId(1000),demoId(18000)])assert.equal(JSON.stringify(saved.get("receipt-private.json")).includes(privateValue),false);
+    }
   });
 });
 

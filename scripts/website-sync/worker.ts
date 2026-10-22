@@ -11,7 +11,7 @@ import { configDigest,mediaIdentity,validateMedia,validateWebsiteRecord } from "
 import type { ObjectStorage } from "../../src/server/database/storage.ts";
 import { verifyMediaBytes } from "../../src/server/database/storage.ts";
 import type { DownloadedImage } from "../notion-sync/download.ts";
-import { createWebsiteImageDownloader } from "./download.ts";
+import { createWebsiteImageDownloader, addWebsiteImageContext, type WebsiteImageContext } from "./download.ts";
 import { sanitizePublicText } from "../../src/server/notion/public-text.ts";
 import { sourceFingerprint, validateMediaSource, type MediaSourceBinding } from "../../src/server/media/notion-source.ts";
 import { normalizeId } from "../../src/server/notion/config.ts";
@@ -77,7 +77,11 @@ export async function runWebsiteSync(options: {client: NotionReadClient;config: 
   let mediaCommit:Promise<unknown>=Promise.resolve();
   const automaticStudy=config.sources.some(s=>s.publication.mode==="course-descendants");
   const check=()=>{options.signal?.throwIfAborted();resumeCheck?.();if(failed)throw new ContentServiceError("CONTENT_UNAVAILABLE","Website sync lease was lost.");};
-  const download=options.download??createWebsiteImageDownloader();
+  const ownedDownloader=options.download?undefined:createWebsiteImageDownloader();
+  const download=async(url:string,context:WebsiteImageContext)=>{
+    try{return await (options.download??ownedDownloader!)(url);}
+    catch(error){addWebsiteImageContext(error,context);throw error;}
+  };
   try {
     check();
     if(options.resumeCollection&&(options.mode==="dry-run"||!options.captureCollection||options.onIncrementalBaseline))throw new ContentServiceError("MISCONFIGURED","Resume requires qualified collection capture.");
@@ -116,7 +120,7 @@ export async function runWebsiteSync(options: {client: NotionReadClient;config: 
         if(!fresh||fresh.sourceFingerprint!==sourceFingerprint(input.url,true))throw new ContentServiceError("CONTENT_UNAVAILABLE","The discovered source image changed or is unavailable.");
         url=fresh.url;sourceRefreshes++;
       } else if((automaticStudy||options.mediaSources)&&input.expiryTime&&(!Number.isFinite(Date.parse(input.expiryTime))||Date.parse(input.expiryTime)<=Date.now()))throw new ContentServiceError("CONTENT_UNAVAILABLE","The source image is unavailable.");
-      check();const image=await download(url);check();
+      check();const image=await download(url,{ownerPageId:input.ownerPageId,locator:input.blockId?{kind:"block",id:normalizeId(input.blockId)}:input.property?{kind:"property",name:input.property}:{kind:"cover"}});check();
       const dimensions=await imageDimensions(image.bytes);check();
       const sha256=createHash("sha256").update(image.bytes).digest("hex"),assetId=mediaIdentity(input.ownerPageId,input.blockId??input.property??"cover",sha256);
       const media:StoredMedia={assetId,ownerPageId:input.ownerPageId,objectKey:`sha256/${sha256}`,sha256,byteSize:image.bytes.length,mime:image.mime,...dimensions};
@@ -152,7 +156,7 @@ export async function runWebsiteSync(options: {client: NotionReadClient;config: 
           if(!fresh)fresh=await resolveNotionMediaSource(binding,refreshScope,options.client);
           if(!fresh||fresh.sourceFingerprint!==binding.sourceFingerprint){reusable=false;break;}
           const media=old.media.find(m=>m.assetId===binding.assetId)!;
-          const image=await download(fresh.url);check();
+          const image=await download(fresh.url,binding);check();
           if(createHash("sha256").update(image.bytes).digest("hex")!==media.sha256||image.mime!==media.mime||
             (image.transformed?"storage":"notion")!==binding.delivery){reusable=false;break;}
           verifyMediaBytes(media,image.bytes);
@@ -261,5 +265,5 @@ export async function runWebsiteSync(options: {client: NotionReadClient;config: 
     }
     return {publicationRevalidation:reads?{passes:revalidationPasses,repairedPages}:undefined,collectionReads:reads?.statistics(),resume:options.resumeCollection?resumeStats:undefined,outcome:options.mode,records:records.length,media:assets.size,uniqueObjects:objects.size,mediaBytes:bytes,mediaByteLimit:maxMediaBytes,sourceRefreshes,partialDocuments:records.filter(r=>r.detail.document?.completeness==="partial").length};
   } catch(error) {if(timer)clearInterval(timer);await renewal;if(lease&&!published)await options.writer!.fail(lease).catch(()=>{});throw error;}
-  finally {if(timer)clearInterval(timer);}
+  finally {if(timer)clearInterval(timer);ownedDownloader?.close();}
 }

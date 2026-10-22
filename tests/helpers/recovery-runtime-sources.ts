@@ -9,15 +9,19 @@ export const recoveryRuntimeSources = [
   },
   {
     "path": "scripts/website-sync/run-private.mjs",
-    "sha256": "551f03a761dd0f6055e2bead779fc95fb7bffc246bd850e68763571c6024f146"
+    "sha256": "94097d3954cf59bdf2e5030cbe4a91e12305c999e34229c3b356fe0c7d4cea9d"
   },
   {
     "path": "scripts/website-sync/run.ts",
-    "sha256": "36850d3e4d2fb499209dd77c2b60b6c2d4757833d9ed6b8a60ae8474075a471e"
+    "sha256": "f896668b5d7a9241ac53caebf8dc3f699ae98c53dd7e29c7908218f047132370"
   },
   {
     "path": "scripts/check-website-protocol.ts",
     "sha256": "8f0c79fc2808d7af5ff4425737ccdcb96bab7932925c8a1d55c6bd19f68dcaab"
+  },
+  {
+    "path": "scripts/website-sync/collection-resume-plan.ts",
+    "sha256": "cd96627f5b8e1aa75acd302c99be6e413faaba2610187a5b2d6f73c8c50b2b52"
   }
 ] as const;
 export function laterRecoveryRuntime(path: string, current: string, prior: string,

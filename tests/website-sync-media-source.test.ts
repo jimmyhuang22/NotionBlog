@@ -9,6 +9,7 @@ import { WEBSITE_SCHEMA_DIGEST, type WebsiteWriter } from "../contracts/website-
 import { createDemo, DEMO_PNG, demoId, demoPage, demoParagraph } from "../scripts/notion-sync/demo.ts";
 import { FakeStorage } from "../scripts/notion-sync/fakes.ts";
 import { runWebsiteSync, websitePolicy } from "../scripts/website-sync/worker.ts";
+import { createWebsiteImageDownloader, websiteImageFailure } from "../scripts/website-sync/download.ts";
 import { configDigest, mediaIdentity as v1MediaIdentity } from "../src/server/database/validation.ts";
 import { mediaIdentity as v2MediaIdentity } from "../src/server/database/website-validation.ts";
 import { createDatabaseWriter } from "../src/server/database/writer.ts";
@@ -71,6 +72,22 @@ function fixture() {
   }
   return { demo, config, client, live, reads, storage, download, downloads: () => downloads, replace };
 }
+
+test("fresh collection errors retain the exact owner and cover or block locator", async t => {
+  for (const location of ["cover", "block"]) await t.test(location, async t => {
+    const s = fixture();
+    if (location === "block") s.demo.pages.get(gameId)!.cover = null;
+    const download = createWebsiteImageDownloader({ resolve: async () => [{ address: "8.8.8.8", family: 4 }],
+      request: async () => ({ status: 403, headers: {}, bytes: (async function* () {})(), cancel() {} }) });
+    t.after(download.close);
+    let escaped: unknown;
+    await assert.rejects(runWebsiteSync({ client: s.client, config: s.config, mode: "dry-run", download }), error => {
+      escaped = error; return error instanceof Error && "code" in error && error.code === "IMAGE_UNAVAILABLE";
+    });
+    assert.deepEqual(websiteImageFailure(escaped)?.context, { ownerPageId: gameId,
+      locator: location === "cover" ? { kind: "cover" } : { kind: "block", id: gameImage } });
+  });
+});
 
 test('qualified hybrid collection refreshes an expiring cover only after current owner and fingerprint validation', async t => {
   for (const variant of ['expired', 'nearly-expired', 'changed', 'withdrawn']) await t.test(variant, async () => {

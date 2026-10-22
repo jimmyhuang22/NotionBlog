@@ -73,6 +73,7 @@ async function main() {
     try {await pool.query("SELECT nb_v2_api.configure_policy($1,$2,$3::jsonb,$4::jsonb)",[policy.configDigest,policy.freshnessSeconds,JSON.stringify(policy.sources),JSON.stringify(policy.permits)]);console.log(JSON.stringify({websitePolicyInstalled:true,requiresFullPublish:true}));}finally{await pool.end();}return;
   }
   const pool=command==="dry-run"?undefined:createDatabasePool(process.env.SYNC_DATABASE_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
+  let closeImageTransport:(()=>void)|undefined;
   try {
     const mediaProvider=process.env.SYNC_MEDIA_PROVIDER??"storage";
     if(!["storage","notion"].includes(mediaProvider))throw new Error("Invalid media source provider.");
@@ -80,10 +81,11 @@ async function main() {
     if(process.env.SYNC_IMAGE_ORIGINALS_DIRECTORY&&!process.env.SYNC_IMAGE_CACHE_DIRECTORY)throw new Error("An image cache directory is required.");
     const cache=process.env.SYNC_IMAGE_CACHE_DIRECTORY?await createWebsiteImageCache({directory:process.env.SYNC_IMAGE_CACHE_DIRECTORY,originalsDirectory:process.env.SYNC_IMAGE_ORIGINALS_DIRECTORY}):undefined;
     const download=createWebsiteImageDownloader({userAgent:process.env.SYNC_IMAGE_USER_AGENT,convertHeic:process.env.SYNC_HEIC_CONVERTER_PATH?createHeicConverter({executable:process.env.SYNC_HEIC_CONVERTER_PATH,temporaryRoot:process.env.SYNC_STATE_DIR??".local/website-sync"}):undefined},{cache});
+    closeImageTransport=download.close;
     const mode=publicationMode(process.env.SYNC_PUBLICATION_MODE);
     if(mode==="published"&&mediaProvider!=="storage")throw new Error("Published content requires independent stored media.");
     const result=await runWebsiteSync({client,config,mode:command as "dry-run"|"stage"|"publish",maxMediaBytes:process.env.WEBSITE_MEDIA_MAX_BYTES===undefined?undefined:Number(process.env.WEBSITE_MEDIA_MAX_BYTES),writer:pool?publicationWriter(sqlExecutor(pool),mode):undefined,mediaSources:pool&&mediaProvider==="notion"?createWebsiteMediaSourceWriter(sqlExecutor(pool)):undefined,storage,download});
     console.log(JSON.stringify({...result,imageTransfer:download.statistics()}));
-  }finally{await pool?.end();}
+  }finally{try{closeImageTransport?.();}finally{await pool?.end();}}
 }
 main().catch(()=>{console.error("Website sync failed. Check the private source mappings, integration access, migration and writer permissions. Upstream details are withheld.");process.exitCode=1;});

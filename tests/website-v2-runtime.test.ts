@@ -46,6 +46,17 @@ async function clean(f: Awaited<ReturnType<typeof fixture>>) {
   assert.equal((await readdir(f.inputs)).some(n => n === "manual-run.lock" || n.startsWith(".website-runtime-env-")), false);
   assert.equal((await readdir(f.state)).includes("worker.lock"), false);
 }
+test("a worker-lock cleanup error cannot strand the independent manual lock or temporary environment", async t => {
+  const f = await fixture(t);
+  await writeFile(join(f.project, "scripts/website-sync/run.ts"), `import {renameSync,writeFileSync} from 'node:fs';
+    renameSync(process.env.WEBSITE_STATE_DIR,process.env.WEBSITE_STATE_DIR+'.saved');
+    writeFileSync(process.env.WEBSITE_STATE_DIR,'fixture-blocks-worker-lock-cleanup');`);
+  await f.saveManifest();
+  const result = await invoke([...f.args, "--mode", "stage"]);
+  assert.equal(result.code, 1);
+  assert.equal((await readdir(f.inputs)).some(n => n === "manual-run.lock" || n.startsWith(".website-runtime-env-")), false);
+  assert.equal((await readdir(f.state + ".saved")).includes("worker.lock"), true, "Never delete a lock moved outside the owned path");
+});
 test("v2 offline check accepts Next.js dynamic route releases without locks, sessions, cache writes or child startup", async t => {
   const f = await fixture(t), result = await invoke([...f.args, "--mode", "publish", "--check"]);
   assert.equal(result.code, 0, result.err); const value = JSON.parse(result.out);

@@ -115,7 +115,7 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   const {configDigest}=await import('../../src/server/database/website-validation.ts');
   const {collectionResumePlan}=await import('./collection-resume-plan.ts');
   const saved=await readCollectionCaptureForRevalidation(captureDirectory,{runId:config.resumeRunId,sourceSha256:recovery?.mapping?.previousSourceSha256??config.sourceSha256,releaseCommit:producerReleaseCommit,configDigest:recovery?.mapping?.previousConfigDigest??configDigest(parseWebsiteNotionConfig(JSON.parse(source)))});
-  if(saved.pages.some(p=>!p.lease||p.lease.runId!==config.resumeRunId))fail('PRIVATE_INPUT_INVALID');
+  if(!saved.pages.length||saved.pages.some(p=>!p.lease||p.lease.runId!==config.resumeRunId))fail('PRIVATE_INPUT_INVALID');
   resumePlan={...collectionResumePlan(recovery?saved.pages.filter(p=>p.record.detail.item.kind!=='course'):saved.pages),courseProjectionRefresh:recovery?{forcedCoursePages:saved.pages.filter(p=>p.record.detail.item.kind==='course').length,originalCaptureUnchanged:true}:undefined,qualification:config.resumeQualification??'original',compatibility,requestReserve:config.resumeRequestReserve,postSeconds:config.resumePostSeconds};
  }
  if(check)return {resumePlan,adapter:'private-host-v2',offlineCheck:true,releaseCommit:release.commit,mode,publicationMode,mediaProvider,networkChecked:false,sessionRefreshed:false,workerStarted:false,publicationEnabled:false};
@@ -172,7 +172,11 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   return summary;
  }finally{
   process.off('SIGINT',cancel);process.off('SIGTERM',cancel);if(temp)await unlink(temp).catch(()=>{});
-  await unlock?.();await manual?.close();if(inode){const now=await lstat(lockPath).catch(()=>null);if(now?.ino===inode.ino&&now?.dev===inode.dev&&!now.isSymbolicLink())await unlink(lockPath);}
+  try{await unlock?.();}
+  finally{
+   try{await manual?.close();}
+   finally{if(inode){const now=await lstat(lockPath).catch(()=>null);if(now?.ino===inode.ino&&now?.dev===inode.dev&&!now.isSymbolicLink())await unlink(lockPath);}}
+  }
  }
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

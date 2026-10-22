@@ -5,9 +5,17 @@ import { collectionResumePlan } from "../scripts/website-sync/collection-resume-
 import type { CollectedPage } from "../scripts/website-sync/collection-capture.ts";
 import { demoId } from "../scripts/notion-sync/demo.ts";
 import { laterRecoveryRuntime } from "./helpers/recovery-runtime-sources.ts";
+import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
 
 function laterPublicationRepair(path:string,current:string,prior:string,producer:Parameters<typeof checkCaptureReleaseCompatibility>[0],consumer:Parameters<typeof checkCaptureReleaseCompatibility>[1]):boolean {
+  if (syncDiagnosticSources[path] && current !== prior) {
+    assert.equal(current, syncDiagnosticSources[path], path);
+    const changed = structuredClone(consumer);
+    changed.files.find(file => file.path === path)!.sha256 = current;
+    assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });
+    return true;
+  }
   const reviewed=publicationRepair.reviewedSourceFiles.find(file=>file.path===path);
   if(!reviewed||current===prior)return false;
   assert.equal(current,reviewed.after,path);
