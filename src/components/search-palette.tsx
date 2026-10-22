@@ -34,10 +34,14 @@ export function SearchPalette() {
   const [active, setActive] = useState(-1);
   // Text being composed by an input method is not a query yet; the search waits until it is committed.
   const [composing, setComposing] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const listId = useId();
   const query = readQuery(text);
+  // Input changes render before the debounce runs; only the current query can offer options.
+  const showingResults = !composing && !!query && results.query === query && results.status === "done";
   // The last option leads to the search page with everything that matched.
-  const count = results.status === "done" && results.query ? results.hits.length + 1 : 0;
+  const count = showingResults ? results.hits.length + 1 : 0;
+  const selected = active >= 0 && active < count ? active : -1;
 
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
@@ -66,7 +70,7 @@ export function SearchPalette() {
     if (composing) return;
     const control = new AbortController();
     const timer = setTimeout(async () => {
-      setResults(previous => ({ ...previous, status: "loading" }));
+      setResults({ status: "loading", query, hits: [], total: null });
       try {
         const response = await fetch(`/api/search?${new URLSearchParams({ q: query, limit: String(LIMIT) })}`, { cache: "no-store", signal: control.signal });
         const body = await response.json().catch(() => null);
@@ -84,12 +88,12 @@ export function SearchPalette() {
       }
     }, DELAY);
     return () => { clearTimeout(timer); control.abort(); };
-  }, [open, query, composing]);
+  }, [open, query, composing, attempt]);
 
   function close() { dialog.current?.close(); }
   function go(href: string) { close(); router.push(href); }
   function hrefOf(index: number): string | null {
-    if (!results.query || index < 0) return null;
+    if (!showingResults || !results.query || index < 0 || index >= count) return null;
     return index < results.hits.length ? searchResultHref(results.hits[index]!) : searchHref(results.query, null);
   }
 
@@ -106,16 +110,18 @@ export function SearchPalette() {
     } else if (event.key === "Enter") {
       event.preventDefault();
       // Nothing chosen yet (still loading, or no match): go to the search page with what was typed.
-      const href = hrefOf(active) ?? (query ? searchHref(query, null) : null);
+      const href = hrefOf(selected) ?? (query ? searchHref(query, null) : null);
       if (href) go(href);
     }
   }
 
-  const waiting = results.status === "loading" || (!!query && results.query !== query && results.status !== "busy" && results.status !== "failed");
+  const waiting = !!query && !composing && (results.query !== query || results.status === "idle" || results.status === "loading");
+  const retryable = !!query && !composing && results.query === query && (results.status === "busy" || results.status === "failed");
   const message = !query ? (text.trim() ? "这个关键词太长，或者包含无法搜索的字符。" : "输入关键词，搜标题和正文。")
+    : composing ? null
+    : waiting ? "正在搜索…"
     : results.status === "busy" ? "暂时搜不了，请稍后再试。"
     : results.status === "failed" ? "这次搜索没有成功，请稍后再试。"
-    : waiting && !results.hits.length ? "正在搜索…"
     : results.status === "done" && !results.hits.length ? `没有找到包含“${results.query}”的内容。`
     : null;
 
@@ -143,7 +149,7 @@ export function SearchPalette() {
               <Magnifier />
               <input
                 ref={input} className="palette__input" type="search" role="combobox" aria-label="搜索内容" aria-autocomplete="list"
-                aria-expanded={count > 0} aria-controls={listId} aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
+                aria-expanded={count > 0} aria-controls={listId} aria-activedescendant={selected >= 0 ? `${listId}-${selected}` : undefined}
                 placeholder="搜标题和正文" maxLength={MAX_QUERY} autoComplete="off" enterKeyHint="search" autoFocus
                 value={text} onChange={event => setText(event.target.value)} onKeyDown={onKeyDown}
                 onCompositionStart={() => setComposing(true)}
@@ -152,8 +158,8 @@ export function SearchPalette() {
               <button type="button" className="palette__close" onClick={close} aria-label="关闭搜索"><kbd aria-hidden="true">Esc</kbd><span aria-hidden="true">关闭</span></button>
             </div>
             <ul id={listId} className="palette__list" role="listbox" aria-label="搜索结果" aria-busy={waiting}>
-              {results.query ? results.hits.map((hit, index) => (
-                <li key={`${hit.kind}:${hit.id}`} id={`${listId}-${index}`} className="palette__option" role="option" aria-selected={index === active} onPointerMove={() => setActive(index)}>
+              {showingResults ? results.hits.map((hit, index) => (
+                <li key={`${hit.kind}:${hit.id}`} id={`${listId}-${index}`} className="palette__option" role="option" aria-selected={index === selected} onPointerMove={() => setActive(index)}>
                   <Link href={searchResultHref(hit)} prefetch={false} tabIndex={-1} onClick={close}>
                     <span className="tag">{kindLabels[hit.kind] ?? "内容"}</span>
                     <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
@@ -162,7 +168,7 @@ export function SearchPalette() {
                 </li>
               )) : null}
               {count > 0 ? (
-                <li id={`${listId}-${count - 1}`} className="palette__option palette__option--all" role="option" aria-selected={active === count - 1} onPointerMove={() => setActive(count - 1)}>
+                <li id={`${listId}-${count - 1}`} className="palette__option palette__option--all" role="option" aria-selected={selected === count - 1} onPointerMove={() => setActive(count - 1)}>
                   <Link href={searchHref(results.query!, null)} prefetch={false} tabIndex={-1} onClick={close}>
                     {typeof results.total === "number" && results.total > results.hits.length ? `查看全部 ${results.total} 条结果` : "在搜索页里查看"}
                   </Link>
@@ -170,7 +176,20 @@ export function SearchPalette() {
               ) : null}
             </ul>
             {/* Before any typing the hint would only repeat the placeholder on screen; it is still read out (X-03). */}
-            <p className={!query && !text.trim() ? "palette__status visually-hidden" : "palette__status"} role="status">{message}</p>
+            <div className={!query && !text.trim() ? "palette__status visually-hidden" : "palette__status"}>
+              <p role="status">{message}</p>
+              {retryable ? (
+                <button type="button" className="search-recovery__action" onClick={() => {
+                  if (!retryable) return;
+                  setResults({ status: "loading", query, hits: [], total: null });
+                  setActive(-1);
+                  setAttempt(current => current + 1);
+                  input.current?.focus();
+                }}>重新搜索</button>
+              ) : showingResults && !results.hits.length ? (
+                <button type="button" className="search-recovery__action" onClick={() => { input.current?.focus(); input.current?.select(); }}>修改关键词</button>
+              ) : null}
+            </div>
             <p className="palette__foot" aria-hidden="true"><span>↑↓ 选择</span><span>回车 打开</span><span>/ 或 ⌘K 随时搜索</span></p>
           </div>
         ) : null}
