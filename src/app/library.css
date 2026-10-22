@@ -264,6 +264,8 @@
 .search__kinds { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 4px 0; }
 .search__kinds .tag { min-height: 34px; padding: 4px 14px; }
 .search__kinds .tag:hover { color: var(--accent); }
+/* At least as tall as the loading state that stands in for it (page-loading, 100vh): the footer, below the first screen while the results are read, then stays put when they arrive instead of rising into view (S13-5). */
+.search { min-height: 100vh; }
 .search__body { padding-top: 24px; }
 /*
  * Results read as a column of entries in a notebook (2026-10-20): no cards, hairlines between them, the kind as one

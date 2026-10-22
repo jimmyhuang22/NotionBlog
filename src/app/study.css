@@ -26,15 +26,15 @@ a.course-card:hover { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent
 .reading { position: relative; padding-bottom: 8px; }
 /*
  * The note's column width, read by the body, the pager, the trail above and the directory button, so all
- * line up at every width (S12): 860 for a note of text, 1120 with a page outline, 1440 when the note
- * holds columns or tables. From 1100 the course directory stands left of that column (the owner's choice of
- * 2026-10-21) and the frame grows by its width, so the pair stays centred. The outline (from 1180) sits right of
- * the article inside the column; the pager stops where the article does. The site header keeps the
- * site-wide edges (F35); only the reading area has its own.
+ * line up at every width (S12): 860, and 1120 from 1180 on, where the outline's column stands right of
+ * the article. It is the same for every note of a course, with or without an outline, columns or wide
+ * tables (F45; below 1180 since S13-3, where an outlined note used to run wider and the text jumped
+ * sideways between notes): tables scroll inside the card instead. From 1100 the course directory stands
+ * left of that column (the owner's choice of 2026-10-21) and the frame grows by its width, so the pair
+ * stays centred; the pager stops where the article does. The site header keeps the site-wide edges (F35);
+ * only the reading area has its own.
  */
 .reading.wrap--wide { --reading-pad: clamp(18px, 2.5vw, 48px); --reading-w: 860px; --reading-aside: 0px; --side-w: 0px; --side-gap: 0px; max-width: calc(var(--reading-w) + var(--side-w) + var(--side-gap) + 2 * var(--reading-pad)); padding-inline: var(--reading-pad); }
-.reading:has(.reading__body--toc) { --reading-w: 1120px; }
-.reading:has(.reading__article :is(.columns, .table-scroll)) { --reading-w: 1440px; }
 .reading__main { min-width: 0; }
 .reading .note-crumbs { max-width: var(--reading-w); margin-inline: auto; padding-right: 0; padding-left: 140px; }
 .note-back { display: none; }
@@ -161,7 +161,7 @@ a.course-card:hover { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent
    * outline, and a note with wide tables stays as wide as the rest (its tables scroll in the card), so moving
    * from note to note never shifts the text, the trail or the directory beside it.
    */
-  .reading.wrap--wide, .reading:has(.reading__body--toc), .reading:has(.reading__article :is(.columns, .table-scroll)) { --reading-w: 1120px; --reading-aside: 244px; }
+  .reading.wrap--wide { --reading-w: 1120px; --reading-aside: 244px; }
   .reading .reading__body { grid-template-columns: minmax(0, 1fr) 204px; }
   .reading .reading__body ~ .pager { padding-right: var(--reading-aside); }
 }
