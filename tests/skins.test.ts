@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { DEFAULT_SKIN, isSkin, rootAttributes, schemeFor, skins, themeScript } from "../src/lib/skins.ts";
+import { DEFAULT_SKIN, isSkin, rootAttributes, schemeFor, skinAfter, skins, themeScript } from "../src/lib/skins.ts";
 
 test("a skin with one scheme always shows it; the others follow the stored choice or the system", () => {
   assert.equal(schemeFor("island", "light", "dark"), "light");
@@ -10,6 +10,16 @@ test("a skin with one scheme always shows it; the others follow the stored choic
   assert.equal(schemeFor("ink", "dark", "light"), "dark");
   assert.equal(schemeFor("apple", null, "dark"), "dark");
   assert.equal(schemeFor("ink", null, "light"), "light");
+});
+
+test("the arrow keys walk the skins in their listed order and wrap round at either end", () => {
+  const ids = skins.map(skin => skin.id);
+  assert.equal(skinAfter(ids[0]!, 1), ids[1]);
+  assert.equal(skinAfter(ids[1]!, -1), ids[0]);
+  assert.equal(skinAfter(ids[0]!, -1), ids[ids.length - 1]);
+  assert.equal(skinAfter(ids[ids.length - 1]!, 1), ids[0]);
+  assert.equal(skinAfter(ids[0]!, ids.length), ids[0]);
+  assert.equal(skinAfter(ids[0]!, 0), ids[0]);
 });
 
 test("root attributes leave the default skin unmarked and pin the fixed schemes", () => {

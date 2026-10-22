@@ -44,6 +44,12 @@ export function skinOf(id: SkinId): Skin {
   return skins.find(skin => skin.id === id) ?? skins[0]!;
 }
 
+/** The skin `steps` places after `id` in the list above (negative for before), wrapping round at either end. */
+export function skinAfter(id: SkinId, steps: number): SkinId {
+  const from = Math.max(0, skins.findIndex(skin => skin.id === id));
+  return skins[(((from + steps) % skins.length) + skins.length) % skins.length]!.id;
+}
+
 /** The scheme a skin shows: its only one, or the stored choice, or whatever the system prefers. */
 export function schemeFor(skin: SkinId, stored: Scheme | null, system: Scheme): Scheme {
   const { schemes } = skinOf(skin);
