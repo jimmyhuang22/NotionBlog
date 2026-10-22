@@ -11,7 +11,7 @@ import { normalizeId } from "./config.ts";
 import { assertWebsiteSourceSchema as assertSourceSchema } from "./website-config.ts";
 import type { WebsiteNotionSource as NotionSource, WebsiteNotionConfig as NotionSourcesConfig } from "./website-config.ts";
 import { compareContent, contentDate, matchesContent } from "../../lib/content/website.ts";
-import { projectGameDates } from "../../lib/content/game-date.ts";
+import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
 import { mapBounded } from "./bounded-work.ts";
@@ -621,7 +621,7 @@ function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?
       const order = query.order ?? (kind === "course" ? "title-asc" : "date-desc");
       records.sort((a, b) => compareContent(a.item, b.item, order, timeZone));
       const { cursor: _cursor, ...filters } = query;
-      const fingerprint = createHash("sha256").update(JSON.stringify({ kind, timeZone, ...(kind === "game" ? { gameDatePolicy: "max-play-day-v2" } : {}), filters: Object.fromEntries(Object.entries(filters).sort(([a], [b]) => a.localeCompare(b))), sources: options.config.sources, records: records.map(({ item }) => [item.id, item.title, dateOf(item), item.updatedAt]) })).digest("base64url");
+      const fingerprint = createHash("sha256").update(JSON.stringify({ kind, timeZone, ...(kind === "game" ? { gameDatePolicy: GAME_DATE_POLICY } : {}), filters: Object.fromEntries(Object.entries(filters).sort(([a], [b]) => a.localeCompare(b))), sources: options.config.sources, records: records.map(({ item }) => [item.id, item.title, dateOf(item), item.updatedAt]) })).digest("base64url");
       let offset = 0;
       if (query.cursor) {
         const match = /^n1\.([A-Za-z0-9_-]{43})\.(\d+)$/.exec(query.cursor);

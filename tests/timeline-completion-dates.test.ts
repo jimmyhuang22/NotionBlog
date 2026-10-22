@@ -7,6 +7,7 @@ import { CONTENT_KINDS, type ContentFeatures } from "../config/features.ts";
 import { fixtureItems } from "../fixtures/content.ts";
 import { createMockRepository } from "../adapters/mock-repository.ts";
 import { compareContent, contentDate, createWebsiteQueries, pageOf, readTimelineIndexSnapshot, readTimelineSnapshot, timelineEvents } from "../src/lib/content/website.ts";
+import { projectGameDates } from "../src/lib/content/game-date.ts";
 import { libraryYears } from "../src/lib/content/years.ts";
 import { createHomeFeedRepository } from "../src/lib/content/home-feed-core.ts";
 import { createHomeFeedV2Repository } from "../src/lib/content/home-feed-v2-core.ts";
@@ -74,7 +75,7 @@ test("completion datetime precision and local event IDs are preserved without ma
   assert.deepEqual(timelineEvents(snapshot([earlier, later]), zone).map(event => event.id), ["book:later:2026-01-01", "game:earlier:2026-01-01"]);
 });
 
-test("movies, playing games and library sorting/year grouping retain their existing dates", () => {
+test("movies and playing activity retain their dates while library archives follow experience dates", () => {
   const movie = { ...structuredClone(fixtureItems.movie[0]), status: "watched" as const, watchedDate: date("2024-12-01", "2025-01-01") };
   assert.deepEqual(events(movie)[0].occurredAt, movie.watchedDate);
   const playing = game("playing", date("2023-05-12", "2023-06-17"));
@@ -82,10 +83,10 @@ test("movies, playing games and library sorting/year grouping retain their exist
   const manualLater = { ...playing, archiveDate: undefined, playedDate: date("2027-01-01") };
   assert.deepEqual(events(manualLater)[0].occurredAt, date("2027-01-01"));
   const items: AnyContent[] = [book("read", date("2022-07-19", "2023-01-01")), game("clear", date("2023-05-12", "2023-06-17")),
-    game("platinumed", null), movie];
+    game("platinumed", null), movie].map(item => item.kind === "game" ? projectGameDates(item, zone) : item);
   const original = structuredClone(items);
   assert.deepEqual(libraryYears(items.filter(item => item.kind === "book"), zone).years, [{ year: 2022, count: 1 }]);
-  assert.deepEqual(libraryYears(items.filter(item => item.kind === "game"), zone).years, [{ year: 2026, count: 2 }]);
+  assert.deepEqual(libraryYears(items.filter(item => item.kind === "game"), zone).years, [{ year: 2023, count: 1 }]);
   const dates = items.map(item => contentDate(item, zone));
   const sorted = [...items].sort((a, b) => compareContent(a, b, "date-desc", zone));
   timelineEvents(snapshot(items), zone);

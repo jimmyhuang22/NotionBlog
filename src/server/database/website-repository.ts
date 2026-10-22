@@ -9,7 +9,7 @@ import { libraryYears } from "../../lib/content/years.ts";
 import { studyTree } from "../notion/study-order.ts";
 import { compareContent, matchesContent, pageOf, documentPlainText, searchContentSnapshot, validateSearchQuery } from "../../lib/content/website.ts";
 import { CONTENT_KINDS } from "../../../config/features.ts";
-import { projectGameDates } from "../../lib/content/game-date.ts";
+import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../../lib/content/status.ts";
 import { WEBSITE_CONTENT_SQL, WEBSITE_SNAPSHOT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "./website-projection.ts";
 import { measureContentRead, measureContentReadAsync } from "../content-read-timing.ts";
@@ -238,7 +238,7 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     async list<K extends ContentKind>(kind: K,query: ListQuery={}) {
       validateListQuery(kind,query);const {cursor,limit,...filters}=query, timeZone=zone(), snapshot=await metadata(kind);
       const records=snapshot.records.filter(d=>matchesContent(d.item,filters,timeZone)).sort((a,b)=>compareContent(a.item,b.item,query.order??(kind==="course"?"title-asc":"date-desc"),timeZone));
-      const page=pageOf(records.map(d=>d.item) as ContentByKind[K][],{cursor,limit},["list",kind,version(snapshot),filters,limit??12,timeZone,...(kind==="game"?["max-play-day-v2"]:[])]);
+      const page=pageOf(records.map(d=>d.item) as ContentByKind[K][],{cursor,limit},["list",kind,version(snapshot),filters,limit??12,timeZone,...(kind==="game"?[GAME_DATE_POLICY]:[])]);
       if(kind!=="status" || !page.items.length)return page;
       const p=validate(await callSql<Projection>(db,options.scoped ? SCOPED_SELECTED_SQL : WEBSITE_STATUS_PAGE_SQL,
         options.scoped ? [kind,page.items.map(item=>item.slug),snapshot.runId,snapshot.revision] : [[kind],true,page.items.map(item=>item.slug)]));
