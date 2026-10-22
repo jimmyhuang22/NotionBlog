@@ -39,3 +39,19 @@ Movie 新增两个可选字段：
 部署详情标签可以先让旧快照采用通用评分标签；实际来源只有在显式映射、同版采集及成功内容发布后才会出现。工程检查不代表运行包已安装、真实来源已接线或网站已上线。
 
 本项只改变影视公共评分的信息传递及既有详情行标签，不调整页面排版、个人评分、书籍字段或栏目开关。
+
+## 映射策略源码候选
+
+用户已批准独立的影视映射策略候选，见[本次决定](decisions/2026-10-23-movie-rating-policy-transition.md)。`scripts/website-sync/movie-rating-policy.ts`提供工程入口，普通worker、CLI和网站均不导入或自动调用。
+
+`movieRatingMappingAddition`验证两份原始配置和指定source key：只能给一个既有启用影视来源新增此前缺失的`publicRating`／`ratingSource`，前者必须映射原`doubanRating`同一属性，后者必须是另一属性。删除两键后，包含禁用来源和未解析扩展值在内的原始配置语义完全相同；来源身份、顺序、公开范围、时区和个人评分均不能改变。结果绑定原始SHA及解析后的摘要，仅当前进程签发的对象可供后续入口使用，复制JSON不能取得授权。
+
+`applyMovieRatingMappingPolicy`与`rollbackMovieRatingMappingPolicy`要求owner提供独占连接上的事务回调，核对state预期revision／epoch／currentRun、旧摘要、空lease及期限、freshness、完整sources和permits。只更新配置摘要并将revision加一，保留epoch、当前成功指针、历史run、deny与来源范围。回退只接受同一核验对象的精确逆向变化，再推进一次revision，不恢复旧lease或递减历史。
+
+本候选仅用于qualified读取接续，且持久发布扩展必须尚无已采纳指针（或未安装）。已有持久发布指针时，前进和回退都拒绝：该扩展另外要求run与state的配置摘要相同，保留epoch不能保证其旧内容可读。入口在同一事务锁定并检查可选指针，不清除它、不改旧run摘要、不把published reader切换成qualified。此类环境须另行审阅兼容方案，不能直接安装本候选。
+
+逆向操作只回退这一配置摘要变化，不回退程序或网站版本。若新DTO已发布，不能据此安装不认识新字段的旧程序；完整运行包回退仍须单独核对同版读取、写入及当前成功快照。
+
+事务所有语句必须使用[同一数据库连接](https://node-postgres.com/features/transactions)，调用者负责提交、异常回滚及运行窗口。入口还将锁定state时的[事务ID](https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-PG-SNAPSHOT)绑定到最终更新，误用自动提交适配器时不执行更新。驱动异常不转发私有值；提交结果不明确时须由owner核实状态，不能自动重试。writer／reader没有此owner操作所需的直接表权限，没有新增角色、SQL函数或迁移。
+
+后续实际运行选择普通完整新采集，不传旧捕获恢复参数，不扩展旧兼容表或恢复目录。旧包与新包的影视、游戏及外部视频投影均有差异，来源证明相同不等于旧DTO适用；新采集须重新固定程序与来源、预算、停止条件、当前策略前像及回退绑定。既有媒体缓存仍须通过原有当前资格和字节核验。本候选的本机临时数据库验证不代表真实运行包、策略或配置已安装；真实操作、合并和部署均未获本项授权。
