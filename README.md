@@ -23,8 +23,8 @@ NotionBlog 是以 Notion 为内容后台的个人网站，将动态、层级学�
 建议使用 **Node.js 24 LTS** 与 npm；完整 Node 版本约束见 [package.json](package.json)。
 
 ```sh
-git clone https://github.com/jimmyhuang22/NotionBlog-clean-staging.git
-cd NotionBlog-clean-staging
+git clone https://github.com/jimmyhuang22/NotionBlog.git
+cd NotionBlog
 npm ci
 npm ci --prefix scripts/game-sync --ignore-scripts
 npm run dev
@@ -121,4 +121,4 @@ git diff --cached
 
 真实配置、凭据、个人记忆和私有资产放在忽略目录或托管平台的服务端环境中。`privacy:check` 检查当前候选文件；它不能代替 Git 历史、提交元数据及 GitHub 日志审查。具体要求见[隐私约定](docs/PRIVACY.md)与[公开准备报告](docs/PUBLIC_READINESS.md)。
 
-本仓库当前是独立的私人迁移准备仓库，临时名为 `NotionBlog-clean-staging`；完成切换后目标名称为 `NotionBlog`。项目原创源码采用 [MIT 许可证](LICENSE)。个人内容、头像、真实站点内容不随源码自动授权；第三方依赖、字体和媒体保留各自许可。实际公开仍须完成最终验收。
+本仓库已完成同名切换，使用独立的干净 Git 历史，当前仍保持私人并进行公开前验收。项目原创源码采用 [MIT 许可证](LICENSE)。个人内容、头像、真实站点内容不随源码自动授权；第三方依赖、字体和媒体保留各自许可。实际公开仍须完成最终验收。
