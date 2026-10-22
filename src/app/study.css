@@ -95,7 +95,13 @@ a.course-card:hover { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent
 .reading-outline .toc__item--2 a { padding-left: 24px; }
 .reading-outline .toc__item--3 a { padding-left: 36px; }
 .toc-drawer { margin: 0 0 24px; border-block: 1px solid var(--rule); }
-.toc-drawer summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: var(--text-sm); font-weight: 600; }
+.toc-drawer summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: var(--text-sm); font-weight: 600; list-style: none; }
+/* Folded, it says how many chapters it holds and shows a small arrow that turns as it opens (round four, X-11). */
+.toc-drawer summary::-webkit-details-marker { display: none; }
+.toc-drawer__count { margin-left: 0.4em; font-weight: 400; color: var(--muted); }
+.toc-drawer summary::after { content: ""; width: 7px; height: 7px; margin: -3px 6px 0 auto; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); }
+.toc-drawer[open] summary::after { margin-top: 3px; transform: rotate(-135deg); }
+@media (prefers-reduced-motion: no-preference) { .toc-drawer summary::after { transition: transform 0.2s cubic-bezier(0.3, 0.9, 0.3, 1), margin 0.2s cubic-bezier(0.3, 0.9, 0.3, 1); } }
 /* A page that has its own outline (the drawer here, the side column on wide screens) does not repeat an outline block from the text. */
 .reading__body--toc .prose__toc { display: none; }
 .pager { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
@@ -123,6 +129,8 @@ a.course-card:hover { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .reading .pager a:not(.pager__next) > span:first-child::before { content: "← "; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .reading .pager .pager__next > span:first-child::after { content: " →"; }
 
+/* Between phone and desktop the trail sits level with the directory button, and the title keeps clear of both (round four, W-10). */
+@media (min-width: 700px) and (max-width: 1099px) { .reading .note-crumbs { padding-top: 34px; padding-bottom: 32px; } }
 @media (max-width: 699px) {
   .reading .note-crumbs { display: none; }
   .note-back { display: flex; align-items: center; min-height: 80px; padding-left: 128px; }
