@@ -23,6 +23,7 @@ import { savePrivateJson } from "./private-json.ts";
 import { createCollectionCapture } from "./collection-capture.ts";
 import { configDigest } from "../../src/server/database/website-validation.ts";
 import { exportPublicationHandoff } from "./publication-handoff.ts";
+import { prepareHostCaptureRecovery } from "./capture-recovery-compatibility.ts";
 import { PublicationRevalidationError, type PublicationRevalidationProgress } from "./publication-revalidation.ts";
 
 /** Internal child: the host entry verifies the frozen release and holds BOTH host locks. */
@@ -45,6 +46,20 @@ async function main() {
   const sourceBytes = await readPrivateFile(env.NOTION_SOURCES_CONFIG ?? "");
   if (createHash("sha256").update(sourceBytes).digest("hex") !== env.WEBSITE_SOURCE_SHA256) throw new WorkerError("MISCONFIGURED");
   const config = JSON.parse(sourceBytes); parseWebsiteNotionConfig(config);
+  if ((env.WEBSITE_RESUME_SOURCE_FILE === undefined) !== (env.WEBSITE_RESUME_SOURCE_SHA256 === undefined)) throw new WorkerError("MISCONFIGURED");
+  if ((env.WEBSITE_RESUME_SOURCE_FILE !== undefined || env.WEBSITE_RESUME_SOURCE_SHA256 !== undefined || env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 !== undefined) &&
+      !env.WEBSITE_RESUME_RECOVERY_ID) throw new WorkerError("MISCONFIGURED");
+  if (env.WEBSITE_RESUME_RECOVERY_ID !== undefined && (!env.WEBSITE_RESUME_RUN_ID ||
+      env.WEBSITE_RESUME_QUALIFICATION !== "fresh" || !env.WEBSITE_RESUME_PRODUCER_PROJECT)) throw new WorkerError("MISCONFIGURED");
+  const recovery = env.WEBSITE_RESUME_RECOVERY_ID === undefined ? undefined : await prepareHostCaptureRecovery({
+    transitionId: env.WEBSITE_RESUME_RECOVERY_ID,
+    producerProject: env.WEBSITE_RESUME_PRODUCER_PROJECT!, producerManifest: env.WEBSITE_RESUME_PRODUCER_MANIFEST ?? "",
+    producerManifestSha256: env.WEBSITE_RESUME_PRODUCER_MANIFEST_SHA256 ?? "", consumerProject: process.cwd(),
+    consumerManifest: env.WEBSITE_CONSUMER_MANIFEST ?? "", consumerManifestSha256: env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 ?? "", currentSourceText: sourceBytes,
+    previousSource: env.WEBSITE_RESUME_SOURCE_FILE === undefined ? undefined : {
+      file: env.WEBSITE_RESUME_SOURCE_FILE, sha256: env.WEBSITE_RESUME_SOURCE_SHA256 ?? "" },
+  });
+  if (recovery && recovery.admission.consumerReleaseCommit !== env.WEBSITE_RELEASE_COMMIT) throw new WorkerError("CHECKPOINT_FAILED");
   const controller = new AbortController(), signal = controller.signal, started = Date.now(); let timedOut = false;
   const notion = createRuntimeNotionReader({ token: env.NOTION_TOKEN ?? "", notionVersion: env.NOTION_API_VERSION }, signal,
     { intervalMs: env.WEBSITE_NOTION_INTERVAL_MS === undefined ? undefined : Number(env.WEBSITE_NOTION_INTERVAL_MS) });
@@ -153,7 +168,8 @@ async function main() {
       const directory=join(state,"website-v2",env.WEBSITE_RESUME_RUN_ID,"collection-private");
       if(createHash("sha256").update(await readPrivateFile(join(directory,"index-private.json"))).digest("hex")!==env.WEBSITE_RESUME_INDEX_SHA256)throw new WorkerError("CHECKPOINT_FAILED");
       let producerReleaseCommit=env.WEBSITE_RELEASE_COMMIT!;
-      if(env.WEBSITE_RESUME_PRODUCER_PROJECT!==undefined){
+      if(recovery){producerReleaseCommit=recovery.admission.producerReleaseCommit;report.resumeCompatibility=recovery.admission;}
+      else if(env.WEBSITE_RESUME_PRODUCER_PROJECT!==undefined){
         const {verifyCaptureProducer}=await import('./capture-release-compatibility.ts');
         const compatibility=await verifyCaptureProducer({producerProject:env.WEBSITE_RESUME_PRODUCER_PROJECT,
           producerManifest:env.WEBSITE_RESUME_PRODUCER_MANIFEST??'',producerManifestSha256:env.WEBSITE_RESUME_PRODUCER_MANIFEST_SHA256??'',
@@ -161,9 +177,11 @@ async function main() {
         if(compatibility.consumerReleaseCommit!==env.WEBSITE_RELEASE_COMMIT)throw new WorkerError("CHECKPOINT_FAILED");
         producerReleaseCommit=compatibility.producerReleaseCommit;report.resumeCompatibility=compatibility;
       }
-      resumeCollection=await prepareCollectionResume({qualification:(env.WEBSITE_RESUME_QUALIFICATION??"original") as ResumeQualification,directory,identity:{runId:env.WEBSITE_RESUME_RUN_ID,sourceSha256:env.WEBSITE_SOURCE_SHA256!,releaseCommit:producerReleaseCommit,configDigest:configDigest(parseWebsiteNotionConfig(config))},db:runtimeSql.executor,
+      resumeCollection=await prepareCollectionResume({qualification:(env.WEBSITE_RESUME_QUALIFICATION??"original") as ResumeQualification,directory,identity:{runId:env.WEBSITE_RESUME_RUN_ID,sourceSha256:recovery?.mapping?.previousSourceSha256??env.WEBSITE_SOURCE_SHA256!,releaseCommit:producerReleaseCommit,configDigest:recovery?.mapping?.previousConfigDigest??configDigest(parseWebsiteNotionConfig(config))},db:runtimeSql.executor,
+        recovery:recovery?{...recovery,current:{sourceSha256:env.WEBSITE_SOURCE_SHA256!,configDigest:configDigest(parseWebsiteNotionConfig(config)),releaseCommit:env.WEBSITE_RELEASE_COMMIT!}}:undefined,
         onBound:async receipt=>{report.resumeQualification=receipt;await save("receipt-private.json",report);
           if(Date.parse(receipt.validUntil)-Date.parse(receipt.serverNow)<(seconds+post)*1000)throw new WorkerError("LIMIT_EXCEEDED");}});
+      report.courseProjectionRefresh=resumeCollection.courseProjectionRefresh;
       resumeBudget.guard();
       if(resumeBudget.plan.limits.notionRequests-resumeBudget.read().counters.notionRequests<reserve)throw new WorkerError("LIMIT_EXCEEDED");
     }

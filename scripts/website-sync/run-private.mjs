@@ -9,7 +9,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {directory,privateText,fileDigest,verifyRelease,fail} from './release.mjs';
 import {acquireLock,privateDirectory} from '../notion-sync/state.ts';
 const modes=new Set(['dry-run','stage','publish']);
-const keys=new Set(['format','project','manifest','privateRoot','stateDir','sourcesFile','sourceSha256','cacheDirectory','originalsDirectory','readerEnv','readerUrlFile','refreshSha256','converterSha256','timeoutSeconds','maxMediaBytes','maxCollectionBytes','notionIntervalMs','collectionConcurrency','captureCollection','resumeRunId','resumeIndexSha256','resumeRequestReserve','resumePostSeconds','resumeProducer','resumeQualification']);
+const keys=new Set(['format','project','manifest','privateRoot','stateDir','sourcesFile','sourceSha256','cacheDirectory','originalsDirectory','readerEnv','readerUrlFile','refreshSha256','converterSha256','timeoutSeconds','maxMediaBytes','maxCollectionBytes','notionIntervalMs','collectionConcurrency','captureCollection','resumeRunId','resumeIndexSha256','resumeRequestReserve','resumePostSeconds','resumeProducer','resumeQualification','resumeRecovery','resumeSource','resumeConsumerManifestSha256']);
 const publicCodes=new Set(['PRIVATE_DIRECTORY_INVALID','PRIVATE_INPUT_INVALID','RELEASE_INVALID','INVALID_ARGUMENTS','RUN_BUSY','RUN_CANCELLED','WORKER_START_FAILED']);
 const receiptCodes=new Set(['MISCONFIGURED','CONTENT_UNAVAILABLE','RATE_LIMITED','SCOPE_INCOMPLETE','IMAGE_REJECTED','IMAGE_UNAVAILABLE','LIMIT_EXCEEDED','BUSY','CANCELLED','LEASE_INVALID','CHECKPOINT_FAILED','RUN_BUDGET_EXCEEDED']);
 const hash=text=>createHash('sha256').update(text).digest('hex');
@@ -60,6 +60,11 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
  if(config.resumeProducer!==undefined&&(!resume||!config.resumeProducer||typeof config.resumeProducer!=='object'||
   Object.keys(config.resumeProducer).sort().join(',')!=='manifest,manifestSha256,project'||
   !['project','manifest','manifestSha256'].every(k=>typeof config.resumeProducer[k]==='string')))fail('PRIVATE_INPUT_INVALID');
+ if(config.resumeRecovery!==undefined&&(!resume||config.resumeQualification!=='fresh'||!config.resumeProducer||typeof config.resumeRecovery!=='string'||!config.resumeRecovery||!/^[a-f0-9]{64}$/.test(config.resumeConsumerManifestSha256)))fail('PRIVATE_INPUT_INVALID');
+ if(config.resumeConsumerManifestSha256!==undefined&&!config.resumeRecovery)fail('PRIVATE_INPUT_INVALID');
+ if(config.resumeSource!==undefined&&(!config.resumeRecovery||!config.resumeSource||typeof config.resumeSource!=='object'||
+  Object.keys(config.resumeSource).sort().join(',')!=='file,sha256'||typeof config.resumeSource.file!=='string'||
+  !/^[a-f0-9]{64}$/.test(config.resumeSource.sha256)))fail('PRIVATE_INPUT_INVALID');
  const {project,privateRoot,stateDir,cacheDirectory,originalsDirectory}=config;
  const release=await verifyRelease(project,config.manifest);
  await directory(privateRoot);await directory(stateDir);await directory(cacheDirectory);
@@ -67,6 +72,13 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
  if(originalsDirectory){await directory(originalsDirectory);await directory(join(originalsDirectory,'sha256'));
   if(cacheDirectory===originalsDirectory||cacheDirectory.startsWith(originalsDirectory+sep)||originalsDirectory.startsWith(cacheDirectory+sep))fail('PRIVATE_DIRECTORY_INVALID');}
  const source=await input(config.sourcesFile);JSON.parse(source);if(hash(source)!==config.sourceSha256)fail('PRIVATE_INPUT_INVALID');
+ let recovery;
+ if(config.resumeRecovery){
+  const {prepareHostCaptureRecovery}=await import('./capture-recovery-compatibility.ts');
+  recovery=await prepareHostCaptureRecovery({transitionId:config.resumeRecovery,
+   producerProject:config.resumeProducer.project,producerManifest:config.resumeProducer.manifest,producerManifestSha256:config.resumeProducer.manifestSha256,
+   consumerProject:project,consumerManifest:config.manifest,consumerManifestSha256:config.resumeConsumerManifestSha256,currentSourceText:source,previousSource:config.resumeSource});
+ }
  const notion=parseEnv(await privateText(join(privateRoot,'notion-readonly.env'))),writer=parseEnv(await privateText(join(privateRoot,'supabase-worker.env'))),reader=parseEnv(await input(config.readerEnv));
  const readerUrl=config.readerUrlFile?(await input(config.readerUrlFile)).trim():reader.DATABASE_READER_URL;
  if(!notion.NOTION_TOKEN||!writer.SYNC_DATABASE_URL||!writer.STORAGE_URL||!writer.STORAGE_BUCKET||!writer.STORAGE_API_KEY||!readerUrl)fail('PRIVATE_INPUT_INVALID');
@@ -87,7 +99,8 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
  }
  let resumePlan,compatibility;
  let producerReleaseCommit=release.commit;
- if(config.resumeProducer){
+ if(recovery){compatibility=recovery.admission;producerReleaseCommit=compatibility.producerReleaseCommit;}
+ else if(config.resumeProducer){
   const {verifyCaptureProducer}=await import('./capture-release-compatibility.ts');
   compatibility=await verifyCaptureProducer({producerProject:config.resumeProducer.project,producerManifest:config.resumeProducer.manifest,producerManifestSha256:config.resumeProducer.manifestSha256,consumerProject:project,consumerManifest:config.manifest});
   producerReleaseCommit=compatibility.producerReleaseCommit;
@@ -101,9 +114,9 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   const {parseWebsiteNotionConfig}=await import('../../src/server/notion/website-config.ts');
   const {configDigest}=await import('../../src/server/database/website-validation.ts');
   const {collectionResumePlan}=await import('./collection-resume-plan.ts');
-  const saved=await readCollectionCaptureForRevalidation(captureDirectory,{runId:config.resumeRunId,sourceSha256:config.sourceSha256,releaseCommit:producerReleaseCommit,configDigest:configDigest(parseWebsiteNotionConfig(JSON.parse(source)))});
+  const saved=await readCollectionCaptureForRevalidation(captureDirectory,{runId:config.resumeRunId,sourceSha256:recovery?.mapping?.previousSourceSha256??config.sourceSha256,releaseCommit:producerReleaseCommit,configDigest:recovery?.mapping?.previousConfigDigest??configDigest(parseWebsiteNotionConfig(JSON.parse(source)))});
   if(saved.pages.some(p=>!p.lease||p.lease.runId!==config.resumeRunId))fail('PRIVATE_INPUT_INVALID');
-  resumePlan={...collectionResumePlan(saved.pages),qualification:config.resumeQualification??'original',compatibility,requestReserve:config.resumeRequestReserve,postSeconds:config.resumePostSeconds};
+  resumePlan={...collectionResumePlan(recovery?saved.pages.filter(p=>p.record.detail.item.kind!=='course'):saved.pages),courseProjectionRefresh:recovery?{forcedCoursePages:saved.pages.filter(p=>p.record.detail.item.kind==='course').length,originalCaptureUnchanged:true}:undefined,qualification:config.resumeQualification??'original',compatibility,requestReserve:config.resumeRequestReserve,postSeconds:config.resumePostSeconds};
  }
  if(check)return {resumePlan,adapter:'private-host-v2',offlineCheck:true,releaseCommit:release.commit,mode,publicationMode,mediaProvider,networkChecked:false,sessionRefreshed:false,workerStarted:false,publicationEnabled:false};
  let manual,inode,unlock,temp;const controller=new AbortController(),cancel=()=>controller.abort();
@@ -133,6 +146,8 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
    WEBSITE_RESUME_RUN_ID:config.resumeRunId,WEBSITE_RESUME_INDEX_SHA256:config.resumeIndexSha256,
    WEBSITE_RESUME_REQUEST_RESERVE:resume?String(config.resumeRequestReserve):undefined,
    WEBSITE_RESUME_POST_SECONDS:resume?String(config.resumePostSeconds):undefined,
+   WEBSITE_RESUME_RECOVERY_ID:config.resumeRecovery,WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256:config.resumeConsumerManifestSha256,
+   WEBSITE_RESUME_SOURCE_FILE:config.resumeSource?.file,WEBSITE_RESUME_SOURCE_SHA256:config.resumeSource?.sha256,
    WEBSITE_RESUME_PRODUCER_PROJECT:config.resumeProducer?.project,WEBSITE_RESUME_PRODUCER_MANIFEST:config.resumeProducer?.manifest,
    WEBSITE_RESUME_PRODUCER_MANIFEST_SHA256:config.resumeProducer?.manifestSha256,WEBSITE_CONSUMER_MANIFEST:config.resumeProducer?config.manifest:undefined,
    WEBSITE_COLLECTION_CONCURRENCY:String(config.collectionConcurrency??1),

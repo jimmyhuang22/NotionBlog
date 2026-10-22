@@ -95,6 +95,19 @@ test("v2 host binds capture opt-in and rejects non-boolean capture settings", as
   Object.assign(f.config, { captureCollection: "true" }); await f.saveConfig();
   assert.equal((await invoke([...f.args, "--check"])).code, 1); await clean(f);
 });
+test("v2 host refuses recovery flags, orphan previous-source input and unknown course bypasses before startup", async t => {
+  const f = await fixture(t);
+  for (const extra of [
+    { resumeRecovery: true }, { resumeRecovery: "unknown-transition" },
+    { resumeSource: { file: "/missing", sha256: "a".repeat(64) } },
+    { courseProjectionRefresh: true }, { configurationTransition: {} },
+  ]) {
+    await writeFile(f.configFile, JSON.stringify({ ...f.config, ...extra }), { mode: 0o600 });
+    const result = await invoke([...f.args, "--check"]);
+    assert.equal(result.code, 1); assert.match(result.err, /PRIVATE_INPUT_INVALID/);
+    assert.equal(result.out.includes('"child"'), false); await clean(f);
+  }
+});
 test("persistent host mode requires stored originals, an extension release and a matching child receipt", async t => {
   const f = await fixture(t), path = join(f.inputs, "supabase-worker.env"), original = await readFile(path, "utf8");
   await writeFile(path, original + 'SYNC_PUBLICATION_MODE="published"\nSYNC_MEDIA_PROVIDER="notion"\n', { mode: 0o600 });
