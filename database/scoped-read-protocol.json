@@ -1,0 +1,15 @@
+{
+  "capability": "notionblog-scoped-read-v1",
+  "migration": {
+    "file": "20261017122812_scoped_content_reads.sql",
+    "sha256": "68300dd8b4955bd2bbdf7bdf2883617f7da1ec75116111625db25cc378dedde3"
+  },
+  "searchMigration": {
+    "file": "20261017131837_scoped_search_parts.sql",
+    "sha256": "cff660d247ded490f6875f7888b11cb6dff52317bd4982e87fd6e287a1c8e6a7"
+  },
+  "traversalMigration": {
+    "file": "20261017132621_iterative_search_walk.sql",
+    "sha256": "e6d3b166401bd2ad88f4be87e9813898e74575beaf2cfcfd1db56f8d4ce3f7c5"
+  }
+}

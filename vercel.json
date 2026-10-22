@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci && npm ci --prefix scripts/game-sync --ignore-scripts",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
+  },
+  "functions": {
+    "src/middleware.ts": {
+      "regions": [
+        "sin1"
+      ]
+    }
+  }
+}

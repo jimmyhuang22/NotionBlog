@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.homelab.notionblog-website-sync</string>
+  <key>ProgramArguments</key><array>
+    <string>__FIXED_NODE__</string><string>__FIXED_RELEASE__/scripts/website-sync/scheduled.mjs</string>
+    <string>--config</string><string>__PRIVATE_CONFIG__</string>
+  </array>
+  <key>WorkingDirectory</key><string>__FIXED_RELEASE__</string>
+  <key>StartInterval</key><integer>7200</integer>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>Umask</key><integer>63</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>ExitTimeOut</key><integer>110</integer>
+  <key>StandardOutPath</key><string>__PRIVATE_ROOT__/website-scheduled-stdout.log</string>
+  <key>StandardErrorPath</key><string>__PRIVATE_ROOT__/website-scheduled-stderr.log</string>
+</dict></plist>

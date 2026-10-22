@@ -1,0 +1,18 @@
+description: 'Website publication every two hours; fixed scope, worker budget, and reader verification.'
+labels: [production, notionblog]
+timeout_sec: 5520
+max_clean_up_time_sec: 90
+hist_retention_days: 14
+working_dir: __PRIVATE_ROOT__
+schedule: 'CRON_TZ=Australia/Melbourne 10 */2 * * *'
+overlap_policy: skip
+env:
+  NODE_OPTIONS: ''
+  NODE_PATH: ''
+  PATH: /usr/bin:/bin
+  NEXT_TELEMETRY_DISABLED: '1'
+steps:
+  - id: publish_and_verify
+    run: |
+      umask 077
+      exec __NODE_PATH__ __RELEASE_PATH__/scripts/website-sync/scheduled.mjs --config __CONFIG_PATH__

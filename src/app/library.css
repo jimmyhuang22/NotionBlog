@@ -1,0 +1,359 @@
+/* Library lists (movies, books, games) and the single-work page. */
+.library__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 24px; }
+.segmented { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: var(--radius-lg); background: var(--soft); }
+/* Links for filters that change the address; buttons (aria-pressed) for ones that only change the view in place. */
+.segmented :is(a, button) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: var(--text-sm); color: var(--muted); cursor: pointer; }
+.segmented :is(a[aria-current], button[aria-pressed="true"]) { background: var(--card); box-shadow: var(--shadow); color: var(--ink); font-weight: 600; }
+/*
+ * The year filter stays on one row and scrolls sideways when it does not fit. Its edges fade only on
+ * the side that has more to show, following the scroll position.
+ */
+.segmented--scroll { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.segmented--scroll::-webkit-scrollbar { display: none; }
+.segmented--scroll a { flex: none; }
+.segmented--scroll a:focus-visible { outline-offset: -2px; border-radius: 999px; }
+/* On the narrowest phones the links sit a little closer, so a short list fits without scrolling. */
+@media (max-width: 360px) { .segmented--scroll a { padding: 0 13px; } }
+@supports (animation-timeline: scroll()) {
+  .segmented--scroll {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--edge-start), #000 calc(100% - var(--edge-end)), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 var(--edge-start), #000 calc(100% - var(--edge-end)), transparent);
+    animation: segmented-edges linear both; animation-timeline: scroll(self inline);
+  }
+}
+@keyframes segmented-edges { 0% { --edge-start: 0px; --edge-end: 36px; } 10% { --edge-start: 36px; } 90% { --edge-end: 36px; } 100% { --edge-start: 36px; --edge-end: 0px; } }
+/*
+ * Under the heading: the years on the left, scrolling sideways when there are many, and the order as one
+ * button at the end of the same row (F34). Without a year row the button keeps that place on its own.
+ */
+.library__filters { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -14px 0 14px; }
+.library__filters .segmented--scroll { flex: 0 1 auto; min-width: 0; }
+.library__sort { flex: none; margin-left: auto; font-size: var(--text-sm); }
+/* Phones: the filters sit closer under the compact page head (globals.css). */
+@media (max-width: 540px) {
+  .library__filters { margin: -2px 0 8px; }
+}
+.library__sort a { position: relative; display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 999px; background: var(--soft); color: var(--ink); font-weight: 600; white-space: nowrap; }
+.library__sort a:hover { color: var(--accent); }
+.library__sort a > span { display: inline-flex; align-items: center; gap: 5px; }
+/* Pressed, it already names the order it leads to while that list is on its way. */
+.library__sort-next, .library__sort a:is(.is-turning, :has(.link-pending[data-pending])) .library__sort-now { display: none !important; }
+.library__sort a:is(.is-turning, :has(.link-pending[data-pending])) .library__sort-next { display: inline-flex !important; }
+/* The old name turning away over the new one (sort-toggle.tsx). */
+.library__sort-leaving { position: absolute; inset: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; pointer-events: none; }
+.library__group { padding-bottom: 26px; }
+/* A year is a quiet label above its covers, so a year with one or two works does not cost a full heading (W-01, 2026-10-20). */
+.library__group .section-title { padding: 0 4px 10px; font-family: var(--font-sans); font-size: var(--text-base); letter-spacing: 0.04em; color: var(--muted); }
+.library__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 26px 18px; }
+.library__item { display: flex; flex-direction: column; min-width: 0; line-height: 1.4; }
+.library__cover { position: relative; display: block; }
+/*
+ * A shelf (2026-10-20): each cover stands on a faint line that reaches half the gap either side, so a row reads as
+ * one shelf. Only on paper: ink draws it in ink; apple, island and y2k stay bare.
+ */
+:root:not([data-skin]) .library__cover::after { content: ""; position: absolute; left: -9px; right: -9px; bottom: -5px; height: 0; border-top: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); pointer-events: none; }
+@media (max-width: 520px) { :root:not([data-skin]) .library__cover::after { left: -6px; right: -6px; } }
+/* A film's title keeps to one line, so the rating under it lines up across a row (the owner's choice, 2026-10-17); the whole title is in its hover hint and on the detail page. */
+.library__grid--movie .library__title, .library__grid--game .library__title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/*
+ * A platinum game: a gold dot in the cover's lower right corner, ringed in white so it reads on any art, and out of
+ * the way of the game's logo; the platform boxes stay the card's one coloured signal (owner's pick, 2026-10-20).
+ */
+.library__badge.library__badge--gold { left: auto; top: auto; right: 8px; bottom: 8px; width: 12px; height: 12px; padding: 0; border-radius: 50%; background: linear-gradient(135deg, #f3e3a1, #c9a646); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); pointer-events: auto; }
+/*
+ * A game card's line: platform boxes and time played, the rating at the far right; on a card too narrow
+ * for all three the rating drops to its own line under the platform, flush left like the lines above it
+ * (owner's request, 2026-10-20), kept on every card so a row stays level.
+ */
+.library__grid--game .library__item { container-type: inline-size; }
+.library__game { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; margin-top: 2px; padding: 0 2px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.library__game-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.library__game-rating { white-space: nowrap; }
+@container (max-width: 210px) {
+  .library__game { grid-template-columns: minmax(0, 1fr); }
+  .library__game-rating { justify-self: start; min-height: 1.4em; }
+}
+/* A platform in its maker's colour, taken down towards ink (H-07, 2026-10-20) so a fact is quieter than an achievement; white reads at 6 or more on each. */
+.platform-chip { display: inline-block; padding: 1px 6px; border-radius: var(--radius-xs); background: var(--soft); font-size: var(--text-xs); font-weight: 700; line-height: 1.5; color: var(--ink); }
+.platform-chip--nintendo { background: #a8323a; color: #fff; }
+.platform-chip--playstation { background: #2f5f9a; color: #fff; }
+.platform-chip--pc { background: #4a4f5a; color: #fff; }
+:root[data-theme="dark"] .platform-chip--pc { background: #5a606b; color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .platform-chip--pc { background: #5a606b; color: #fff; } }
+/* A film's kind when it is not a film (剧集, 小品, 相声…): always light on a dark veil, whatever the theme. */
+.library__badge { position: absolute; left: 6px; top: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: var(--text-xs); color: #fff; pointer-events: none; }
+/* A title in the hand, as the shelf's label (2026-10-20); apple and y2k, whose hand is a sans, keep their weight. */
+.library__title { margin-top: 10px; padding: 0 2px; font-family: var(--font-hand); font-size: var(--text-md); font-weight: 400; }
+:is([data-skin="apple"], [data-skin="y2k"]) .library__title { font-size: var(--text-base); font-weight: 600; }
+/* The dot between two facts hangs in the gap before the later one; on a wrapped line it falls outside the clipped edge. */
+/* The work's sentence lies over the facts and shows on hover (library-grid.tsx); touch screens keep the facts. */
+.library__item { position: relative; }
+.library__said { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 2px; background: var(--bg); font-family: var(--font-hand); font-size: var(--text-sm); line-height: 1.6; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none; }
+@media (hover: hover) { .library__item:hover .library__said, .library__item:focus-visible .library__said { opacity: 1; } }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) { .library__said { transition: opacity 0.18s; } }
+.library__meta { display: flex; flex-wrap: wrap; gap: 0 14px; overflow-x: clip; padding: 0 2px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.library__meta span { position: relative; }
+.library__meta span + span::before { content: "·"; position: absolute; left: -9px; }
+.library__more { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 20px; padding-top: 4px; }
+.library__more span { font-size: var(--text-sm); color: var(--muted); }
+.cover { display: block; width: 100%; aspect-ratio: 2 / 3; border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); object-fit: cover; }
+/* Covers lift like the other linked cards. */
+.library__item:hover .cover, .album-card:hover .album-card__cover { box-shadow: var(--shadow-lift); }
+@media (prefers-reduced-motion: no-preference) {
+  .library__item .cover, .album-card__cover { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), box-shadow 0.3s; }
+  .library__item:hover .cover, .album-card:hover .album-card__cover { transform: translateY(-2px) rotate(-0.25deg); }
+  .library__item:active .cover, .album-card:active .album-card__cover { transform: scale(0.985); }
+}
+/*
+ * No cover: the title stands on the tile like the spine of a book on a shelf, so every tile differs.
+ * Sizes follow the tile's own width; a title too long for the tile is cut at its end, never at its start.
+ */
+.cover--empty, .album-card__cover.album-card__cover--empty { container-type: inline-size; padding: 11% 11% 11% 13.5%; box-shadow: var(--shadow), inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent); color: var(--ink); overflow: hidden; }
+.cover--empty span, .album-card__cover.album-card__cover--empty span { display: block; max-width: 100%; height: 100%; overflow: hidden; writing-mode: vertical-rl; font-family: var(--font-hand); font-size: clamp(15px, 18cqw, 26px); line-height: 1.5; letter-spacing: 0.08em; overflow-wrap: anywhere; }
+.library__item:hover .cover--empty, .album-card:hover .album-card__cover.album-card__cover--empty { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent); }
+/*
+ * A cover that is still loading: the spine and the image share one cell, and the spine is taken away
+ * once the image has arrived. Its title waits a moment, so a cover that comes quickly never flashes text.
+ */
+.cover-slot { display: grid; }
+.cover-slot > * { grid-area: 1 / 1; min-width: 0; }
+/* Until it arrives the image draws nothing of its own, or its backing would hide the spine beneath it. */
+.cover--waiting + .cover { background: none; box-shadow: none; }
+@media (prefers-reduced-motion: no-preference) { .cover--waiting span { animation: cover-wait 0.25s 0.3s both; } }
+@keyframes cover-wait { from { opacity: 0; } }
+/* Landscape tiles (games, albums) keep the title horizontal, up to three lines. */
+.library__grid--game .cover--empty, .work--game .cover--empty, .album-card__cover.album-card__cover--empty { display: flex; align-items: center; padding: 6% 8% 6% 9%; }
+.library__grid--game .cover--empty span, .work--game .cover--empty span, .album-card__cover.album-card__cover--empty span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; height: auto; writing-mode: horizontal-tb; font-size: clamp(15px, 8.5cqw, 22px); letter-spacing: 0.04em; }
+/* Game art is drawn wide; films and books are posters. Each keeps its own shape instead of a shared crop. */
+.library__grid--game { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.library__grid--game .cover, .work--game .cover { aspect-ratio: 16 / 9; }
+.work--game .work__cover { flex-basis: 380px; }
+@media (max-width: 520px) {
+  .library__grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 20px 12px; }
+  .library__grid--game { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+}
+
+/* A detail page sits in one centred column: a large cover beside what is known, the record below at the same width. */
+.work { display: flex; flex-wrap: wrap; gap: 28px 48px; max-width: 980px; margin-inline: auto; padding-block: 12px 36px; }
+.work ~ .reading__article { max-width: 980px; margin-inline: auto; }
+.work__cover { flex: 0 0 300px; max-width: 100%; }
+.work--book .work__cover { flex-basis: 260px; }
+.work__info { flex: 1 1 320px; min-width: 0; }
+.work__info h1 { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 42px); font-weight: 400; line-height: 1.2; }
+.work__original { margin: 6px 0 0; font-size: var(--text-body); color: var(--muted); }
+.work__info .reading__tags { margin: 16px 0 0; }
+/* What stands out first: one sentence of when and what in the hand font, then the rating as ink dots and progress as a line of ink. */
+.work__said { margin: 22px 0 0; font-family: var(--font-hand); font-size: var(--text-lg); line-height: 1.5; color: var(--ink); }
+.work__lead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin: 10px 0 0; }
+.work__lead dd { margin: 0; }
+/* A game's platforms between its status and rating (platform-chip below). */
+.work__platforms { display: flex; flex-wrap: wrap; gap: 6px; }
+.work__platforms .platform-chip { padding: 2px 9px; font-size: var(--text-sm); }
+.work__rating, .work__progress { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.work__dots { display: inline-flex; gap: 5px; }
+.work__dots i { width: 11px; height: 11px; border: 1.5px solid var(--accent); border-radius: 50%; }
+.work__dots i.is-on { background: var(--accent); }
+.work__progress { flex: 1 1 200px; }
+.work__progress dd { flex: 1; display: flex; align-items: center; gap: 10px; }
+.work__bar { flex: 1; height: 5px; border-radius: 999px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--progress) 100% no-repeat, var(--soft); }
+/*
+ * Everything else, as one quiet line under a hairline. A fact keeps together; the dots sit in the gaps between
+ * facts, so one that would start a wrapped line falls outside it and is clipped (as .library__meta does).
+ */
+.work__line { display: flex; flex-wrap: wrap; gap: 0 18px; overflow-x: clip; font-variant-numeric: tabular-nums; margin: 18px 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: var(--text-sm); line-height: 1.8; color: var(--muted); }
+.work__line span { position: relative; }
+.work__line span + span::before { content: "·"; position: absolute; left: -12px; }
+/* The floor of the page: the works on either side, as the note pages' previous and next cards (study.css .pager). */
+.work__neighbours, .work__neighbours-pending, .work__neighbours-failed { max-width: 980px; margin: 28px auto 0; }
+.work__neighbours a { flex-basis: 260px; }
+/* A work with only one neighbour shows it at half width on its own side, where it stands when both are there (W-08). */
+.work__neighbours:has(> a:only-child) a { flex: 0 1 calc(50% - 5px); }
+.work__neighbours:has(> .pager__next:only-child) { justify-content: flex-end; }
+.work__neighbours-pending { min-height: 92px; }
+.work__neighbours-failed { font-size: var(--text-sm); color: var(--muted); }
+/* No record yet: said in one quiet line, under it the small stroke the list's end has (W-09, 2026-10-21; it replaced a dashed slip). */
+.work__record-empty { position: relative; width: fit-content; margin: 8px auto 0; font-family: var(--font-hand); font-size: var(--text-base); letter-spacing: 0.04em; color: var(--muted); }
+:root:not([data-skin]) .work__record-empty { padding-bottom: 10px; }
+:root:not([data-skin]) .work__record-empty::after { content: ""; position: absolute; left: 0; bottom: 0; width: 46px; height: 6px; background: color-mix(in srgb, var(--accent) 55%, transparent); -webkit-mask: var(--pen-stroke) center / 100% 100% no-repeat; mask: var(--pen-stroke) center / 100% 100% no-repeat; }
+[data-skin="island"] .work__record-empty { background: linear-gradient(transparent 56%, var(--marker) 56% 88%, transparent 88%); }
+@media (max-width: 640px) {
+  .work__cover, .work--book .work__cover { flex-basis: 220px; }
+}
+/*
+ * Phones: a poster or book cover takes two fifths of the row with the title, tags, sentence and rating beside it,
+ * like the desktop page made small, so the first screen holds the whole record instead of the cover alone.
+ * The line of facts and the outside link run under both. Game art is wide and stays above the title.
+ */
+@media (max-width: 540px) {
+  .work:not(.work--game) { display: grid; grid-template-columns: 40% minmax(0, 1fr); grid-template-rows: repeat(5, auto) 1fr; gap: 0 16px; align-items: start; padding-top: 0; }
+  .work:not(.work--game) .work__info { display: contents; }
+  .work:not(.work--game) .work__cover { grid-column: 1; grid-row: 1 / span 6; }
+  .work:not(.work--game) .work__info > * { grid-column: 2; }
+  .work:not(.work--game) .work__info > :is(.work__line, .work__line ~ *) { grid-column: 1 / -1; }
+  .work:not(.work--game) .work__info h1 { font-size: var(--text-2xl); }
+  .work:not(.work--game) .work__original { font-size: var(--text-sm); }
+  .work:not(.work--game) .work__info .reading__tags { margin-top: 10px; }
+  .work:not(.work--game) .work__said { margin-top: 12px; font-size: var(--text-md); }
+  .work:not(.work--game) .work__lead { margin-top: 8px; gap: 8px 12px; }
+  .work:not(.work--game) .work__line { margin-top: 18px; }
+}
+
+/* Albums */
+.album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 28px 18px; }
+.album-card { display: flex; flex-direction: column; min-width: 0; line-height: 1.4; }
+.album-card__cover { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-lg); background: var(--card); box-shadow: var(--shadow); object-fit: cover; }
+.album-card__title { margin-top: 12px; padding: 0 4px; font-size: var(--text-body); font-weight: 600; letter-spacing: -0.01em; }
+.album-card__meta { padding: 0 4px; font-size: var(--text-sm); color: var(--muted); }
+.album-head { padding-block: 8px 28px; }
+.album-head h1 { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 42px); font-weight: 400; line-height: 1.2; }
+.album-head p { margin: 6px 0 0; font-size: var(--text-base); color: var(--muted); }
+.album-head .album-head__summary { margin-top: 14px; max-width: 640px; font-size: var(--text-body); color: var(--ink); }
+/* Consecutive photos flow into a grid; text, headings and the author's own columns span the full width. */
+.album .prose { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.album .prose > * { grid-column: 1 / -1; margin: 0; }
+.album .prose > .figure { grid-column: auto; }
+/*
+ * An album laid out in Notion columns: each column keeps its own order, but the pictures line up in rows across
+ * the columns, so a two-line caption no longer pushes one column down (W-04). Each column is a subgrid over shared
+ * rows; unused rows are empty and take no space. Narrow screens keep the columns stacked.
+ */
+@media (min-width: 600px) {
+  .album .columns:has(> .columns__col > .figure) { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: repeat(120, auto); gap: 0 28px; }
+  .album .columns:has(> .columns__col > .figure) > .columns__col { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; }
+}
+.album .prose > .figure img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.album .columns .figure img { width: 100%; }
+@media (max-width: 520px) {
+  .album .prose { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .album .prose > .figure figcaption { font-size: var(--text-xs); }
+}
+
+/* Blog */
+.posts__filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 18px !important; font-size: var(--text-sm) !important; }
+.posts__filter a { padding: 8px 0; color: var(--accent); }
+.posts__group { padding-bottom: 28px; }
+.posts__year { padding: 0 4px 12px; }
+.post-card { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; margin-bottom: 14px; padding: 24px 26px; border-radius: var(--radius-lg); }
+.post-card__text { flex: 999 1 280px; min-width: 0; }
+.post-card__date { font-size: var(--text-sm); color: var(--muted); }
+.post-card__title { margin: 2px 0 0; font-family: var(--font-hand); font-size: var(--text-2xl); font-weight: 400; line-height: 1.35; }
+.post-card__summary { margin: 8px 0 0; font-size: var(--text-md); line-height: 1.7; color: var(--muted); }
+.post-card__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
+.post-card__tags .tag, .post__tags .tag { min-height: 28px; padding: 2px 12px; }
+.post-card__tags .tag:hover, .post__tags .tag:hover { color: var(--accent); }
+.post-card__cover { flex: 1 1 150px; max-width: 220px; aspect-ratio: 4 / 3; border-radius: var(--radius-md); object-fit: cover; }
+.reading__body.post, .post__after { max-width: 776px; }
+.post__date { margin: 0 0 8px; font-size: var(--text-sm); color: var(--muted); }
+.post__title { margin-bottom: 12px; }
+.post__summary { margin: 0 0 18px; font-size: var(--text-body); line-height: 1.7; color: var(--muted); }
+.post__tags { margin-bottom: 24px; }
+.post__cover { display: block; width: 100%; height: auto; max-height: 420px; margin: 0 0 28px; border-radius: var(--radius-md); object-fit: cover; }
+.post__cover--failed { margin: 0 0 28px; }
+@media (max-width: 520px) {
+  .post-card { padding: 20px; }
+  .post-card__cover { max-width: 100%; }
+}
+
+/* Search: one field, an optional section filter, and results as linked cards. */
+.search__form { display: flex; align-items: center; gap: 2px; min-height: 58px; padding: 0 18px 0 8px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); }
+.search__form:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.search__submit { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.search__submit:hover { color: var(--accent); }
+.search__input { flex: 1 1 auto; min-width: 0; height: 44px; border: 0; background: none; font: inherit; font-size: var(--text-body); color: var(--ink); outline: none; }
+.search__input::placeholder { color: var(--muted); opacity: 1; }
+.search__kinds { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 4px 0; }
+.search__kinds .tag { min-height: 34px; padding: 4px 14px; }
+.search__kinds .tag:hover { color: var(--accent); }
+.search__body { padding-top: 24px; }
+/*
+ * Results read as a column of entries in a notebook (2026-10-20): no cards, hairlines between them, the kind as one
+ * character in a ring like the course overview's marks, and a match underlined in ink (O-04: no fill, which the island's yellow highlight already uses).
+ */
+.search__hits { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+.search__hits > li { border-bottom: 1px solid var(--rule); }
+.search-hit { display: block; padding: 16px 6px 18px; color: var(--ink); }
+.search-hit:hover { background: color-mix(in srgb, var(--soft) 55%, transparent); }
+.search-hit:hover .search-hit__title { color: var(--accent); }
+.search-hit__top { display: flex; align-items: baseline; gap: 12px; }
+.search-hit__kind { flex: 0 0 auto; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 50%; color: var(--muted); font-family: var(--font-hand); font-size: var(--text-xs); line-height: 1; transform: translateY(-2px); }
+.search-hit__kind > i { font-style: normal; }
+.search-hit__title { min-width: 0; font-family: var(--font-hand); font-size: var(--text-lg); line-height: 1.45; }
+.search-hit__excerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 6px; padding-left: 34px; font-size: var(--text-base); line-height: 1.7; color: var(--muted); }
+.search-hit mark { padding: 0; border-radius: 0; background: none; color: inherit; text-decoration: underline 1.5px var(--accent); text-underline-offset: 4px; text-decoration-skip-ink: none; }
+/* In the excerpt a found word is only inked: underlines there read as links of their own inside the one link (X-10). */
+.search-hit__excerpt mark { text-decoration: none; color: var(--accent); }
+.palette mark { padding: 0 2px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink); }
+@media (max-width: 520px) { .search-hit__excerpt { padding-left: 0; } }
+
+/* Projects: one card per project, what it is on the left, stack and links on the right. */
+.project-card { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-bottom: 14px; padding: 26px 28px; border-radius: var(--radius-lg); }
+.project-card__main { flex: 999 1 320px; min-width: 0; }
+.project-card__meta { margin: 0; font-size: var(--text-sm); color: var(--muted); }
+.project-card__title { margin: 2px 0 0; font-family: var(--font-hand); font-size: var(--text-2xl); font-weight: 400; line-height: 1.35; }
+.project-card__summary { margin: 8px 0 0; font-size: var(--text-md); line-height: 1.7; color: var(--muted); }
+.project-card__side { flex: 1 1 180px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.project__stack { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.project__links { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0; font-size: var(--text-sm); }
+.project__links a { padding: 6px 0; }
+.project__facts { display: flex; flex-direction: column; gap: 10px; margin: 0 0 24px; }
+.project__facts:empty { display: none; }
+@media (max-width: 520px) { .project-card { padding: 20px; } }
+
+/* Quick search: the search page's short form, laid over the current page. */
+.palette { width: min(640px, calc(100vw - 28px)); max-width: none; max-height: min(600px, calc(100dvh - 140px)); margin: 96px auto auto; padding: 0; border: 0; border-radius: var(--radius-lg); background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--rule), 0 30px 60px -24px rgba(30, 24, 10, 0.5); overflow: hidden; }
+/* The page behind is dimmed, never tinted with the text colour: in a dark theme that colour is light and washed the page out. */
+.palette::backdrop { background: rgba(12, 12, 14, 0.4); background: light-dark(rgba(32, 36, 44, 0.3), rgba(0, 0, 0, 0.6)); }
+.palette__panel { display: flex; flex-direction: column; max-height: inherit; }
+.palette__field { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 12px 0 20px; color: var(--muted); }
+.palette__input { flex: 1 1 auto; min-width: 0; height: 44px; border: 0; background: none; font: inherit; font-family: var(--font-hand); font-size: var(--text-lg); color: var(--ink); outline: none; }
+.palette__input::placeholder { color: var(--muted); opacity: 1; }
+.palette__input::-webkit-search-cancel-button { display: none; }
+.palette__close { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer; }
+.palette__close kbd { padding: 3px 8px; border-radius: var(--radius-xs); background: var(--soft); font: 12px var(--font-mono); color: var(--muted); }
+/* The key name is for keyboards; a touch screen gets the word instead. */
+.palette__close span { display: none; font-size: var(--text-sm); color: var(--accent); }
+.palette__list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 0 8px; list-style: none; overflow-y: auto; }
+.palette__list:not(:empty) { padding-block: 8px; border-top: 1px solid var(--rule); }
+.palette__option a { display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); }
+.palette__option a:hover { color: inherit; }
+.palette__option[aria-selected="true"] a { background: var(--soft); }
+.palette__option .tag { flex: 0 0 auto; white-space: nowrap; }
+.palette__title { flex: 0 1 auto; min-width: 0; max-width: 60%; font-family: var(--font-hand); font-size: var(--text-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette__excerpt { flex: 1 1 0; min-width: 0; font-size: var(--text-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette__option--all a { font-size: var(--text-sm); color: var(--accent); }
+.palette__status { flex: 0 0 auto; margin: 0; padding: 14px 20px; border-top: 1px solid var(--rule); font-size: var(--text-sm); color: var(--muted); }
+.palette__status:empty { display: none; }
+.palette__foot { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 10px 20px; border-top: 1px solid var(--rule); font-size: var(--text-xs); color: var(--muted); }
+@media (max-width: 520px), (hover: none) {
+  .palette__foot, .palette__close kbd { display: none; }
+  .palette__close span { display: inline; }
+}
+@media (max-width: 520px) {
+  .palette { margin-top: 12px; max-height: calc(100dvh - 24px); }
+  .palette__option a { flex-wrap: wrap; gap: 4px 10px; }
+  .palette__title { max-width: none; white-space: normal; }
+  .palette__excerpt { flex-basis: 100%; }
+}
+
+/*
+ * A pressed filter answers at once, before its list has arrived (link-pending.tsx marks the link):
+ * the pressed choice darkens and the list it is about to replace steps back.
+ */
+.link-pending { display: none; }
+/* A pressed work card answers before its page arrives. */
+.library__item:has(.link-pending[data-pending]) { cursor: progress; }
+.library__item:has(.link-pending[data-pending]) :is(.cover, .cover-slot) { opacity: 0.55; transition: opacity 0.15s; }
+.segmented a:has(.link-pending[data-pending]) { color: var(--ink); }
+/* Search sections are tags: the pressed one takes the chosen look at once. */
+.search__kinds a:has(.link-pending[data-pending]) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
+.wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-head:has(.link-pending[data-pending]) + .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { opacity: 0.45; }
+@media (prefers-reduced-motion: no-preference) {
+  /* A short delay, so a list that arrives quickly never flickers. */
+  .library__group, .library__more, .library__filters ~ .state, .status-head + .timeline, .search__kinds ~ .search__body { transition: opacity 0.2s 0.1s; }
+}
+
+/* A work's page on its way: the same layout, quiet bars in place of the words. */
+.work-loading__crumb { width: 72px; height: 14px; }
+.work-loading .work__cover .cover { box-shadow: none; background: var(--soft); }
+.work-loading__title { width: 70%; height: 40px; margin-bottom: 26px; }
+.work-loading__line { height: 16px; margin-bottom: 14px; }

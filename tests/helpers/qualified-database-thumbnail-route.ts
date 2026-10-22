@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {Pool} from 'pg';
+import {mediaIdentity} from '../../src/server/database/validation.ts';
+import {WEBSITE_SCHEMA_DIGEST} from '../../contracts/website-sync.ts';
+const hash=(b:Uint8Array)=>createHash('sha256').update(b).digest('hex');
+const original=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+let bytes=Buffer.from([82,73,70,70,4,0,0,0,87,69,66,80]);
+const owner='00000000000000000000000000000001',asset=mediaIdentity(owner,'cover',hash(original));
+const media={assetId:asset,ownerPageId:owner,sha256:hash(original),objectKey:'sha256/'+hash(original),byteSize:original.length,mime:'image/png',width:null,height:null};
+const thumbnail={assetId:mediaIdentity(owner,'thumbnail:400:'+asset,hash(bytes)),ownerPageId:owner,sha256:hash(bytes),objectKey:'sha256/'+hash(bytes),byteSize:bytes.length,mime:'image/webp',width:400,height:300};
+const projection={thumbnailCapability:'notionblog-thumbnail-index-v1',schemaDigest:WEBSITE_SCHEMA_DIGEST,version:'v2',runId:'11111111-1111-4111-8111-111111111111',source:{media,binding:{assetId:asset,ownerPageId:owner,sha256:media.sha256,locator:{kind:'cover'},delivery:'notion',sourceFingerprint:'a'.repeat(64)}},thumbnail};
+let sourceRequests=0,objectRequests=0,queries=0,denied=false,withdrawDuringRead=false;
+const query=Pool.prototype.query,fetcher=globalThis.fetch;
+try{
+ Object.assign(process.env,{CONTENT_PROVIDER:'database',DATABASE_CONTENT_VERSION:'2',DATABASE_PUBLICATION_MODE:'qualified',DATABASE_READER_URL:'postgres://fixture:fixture@localhost/db',DATABASE_TLS:'disable',MEDIA_PROVIDER:'notion',MEDIA_THUMBNAILS:'enabled',MEDIA_THUMBNAIL_QUALIFICATION:'database',THUMBNAIL_STORAGE_PROVIDER:'cos',STORAGE_PROVIDER:'supabase',COS_BUCKET:'fiction-media-1250000000',COS_REGION:'ap-shanghai',COS_PREFIX:'notionblog',COS_SECRET_ID:'fixtureSecretId123',COS_SECRET_KEY:'fixtureSecretKeyForCos123',NOTION_TOKEN:'offline-source-token',NOTION_SOURCES_JSON:JSON.stringify({schemaVersion:2,sources:[{key:'statuses',kind:'status',enabled:true,dataSourceId:owner,fields:{title:'Name',recordedAt:'Date'},publication:{mode:'all',allowlistPageIds:[]}}]})});
+ for(const key of ['NOTION_TOKEN','NOTION_SOURCES_JSON','NOTION_SOURCES_CONFIG','DATABASE_MEDIA_DIRECTORY','COS_READ_TRANSPORT','COS_SECURITY_TOKEN','COS_CREDENTIALS_EXPIRES_AT'])delete process.env[key];
+ Pool.prototype.query=(async(sql:string)=>{queries++;assert.equal(sql,'SELECT nb_thumbnail_api.read_media($1,$2,$3) AS result');return {rows:[{result:denied?null:projection}]};}) as typeof Pool.prototype.query;
+ globalThis.fetch=async input=>{const u=new URL(String(input));if(u.hostname!=='fiction-media-1250000000.cos.ap-shanghai.myqcloud.com'){sourceRequests++;throw Error('Notion must not be requested');}objectRequests++;if(withdrawDuringRead)denied=true;return new Response(bytes);};
+ const {GET}=await import('../../src/app/media/v2/[assetId]/route.ts');
+ const call=()=>GET(new Request('https://example.test/media/v2/'+asset+'?thumbnail=400'),{params:Promise.resolve({assetId:asset})});
+ const good=await call();assert.equal(good.status,200);assert.deepEqual(Buffer.from(await good.arrayBuffer()),bytes);assert.equal(queries,2);assert.equal(sourceRequests,0);
+ const cached=await call();assert.equal(cached.status,200);assert.deepEqual(Buffer.from(await cached.arrayBuffer()),bytes);assert.equal(queries,4);assert.equal(objectRequests,1);assert.match(cached.headers.get('Server-Timing')!,/desc="hit"/);
+ denied=true;assert.equal((await call()).status,404);assert.equal(objectRequests,1);
+ // A new derivative must download again; withdrawal during that transfer still blocks it.
+ bytes=Buffer.concat([bytes,Buffer.from([0])]);Object.assign(thumbnail,{sha256:hash(bytes),objectKey:'sha256/'+hash(bytes),byteSize:bytes.length,assetId:mediaIdentity(owner,'thumbnail:400:'+asset,hash(bytes))});
+ denied=false;withdrawDuringRead=true;assert.equal((await call()).status,404);assert.equal(objectRequests,2);assert.equal(sourceRequests,0);
+ console.log(JSON.stringify({sourceRequests,objectRequests,cacheHitQualified:true,centralWithdrawalBlocked:true,postReadWithdrawalBlocked:true}));
+}finally{Pool.prototype.query=query;globalThis.fetch=fetcher;}

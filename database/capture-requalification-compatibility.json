@@ -1,0 +1,55 @@
+{
+  "producerCommit": "6760363e13c96e616c8616e0502b9191dbacdaea",
+  "files": [
+    {
+      "path": "scripts/check-website-protocol.ts",
+      "before": "153b5c807f4fdef81207cf093ad54db5bf0c964c1e5d1a9ae66d8322c54b5e1d",
+      "after": "d5060e22750b2aaa5a13682657785029398958086013966bd40ca85d9aae5ddf"
+    },
+    {
+      "path": "scripts/website-sync/collection-capture.ts",
+      "before": "323c3d12b1887a16548e1afe780246db9675b70cafac672a2d9546924ec40771",
+      "after": "1d788a23f48e9b5d6bee4857812eef3b366e676b0c07278e1a9adb001384db1a"
+    },
+    {
+      "path": "scripts/website-sync/collection-revalidation.ts",
+      "before": "c11e199cf1aa559f9dffa4e97b823f4ad9532c4c93a7de6521b425d0b1d11903",
+      "after": "44ccbfdf1b9cd44e6fad9952b345d6fcc422cd101b001191fee801011ebf2766"
+    },
+    {
+      "path": "scripts/website-sync/run-private.mjs",
+      "before": "a36f84b7d49c453bca41c998e205fa9324191fa579d8672e91077952ab62073f",
+      "after": "eacbc5fd27173ed5a45b6063be4f8758e90dbcff23d589ce10dcfd24afd233b0"
+    },
+    {
+      "path": "scripts/website-sync/run.ts",
+      "before": "6028c0cdd6c25cee0498492b317c88af1d9138a5df8ab49d2915fa3ce556bbfb",
+      "after": "2db0b821c4b272d29f5cb5af5de61e75830c7c7c659cd4465ac8fc3f8e3825e1"
+    },
+    {
+      "path": "scripts/website-sync/worker.ts",
+      "before": "b9ccf53f3c08b1aa785f895cd76c6c4b78d64efa4999399fc0ea7b14684992be",
+      "after": "62d47f9448720e5cf3179f589348c7dca185b5ab12e35c5286e8f2537b411b5f"
+    },
+    {
+      "path": "src/server/database/website-repository.ts",
+      "before": "bfbcdc7ed6e2eab4b6176e7b49b21510db16e67f4e4d627842621b7726a4facd",
+      "after": "b47cba51f25880d3080a9970e086956c270f88ced8f38f07dcda1ff76c8883af"
+    },
+    {
+      "path": "src/server/notion/website-repository.ts",
+      "before": "9647a663ab1dd3f8156521da46e69feabdaa112cea9068b9e37b28a6611326ce",
+      "after": "cc5355e934d2f106def8d1c038e2c63cb51a0b96c0f0d8050478affcb730b6b1"
+    },
+    {
+      "path": "database/fresh-qualification-protocol.json",
+      "before": null,
+      "after": "e58f6a18190e2dbe6a821f21b7f4d993a810c0d11b969bd0ff0f69e4aee6f814"
+    },
+    {
+      "path": "supabase/migrations/20261016025910_fresh_collection_qualification.sql",
+      "before": null,
+      "after": "d4c9a7199a84fe8a3f16d7702aae0eacc2cfc3ee8d1dd3cbc7e47f272ef9be19"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "collections": [
+    {
+      "platform": "bilibili",
+      "kind": "season",
+      "accountId": "10001",
+      "collectionId": "200",
+      "representativeUrl": "https://www.bilibili.com/video/BV0000000001/"
+    }
+  ]
+}

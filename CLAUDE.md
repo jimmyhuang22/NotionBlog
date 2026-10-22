@@ -1,0 +1,25 @@
+# 前端与 UI
+
+先读 [开发接手说明](docs/DEVELOPMENT_HANDOFF.md) 和 [前端接手说明](docs/FRONTEND_GUIDE.md)，再读 AGENTS.md、README.md、docs/REQUIREMENTS.md、决策记录与进度记录（`docs/decisions/` 与 `docs/progress/` 下的各项记录，以及 2026-10-12 前的存档 docs/DECISIONS.md 与 docs/PROGRESS.md）。本地若存在 `.local/PROJECT_MEMORY.md` 和 `.local/FRONTEND_PRIVATE_NOTES.md`，一并读取，个人细节不得复制到公共文件。
+
+Claude 负责视觉、页面、组件与交互；后端、同步、数据库和部署由 Codex 负责。共享工程位于当前根目录，不另外初始化前端项目。
+
+## 当前状态
+
+首版前端已完成并合入 main，正式站点用真实数据运行：首页混合时间线（含发在其他平台的作品与合集卡片）、作品页（发在其他平台的全部作品）、动态（图片、条件展开、年份切换）、学习首页、课程与笔记阅读、影视、书籍、游戏、相册、17 类正文块、看大图、代码高亮与公式排版、浅色与深色主题。博客与项目的页面也已完成，但栏目保持关闭，只在演示数据下验证过。视觉方向与首页排版已由用户确认，见前端接手说明的“已经定下的设计”，不要重新发散。
+
+前端剩余工作大多在等后端或等用户：全部课程发布后的学习区复验、作品库与相册封面的小图（到位后才打开列表的自动加载）、博客与“项目”的真实来源。各页面在什么数据下验证过，见前端接手说明的“页面与状态”。对后端的需求与当前调用方式见 [后端交接包](docs/BACKEND_HANDOFF.md)。
+
+## 取数与边界
+
+服务端页面从 `src/lib/content/index.ts` 导入 `contentRepository`：list、get、getHome、getCourseTree、getCourseMetadata、getStatusYears。客户端组件接收 DTO；交互取数使用 `/api/content/[kind]`、`/api/content/[kind]/[slug]`、`/api/study/[course]/tree` 和 `/api/status/years`。不要直接导入原始来源、Token、Notion SDK 或数据库模块，也不要修改 `src/app/api/` 与 `src/app/media/` 下的路由。
+
+地址以 DTO.href 为准，不自行拼接。演示内容不能呈现为真实记录。父页面公开不代表子页面公开，未公开的链接显示为不可点击，不能跳回私有 Notion 地址。媒体使用站内路径和普通 `<img>`，不经过图片优化缓存。
+
+缺日期、封面、评分、空列表、无正文与上游失败都要有明确状态，不补值。慢请求要有加载反馈，目录失败只影响目录本身并可重试；目录与笔记链接保持 `prefetch={false}`。
+
+## 协作
+
+依赖、契约、fixtures、栏目开关和全局入口属于共享范围，变更前先和用户确认。每项工作从最新 develop 开短期分支、向 develop 开合并请求，按影响范围完成本机验证后自行合并，不必等用户逐个放行，也不等平台检查：日常进 develop 的请求不再逐个触发平台检查，develop 约每两小时集中检查一次，失败了回头修。不为无关 develop 更新反复同步和检查。存在冲突或依赖／同一逻辑变化时先整合验证；纯说明与记录文档做记录格式、链接、差异和隐私检查，应用／构建输入改变做集中 check／build，具体见 AGENTS.md。发布到 main 仍验收完整集成版本，只由用户合并，除非用户就那一次发布明确指定代为合并。Git 上的文字用英文，文档与界面文案用中文。每次完成在 `docs/progress/` 下新建一个文件（不再编辑 docs/PROGRESS.md），写明页面、组件、验证方式与宽度、限制与下一项；只在演示数据下验证过的要明说。
+
+develop → main 发布请求打开期间，暂缓向 develop 合并，避免改变受检版本而让检查重排；独立分支可继续开发。等发布合并后恢复日常合并；用户另行明确解除暂停时按其指令执行，具体见 AGENTS.md 的发布窗口约定。

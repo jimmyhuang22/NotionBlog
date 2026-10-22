@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "isExampleOnly": true,
+  "sources": [
+    {
+      "key": "status",
+      "kind": "status",
+      "dataSourceId": "",
+      "enabled": false,
+      "publication": { "mode": "allowlist", "allowlistPageIds": [] },
+      "fields": { "title": "Name", "recordedAt": "Created time" },
+      "cover": { "strategy": "none" }
+    },
+    {
+      "key": "study",
+      "kind": "course",
+      "dataSourceId": "",
+      "enabled": false,
+      "publication": { "mode": "allowlist", "allowlistPageIds": [] },
+      "fields": { "title": "Name", "semester": "Semester", "tags": "Tags" },
+      "cover": { "strategy": "native-page-cover" }
+    },
+    {
+      "key": "study-notes",
+      "kind": "study-note",
+      "dataSourceId": "",
+      "coursePageId": "",
+      "enabled": false,
+      "publication": { "mode": "allowlist", "allowlistPageIds": [] },
+      "fields": { "title": "Name", "date": "Date", "type": "Type" },
+      "cover": { "strategy": "native-page-cover" }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "producerCommit": "520e82f764f18955a63a04f961285c645d5fd500",
+  "files": [
+    {
+      "path": "scripts/website-sync/worker.ts",
+      "before": "5856fa989875eaa0298fe756224c353d994199a7128bf198edfcc339cbae31d4",
+      "after": "e1ae0225cc90903726139a0e13f707491d2d66032b28b454620c3a7b97d7e73d"
+    },
+    {
+      "path": "scripts/website-sync/run.ts",
+      "before": "238dec444d4ed7173c57edc6bf77c604d653d063a8870c3f4716c300530f9d93",
+      "after": "cb70d872076eb0125c9f885c0f122e4384acc81ccbc9187cddbf16723fde5e1a"
+    },
+    {
+      "path": "scripts/website-sync/collection-capture.ts",
+      "before": "1d788a23f48e9b5d6bee4857812eef3b366e676b0c07278e1a9adb001384db1a",
+      "after": "a390be0b5ae46c5320988bf8a430ddb67c6fdc2adff1234393b8c1d4bea1d195"
+    },
+    {
+      "path": "scripts/website-sync/publication-revalidation.ts",
+      "before": null,
+      "after": "914108e2f939c044b38dfd8434c18cdbed9e3562a28ed39f5fed9359d77e74e8"
+    }
+  ],
+  "reviewedSourceFiles": [
+    {
+      "path": "scripts/website-sync/worker.ts",
+      "after": "0a87ec829c24cf944aec0e427c26c20f211de047a7fa2f6febea68776d0376be"
+    },
+    {
+      "path": "scripts/website-sync/run.ts",
+      "after": "961ef42c5e802a772c344e5b32265f437572ad7075025c85d26ce314ca33971b"
+    },
+    {
+      "path": "scripts/website-sync/collection-capture.ts",
+      "after": "a390be0b5ae46c5320988bf8a430ddb67c6fdc2adff1234393b8c1d4bea1d195"
+    },
+    {
+      "path": "scripts/website-sync/publication-revalidation.ts",
+      "after": "914108e2f939c044b38dfd8434c18cdbed9e3562a28ed39f5fed9359d77e74e8"
+    }
+  ]
+}

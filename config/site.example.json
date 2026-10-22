@@ -1,0 +1,28 @@
+{
+  "isExampleOnly": true,
+  "siteName": "NotionBlog",
+  "notionSiteUrl": "",
+  "timeZone": "UTC",
+  "profile": {
+    "name": "",
+    "bio": "",
+    "avatar": ""
+  },
+  "studyProjects": [
+    {
+      "slug": "example-programme",
+      "title": "Example Learning Programme",
+      "code": "DEMO",
+      "category": "学位学习",
+      "layout": "semesters",
+      "courseCodes": null
+    }
+  ],
+  "socials": [
+    { "platform": "bilibili", "url": "" },
+    { "platform": "xiaohongshu", "url": "" },
+    { "platform": "steam", "url": "" },
+    { "platform": "github", "url": "" },
+    { "platform": "email", "url": "" }
+  ]
+}

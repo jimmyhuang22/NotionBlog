@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-incremental-publication-v1",
+  "migration": {
+    "version": 1,
+    "file": "20261012225727_incremental_publication.sql",
+    "sha256": "987e132ccbbf0e73e7f66014f331624d4719c5eb44423c0b89a2ab91f05a579f"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-search-precomputed-v1",
+  "algorithm": "scoped-walk-e6d3b166-v1",
+  "migration": {
+    "file": "20261019105018_guarded_search_precomputation.sql",
+    "sha256": "c19b5d1c8e82111ff458f73c3b5cfe215ff9bb58116736248f884c6b46adf50c"
+  }
+}

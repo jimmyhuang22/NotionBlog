@@ -1,0 +1,10 @@
+{
+  "capability": "notionblog-public-cache-v1",
+  "version": 1,
+  "migration": {
+    "file": "supabase/migrations/20261020203508_public_content_cache.sql",
+    "sha256": "90355b5c3ca29ad539623e7203d69d91d59445ea7299ef3b5030050ac1a3e97b"
+  },
+  "installedByBuild": false,
+  "enabledByDefault": false
+}

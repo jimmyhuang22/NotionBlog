@@ -1,0 +1,10 @@
+{
+  "capability": "notionblog-thumbnail-index-v1",
+  "migrations": [
+    {
+      "version": "001-media-thumbnails",
+      "file": "20261011123536_media_thumbnails.sql",
+      "sha256": "671e034b85f1c859c9a2fcbf4ea915c8dba371412472d83da2566c3f1e0ec3fa"
+    }
+  ]
+}

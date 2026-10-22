@@ -1,0 +1,5 @@
+# Isolated optional HTTP transport; no GUI, browser, signer or login-cookie dependency.
+curl-cffi==0.16.3
+cffi==2.1.1
+certifi==2026.7.22
+pycparser==3.11

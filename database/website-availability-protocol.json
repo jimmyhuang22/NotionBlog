@@ -1,0 +1,10 @@
+{
+  "capability": "notionblog-website-last-success-v1",
+  "migrations": [
+    {
+      "version": "001-website-last-success",
+      "file": "20261016121202_website_last_success.sql",
+      "sha256": "e9026d070fa36de7966249b652ccdc0de9b550d0d980f913de9f64609a694a92"
+    }
+  ]
+}

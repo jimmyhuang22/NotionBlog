@@ -1,0 +1,11 @@
+{
+  "protocol": "notionblog-sync-v1",
+  "schemaDigest": "74880b7667ebc1fd2fd476a84bb5fabf55bd6833eb8b9da11c8df696c5c99b6a",
+  "migrations": [
+    {
+      "version": "001",
+      "file": "001_content.sql",
+      "sha256": "bf1aa5e1bf22287e243e51bb9d17f9b9ceb8884e587b822703bf3df8bd304966"
+    }
+  ]
+}

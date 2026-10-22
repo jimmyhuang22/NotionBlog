@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-persistent-publication-v1",
+  "migration": {
+    "version": 1,
+    "file": "20261012223207_persistent_publication.sql",
+    "sha256": "6b1b7e2ab295284814330536bb7095972831d3356e63c6b542d1d7b92d9b79bf"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "notionblog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-offline.mjs",
+    "build": "node scripts/development/run.mjs build",
+    "start": "node scripts/development/run.mjs start",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/development/run.mjs test",
+    "privacy:check": "node scripts/check-privacy.mjs",
+    "notion:check": "node scripts/check-notion.ts",
+    "database:protocol": "node scripts/check-database-protocol.ts",
+    "database:admin": "node scripts/database.ts",
+    "reader:check": "node scripts/check-reader.ts",
+    "website:check": "node scripts/check-website.ts",
+    "check": "node scripts/development/run.mjs check",
+    "media:protocol": "node scripts/media-thumbnails/cli.ts verify",
+    "media:thumbnails": "node scripts/media-thumbnails/cli.ts",
+    "website:sync": "node scripts/website-sync/cli.ts",
+    "dev:real": "node scripts/dev-real.mjs",
+    "website:capabilities": "node scripts/check-website-capabilities.ts",
+    "website:protocol": "node scripts/check-website-protocol.ts",
+    "website:database": "node scripts/website-database.ts",
+    "content:withdraw": "node scripts/public-cache/withdraw-cli.ts",
+    "content:cache-refresh": "node scripts/public-cache/refresh-cli.ts",
+    "content:cache-consume": "node scripts/public-cache/consumer-cli.ts"
+  },
+  "dependencies": {
+    "@notionhq/client": "5.27.0",
+    "@vercel/functions": "3.9.11",
+    "@vercel/oidc": "4.0.0",
+    "katex": "0.19.0",
+    "lxgw-wenkai-screen-webfont": "1.7.0",
+    "next": "16.4.0",
+    "pg": "8.23.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1",
+    "sharp": "0.35.5",
+    "shiki": "4.5.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

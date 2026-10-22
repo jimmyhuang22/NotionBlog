@@ -1,0 +1,4 @@
+# Archive of the single progress log; new entries are separate files in docs/progress/.
+# Branches opened before the switch may still add a section at the top: keep both sides
+# when merging locally. GitHub ignores this setting, which is why the log was split up.
+docs/PROGRESS.md merge=union

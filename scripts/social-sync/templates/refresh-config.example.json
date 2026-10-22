@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "reviewedAt": "2026-01-02T00:00:00.000Z",
+  "cadence": { "bilibiliHours": 6, "xiaohongshuHours": 24 },
+  "stateDirectories": {
+    "publications": "/ABSOLUTE/PRIVATE/social-publications",
+    "collections": "/ABSOLUTE/PRIVATE/social-collections"
+  },
+  "publications": [
+    {
+      "target": { "platform": "bilibili", "workId": "example-work", "accountId": "10001", "url": "https://www.bilibili.com/video/BV0000000001/" },
+      "kind": "video"
+    },
+    {
+      "target": { "platform": "xiaohongshu", "workId": "example-note", "accountId": "000000000000000000000001", "url": "https://www.xiaohongshu.com/explore/000000000000000000000002" },
+      "kind": "image-note"
+    }
+  ],
+  "collections": []
+}

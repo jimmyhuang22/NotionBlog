@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "timeZone": "UTC",
+  "isExampleOnly": true,
+  "sources": [
+    {
+      "key": "statuses", "kind": "status", "enabled": true,
+      "dataSourceId": "00000000000000000000000000000001",
+      "fields": { "title": "Name", "recordedAt": "Date" },
+      "publication": { "mode": "all", "allowlistPageIds": [] }
+    },
+    {
+      "key": "games", "kind": "game", "enabled": true,
+      "dataSourceId": "00000000000000000000000000000002",
+      "fields": { "title": "Name", "status": "Status", "playedDate": "Date", "lastPlayedDate": "Platform Last Played", "firstPlayedDate": "Platform First Played", "playedTime": "Played Time", "platforms": "Platform", "rating": "Rating" },
+      "playedTimeUnit": "hour",
+      "statusMap": { "Clear": "clear", "Platinumed": "platinumed", "Playing": "playing", "Wish List": "wishlist" },
+      "cover": { "strategy": "files-property", "property": "Cover" },
+      "publication": { "mode": "all", "allowlistPageIds": [] }
+    },
+    {
+      "key": "about", "kind": "page", "enabled": true,
+      "pageId": "00000000000000000000000000000003", "pageKey": "about",
+      "fields": { "title": "title" },
+      "publication": { "mode": "allowlist", "allowlistPageIds": ["00000000000000000000000000000003"] }
+    },
+    {
+      "key": "courses", "kind": "course", "enabled": false,
+      "dataSourceId": "00000000000000000000000000000004",
+      "fields": { "title": "Name", "semester": "Semester" },
+      "publication": { "mode": "all", "allowlistPageIds": [] }
+    },
+    {
+      "key": "automatic-study-notes", "kind": "study-note", "enabled": false,
+      "dataSourceId": "00000000000000000000000000000004", "coursePageId": null,
+      "fields": { "title": "Name", "date": "Date", "type": "Type", "order": "Sort order" },
+      "publication": { "mode": "course-descendants", "allowlistPageIds": [] }
+    }
+  ]
+}

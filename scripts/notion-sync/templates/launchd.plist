@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.homelab.notionblog-sync</string>
+  <key>ProgramArguments</key><array>
+    <string>__NODE_ABSOLUTE_PATH__</string>
+    <string>__RELEASE_ABSOLUTE_PATH__/scripts/notion-sync/cli.ts</string>
+    <string>--env</string><string>__ENV_ABSOLUTE_PATH__</string>
+    <string>--state-dir</string><string>__STATE_ABSOLUTE_PATH__</string>
+    <string>--reconcile</string>
+  </array>
+  <key>WorkingDirectory</key><string>__RELEASE_ABSOLUTE_PATH__</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>__NODE_BIN_ABSOLUTE_PATH__:/usr/bin:/bin</string>
+    <key>NEXT_TELEMETRY_DISABLED</key><string>1</string>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>ProcessType</key><string>Background</string>
+  <key>ThrottleInterval</key><integer>300</integer>
+  <key>ExitTimeOut</key><integer>30</integer>
+  <key>StandardOutPath</key><string>__STATE_ABSOLUTE_PATH__/stdout.log</string>
+  <key>StandardErrorPath</key><string>__STATE_ABSOLUTE_PATH__/stderr.log</string>
+</dict></plist>

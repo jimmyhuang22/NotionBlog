@@ -1,0 +1,7 @@
+{
+  "name": "notionblog-game-sync",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24 <27" },
+  "dependencies": { "psn-api": "2.18.1" }
+}

@@ -1,0 +1,62 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { hash } from "../scripts/social-sync/model.ts";
+import { publicationCoverSource } from "../scripts/social-media/sources.ts";
+import { prepareCover } from "../scripts/social-media/worker.ts";
+import { versionedCoverReference, withSocialCovers } from "../src/server/social/covers.ts";
+import { socialMediaResponse } from "../src/server/social/media.ts";
+import { MEDIA_BROWSER_CACHE_CONTROL, hasSafeMediaCachePolicy } from "../src/server/media/cache.ts";
+import { imagePreviewSrc } from "../src/lib/content/image-preview.ts";
+import { coverTestEngine, coverTestImage } from "./helpers/social-cover-engine.ts";
+import { readRetainedSocialSnapshot } from "../src/server/social/retained-repository.ts";
+import type { StoredMedia } from "../contracts/sync.ts";
+
+test("content-addressed social references survive upstream renewal, reuse bytes, and still reject withdrawal", async t => {
+  const e = await coverTestEngine(t), row = await e.add("BV0000000003", "work-a");
+  const source = publicationCoverSource(row), prepared = await prepareCover(source, await coverTestImage());
+  await e.writer.register(source, "retained", prepared.files);
+  const reference = versionedCoverReference(source.kind, source.key, prepared.files), path = `/media/social/${reference}`;
+  const decorated = await withSocialCovers(await readRetainedSocialSnapshot(e.reader), e.reader, "retained");
+  // The direct reader tests below also cover cache hits independently of page decoration.
+  assert.match(reference, /^s3\.publication\.[a-f0-9]{64}\.[a-f0-9]{64}$/);
+  assert.equal(imagePreviewSrc({ id: "fixture", src: path, alt: "", width: 800, height: 450 }, 800), `${path}?thumbnail=800`);
+  assert.equal(decorated.items.find(item => item.id === "work-a")?.cover?.src, path);
+  let objectReads = 0;
+  const storage = { put: async () => {}, read: async (m: StoredMedia) => { objectReads++; return prepared.bodies.get(m.sha256)!; } };
+  const first = await socialMediaResponse(reference, 800, "retained", e.reader, () => storage);
+  assert.equal(first.status, 200); assert.equal(first.headers.get("cache-control"), MEDIA_BROWSER_CACHE_CONTROL);
+  assert.equal(hasSafeMediaCachePolicy(first, path), true);
+  assert.equal((await socialMediaResponse(reference, 800, "retained", e.reader, () => storage)).status, 200);
+  assert.equal(objectReads, 1);
+  const etag = first.headers.get("etag")!;
+  const notModified = await socialMediaResponse(reference, 800, "retained", e.reader, () => { throw Error("no object read"); }, etag);
+  assert.equal(notModified.status, 304); assert.equal(hasSafeMediaCachePolicy(notModified, path), true);
+  assert.equal((await notModified.arrayBuffer()).byteLength, 0);
+  row.coverUrl = "https://i0.hdslb.com/example.png?reference=renewed";
+  row.observedAt = new Date(Date.parse(row.observedAt) + 1).toISOString();
+  await e.worker.query("SELECT * FROM social_sync.ingest($1,$2,$3)", [source.key, hash(JSON.stringify(row)), JSON.stringify(row)]);
+  await e.writer.register(publicationCoverSource(row), "retained", prepared.files);
+  assert.equal(versionedCoverReference(source.kind, source.key, prepared.files), reference);
+  assert.equal((await socialMediaResponse(reference, 800, "retained", e.reader, () => storage)).status, 200);
+  assert.equal(objectReads, 1);
+  await e.db.query("UPDATE social_sync.works SET approved=false WHERE work_id=$1", [row.workId]);
+  const withdrawn = await socialMediaResponse(reference, 800, "retained", e.reader, () => storage, etag);
+  assert.equal(withdrawn.status, 404); assert.equal(withdrawn.headers.get("cache-control"), "private, no-store");
+  assert.equal(objectReads, 1);
+});
+
+test("a real replacement changes the browser address and old versions cannot read new bytes", async t => {
+  const e = await coverTestEngine(t), row = await e.add("BV0000000003", "work-a"), source = publicationCoverSource(row);
+  const first = await prepareCover(source, await coverTestImage()), next = await prepareCover(source, await coverTestImage(640, 480));
+  await e.writer.register(source, "retained", first.files);
+  const old = versionedCoverReference(source.kind, source.key, first.files), current = versionedCoverReference(source.kind, source.key, next.files);
+  assert.notEqual(old, current); await e.writer.register(source, "retained", next.files);
+  const noStorage = () => { throw Error("old version must not read any object"); };
+  assert.equal((await socialMediaResponse(old, 400, "retained", e.reader, noStorage)).status, 404);
+  const storage = { put: async () => {}, read: async (m: StoredMedia) => next.bodies.get(m.sha256)! };
+  const response = await socialMediaResponse(current, 400, "retained", e.reader, () => storage);
+  assert.equal(response.status, 200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(next.bodies.get(next.files.previews["400"].sha256)!));
+  const changedTier = await socialMediaResponse(current, 800, "retained", e.reader, () => storage, response.headers.get("etag"));
+  assert.equal(changedTier.status, 200); assert.notEqual(changedTier.headers.get("etag"), response.headers.get("etag"));
+});

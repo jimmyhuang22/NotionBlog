@@ -1,0 +1,7 @@
+{
+  "capability": "qualified-collection-revalidation-v1",
+  "migration": {
+    "file": "20261015225213_qualified_collection_revalidation.sql",
+    "sha256": "1df33f3d944446ef5e4ab7e8f853df89113916d435d772a94f73e999c94778b3"
+  }
+}

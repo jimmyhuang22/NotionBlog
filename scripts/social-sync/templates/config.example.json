@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "publications": [
+    {
+      "platform": "bilibili",
+      "workId": "example-work",
+      "accountId": "10001",
+      "url": "https://www.bilibili.com/video/BV0000000001/"
+    },
+    {
+      "platform": "xiaohongshu",
+      "workId": "example-work",
+      "accountId": "000000000000000000000001",
+      "url": "https://www.xiaohongshu.com/explore/000000000000000000000002"
+    }
+  ]
+}

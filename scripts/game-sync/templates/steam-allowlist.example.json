@@ -1,0 +1,11 @@
+{
+  "mode": "fixed-allowlist",
+  "approvedAt": "",
+  "steamId": "",
+  "reviewedAt": "",
+  "confirmedComplete": false,
+  "verifiedPublicAppIds": [],
+  "privateAppIds": [],
+  "hiddenAppIds": [],
+  "products": {}
+}

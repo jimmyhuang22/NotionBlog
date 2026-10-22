@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-body-image-thumbnails-v1",
+  "migration": {
+    "version": "001-body-image-1600",
+    "file": "20261018033241_body_image_thumbnails_1600.sql",
+    "sha256": "8db0b8ae1aba7a36f22ffd8b3624831638f32748e5400e8da6a47d0568ad0b20"
+  }
+}

@@ -1,0 +1,382 @@
+/* Status timeline: an ink line with one ring per entry, grouped by month. */
+.timeline { padding-bottom: 8px; }
+.timeline__head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 0 4px 22px; }
+.timeline__head h2 { margin: 0; font-family: var(--font-hand); font-size: var(--text-3xl); font-weight: 400; }
+.timeline__head a { padding: 10px 0; font-family: var(--font-hand); font-size: var(--text-base); color: var(--accent); text-decoration: underline wavy color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 5px; }
+.timeline__month { margin: 0 0 0 8px; padding: 4px 0 18px 30px; border-left: 1px solid var(--line); font-family: var(--font-hand); font-size: var(--text-base); font-weight: 400; color: var(--ink); }
+/* A month is "十月" a step up in the hand font with its year small beside it (month-label.tsx), so it stands above the entry times. */
+.timeline__month { padding-bottom: 14px; }
+.timeline__month-name { font-size: var(--text-xl); color: var(--ink); }
+.timeline__month-year { margin-left: 4px; font-family: var(--font-sans); font-size: var(--text-xs); letter-spacing: 0.04em; color: var(--muted); }
+/* The first month sits on the line like the others; the line simply starts there. */
+.timeline__month--first { padding-top: 0; }
+.timeline { --line: color-mix(in srgb, var(--accent) 30%, var(--rule)); }
+.entry { position: relative; margin-left: 8px; padding: 0 0 32px 30px; border-left: 1px solid var(--line); scroll-margin-top: 24px; }
+.entry::before {
+  content: ""; position: absolute; left: -6px; top: 6px;
+  width: 11px; height: 11px; border: 1.5px solid var(--accent); border-radius: 50%; background: var(--bg);
+}
+.entry--lead::before, .entry:target::before { background: var(--accent); }
+/* The newest entry: a halo round its dot, an ink spine on its card (like the course cards) and a small label. */
+.entry--lead::before { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 16%, transparent); }
+.entry--lead .entry__card { box-shadow: var(--shadow), inset 3px 0 0 var(--accent); }
+.entry__latest { margin-left: 10px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, var(--card)); font-family: var(--font-hand); font-size: var(--text-xs); color: var(--accent); }
+/* In ink the label is small words over a stroke of the pen, not a pill like the section tags beside it (T-08, 2026-10-20). */
+:root:not([data-skin]) .entry__latest, [data-skin="apple"] .entry__latest { padding: 0; background: none; border-radius: 0; }
+:root:not([data-skin]) .entry__latest { position: relative; padding-bottom: 5px; }
+:root:not([data-skin]) .entry__latest::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--accent); -webkit-mask: var(--pen-stroke) center / 100% 100% no-repeat; mask: var(--pen-stroke) center / 100% 100% no-repeat; }
+.entry__time { font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+/*
+ * Within a week the line leads with 今天, 昨天, "N 天前". The date keeps the quiet colour it always had,
+ * which is already as light as its contrast allows; the name is told apart by being darker instead.
+ * The date stays in one piece, so a narrow line breaks after the dot.
+ */
+.entry__ago { color: var(--ink); }
+.entry__day { white-space: nowrap; }
+/*
+ * A card is as wide as what it says, up to the column: a short remark is a small card and a long one
+ * fills the line. One with a body keeps a least width so two words do not make a button-sized card;
+ * the unfolded full text takes the whole column, since it can hold pictures and tables.
+ */
+.entry__card { width: fit-content; min-width: min(280px, 100%); max-width: 100%; margin-top: 8px; padding: 20px 24px; }
+.entry__card--brief { min-width: 0; padding: 14px 24px; }
+.entry__card--full { width: auto; }
+/*
+ * The title stands apart from the words under it: larger and heavier; a title-only card keeps its plain weight (F36).
+ * The hand font has a single weight, and a bold the browser makes up fills the strokes of dense characters, so the
+ * extra weight is a hairline outline in the text colour instead. Skins whose hand font is a sans with real weights
+ * set --title-stroke to 0 and their own font-weight (skins.css).
+ */
+.entry__card-title { margin: 0 0 10px; font-family: var(--font-hand); font-size: var(--text-xl); font-weight: 400; -webkit-text-stroke: var(--title-stroke, 0.35px) currentColor; line-height: 1.45; }
+.entry__card--brief .entry__card-title { margin: 0; -webkit-text-stroke: 0; }
+/* Titles stay in the hand font; bodies can run to many lines, so they use the reading font. */
+.entry__card p { margin: 0; font-size: var(--text-body); line-height: 1.75; white-space: pre-wrap; }
+/* The words a shade lighter than the title, still well above 4.5 against every card. */
+.entry__card > p, .entry__card .prose { color: color-mix(in srgb, var(--ink) 78%, var(--card)); }
+/* Body images from the list: one shows whole, two or more become an even grid of crops. */
+/* Pictures sit inside the card, under the words. */
+.entry__photos { display: grid; gap: 8px; margin-top: 14px; }
+.entry__card--brief .entry__photos { margin-top: 10px; }
+/* Set widths, not maximums: a card as wide as its contents must not shrink to its title while the picture is still on its way. */
+.entry__photos--1 { width: 420px; max-width: 100%; }
+.entry__photos--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 520px; max-width: 100%; }
+.entry__photos--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.entry__card:has(> .entry__photos--3) { width: auto; }
+.entry__photos img { display: block; width: 100%; height: auto; border-radius: var(--radius-md); background: var(--soft); }
+.entry__photos--2 img, .entry__photos--3 img { aspect-ratio: 1; object-fit: cover; }
+.entry__photos .figure__zoom { border-radius: var(--radius-md); }
+.entry__photos .figure__failed { min-height: 0; aspect-ratio: 1; border-radius: var(--radius-md); font-size: var(--text-xs); }
+/* A tall single picture (taller than 1.6 times its width) shows its top 420, marked, and opens whole. */
+.entry__photos--tall { position: relative; width: 320px; max-width: 100%; }
+.entry__photos--tall img { max-height: 420px; object-fit: cover; object-position: top; }
+.entry__long { position: absolute; right: 8px; bottom: 8px; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: var(--text-xs); color: #fff; pointer-events: none; }
+.entry__more { display: block; min-height: 36px; margin: 10px 0 -10px; padding: 0; border: 0; background: none; font-family: var(--font-hand); font-size: var(--text-sm); color: var(--accent); cursor: pointer; }
+.entry__more:hover { text-decoration: underline wavy color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 4px; }
+.entry__more:disabled { cursor: progress; }
+.entry__card .prose { font-size: var(--text-body); line-height: 1.75; }
+/* A long entry's typeset opening, collapsed to about nine lines (status-body.tsx); a mask fades it, so it suits every card colour. */
+.entry__preview { max-height: calc(9 * 1.75 * var(--text-body)); overflow: hidden; }
+.entry__preview[data-clipped] { mask-image: linear-gradient(to bottom, #000 calc(100% - 4.5em), transparent); }
+.entry__preview > .prose > :first-child { margin-top: 0; }
+/* height: auto, or the height the source declares would stand and a wide cover would be cut to a tall box on a phone. */
+.entry__cover { display: block; height: auto; margin-top: 12px; border-radius: var(--radius-md); max-height: 360px; object-fit: cover; }
+.entry__cover--failed { margin-top: 12px; }
+.timeline__more { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-left: 38px; }
+.timeline__more span { font-size: var(--text-sm); color: var(--muted); }
+.timeline__notice { margin: 0 0 20px 38px; }
+.status-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 24px; }
+/* Updates from other sections: a hollow dot, a plain label and a compact linked card. */
+.entry--event::before { border-color: var(--muted); }
+.entry__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+/* The label on a work published elsewhere leads to the page that lists them all. */
+a.tag--social { position: relative; }
+a.tag--social:hover { color: var(--accent); }
+/* A label is small; the area that takes a press reaches a little past it. */
+a.tag--social::after { content: ""; position: absolute; inset: -11px -8px; }
+.event { display: flex; align-items: center; gap: 16px; max-width: 460px; margin-top: 10px; padding: 14px 18px 14px 14px; border-radius: var(--radius-lg); line-height: 1.45; }
+.event__cover { flex: 0 0 46px; width: 46px; height: 64px; border-radius: var(--radius-sm); background: var(--soft); object-fit: cover; }
+.event--album .event__cover { flex-basis: 76px; width: 76px; height: 57px; }
+.event--game .event__cover { flex-basis: 96px; width: 96px; height: 54px; }
+.event__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding-left: 4px; }
+.event__verb { font-size: var(--text-xs); color: var(--muted); }
+.event__title { font-family: var(--font-hand); font-size: var(--text-body); }
+.event__detail { font-size: var(--text-sm); color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.event__arrow { flex: 0 0 auto; color: var(--muted); }
+/* A game as one line (home-timeline.tsx GameLine): a square of its cover, the sentence, its platform chips. */
+.event--line { width: fit-content; max-width: 100%; align-items: center; gap: 12px; padding: 10px 18px 10px 10px; }
+.event__square { flex: 0 0 44px; width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--soft); object-fit: cover; }
+.event__line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.event__sentence { min-width: 0; overflow-wrap: anywhere; }
+.event__lead { font-family: var(--font-hand); font-size: var(--text-body); }
+.event--line .event__title { font-family: var(--font-hand); font-size: var(--text-body); }
+.event__chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; white-space: nowrap; }
+.event__time { font-size: var(--text-sm); color: var(--muted); }
+.event--line:hover .event__title { color: var(--accent); }
+/*
+ * A work published on other platforms, drawn the way its own platform draws it: a video frame with the
+ * figures along its foot, or an upright note with its likes under the title. Without a cover it is
+ * the same card without the frame. The body comes first in the page and the frame is moved above it,
+ * so the link reads title first.
+ */
+.work-card { display: flex; flex-direction: column; width: fit-content; max-width: min(560px, 100%); margin-top: 10px; border-radius: var(--radius-lg); overflow: hidden; line-height: 1.45; }
+.work-card--framed.work-card--wide { width: 380px; }
+.work-card--framed.work-card--tall { width: 208px; }
+.work-card--plain { min-width: min(280px, 100%); }
+.work-card__main { position: relative; display: flex; flex-direction: column; color: inherit; }
+.work-card:has(> a.work-card__main:hover) { box-shadow: var(--shadow-lift); }
+a.work-card__main:hover .work-card__title { color: var(--accent); }
+a.work-card__main:focus-visible, a.work-card__more:focus-visible { outline-offset: -3px; border-radius: var(--radius-md); }
+.work-card__frame { order: -1; position: relative; display: block; background: var(--soft); overflow: hidden; }
+.work-card--wide .work-card__frame { aspect-ratio: 16 / 9; }
+.work-card--tall .work-card__frame { aspect-ratio: 3 / 4; }
+.work-card__cover { display: block; width: 100%; height: 100%; object-fit: cover; }
+.work-card__blank { display: grid; place-items: center; width: 100%; height: 100%; color: var(--muted); opacity: 0.6; }
+/* On the picture: always light on a dark veil, whatever the theme. */
+.work-card__badge { position: absolute; left: 10px; top: 10px; padding: 2px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: var(--text-xs); color: #fff; }
+.work-card__over { position: absolute; inset: auto 0 0 0; padding: 24px 12px 8px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.64)); color: #fff; }
+.work-card__body { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 12px; }
+.work-card--plain .work-card__body { padding: 14px 44px 14px 20px; }
+.work-card__title { font-family: var(--font-hand); font-size: var(--text-body); overflow-wrap: anywhere; }
+.work-card--framed .work-card__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.work-card__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 14px; font-size: var(--text-sm); color: var(--muted); }
+/*
+ * Parts of a line are separated by dots that hang in the gap before each part. A part that wraps to the
+ * next line starts at the edge and its dot falls outside the clip, so no line begins with a separator.
+ */
+.work-card__where { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-width: 0; overflow-x: clip; color: var(--muted); }
+.work-card__where svg { flex: 0 0 auto; margin-right: -10px; }
+/* The dot is a separator for the eye only, so it is given no spoken text. */
+.work-card__part { position: relative; }
+.work-card__part::before { content: "·"; content: "·" / ""; position: absolute; left: -10px; }
+.work-card__figures { display: inline-flex; gap: 12px; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.work-card__figures > span { display: inline-flex; align-items: center; gap: 4px; }
+.work-card__figures svg { flex: 0 0 auto; }
+.work-card__foot .work-card__figures, .work-card__more .work-card__figures { color: var(--ink); }
+.work-card__label, .work-card__figures--none { color: var(--muted); }
+/* A collection's change since the first look: one quiet line led by a small ink dot. */
+.work-card__update { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; overflow-x: clip; font-size: var(--text-sm); }
+.work-card__update::before { content: ""; align-self: center; width: 6px; height: 6px; margin-right: -8px; border-radius: 50%; background: var(--accent); }
+.work-card__update .work-card__part { color: var(--muted); }
+/* The way out is plain on a card without a picture; a picture says it by itself. */
+.work-card__arrow { font-size: var(--text-sm); color: var(--accent); }
+.work-card__main > .work-card__arrow { position: absolute; right: 18px; top: 14px; }
+.work-card--framed .work-card__main > .work-card__arrow { display: none; }
+/* A further platform of the same work: a ruled line under the card with that platform's own figures and address. */
+.work-card__more { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; padding: 9px 14px; border-top: 1px solid var(--rule); color: inherit; }
+.work-card--plain .work-card__more { padding-inline: 20px 18px; }
+.work-card__more .work-card__where { flex: 1 1 auto; font-size: var(--text-sm); }
+a.work-card__more:hover { background: var(--soft); }
+/*
+ * Works that follow one another, with covers: a strip of smaller cards moved sideways. The list is
+ * padded and pulled back by the same amount, so the cards' shadows are not cut by the scrolling edge.
+ */
+.work-strip { position: relative; margin-top: 10px; }
+.work-strip__list { display: flex; align-items: flex-start; gap: 12px; margin: -6px -6px 0; padding: 6px 6px 16px; list-style: none; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scroll-padding-inline: 6px; scrollbar-width: thin; }
+.work-strip__list:focus-visible { outline-offset: 0; border-radius: var(--radius-lg); }
+.work-strip__list > li { flex: 0 0 auto; scroll-snap-align: start; }
+.work-card--small { margin-top: 0; }
+.work-card--small .work-card__over { padding: 20px 10px 6px; }
+.work-strip .work-card--wide { width: 232px; }
+.work-strip .work-card--tall { width: 150px; }
+.work-card--small .work-card__body { padding: 8px 12px 10px; }
+.work-card--small .work-card__title { font-size: var(--text-sm); }
+.work-card--small .work-card__foot, .work-card--small .work-card__figures, .work-card--small .work-card__update { font-size: var(--text-xs); }
+.work-card--small .work-card__badge { left: 8px; top: 8px; }
+/*
+ * A Bilibili work on the home timeline, as on its Bilibili page (bili-card.tsx): the cover, its kind at
+ * the top left, views and the number of videos along its foot, then title and day with no card behind.
+ * Four to a strip's width on a wide screen, about 200 wide on a phone so the next one shows at the edge.
+ */
+.work-strip__list { container-type: inline-size; }
+.work-strip__list > li:has(> .bili-card) { width: max(160px, calc((100cqw - 36px) / 4)); }
+/* Fewer cards take more room (F37): one about half the width up to 340, two or three a third each. */
+.work-strip__list:not(:has(> li:nth-child(2))) > li:has(> .bili-card) { width: min(340px, calc((100cqw - 12px) / 2)); }
+.work-strip__list:has(> li:nth-child(2)):not(:has(> li:nth-child(4))) > li:has(> .bili-card) { width: calc((100cqw - 24px) / 3); }
+@media (max-width: 640px) {
+  /* Separate rules on purpose: as one list the build joins them into :is(), whose weight would beat the single card's. */
+  .work-strip__list > li:has(> .bili-card) { width: 240px; }
+  .work-strip__list:has(> li:nth-child(2)):not(:has(> li:nth-child(4))) > li:has(> .bili-card) { width: 240px; }
+  .work-strip__list:not(:has(> li:nth-child(2))) > li:has(> .bili-card) { width: min(340px, 100cqw); }
+}
+/* Positioned, so the words kept for screen readers stay inside the scrolling strip instead of widening the page. */
+.bili-card { position: relative; display: flex; flex-direction: column; gap: 4px; color: inherit; }
+.bili-card__frame { order: -1; position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--radius-md); background: var(--soft); box-shadow: var(--shadow); }
+.bili-card__cover { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bili-card__blank { display: grid; place-items: center; width: 100%; height: 100%; color: var(--muted); opacity: 0.6; }
+.bili-card__blank svg { width: 22px; height: 22px; }
+/* On the picture: always light on a dark veil, whatever the theme. */
+.bili-card__badge { position: absolute; left: 7px; top: 7px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: var(--text-xs); color: #fff; }
+.bili-card__stats { position: absolute; inset: auto 0 0 0; display: flex; justify-content: space-between; gap: 8px; padding: 18px 8px 5px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.62)); font-size: var(--text-xs); color: #fff; font-variant-numeric: tabular-nums; }
+.bili-card__stats > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.bili-card__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; font-family: var(--font-hand); font-size: var(--text-body); line-height: 1.4; overflow-wrap: anywhere; }
+/* The day, only when the row holds works of several days. */
+.bili-card__meta { font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
+/* A collection's addition at the top right, the same height as the kind at the left: accent behind, the card colour on it, so it reads in light and dark. */
+.bili-card__new { position: absolute; right: 7px; top: 7px; padding: 2px 8px; border-radius: 999px; background: var(--accent); font-size: var(--text-xs); font-weight: 600; color: var(--card); font-variant-numeric: tabular-nums; }
+a.bili-card:hover .bili-card__title { color: var(--accent); }
+a.bili-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md); }
+/* Work covers lift on the same paper curve as every card and cover (M-05); only covers also brighten. */
+@media (prefers-reduced-motion: no-preference) {
+  .bili-card__frame { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), box-shadow 0.3s, filter 0.3s; }
+  a.bili-card:hover .bili-card__frame { transform: translateY(-2px); box-shadow: var(--shadow-lift); filter: brightness(1.05); }
+}
+.work-card--small .work-card__more { padding: 7px 12px; }
+/* For a mouse with only an upright wheel; touch and keyboard already move the strip. */
+.work-strip__step { display: none; position: absolute; top: 56px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--card); box-shadow: var(--shadow-lift); font-size: var(--text-md); line-height: 1; color: var(--ink); cursor: pointer; }
+.work-strip__step--back { left: -14px; }
+.work-strip__step--on { right: -14px; }
+@media (hover: hover) and (pointer: fine) { .work-strip__step { display: grid; place-items: center; } }
+@media (prefers-reduced-motion: no-preference) { .work-strip__list { scroll-behavior: smooth; } }
+/* Works that follow one another on the home timeline: one list, a line each. */
+.entry__count { font-size: var(--text-sm); color: var(--muted); }
+.home-works { max-width: 560px; margin: 10px 0 0; padding: 0; list-style: none; border-radius: var(--radius-lg); overflow: hidden; }
+.home-works li + li { border-top: 1px solid var(--rule); }
+.home-works__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 14px; padding: 11px 20px; color: inherit; line-height: 1.45; }
+a.home-works__row:hover { background: var(--soft); }
+a.home-works__row:focus-visible { outline-offset: -3px; border-radius: var(--radius-md); }
+.home-works__title { min-width: 0; font-family: var(--font-hand); font-size: var(--text-body); overflow-wrap: anywhere; }
+.home-works__row--more { padding-top: 0; }
+/* The second column is as wide as the figures under the arrow, so the arrow is pushed to its far end to line up down the list. */
+.home-works__arrow { grid-area: 1 / 2; justify-self: end; min-width: 1em; text-align: right; font-size: var(--text-sm); color: var(--accent); }
+.home-works__meta { grid-column: 1; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; min-width: 0; overflow-x: clip; font-size: var(--text-sm); color: var(--muted); }
+.home-works__meta svg { flex: 0 0 auto; align-self: center; margin-right: -10px; }
+/* A hanging dot, as in the cards' lines: a part that wraps never starts its line with one. */
+.home-works__part { position: relative; }
+.home-works__part::before { content: "·"; content: "·" / ""; position: absolute; left: -10px; }
+.home-works__figures { display: inline-flex; gap: 12px; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-works__label { color: var(--muted); }
+.entry > .tag--demo { margin-left: 8px; }
+/*
+ * The works page: every work published elsewhere as one line of a ruled sheet, a sheet per year. The
+ * columns belong to the sheet, so date, title, platform and figures line up down the whole year; a
+ * work on several platforms adds a line under its title for each.
+ */
+.works { padding-bottom: 8px; }
+.works__group + .works__group { margin-top: 32px; }
+.works__group .section-title { padding: 0 4px 10px; font-family: var(--font-sans); font-size: var(--text-base); letter-spacing: 0.04em; color: var(--muted); }
+/* Every track but the title sizes to its cells: a line's own padding is then counted into the edge tracks, which a fixed track would not do. */
+.works__list { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; column-gap: 18px; margin: 0; padding: 0; list-style: none; border-radius: var(--radius-lg); overflow: hidden; }
+.work-row, .work-row__line { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+.work-row + .work-row { border-top: 1px solid var(--rule); }
+.work-row__line { align-items: baseline; row-gap: 2px; padding: 13px 20px; color: inherit; line-height: 1.45; }
+.work-row__line--more { padding-top: 0; }
+a.work-row__line:hover { background: var(--soft); }
+a.work-row__line:focus-visible { outline-offset: -3px; border-radius: var(--radius-md); }
+/* Least widths keep the columns in the same places from one year's sheet to the next. */
+.work-row__date { min-width: 5.4em; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.work-row__title { min-width: 0; font-family: var(--font-hand); font-size: var(--text-body); overflow-wrap: anywhere; }
+.work-row__meta { display: inline-flex; align-items: baseline; gap: 6px; min-width: 15em; font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
+/* Centred on its own, so the words and not the mark set the line the row aligns to. */
+.work-row__meta svg { flex: 0 0 auto; align-self: center; }
+/* The dot only separates for the eye; where the browser allows, it is given no spoken form. */
+.work-row__part::before { content: "·"; content: "·" / ""; margin-right: 6px; }
+.work-row__figures { display: inline-flex; gap: 14px; min-width: 10.5em; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.work-row__label { color: var(--muted); }
+.work-row__arrow { min-width: 1em; font-size: var(--text-sm); color: var(--accent); }
+/* While the list is read: the same sheet with faint bars for lines. */
+.works__list--waiting .work-row__line + .work-row__line { border-top: 1px solid var(--rule); }
+/* Bars, not text cells: the columns keep their least widths on a wide screen and take the given widths on a narrow one. */
+.works__list--waiting .skeleton { display: block; height: 12px; min-width: 0; align-self: center; }
+.works__list--waiting .work-row__date { min-width: 0; }
+/*
+ * The works page, one platform at a time (works-list.tsx, the owner's choice of 2026-10-18): Bilibili
+ * frames four to a row, Xiaohongshu notes five, both two on a phone; fewer as the column narrows.
+ */
+.works__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px 16px; margin: 0; padding: 0; list-style: none; }
+.works__grid--xiaohongshu { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 960px) { .works__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .works__grid--xiaohongshu { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .works__grid, .works__grid--xiaohongshu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
+.works__grid > li { min-width: 0; }
+/* The card: its cover, then title and day, with no card behind; positioned so screen-reader words stay inside it. */
+.works-card { position: relative; display: flex; flex-direction: column; gap: 4px; color: inherit; }
+.works-card__frame { order: -1; position: relative; display: block; overflow: hidden; border-radius: var(--radius-md); background: var(--soft); box-shadow: var(--shadow); }
+.works-card--wide .works-card__frame { aspect-ratio: 16 / 9; }
+.works-card--tall .works-card__frame { aspect-ratio: 3 / 4; }
+.works-card__cover { display: block; width: 100%; height: 100%; object-fit: cover; }
+.works-card__blank { display: grid; place-items: center; width: 100%; height: 100%; color: var(--muted); opacity: 0.6; }
+/* On the picture: always light on a dark veil, whatever the theme. */
+.works-card__stats { position: absolute; inset: auto 0 0 0; display: flex; justify-content: space-between; gap: 8px; padding: 18px 8px 5px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.62)); font-size: var(--text-xs); color: #fff; font-variant-numeric: tabular-nums; }
+.works-card__stats > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.works-card__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; font-family: var(--font-hand); font-size: var(--text-body); line-height: 1.4; overflow-wrap: anywhere; }
+/* So days line up across a row (the owner's choice, 2026-10-18): a Bilibili title keeps to one line, the whole title in its hover hint; a Xiaohongshu title always takes two lines' height. */
+.works-card--wide .works-card__title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+.works-card--tall .works-card__title { min-height: calc(2 * 1.4em); }
+.works-card__day { font-size: var(--text-xs); color: var(--muted); }
+a.works-card:hover .works-card__title { color: var(--accent); }
+a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md); }
+@media (prefers-reduced-motion: no-preference) {
+  .works-card__frame { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), box-shadow 0.3s, filter 0.3s; }
+  a.works-card:hover .works-card__frame { transform: translateY(-2px); box-shadow: var(--shadow-lift); filter: brightness(1.05); }
+}
+/* The platform switch: each name led by its mark. */
+.works__platforms a { display: inline-flex; align-items: center; gap: 6px; }
+/*
+ * F40: the chosen look is one block that slides between the names (works-shell.tsx places it). Until it is
+ * placed, before the page is interactive, the chosen link keeps its own look.
+ */
+.works__platforms { position: relative; isolation: isolate; }
+.works__platforms > a { position: relative; z-index: 1; }
+.works__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); pointer-events: none; }
+.works__tools .works__platforms.segmented[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
+[data-skin="apple"] .works__pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
+[data-skin="y2k"] .works__pill { background: var(--y2k-button) #1a6ace; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px -4px rgba(22, 103, 199, 0.7); }
+/* The list area during a switch: the leaving list lies over it, the edges fade so cards never cut off hard. */
+.works__stage { position: relative; }
+/* While switching, cards sliding out or in are cut at the list's edges; no fading mask, which dimmed the still cards' edges like a passing mist (F40 addendum). */
+.works__stage.is-moving { overflow: clip; overflow-clip-margin: 24px; }
+.works__pane--leaving { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
+/* A pressed order answers at once, as the filters do (M-10): the list it is about to replace steps back while the new one is read. */
+.works:has(.library__sort a:is(.is-turning, :has(.link-pending[data-pending]))) .works__stage { opacity: 0.45; }
+@media (prefers-reduced-motion: no-preference) {
+  .works__pill { transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.34s cubic-bezier(0.3, 1.25, 0.4, 1); }
+  .works__platforms > a { transition: color 0.25s; }
+  /* A short delay, so an order that arrives quickly never flickers. */
+  .works__stage { transition: opacity 0.2s 0.1s; }
+  .works__stage.is-moving { transition: height 0.42s cubic-bezier(0.22, 0.8, 0.2, 1); }
+  /* After a switch a cover that is not ready keeps its soft place and fades in, instead of appearing all at once. */
+  .works__stage[data-switched] .works-card__cover { transition: opacity 0.2s; }
+  .works__stage[data-switched] .works-card__cover:not([data-shown]) { opacity: 0; }
+}
+/* The platforms and the order beside the title; on a narrow screen they drop under it together. */
+.works__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+/* While the list is read: faint cards in the same shapes (works/loading.tsx). */
+.works__more { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 20px; padding-top: 24px; }
+.works__more span { font-size: var(--text-sm); color: var(--muted); }
+.works > .notice, .works__pane > .notice { margin: 0 0 20px; }
+/* Narrow: each work stacks into date, title, where it lives, figures; the way out stays at the top right. */
+@media (max-width: 760px) {
+  .works__list { display: block; }
+  .work-row { display: block; }
+  .work-row__line { display: grid; grid-template-columns: minmax(0, 1fr) 1em; row-gap: 3px; padding: 13px 16px; }
+  .work-row__date { grid-area: 1 / 1; }
+  .work-row__arrow { grid-area: 1 / 2; }
+  .work-row__title, .work-row__meta, .work-row__figures { grid-column: 1 / -1; justify-self: start; min-width: 0; }
+  .work-row__meta, .work-row__figures { flex-wrap: wrap; white-space: normal; }
+  /* Without a date the title takes the first line, beside the way out. */
+  .work-row__date:empty { display: none; }
+  .work-row__date:empty + .work-row__title { grid-area: 1 / 1; }
+  .work-row__line--more { padding-top: 0; }
+  .work-row__line--more .work-row__date, .work-row__line--more .work-row__title { display: none; }
+  .work-row__line--more .work-row__meta { grid-area: 1 / 1; }
+}
+/* On a phone the platform and its link share the first line and the figures take the next. */
+@media (max-width: 520px) {
+  .home-works__row { padding: 11px 16px; }
+  .home-works__figures { grid-column: 1 / -1; }
+  /* Two remarks read better one under the other than broken mid-sentence. */
+}
+@media (max-width: 520px) {
+  .entry { padding-left: 22px; }
+  .timeline__month { padding-left: 22px; }
+  .timeline__more, .timeline__notice { margin-left: 30px; }
+}
+
+/* While the timeline loads, its line and dots are already there; faint bars stand in for the entries. */
+.timeline-skeleton { min-height: 60vh; margin-left: 8px; padding: 0 0 6px 30px; border-left: 1px solid var(--line); }
+.timeline-skeleton div { position: relative; padding-bottom: 34px; }
+.timeline-skeleton div::before { content: ""; position: absolute; left: -36px; top: 5px; width: 11px; height: 11px; border: 1.5px solid var(--accent); border-radius: 50%; background: var(--bg); }
+.timeline-skeleton div:first-child::before { background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 16%, transparent); }
+.timeline-skeleton span { display: block; height: 10px; margin-bottom: 12px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, var(--soft)); }
+.timeline-skeleton span:first-child { height: 8px; }
+@media (prefers-reduced-motion: no-preference) { .timeline-skeleton span { animation: pulse 1.4s ease-in-out infinite; } }
+@media (max-width: 520px) { .timeline-skeleton { padding-left: 22px; } .timeline-skeleton div::before { left: -28px; } }

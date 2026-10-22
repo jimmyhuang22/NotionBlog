@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-published-thumbnails-v1",
+  "migration": {
+    "version": 1,
+    "file": "20261013005602_published_thumbnails.sql",
+    "sha256": "6a128a1ed08695d1f050ae848fee0baa354d197237cd597f3c8b7ccfe48313cc"
+  }
+}

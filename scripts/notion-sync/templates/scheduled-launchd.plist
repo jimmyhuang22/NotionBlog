@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Review candidate only. Do not install/bootstrap before choosing the interval and activation scope. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.homelab.notionblog-sync</string>
+  <key>ProgramArguments</key><array>
+    <string>__NODE_ABSOLUTE_PATH__</string>
+    <string>__RELEASE_ABSOLUTE_PATH__/scripts/notion-sync/run-private.mjs</string>
+    <string>--project</string><string>__RELEASE_ABSOLUTE_PATH__</string>
+    <string>--private-root</string><string>__PRIVATE_ROOT_ABSOLUTE_PATH__</string>
+    <string>--state-dir</string><string>__STATE_ABSOLUTE_PATH__</string>
+    <string>--mode</string><string>publish</string>
+    <string>--media-provider</string><string>notion</string>
+  </array>
+  <key>WorkingDirectory</key><string>__RELEASE_ABSOLUTE_PATH__</string>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>Umask</key><integer>63</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>ExitTimeOut</key><integer>40</integer>
+  <key>StandardOutPath</key><string>__STATE_ABSOLUTE_PATH__/stdout.log</string>
+  <key>StandardErrorPath</key><string>__STATE_ABSOLUTE_PATH__/stderr.log</string>
+</dict></plist>

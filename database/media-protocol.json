@@ -1,0 +1,10 @@
+{
+  "capability": "notionblog-media-source-v1",
+  "migrations": [
+    {
+      "version": "001-media-sources",
+      "file": "001_media_sources.sql",
+      "sha256": "ee06639d903baed20e4ec9d2136982655e7f09bae5db2a4f00b8224d3d4c6076"
+    }
+  ]
+}

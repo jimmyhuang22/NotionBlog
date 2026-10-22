@@ -1,0 +1,35 @@
+# Dependencies and generated files
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+*.log
+/.claude/worktrees/
+
+# Credentials and deployment-local files
+.env
+.env.*
+!.env.example
+.vercel/
+/supabase/.temp/
+/supabase/.branches/
+*.pem
+*.key
+
+# Private handoff materials, configuration, exports, and memory
+/*-development-kit/
+/*-development-kit-*.zip
+/.local/
+/sources/
+/private/
+/exports/
+/cache/
+/config/notion-sources.json
+/config/site.json
+
+# Private display assets (for example a replaceable avatar) served from public/local/
+/public/local/

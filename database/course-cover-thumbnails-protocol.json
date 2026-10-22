@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-course-cover-thumbnails-v1",
+  "migration": {
+    "version": "001-course-cover-1600",
+    "file": "20261017044958_course_cover_thumbnails.sql",
+    "sha256": "c349a23fe5c0785ab8ded1728ce42d4ecfcd77721d971debc9ee4195f61f823f"
+  }
+}

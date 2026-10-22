@@ -1,0 +1,7 @@
+{
+  "capability": "fresh-collection-qualification-v1",
+  "migration": {
+    "file": "20261016025910_fresh_collection_qualification.sql",
+    "sha256": "d4c9a7199a84fe8a3f16d7702aae0eacc2cfc3ee8d1dd3cbc7e47f272ef9be19"
+  }
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.homelab.notionblog-game-sync</string>
+  <key>ProgramArguments</key><array>
+    <string>__NODE_ABSOLUTE_PATH__</string>
+    <string>__RELEASE_ABSOLUTE_PATH__/scripts/game-sync/cli.ts</string>
+    <string>daily</string><string>__PRIVATE_ROOT_ABSOLUTE_PATH__</string><string>notify</string>
+  </array>
+  <key>WorkingDirectory</key><string>__RELEASE_ABSOLUTE_PATH__</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>Umask</key><integer>63</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>ExitTimeOut</key><integer>40</integer>
+  <key>StandardOutPath</key><string>__PRIVATE_ROOT_ABSOLUTE_PATH__/daily-stdout.log</string>
+  <key>StandardErrorPath</key><string>__PRIVATE_ROOT_ABSOLUTE_PATH__/daily-stderr.log</string>
+</dict></plist>

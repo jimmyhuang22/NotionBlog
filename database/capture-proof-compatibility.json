@@ -1,0 +1,25 @@
+{
+  "producerCommit": "04cb8f78b165e3b3285021ac7e2fa9021c870004",
+  "files": [
+    {
+      "path": "scripts/website-sync/collection-source-proof.ts",
+      "before": "4afd1159e039f6a76dd3275fdc91ff59ab221d60384cbea961f72ca51f79a4b2",
+      "after": "180e655c4a64e51347afe5b1577ac61c7290c072d6eb51ceb10142ed2f61c400"
+    },
+    {
+      "path": "scripts/website-sync/collection-resume-plan.ts",
+      "before": "d29533d1e2f25dfa3c97a529e4cc40f63299fd26e53c27c5b423c69026e52296",
+      "after": "a68d3ab16a59e7cccbbeca6043fb9f56fdf7fa39421f135ac660a39eb0b5a6f2"
+    },
+    {
+      "path": "scripts/website-sync/worker.ts",
+      "before": "a83d121370b477d741ce86f74ff3922da92207841eefabf1b4137c52babbf666",
+      "after": "62d47f9448720e5cf3179f589348c7dca185b5ab12e35c5286e8f2537b411b5f"
+    },
+    {
+      "path": "database/capture-requalification-compatibility.json",
+      "before": "0085535d577f489ddab2ecffd79fa4d61d816df6bfe62014db560bf80b8d7d00",
+      "after": "492d06c37b1c920d799d333c78bd80ab2b543963a8af6d783d5664f2e5359730"
+    }
+  ]
+}

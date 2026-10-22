@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-automatic-study-v1",
+  "migration": {
+    "version": "001-automatic-study",
+    "file": "001_automatic_study.sql",
+    "sha256": "1fb8479acd88f9bf0d5989fe32f46730da23b0c20368ee933c7f4fd535c4bae5"
+  }
+}

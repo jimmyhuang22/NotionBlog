@@ -1,0 +1,8 @@
+{
+  "protocol": "notionblog-website-v2",
+  "schemaDigest": "6cc1930413741a7263cac15f5011ede34c7e7e61188435320af2c1d4ad9e4936",
+  "migration": {
+    "file": "001_website.sql",
+    "sha256": "128014f4ce055172b8f4cdddeb2942822c7e109d52fbcdca38bacf49926c0937"
+  }
+}

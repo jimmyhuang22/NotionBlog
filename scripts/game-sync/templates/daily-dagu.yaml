@@ -1,0 +1,17 @@
+description: 'Daily game-time synchronization using the approved fixed Steam allowlist.'
+labels: [production, notionblog]
+timeout_sec: 960
+max_clean_up_time_sec: 60
+hist_retention_days: 14
+working_dir: __RELEASE_PATH__
+schedule: 'CRON_TZ=Australia/Melbourne 0 9 * * *'
+overlap_policy: skip
+env:
+  NODE_OPTIONS: ''
+  NODE_PATH: ''
+  PATH: /usr/bin:/bin
+steps:
+  - id: sync_and_verify
+    run: |
+      umask 077
+      exec __NODE_PATH__ __RELEASE_PATH__/scripts/game-sync/cli.ts daily __PRIVATE_ROOT__ notify

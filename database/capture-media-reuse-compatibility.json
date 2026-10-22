@@ -1,0 +1,95 @@
+{
+  "producerCommit": "a0022e5343927ad4e4387f4d491fb8e5856b6819",
+  "files": [
+    {
+      "path": ".env.example",
+      "before": "5fe15feb0046681582a7df789c32c9394f88e73f711a45a3ce6ce5e2de3bc50d",
+      "after": "8d738c533373431c1e728fff4ce5d11475efc002cb48f2068368f594d5230f2e"
+    },
+    {
+      "path": "database/capture-proof-compatibility.json",
+      "before": "25b71be541db11caab496f0440527592f373f0203db20a25329baab4509d8ea2",
+      "after": "64e81956396dc92104547c777a64b59923ce274f8430c9dd92a6bb6226f4b24e"
+    },
+    {
+      "path": "database/capture-requalification-compatibility.json",
+      "before": "c47cd2e036383c33556424623639a746e06d7ed74e192fe9c2a91c3340754e78",
+      "after": "492d06c37b1c920d799d333c78bd80ab2b543963a8af6d783d5664f2e5359730"
+    },
+    {
+      "path": "database/website-availability-protocol.json",
+      "before": null,
+      "after": "c39309cfc0eac681d3d35577fea7219c29108f288e9dbb0dc6d0e4af9e1ccc11"
+    },
+    {
+      "path": "scripts/dev-real.mjs",
+      "before": "6b79f53d5f5b28d01e810270c5b3e882b0a6bd26aec0f3cd63ff7365b7378cb9",
+      "after": "a10a10b70cbe19b10a9557e80aa4c913acc727f8d16ef410695f770d4f636af8"
+    },
+    {
+      "path": "scripts/website-sync/worker.ts",
+      "before": "9d4e6eeaec8cfacf6e7ce09182532fa1cc383c986f6082808f861e7ca088684e",
+      "after": "62d47f9448720e5cf3179f589348c7dca185b5ab12e35c5286e8f2537b411b5f"
+    },
+    {
+      "path": "src/app/media/v2/[assetId]/route.ts",
+      "before": "d811cd031c148f8a607f75ef9e493358146da62be63bdf1f44263c5b0741e762",
+      "after": "b3aca069ada45e0b6e162ef7ff2c92d622e5330cf1cdbd5ece156d50e6fc0a86"
+    },
+    {
+      "path": "src/server/database/cos-config.ts",
+      "before": "bc4b6f6f19a404ca3c7c78f9372ce844b1506568f1cf0efaad9b3861309d6c5b",
+      "after": "1d7c1d5a44fe75c1913f03f51704107d98be3eb44acfce8acb6e7205e9caed8a"
+    },
+    {
+      "path": "src/server/database/runtime.ts",
+      "before": "66b0fb5a6a2b656362ce3fe2999ee29c663447fb844c3955e3ee30f7b3a90c8b",
+      "after": "74150b340962ba57ddc4a3d0031218c4fd14ed11c4e7b140b95b0ed364e366d7"
+    },
+    {
+      "path": "supabase/migrations/20261016064210_fresh_verification_accept_published_cache.sql",
+      "before": null,
+      "after": "aa48a665a03733dfaf7a1c73105f6525c44cc0ecfc953075bb20f8e1fda73226"
+    },
+    {
+      "path": "supabase/migrations/20261016121202_website_last_success.sql",
+      "before": null,
+      "after": "e9026d070fa36de7966249b652ccdc0de9b550d0d980f913de9f64609a694a92"
+    },
+    {
+      "path": "src/server/database/cos-storage.ts",
+      "before": "1cbac8d8bae0db291b146382d5a6381b4de8998aff860f8f8988a6969827d6aa",
+      "after": "cdd3d0a39f8e73c761c96d5ffaf6eb9b35a6c495da8c7cd928fdba920e832bdd"
+    },
+    {
+      "path": "src/server/database/storage.ts",
+      "before": "e29fca481a1a68ab71f204803ce6456a6e79b29d9ab2c830fa5e1af65204e431",
+      "after": "97b5844415f908f98e095ed1508260def21805ddcb57bf099e14f1b2ee3abac6"
+    },
+    {
+      "path": "src/server/media/thumbnail.ts",
+      "before": "2d56738282608596b126470a39bd787c0b393c6e4c28ee219796519963681423",
+      "after": "3aca51c28f2ebae33dbc765dc82ee1a16515678e8ad06c62b09f51a08cd92c35"
+    },
+    {
+      "path": "src/server/notion/client.ts",
+      "before": "c41c937b76ebde83d2be8e7be11708adb07bac69881cfbb0583600c9203049c3",
+      "after": "73d6103f62bca584679ed9e80eebe9efa57a727ee72e3bc28c5fe25e718e518b"
+    },
+    {
+      "path": "src/server/notion/inflight-reads.ts",
+      "before": null,
+      "after": "f13a8bed42263dc1228e3479a9527b53d4ac5ef08215d7b6d63504b5712ae5a2"
+    },
+    {
+      "path": "src/server/database/cos-https.ts",
+      "before": null,
+      "after": "bcf4d222a503836939aec9d787f9cca0810e0e9f680aef10179190d48d855dcc"
+    },
+    {
+      "path": "src/server/media/thumbnail-bytes.ts",
+      "before": null,
+      "after": "863b871d0048d3a87e1269c755f20a2f628b1cff68c93bf9d434a488b88bf46e"
+    }
+  ]
+}

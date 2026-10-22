@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "NotionBlog 社交刷新",
+  "version": "0.2.0",
+  "minimum_chrome_version": "120",
+  "description": "刷新已审核笔记统计，并发现指定 B 站账号的新公开投稿。",
+  "permissions": ["alarms", "scripting", "nativeMessaging", "storage"],
+  "host_permissions": ["https://www.xiaohongshu.com/*", "https://space.bilibili.com/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_title": "刷新社交来源"}
+}

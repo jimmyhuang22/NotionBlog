@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-incremental-reader-v1",
+  "migration": {
+    "version": 1,
+    "file": "20261012232208_incremental_reader.sql",
+    "sha256": "404dfdf1961e254d8b430f33e62068348648e4bd413312a583d56e674613b994"
+  }
+}

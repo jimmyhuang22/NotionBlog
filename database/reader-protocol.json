@@ -1,0 +1,10 @@
+{
+  "capability": "notionblog-status-read-v1",
+  "migrations": [
+    {
+      "version": "001-status",
+      "file": "001_status.sql",
+      "sha256": "bbb7c4560522411104b89cb9032d7aaad758738f40f5086f0596c5aa51d78ade"
+    }
+  ]
+}

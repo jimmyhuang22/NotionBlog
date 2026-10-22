@@ -1,0 +1,132 @@
+/*
+ * Motion. Everything here is decoration on top of a page that works without it: nothing is hidden
+ * unless motion is welcome, and visitors who prefer reduced motion get the plain state.
+ * The theme switch's ink spread lives with the theme rules in globals.css.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* Images fade in once loaded (use-fade-in.ts adds the class only while one is still on its way). */
+  img.is-loading { opacity: 0; }
+  .library__item .cover, .work__cover .cover, .figure img, .entry__photos img { transition: opacity 0.45s ease, transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), box-shadow 0.3s; }
+
+  /* Rows added by "load more" rise into place; grid tiles follow one another along the row. */
+  .is-appended { animation: rise-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .library__item.is-appended:nth-child(6n + 2) { animation-delay: 40ms; }
+  .library__item.is-appended:nth-child(6n + 3) { animation-delay: 80ms; }
+  .library__item.is-appended:nth-child(6n + 4) { animation-delay: 120ms; }
+  .library__item.is-appended:nth-child(6n + 5) { animation-delay: 160ms; }
+  .library__item.is-appended:nth-child(6n) { animation-delay: 200ms; }
+  @keyframes rise-in { from { opacity: 0; transform: translateY(14px); } }
+
+  /* An expanded status entry unfolds from its top edge; the clip is let go at the end so the card keeps its shadow. */
+  .entry__card--full { animation: unfold 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  @keyframes unfold { from { opacity: 0.2; clip-path: inset(0 0 55% 0 round 16px); } to { clip-path: inset(0 round 16px); } }
+  /* Closing rolls the same way back up before the short card returns (status-body.tsx). */
+  .entry__card--full.is-folding { animation: fold 0.25s cubic-bezier(0.4, 0, 0.6, 1) forwards; }
+  @keyframes fold { from { clip-path: inset(0 round 16px); } to { opacity: 0.3; clip-path: inset(0 0 70% 0 round 16px); } }
+
+  /* The image viewer fades in and settles; closing fades it out (lightbox.tsx keeps the picture until then). */
+  .lightbox, .lightbox::backdrop { opacity: 0; transition: opacity 0.2s ease, overlay 0.2s allow-discrete, display 0.2s allow-discrete; }
+  .lightbox[open], .lightbox[open]::backdrop { opacity: 1; }
+  .lightbox__frame { transition: scale 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .lightbox:not([open]) .lightbox__frame { scale: 0.97; }
+  @starting-style {
+    .lightbox[open], .lightbox[open]::backdrop { opacity: 0; }
+    .lightbox[open] .lightbox__frame { scale: 0.97; }
+  }
+
+  /* The course directory's drawer slides in from the left over a fading backdrop (narrow screens, study-reading-directory.tsx). */
+  .reading__side[data-open] { transition: translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease; }
+  .reading__backdrop { transition: opacity 0.2s ease; }
+  @starting-style {
+    .reading__side[data-open] { translate: -24px 0; opacity: 0; }
+    .reading__backdrop:not([hidden]) { opacity: 0; }
+  }
+
+  /* While the viewer waits for an original the note in its bar breathes. */
+  .lightbox__state:not(:empty) { animation: pulse 1.4s ease-in-out infinite; }
+  .lightbox__spinner { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { rotate: 1turn; } }
+
+  /* The about sheet does the same, rising a little as it arrives. */
+  .about-dialog, .about-dialog::backdrop { opacity: 0; transition: opacity 0.2s ease, translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), overlay 0.2s allow-discrete, display 0.2s allow-discrete; }
+  .about-dialog { translate: 0 10px; }
+  .about-dialog[open], .about-dialog[open]::backdrop { opacity: 1; translate: none; }
+  @starting-style {
+    .about-dialog[open], .about-dialog[open]::backdrop { opacity: 0; }
+    .about-dialog[open] { translate: 0 10px; }
+  }
+
+  /*
+   * The quick search arrives like the about sheet, so the three overlays open alike (M-01). It closes at once:
+   * its contents leave with the open state (search-palette.tsx), and an empty sheet should not linger.
+   */
+  .palette[open], .palette[open]::backdrop { transition: opacity 0.2s ease, translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @starting-style {
+    .palette[open], .palette[open]::backdrop { opacity: 0; }
+    .palette[open] { translate: 0 10px; }
+  }
+
+  /*
+   * The quiet motions of 2026-10-20, the owner's second round: things that answer a hand rather than show off.
+   * After a filter the first rows rise 6px into place one after another (use-filter-arrival.ts, study-overview.tsx).
+   */
+  .is-arriving { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 25ms); }
+  @keyframes arrive-row { from { opacity: 0; transform: translateY(6px); } }
+  /* The course kinds' chosen look and the outline's mark slide; a tree branch's arrow turns as it opens or closes. */
+  .study-views__pill { transition: transform 0.3s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.3s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.3s cubic-bezier(0.3, 1.25, 0.4, 1); }
+  .study-views > button { transition: color 0.25s; }
+  .reading-outline__mark { transition: transform 0.26s cubic-bezier(0.3, 0.9, 0.3, 1), height 0.26s cubic-bezier(0.3, 0.9, 0.3, 1); }
+  .tree__toggle span { transition: transform 0.2s cubic-bezier(0.3, 0.9, 0.3, 1); }
+  /* A chapter reached from the outline: one stroke of ink under its heading, gone within a second. */
+  .prose__h.is-arrived { position: relative; }
+  .prose__h.is-arrived::after { content: ""; position: absolute; left: 0; bottom: -6px; width: min(8em, 100%); height: 2px; border-radius: 999px; background: var(--accent); transform-origin: left; animation: arrived 0.9s ease-out both; }
+  @keyframes arrived { 0% { opacity: 0; transform: scaleX(0.2); } 25% { opacity: 0.9; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1); } }
+
+  /*
+   * The introduction has no entrance of its own (F42, 2026-10-21): the home page's loading state draws it too,
+   * and the page taking over replayed it, so it faded in twice on every load. It arrives with its page.
+   */
+
+  /*
+   * Then the home timeline is drawn, once (M-03, the owner's pick of 2026-10-20): the ink line runs down one
+   * segment after another, each row's ring pops as the line reaches it and the row's contents follow.
+   * Each segment is uncovered from the top with a clip, so every skin's own line (solid, dashed, double width)
+   * is the one drawn. Fill is backwards only: once played, nothing is left clipped (shadows, tape) or moved.
+   * Only the rows of the first screen carry --i (home-timeline.tsx); later rows and appended ones are plain.
+   */
+  .timeline--home [style*="--i"] :is(.timeline__month, .entry) { animation: ink-draw 0.2s linear backwards; animation-delay: calc(350ms + var(--i) * 150ms); }
+  .timeline--home [style*="--i"] .entry::before { animation: ring-in 0.25s cubic-bezier(0.3, 1.4, 0.5, 1) backwards; animation-delay: calc(350ms + var(--i) * 150ms); }
+  .timeline--home [style*="--i"] .entry > * { animation: arrive 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(430ms + var(--i) * 150ms); }
+  @keyframes ink-draw { from { clip-path: inset(0 0 100% -16px); } to { clip-path: inset(0 0 0 -16px); } }
+  @keyframes ring-in { from { transform: scale(0); } }
+  @keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
+}
+
+/*
+ * Changing a filter: the selected segment slides to its new place instead of jumping. The two
+ * controls have their own names so a segment never flies from one page's control to another's.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .segmented--scroll a[aria-current] { view-transition-name: segment-year; }
+  .library__head .segmented:not(.works__platforms) a[aria-current] { view-transition-name: segment-status; }
+  ::view-transition-group(segment-year), ::view-transition-group(segment-status) { animation-duration: 0.3s; animation-timing-function: cubic-bezier(0.3, 0.9, 0.3, 1); }
+}
+
+/*
+ * Moving between pages is page-switch.tsx's cross-fade, not a view transition (F43, 2026-10-21; it replaced
+ * the fade out and rise in, and the sideways move for sections chosen in the header). A filter change is
+ * a view transition of class "filter": the list is swapped in place, the old one hidden at once, and only
+ * the chosen segment slides. The rest of the document is swapped without a fade. Nothing is animated
+ * during the first load; see page-transition.tsx for why.
+ */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-old(.filter), ::view-transition-new(.filter) { animation: none; }
+/* A filter change shows the new list at once: the old one's picture is not kept over it while the segment slides (F23, two lists overlapping). */
+::view-transition-old(.filter) { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  /* The header's ink mark glides to the section pressed, at the press (F43): it does not wait for the page. */
+  .site-nav__mark.is-placed { transition: transform 0.36s cubic-bezier(0.3, 0.9, 0.3, 1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) { animation: none; }
+}
