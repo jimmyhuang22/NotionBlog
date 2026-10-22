@@ -286,7 +286,8 @@ a.work-row__line:focus-visible { outline-offset: -3px; border-radius: var(--radi
 .works__grid--xiaohongshu { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 960px) { .works__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .works__grid--xiaohongshu { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .works__grid, .works__grid--xiaohongshu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
-.works__grid > li { min-width: 0; }
+/* A cell holds its card at the row's height, so cards side by side end level when one day line wraps and another does not (S13-2: 320 wide, a collection's "最后更新" and its date). */
+.works__grid > li { min-width: 0; display: grid; }
 /* The card: its cover, then title and day, with no card behind; positioned so screen-reader words stay inside it. */
 .works-card { position: relative; display: flex; flex-direction: column; gap: 4px; color: inherit; }
 .works-card__frame { order: -1; position: relative; display: block; overflow: hidden; border-radius: var(--radius-md); background: var(--soft); box-shadow: var(--shadow); }
@@ -324,14 +325,16 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
 .works__stage { position: relative; }
 /* While switching, cards sliding out or in are cut at the list's edges; no fading mask, which dimmed the still cards' edges like a passing mist (F40 addendum). */
 .works__stage.is-moving { overflow: clip; overflow-clip-margin: 24px; }
+/* The margin counts towards the page's width, so it never reaches past the page's side padding (.wrap, 18px on a phone): wider, the page scrolled sideways mid-switch (F40 addendum, 2026-10-23). */
+@media (max-width: 520px) { .works__stage.is-moving { overflow-clip-margin: 18px; } }
 .works__pane--leaving { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
 /* A pressed order answers at once, as the filters do (M-10): the list it is about to replace steps back while the new one is read. */
 .works:has(.library__sort a:is(.is-turning, :has(.link-pending[data-pending]))) .works__stage { opacity: 0.45; }
 @media (prefers-reduced-motion: no-preference) {
   .works__pill { transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.34s cubic-bezier(0.3, 1.25, 0.4, 1); }
   .works__platforms > a { transition: color 0.25s; }
-  /* A short delay, so an order that arrives quickly never flickers. */
-  .works__stage { transition: opacity 0.2s 0.1s; }
+  /* Dims after a short delay, so an order that arrives quickly never flickers; comes back at once, the new cards rising from 45% (round four, M-12). */
+  .works:has(.library__sort a:is(.is-turning, :has(.link-pending[data-pending]))) .works__stage { transition: opacity 0.2s 0.1s; }
   .works__stage.is-moving { transition: height 0.42s cubic-bezier(0.22, 0.8, 0.2, 1); }
   /* After a switch a cover that is not ready keeps its soft place and fades in, instead of appearing all at once. */
   .works__stage[data-switched] .works-card__cover { transition: opacity 0.2s; }

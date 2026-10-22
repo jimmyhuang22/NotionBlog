@@ -1,6 +1,7 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { colorReplacements, highlightCode, normalizeLanguage } from "../src/lib/render/highlight.ts";
+import { CODE_ROLES, highlightCode, normalizeLanguage } from "../src/lib/render/highlight.ts";
 import { renderEquation } from "../src/lib/render/equation.ts";
 import { renderSnippets } from "../src/lib/render/actions.ts";
 import { MAX_SNIPPETS, MAX_SNIPPET_CHARS, collectSnippets, withinLimits, type Snippet } from "../src/lib/render/snippets.ts";
@@ -18,7 +19,7 @@ test("source language names map to a bundled grammar or to plain text", () => {
 
 test("highlighting escapes code and falls back for unknown or oversized input", async () => {
   const html = await highlightCode('String s = "<script>alert(1)</script>";', "java");
-  assert.ok(html && html.includes("--shiki-light") && html.includes("--shiki-dark"));
+  assert.ok(html && html.includes("var(--code-key)") && html.includes("var(--code-ink)"));
   assert.ok(!html.includes("<script>") && !/<pre|<code/u.test(html));
   assert.equal(await highlightCode("x = 1", "plain text"), null);
   assert.equal(await highlightCode("x".repeat(40_001), "java"), null);
@@ -73,7 +74,7 @@ test("the browser-facing renderer returns markup by block id and ignores anythin
   ];
   const html = await renderSnippets(snippets);
   assert.deepEqual(Object.keys(html).sort(), ["__proto__", "code", "eq"]);
-  assert.ok(html.code?.includes("--shiki-light") && !html.code.includes("<img"));
+  assert.ok(html.code?.includes("var(--code-") && !html.code.includes("<img"));
   assert.ok(html.eq?.includes("katex"));
   const inline = await renderSnippets([{ id: "inline:1", kind: "inline-equation", expression: "a^2" }, { id: "block", kind: "equation", expression: "a^2" }]);
   assert.ok(inline["inline:1"]?.includes("katex") && !inline["inline:1"].includes("katex-display") && inline.block?.includes("katex-display"));
@@ -101,13 +102,7 @@ test("body headings continue the outline above them without skipping a level", (
   assert.equal(headingTag(1, headingShift(toc(2), 2)), "h2");
 });
 
-test("highlight colours keep at least 4.5:1 on the code block background in both themes", async () => {
-  const luminance = (hex: string) => {
-    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)) as [number, number, number];
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  };
-  const contrast = (a: string, b: string) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]; return (hi + 0.05) / (lo + 0.05); };
-  // The code block sits on --code: #f4f0e6 in the light theme, #23272e in the dark one (src/app/globals.css).
+test("code is coloured only by the site's three roles, and operators stay ink", async () => {
   const samples: [string, string][] = [
     ["// note\nconst total: number = items.length + 1;\nexport function run(input: string) { return `${input}!`; }", "typescript"],
     ["<!-- note -->\n<a href=\"/x\" class=\"y\">text</a>", "html"],
@@ -117,11 +112,39 @@ test("highlight colours keep at least 4.5:1 on the code block background in both
   for (const [code, language] of samples) {
     const html = await highlightCode(code, language);
     assert.ok(html, language);
-    for (const [variable, background] of [["--shiki-light", "#f4f0e6"], ["--shiki-dark", "#23272e"]] as const) {
-      const colours: Set<string> = new Set([...html.matchAll(new RegExp(`${variable}:(#[0-9a-fA-F]{6})`, "gu"))].map(match => match[1]!.toLowerCase()));
-      assert.ok(colours.size > 1, `${language} ${variable}`);
-      for (const colour of colours) assert.ok(contrast(colour, background) >= 4.5, `${language} ${variable} ${colour}`);
+    const used = new Set([...html.matchAll(/color:([^;"]+)/gu)].map(match => match[1]!.trim()));
+    assert.ok(used.size > 1, language);
+    for (const colour of used) assert.ok(CODE_ROLES.some(name => colour === `var(${name})`), `${language} ${colour}`);
+  }
+  // A MAC address tagged as Java (as Notion does by default): the colons are operators, not keywords.
+  const mac = await highlightCode("e2:de:ca:b5:ff:c7", "java");
+  assert.ok(mac && !mac.includes("var(--code-key)"), mac ?? "");
+  const java = await highlightCode('int n = 1; // count\nString s = "GET";', "java");
+  for (const name of CODE_ROLES) assert.ok(java?.includes(`var(${name})`), name);
+});
+
+test("each skin and scheme draws the code roles at 4.5:1 or more on its code background", () => {
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]; return (hi + 0.05) / (lo + 0.05); };
+  // prose.css maps the roles to these tokens; every block that sets --code sets the other three beside it.
+  const prose = readFileSync(new URL("../src/app/prose.css", import.meta.url), "utf8");
+  assert.ok(prose.includes("--code-ink: var(--ink); --code-key: var(--accent); --code-note: var(--muted);"));
+  let checked = 0;
+  for (const file of ["globals.css", "skins.css"]) {
+    const css = readFileSync(new URL(`../src/app/${file}`, import.meta.url), "utf8");
+    for (const [, body] of css.matchAll(/\{([^{}]*--code:[^{}]*)\}/gu)) {
+      const token = (name: string) => new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`, "u").exec(body!)?.[1];
+      const background = token("code")!;
+      for (const name of ["ink", "accent", "muted"]) {
+        const colour = token(name);
+        assert.ok(colour, `${file}: --${name} beside --code ${background}`);
+        assert.ok(contrast(colour, background) >= 4.5, `${file}: --${name} ${colour} on ${background}`);
+      }
+      checked += 1;
     }
   }
-  for (const replaced of Object.values(colorReplacements).flatMap(Object.keys)) assert.ok(!(await highlightCode(samples[0]![0], "typescript"))!.toLowerCase().includes(replaced), replaced);
+  assert.ok(checked >= 7, `${checked} blocks`);
 });

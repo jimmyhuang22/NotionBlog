@@ -49,30 +49,30 @@ test("library queries allow combined year/status/order, restrict summaries and r
   for (const kind of ["post", "course", "album", "project"] as const) assert.throws(() => parseListQuery(kind, new URLSearchParams("year=2026")), invalid);
 });
 
-test("game browsing uses the platform's latest play, preserves experience dates and supports legacy snapshots", async () => {
+test("game browsing remains in the personal experience year despite later platform play", async () => {
   const experience = { start: "2023-06-01", end: "2023-08-01", precision: "date" as const };
   const latest = { start: "2025-12-31T14:30:00.000Z", end: null, precision: "datetime" as const };
   const game = { ...structuredClone(fixtureItems.game[0]), playedDate: experience, lastPlayedDate: latest };
-  assert.equal(contentYear(game, "Australia/Melbourne"), 2026);
-  assert.equal(contentYear(game, "UTC"), 2025);
-  assert.deepEqual(itemDate(game), { start: "2025-12-31", end: null, precision: "date" });
+  assert.equal(contentYear(game, "Australia/Melbourne"), 2023);
+  assert.equal(contentYear(game, "UTC"), 2023);
+  assert.deepEqual(itemDate(game), { start: "2023-08-01", end: null, precision: "date" });
   assert.deepEqual(contentDate(game), itemDate(game));
   const legacy = { ...game, lastPlayedDate: undefined };
   assert.deepEqual(itemDate(legacy), { start: "2023-08-01", end: null, precision: "date" });
   assert.equal(contentYear(legacy, "UTC"), 2023);
   assert.equal(contentYear({ ...game, lastPlayedDate: null }, "UTC"), 2023);
   assert.equal(contentYear({ ...legacy, playedDate: null, updatedAt: "2026-10-14T00:00:00Z" }, "UTC"), null);
-  assert.ok(compareContent(game, legacy, "date-desc") < 0);
-  assert.ok(compareContent(game, legacy, "date-asc") > 0);
+  assert.equal(compareContent(game, legacy, "date-desc"), 0);
+  assert.equal(compareContent(game, legacy, "date-asc"), 0);
   assert.deepEqual(game.playedDate, experience);
 
   const mock = createMockRepository();
-  const sample = fixtureItems.game.find(item => item.lastPlayedDate !== null)!;
-  const listed = await mock.list("game", { status: "playing", year: 2025, limit: 50 });
+  const sample = fixtureItems.game.find(item => item.status === "playing" && item.lastPlayedDate && item.playedDate === null)!;
+  const listed = await mock.list("game", { status: "playing", year: "undated", limit: 50 });
   assert.ok(listed.items.some(item => item.id === sample.id));
-  assert.ok(!(await mock.list("game", { status: "playing", year: "undated", limit: 50 })).items.some(item => item.id === sample.id));
+  assert.ok(!(await mock.list("game", { status: "playing", year: 2025, limit: 50 })).items.some(item => item.id === sample.id));
   const years = await mock.getLibraryYears!("game", { status: "playing" });
-  assert.equal(years.years.find(value => value.year === 2025)!.count, listed.total);
+  assert.equal(years.undatedCount, listed.total);
 });
 
 test("mock status-specific summaries agree with every year list, pagination, totals and unknown dates", async () => {

@@ -27,7 +27,14 @@ test("external video transition accepts only its exact producer, mapper pair and
     { path: "database/capture-external-video-compatibility.json", sha256: "c".repeat(64) }] };
   assert.equal(checkCaptureReleaseCompatibility(producer, consumer).format, "capture-external-video-links-v1");
   for (const pair of transition.files) {
-    assert.equal(createHash("sha256").update(await readFile(new URL("../" + pair.path, import.meta.url))).digest("hex"), pair.after);
+    const actual = createHash("sha256").update(await readFile(new URL("../" + pair.path, import.meta.url))).digest("hex");
+    if (pair.path === "src/server/notion/website-repository.ts") {
+      // The older video-only transition must reject the newer archive and rating mapper.
+      assert.equal(actual, "90579122d17360d7340908cf0436271a1c368628c074a64c48904194f08f3ef1");
+      const newerMapper = structuredClone(consumer);
+      newerMapper.files.find(file => file.path === pair.path)!.sha256 = actual;
+      assert.throws(() => checkCaptureReleaseCompatibility(producer, newerMapper), { code: "RELEASE_INVALID" });
+    } else assert.equal(actual, pair.after);
     for (const side of ["before", "after"]) {
       const old = structuredClone(producer), current = structuredClone(consumer);
       (side === "before" ? old : current).files.find(f => f.path === pair.path)!.sha256 = "0".repeat(64);

@@ -88,11 +88,11 @@ test("the actual full collector stores Melbourne days through restricted SQL and
   const writer = createWebsiteWriter(role("nb_writer")), reader = createWebsiteDatabaseRepository(role("nb_reader"), { timeZone: zone });
   const noStorage = { put: async () => { assert.fail("No images to upload"); }, read: async () => { assert.fail("No images to read"); return new Uint8Array(); } };
   const cases = [
-    ["2025-12-31T15:30:00Z", "2025-10-04T14:30:00Z", "2026-01-01", "2025-10-05", 2026],
-    ["2026-04-04T14:30:00Z", "2025-10-04T14:30:00Z", "2026-04-05", "2025-10-05", 2026],
-    ["2025-12-31", "2025-10-04", "2025-12-31", "2025-10-04", 2025],
+    ["2025-12-31T15:30:00Z", "2025-10-04T14:30:00Z", "2026-01-01", "2025-10-05"],
+    ["2026-04-04T14:30:00Z", "2025-10-04T14:30:00Z", "2026-04-05", "2025-10-05"],
+    ["2025-12-31", "2025-10-04", "2025-12-31", "2025-10-04"],
   ] as const;
-  for (const [last, first, lastDay, firstDay, year] of cases) {
+  for (const [last, first, lastDay, firstDay] of cases) {
     f.properties.Last.rollup.date.start = last; f.properties.First.rollup.date.start = first;
     const report = await runWebsiteSync({ client: f.client, config: f.config, mode: "publish", writer, storage: noStorage });
     assert.equal(report.records, 1);
@@ -103,7 +103,7 @@ test("the actual full collector stores Melbourne days through restricted SQL and
     assert.deepEqual(detail!.item.lastPlayedDate, stored.lastPlayedDate);
     assert.deepEqual(detail!.item.firstPlayedDate, stored.firstPlayedDate);
     assert.deepEqual(detail!.item.playedDate, { start: f.manual.start, end: f.manual.end, precision: "date" });
-    assert.deepEqual((await reader.getLibraryYears!("game")).years, [{ year, count: 1 }]);
+    assert.deepEqual((await reader.getLibraryYears!("game")).years, [{ year: 2024, count: 1 }]);
   }
   // Exercise the real page-level preparation without a source enumeration,
   // then persist its exact record through the same restricted SQL ports.
@@ -116,14 +116,14 @@ test("the actual full collector stores Melbourne days through restricted SQL and
   const lease = await writer.begin(randomUUID(), policy.configDigest);
   await writer.stage(lease, [prepared.record]); await writer.promote(lease, { records: 1, media: 0, complete: true });
   const item = (await reader.get("game", id(2)))!.item;
-  assert.equal(item.archiveDate!.start, "2026-01-01"); assert.equal(item.firstPlayedDate!.start, "2025-10-05");
-  assert.equal((await reader.list("game", { year: 2026 })).total, 1);
+  assert.equal(item.archiveDate!.start, "2024-08-03"); assert.equal(item.firstPlayedDate!.start, "2025-10-05");
+  assert.equal((await reader.list("game", { year: 2024 })).total, 1);
   assert.equal((await reader.list("game", { year: 2025 })).total, 0);
 });
 
 test("direct collectors inherit the source zone; an incremental timezone change invalidates its expected digest before reads", async () => {
   const f = fixture(zone), rows = await createWebsiteNotionRepository({ client: f.client, config: f.config }).collectRecords(false);
-  assert.equal((rows[0]!.detail.item as Game).archiveDate!.start, "2026-01-01");
+  assert.equal((rows[0]!.detail.item as Game).archiveDate!.start, "2024-08-03");
   const calls = f.calls();
   const result = await prepareSinglePage({ client: f.client, config: { ...f.config, timeZone: "UTC" }, expectedConfigDigest: configDigest(f.config), ordinal: 0,
     ticket: { operationId: "changed-zone", sourceKey: "fictional-games", pageKey: id(2), generation: 1, reasons: ["content"] },

@@ -60,7 +60,8 @@ test("a withdrawal during a cold read prevents its result entering the reusable 
 
 test("origin cache headers never turn a missing/failed image into a cached 304", async () => {
   const previous = { ...process.env };
-  Object.assign(process.env, { PUBLIC_CONTENT_CACHE: "tagged-v1", CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "qualified", PUBLIC_CACHE_SITE_KEY: config.siteKey, PUBLIC_CACHE_PURGE_SECRET: config.secret, PUBLIC_CACHE_ORIGIN: config.origin });
+  // This fixture uses a synthetic local origin, independently of a hosting builder's metadata.
+  Object.assign(process.env, { VERCEL: "", PUBLIC_CONTENT_CACHE: "tagged-v1", CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "qualified", PUBLIC_CACHE_SITE_KEY: config.siteKey, PUBLIC_CACHE_PURGE_SECRET: config.secret, PUBLIC_CACHE_ORIGIN: config.origin });
   try {
     const url = "https://site.example/media/v2/a1." + "a".repeat(64);
     const full = await publicHttpResponse(new Request(url), new Response("bytes", { headers: { "Content-Type": "image/webp" } }), "media");

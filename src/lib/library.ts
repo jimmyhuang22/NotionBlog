@@ -2,6 +2,7 @@ import type { Book, DateRange, Game, Movie, Rating, TimeAmount } from "../../con
 import { ratingLabel } from "./format.ts";
 import type { YearChoice } from "./year-filter.ts";
 import { gameBrowsingDate } from "./content/game-date.ts";
+import { isMoviePublicRating } from "./content/movie-rating.ts";
 
 export type LibraryItem = Book | Movie | Game;
 export type LibraryKind = LibraryItem["kind"];
@@ -72,8 +73,17 @@ const factWords: Record<string, (value: string) => string> = {
   已玩时长: value => `玩了 ${value}`, 预计时长: value => `预计 ${value}`,
 };
 
-export function workFactText(label: string, value: string): string {
+export function workFactText(label: string, value: string, kind?: LibraryKind): string {
+  if (kind === "movie" && label === "豆瓣评分") return `${label} ${value}`;
   return (factWords[label] ?? (text => `${label} ${text}`))(value);
+}
+
+/** A legacy field name is not evidence of where its public score came from. */
+export function movieRatingFact(item: Pick<Movie, "publicRating" | "ratingSource" | "doubanRating">): [string, string] | null {
+  const value = item.publicRating === undefined ? item.doubanRating : item.publicRating;
+  if (value === null || !isMoviePublicRating(value)) return null;
+  const label = item.ratingSource === "douban" ? "豆瓣评分" : item.ratingSource === "bangumi" ? "Bangumi 评分" : item.ratingSource === "1905" ? "1905电影网评分" : "公共评分";
+  return [label, String(value)];
 }
 
 /** Use the same date as the list's sorting and year filter. */
@@ -118,12 +128,14 @@ export function platformChip(platform: string): PlatformChip {
 
 /**
  * Time played as a game card writes it: whole hours from a hundred on, one decimal below, nothing for
- * none at all (a game bought and not played) or an unknown time. Minutes as they are.
+ * none at all (a game bought and not played) or an unknown time. Minutes as they are. A time that
+ * rounds to nothing (a game opened for a minute or two, 0.02 hours) is left out too: "0 小时" reads as
+ * unplayed, and none at all is what the owner chose for that (F24; S13-4, 2026-10-23).
  */
 export function cardTimeLabel(amount: TimeAmount | null): string | null {
-  if (!amount || !(amount.value > 0)) return null;
-  if (amount.unit !== "hour") return `${Math.round(amount.value)} 分钟`;
-  return `${amount.value >= 100 ? Math.round(amount.value) : Math.round(amount.value * 10) / 10} 小时`;
+  if (!amount) return null;
+  const shown = amount.unit !== "hour" || amount.value >= 100 ? Math.round(amount.value) : Math.round(amount.value * 10) / 10;
+  return shown > 0 ? `${shown} ${amount.unit === "hour" ? "小时" : "分钟"}` : null;
 }
 
 /** A game card's second line: its platforms, time played and rating; an unknown one is left out, not written as missing. */
