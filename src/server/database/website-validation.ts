@@ -3,6 +3,7 @@ import type { StoredMedia } from "../../../contracts/sync.ts";
 import type { WebsiteRecord } from "../../../contracts/website-sync.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { isNotionPageHost, isTemporaryMediaUrl } from "../notion/public-text.ts";
+import { isMoviePublicRating, isMovieRatingSource } from "../../lib/content/movie-rating.ts";
 
 function bad(): never { throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid synchronization payload."); }
 const object = (x: unknown): Record<string, unknown> => {
@@ -106,7 +107,7 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
   const fields: Record<string,string[]> = {
     status:["recordedAt","text"],course:["code","semester","ratings"],"study-note":["courseId","parentId","noteType","date","breadcrumbs"],
     post:["publishedAt"],album:["date","photoCount"],book:["authors","status","readingDate","pagesRead","totalPages","progressPercent","personalRating","doubanRating","externalUrl"],
-    movie:["originalTitle","mediaType","status","watchedDate","releaseDate","director","actors","rating","doubanRating"],
+    movie:["originalTitle","mediaType","status","watchedDate","releaseDate","director","actors","rating","doubanRating","publicRating","ratingSource"],
     game:["status","platforms","playedDate","lastPlayedDate","firstPlayedDate","archiveDate","releaseDate","playedTime","estimatedTime","progressPercent","rating"],
     project:["period","role","stack","links"],page:["pageKey"]
   };
@@ -128,7 +129,7 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
     case "post":date(i.publishedAt);break;
     case "album":date(i.date);if(!num(i.photoCount)||(typeof i.photoCount==="number"&&!Number.isInteger(i.photoCount)))bad();break;
     case "book":strings(i.authors);if(!["reading","read","wishlist","given-up","unknown"].includes(String(i.status)))bad();date(i.readingDate);for(const k of ["pagesRead","totalPages","doubanRating"])if(!num(i[k]))bad();percentage(i.progressPercent);rating(i.personalRating);if(i.externalUrl!==null)url(i.externalUrl);break;
-    case "movie":nullable(i.originalTitle);nullable(i.mediaType);nullable(i.director);strings(i.actors);if(!["watched","wishlist","unknown"].includes(String(i.status)))bad();date(i.watchedDate);date(i.releaseDate);rating(i.rating);if(!num(i.doubanRating))bad();break;
+    case "movie":nullable(i.originalTitle);nullable(i.mediaType);nullable(i.director);strings(i.actors);if(!["watched","wishlist","unknown"].includes(String(i.status)))bad();date(i.watchedDate);date(i.releaseDate);rating(i.rating);if(!num(i.doubanRating))bad();if(i.publicRating!==undefined&&!isMoviePublicRating(i.publicRating))bad();if(i.ratingSource!==undefined&&!isMovieRatingSource(i.ratingSource))bad();break;
     case "game":strings(i.platforms);if(!["clear","platinumed","playing","wishlist","unknown"].includes(String(i.status)))bad();date(i.playedDate);if(i.lastPlayedDate!==undefined)date(i.lastPlayedDate);for(const k of ["firstPlayedDate","archiveDate"])if(i[k]!==undefined)playDay(i[k]);date(i.releaseDate);time(i.playedTime);time(i.estimatedTime);percentage(i.progressPercent);rating(i.rating);break;
     case "project":date(i.period);nullable(i.role);strings(i.stack);if(!Array.isArray(i.links))bad();for(const v of i.links){const l=object(v);keys(l,["label","url"]);if(!text(l.label))bad();url(l.url);}break;
     case "page":if(i.slug!=="about"||i.pageKey!=="about"||i.cover!==null)bad();break;
