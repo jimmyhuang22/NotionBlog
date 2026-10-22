@@ -119,6 +119,28 @@ test("filtered-scope is opt-in, independently pinned, and ordinary reads survive
   } finally { await f.db.close(); }
 });
 
+test("filtered-scope explicit disable uses on-demand without either optional filtered extension", async () => {
+  const f = await setup({ scope: false, filtered: false, precomputed: false });
+  const old = process.env.DATABASE_SEARCH_PROJECTION;
+  try {
+    await f.publish([status(0, body("Java"))]);
+    process.env.DATABASE_SEARCH_PROJECTION = "filtered-scope";
+    for (const disable of [{ filteredScopeSearch: false }, { filteredSearch: false }]) {
+      const calls: string[] = [];
+      const sql: SqlExecutor = { async query<T>(text: string, values?: unknown[]) {
+        calls.push(text); return f.reader.query<T>(text, values);
+      } };
+      const repo = createWebsiteDatabaseRepository(scopedReader(sql, "published"), { scoped: true, ...disable });
+      assert.equal((await repo.search!({ q: "Java" })).total, 1);
+      assert(calls.some(text => text.includes("nb_read_api.read_search_parts(")));
+      assert(!calls.some(text => /(?:read|check)_search_(?:filtered|precomputed)/.test(text)));
+    }
+  } finally {
+    if (old === undefined) delete process.env.DATABASE_SEARCH_PROJECTION; else process.env.DATABASE_SEARCH_PROJECTION = old;
+    await f.db.close();
+  }
+});
+
 test("filtered-scope preserves complete Unicode, fallback, DTO and cursor results against all three paths", async () => {
   const f = await setup();
   try {

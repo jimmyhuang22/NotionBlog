@@ -53,7 +53,7 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
   // Resolve the same existing option as scopedReader, once per repository. The
   // shared runtime factory and its frozen producer compatibility pins stay intact.
   const filteredScopeSearch = options.filteredScopeSearch ?? (options.scoped === true && options.filteredSearch !== false && process.env.DATABASE_SEARCH_PROJECTION === "filtered-scope");
-  const filteredSearch = options.filteredSearch ?? (options.scoped === true && ["filtered", "filtered-scope"].includes(process.env.DATABASE_SEARCH_PROJECTION ?? ""));
+  const filteredSearch = options.filteredSearch ?? (options.scoped === true && process.env.DATABASE_SEARCH_PROJECTION === "filtered");
   if ((filteredSearch || filteredScopeSearch) && !options.scoped) throw new ContentServiceError("MISCONFIGURED", "Filtered search requires scoped reads.");
   const zone=()=>statusTimeZone(options);
   const pageSize=options.snapshotPageSize, maxSnapshotBytes=options.maxSnapshotBytes??16*1024*1024;
