@@ -114,6 +114,7 @@ export interface Book extends ContentBase {
   externalUrl: string | null;
 }
 export type MovieStatus = "watched" | "wishlist" | "unknown";
+export type MovieRatingSource = "douban" | "bangumi" | "1905";
 export interface Movie extends ContentBase {
   kind: "movie";
   originalTitle: string | null;
@@ -124,6 +125,11 @@ export interface Movie extends ContentBase {
   director: string | null;
   actors: string[];
   rating: Rating | null;
+  /** Public score on a 0–10 scale. Legacy snapshots may omit it; null is explicitly unknown. */
+  publicRating?: number | null;
+  /** Verified source of the public score; absence never implies Douban. */
+  ratingSource?: MovieRatingSource | null;
+  /** Legacy public-score field, retained for older clients; its name does not prove the source. */
   doubanRating: number | null;
 }
 export type GameStatus = "platinumed" | "clear" | "playing" | "wishlist" | "unknown";
@@ -137,7 +143,7 @@ export interface Game extends ContentBase {
   lastPlayedDate?: DateRange | null;
   /** Earliest observed linked-platform play, day only. Unknown (including Steam) stays null. */
   firstPlayedDate?: DateRange | null;
-  /** Server-resolved day: later of the personal range's end/start and platform last play. */
+  /** Stable archive day: the personal experience range's end, otherwise its start; unknown stays null. */
   archiveDate?: DateRange | null;
   releaseDate: DateRange | null;
   playedTime: TimeAmount | null;
