@@ -74,7 +74,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // New mapper/website reader releases (including reader-only filtering) stay
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
-        ? "553482c9d9c2528fd7867c9bb1634cdd45cbd21153583748c5d7da3e773c4e88"
+        ? "e7003475c6cc4cfb0ebfecb30f9fc5adc76dd4a2f632bcc80fce6f0aa1c997fe"
         : "7953e4da3832eb8bfb4564923612057e89f4a48648276d62680e852a1cc05a9c";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;

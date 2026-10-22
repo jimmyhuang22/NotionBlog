@@ -12,6 +12,7 @@ import { assertWebsiteSourceSchema as assertSourceSchema } from "./website-confi
 import type { WebsiteNotionSource as NotionSource, WebsiteNotionConfig as NotionSourcesConfig } from "./website-config.ts";
 import { compareContent, contentDate, matchesContent } from "../../lib/content/website.ts";
 import { projectGameDates } from "../../lib/content/game-date.ts";
+import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/content/movie-rating.ts";
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
 import { mapBounded } from "./bounded-work.ts";
@@ -327,7 +328,12 @@ class ReadSession {
         progressPercent: pagesRead !== null && totalPages !== null && totalPages > 0 && pagesRead <= totalPages ? Math.round(pagesRead / totalPages * 1000) / 10 : null,
         personalRating: getRating(page, f.personalRating), doubanRating: getNumber(page, f.doubanRating), externalUrl: getPublicUrl(page, f.externalUrl) };
     }
-    if (source.kind === "movie") return { ...base, kind: "movie", originalTitle: getSelect(page, f.originalTitle), mediaType: getSelect(page, f.mediaType), status: state(["watched", "wishlist"]) as ContentByKind["movie"]["status"], watchedDate: getDate(page, f.watchedDate), releaseDate: getDate(page, f.releaseDate), director: getSelect(page, f.director), actors: getValues(page, f.actors), rating: getRating(page, f.rating), doubanRating: getNumber(page, f.doubanRating) };
+    if (source.kind === "movie") {
+      const publicRating = getNumber(page, f.publicRating ?? f.doubanRating);
+      if (!isMoviePublicRating(publicRating)) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid public movie rating.");
+      return { ...base, kind: "movie", originalTitle: getSelect(page, f.originalTitle), mediaType: getSelect(page, f.mediaType), status: state(["watched", "wishlist"]) as ContentByKind["movie"]["status"], watchedDate: getDate(page, f.watchedDate), releaseDate: getDate(page, f.releaseDate), director: getSelect(page, f.director), actors: getValues(page, f.actors), rating: getRating(page, f.rating), doubanRating: getNumber(page, f.doubanRating), publicRating,
+        ratingSource: publicRating === null ? null : normalizeMovieRatingSource(getSelect(page, f.ratingSource)) };
+    }
     if (source.kind === "game") {
       const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime), estimated = getNumber(page, f.estimatedTime);
       return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms: getValues(page, f.platforms), playedDate: getDate(page, f.playedDate), lastPlayedDate: getLastPlayedDate(page, f.lastPlayedDate), firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),

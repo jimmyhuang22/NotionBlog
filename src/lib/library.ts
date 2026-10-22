@@ -2,6 +2,7 @@ import type { Book, DateRange, Game, Movie, Rating, TimeAmount } from "../../con
 import { ratingLabel } from "./format.ts";
 import type { YearChoice } from "./year-filter.ts";
 import { gameBrowsingDate } from "./content/game-date.ts";
+import { isMoviePublicRating } from "./content/movie-rating.ts";
 
 export type LibraryItem = Book | Movie | Game;
 export type LibraryKind = LibraryItem["kind"];
@@ -74,6 +75,14 @@ const factWords: Record<string, (value: string) => string> = {
 
 export function workFactText(label: string, value: string): string {
   return (factWords[label] ?? (text => `${label} ${text}`))(value);
+}
+
+/** A legacy field name is not evidence of where its public score came from. */
+export function movieRatingFact(item: Pick<Movie, "publicRating" | "ratingSource" | "doubanRating">): [string, string] | null {
+  const value = item.publicRating === undefined ? item.doubanRating : item.publicRating;
+  if (value === null || !isMoviePublicRating(value)) return null;
+  const label = item.ratingSource === "douban" ? "豆瓣评分" : item.ratingSource === "bangumi" ? "Bangumi 评分" : item.ratingSource === "1905" ? "1905电影网评分" : "公共评分";
+  return [label, String(value)];
 }
 
 /** Use the same date as the list's sorting and year filter. */
