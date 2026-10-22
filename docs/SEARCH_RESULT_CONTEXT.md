@@ -12,7 +12,7 @@
 
 ## 数据库独立扩展
 
-[`search-context-protocol.json`](../database/search-context-protocol.json) 固定新迁移摘要；迁移由 Supabase CLI 创建，既有冻结 SQL 与 schema digest 不变。代码默认 `DATABASE_SEARCH_CONTEXT=off`，未安装迁移的旧 reader 继续原响应。`on` 只允许 database v2；本项没有安装真实库或修改任何云端变量。
+[`search-context-protocol.json`](../database/search-context-protocol.json) 固定新迁移摘要，由 `tests/search-context.test.ts` 随 `npm run check` 核对（不写进 `scripts/check-website-protocol.ts`：那个脚本属于已审的同步恢复运行文件，须保持逐字节不变）；迁移由 Supabase CLI 创建，既有冻结 SQL 与 schema digest 不变。代码默认 `DATABASE_SEARCH_CONTEXT=off`，未安装迁移的旧 reader 继续原响应。`on` 只允许 database v2；本项没有安装真实库或修改任何云端变量。
 
 支持 qualified／published，各自支持 legacy、scoped on-demand／filtered／precomputed。可选 filtered／precomputed 仍须它们原来的独立安装与显式配置；上下文不会启用搜索优化。Legacy 启用上下文也需要基础 scoped reader 的 `nb_read.assert_pin` 能力，不能只安装本迁移而假定足够。
 

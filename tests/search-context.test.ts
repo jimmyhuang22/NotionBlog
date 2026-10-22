@@ -60,6 +60,15 @@ async function setup(install = true) {
   return { ...f, publish, registerContext, repo };
 }
 
+// The migration's digest is checked here rather than in scripts/check-website-protocol.ts: that script is part of
+// the reviewed sync recovery runtime (tests/helpers/recovery-runtime-sources.ts) and must stay byte-identical.
+test("search context migration matches its manifest and is the only file it names", async () => {
+  assert.equal(protocol.capability, "notionblog-search-context-v1");
+  assert.match(protocol.migration.file, /^\d{14}_search_result_context\.sql$/);
+  const bytes = await readFile(new URL("../supabase/migrations/" + protocol.migration.file, import.meta.url));
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), protocol.migration.sha256, "Search context extension differs from its manifest.");
+});
+
 test("context follows physical identity, preserves all levels and bounds unknown or oversized metadata", () => {
   const records = rows(), map = new Map(records.map(r => [r.detail.item.id, r.detail.item] as [string, AnyContent]));
   const note = records[3].detail.item as StudyNote;

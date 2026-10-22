@@ -79,14 +79,12 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
     if(laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer)) {
       // Exact newer bytes are checked above without weakening this old spec.
-    } else if(pair.path==="src/server/notion/website-repository.ts" || pair.path==="src/server/database/website-repository.ts" || pair.path==="scripts/check-website-protocol.ts") {
-      // New mapper, website reader and protocol checker releases stay
+    } else if(pair.path==="src/server/notion/website-repository.ts" || pair.path==="src/server/database/website-repository.ts") {
+      // New mapper/website reader releases (including reader-only filtering) stay
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
         ? "035363383d2dd8d8e01e7412d58bcef26989bd3a6e759bd3c4b1c89170688147"
-        : pair.path==="src/server/database/website-repository.ts"
-          ? "4845eb9d686cdfa604a3923e50b52f843249a57ede08ace6f0ea99bc7ae956b4"
-          : "474194283392bd24d9380e3838048aa2508a52cc7d65adadada78505e8f75ea3";
+        : "4845eb9d686cdfa604a3923e50b52f843249a57ede08ace6f0ea99bc7ae956b4";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});
