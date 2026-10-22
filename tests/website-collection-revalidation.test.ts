@@ -14,6 +14,7 @@ import { configDigest } from "../src/server/database/website-validation.ts";
 import { runWebsiteSync, websitePolicy } from "../scripts/website-sync/worker.ts";
 import { createCollectionCapture, readCollectionCaptureForRevalidation } from "../scripts/website-sync/collection-capture.ts";
 import { PublicationRevalidationError, type PublicationRevalidationProgress } from "../scripts/website-sync/publication-revalidation.ts";
+import { createWebsiteImageDownloader, websiteImageFailure } from "../scripts/website-sync/download.ts";
 import { bindFreshCollectionDeadline, bindCollectionDeadline, runRevalidatedWebsiteSync, prepareCollectionResume } from "../scripts/website-sync/collection-revalidation.ts";
 import protocol from "../database/qualified-revalidation-protocol.json" with { type: "json" };
 
@@ -265,6 +266,36 @@ test("a late edit recollects only the changed owner, persists its new proof and 
   assert.ok(events.some(e=>e.change?.ownerId===id&&e.change.kind==="revision"&&e.change.changedPaths.includes("page.edited")));
   assert.equal(events.at(-1)?.phase,"complete");
   assert.equal((await f.db.query<{value:string}>("SELECT valid_until::text AS value FROM nb_v2.runs WHERE id=$1",[runId])).rows[0].value,f.old.valid_until);
+});
+
+test("a new image failing during late body repair retains its exact diagnostic and cannot stage a partial publication", async t => {
+  const f = await fixture(t), id = demoId(1000), blockId = demoId(50_001), runId = randomUUID();
+  const resume = await prepareCollectionResume({ directory: f.directory, identity: f.identity, db: f.db });
+  const directory = join(f.directory, "repair-image-failure"), identity = { ...f.identity, runId };
+  const capture = await createCollectionCapture(directory, identity);
+  const client = { ...f.demo.client, listBlocks: async (owner: string) => {
+    const blocks = await f.demo.client.listBlocks(owner);
+    if (owner === demoId(1001)) {
+      f.demo.pages.get(id)!.last_edited_time = "2026-10-02T00:00:00.000Z";
+      f.demo.blocks.set(id, [{ ...demoParagraph(blockId, id, ""), type: "image",
+        image: { type: "external", external: { url: "https://assets.example.test/repair.png" }, caption: [] } } as BlockObjectResponse]);
+    }
+    return blocks;
+  } };
+  let requests = 0, escaped: unknown;
+  const download = createWebsiteImageDownloader({ resolve: async () => [{ address: "8.8.8.8", family: 4 }],
+    request: async () => { requests++; return { status: 403, headers: {}, bytes: (async function* () {})(), cancel() {} }; } });
+  t.after(download.close);
+  await assert.rejects(runWebsiteSync({ client, config: f.config, mode: "publish", storage, download,
+    writer: { ...f.writer, begin: (_id, digest) => f.writer.begin(runId, digest),
+      stage: async () => assert.fail("A failed repair must not stage anything"), promote: async () => assert.fail("No partial publication") },
+    resumeCollection: resume, captureCollection: capture, publicationRepair: { maxPages: 2, maxPasses: 1 } }), error => {
+      escaped = error; return error instanceof Error && "code" in error && error.code === "IMAGE_UNAVAILABLE";
+    });
+  assert.equal(requests, 1, "Permission denial is never retried");
+  assert.deepEqual(websiteImageFailure(escaped)?.context, { ownerPageId: id, locator: { kind: "block", id: blockId } });
+  assert.equal((await readCollectionCaptureForRevalidation(directory, identity)).collectionComplete, false);
+  assert.equal((await f.db.query<{ n: number }>("SELECT count(*)::int AS n FROM nb_v2.records WHERE run_id=$1", [runId])).rows[0].n, 0);
 });
 
 test("publication repair keeps revocation, reparenting and continuing edits fail-closed with inspectable cached work", async t=>{
