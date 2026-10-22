@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { validateListQuery, validateLibraryYearsQuery } from "../src/lib/content/query.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../src/lib/content/status.ts";
 import { contentYear, libraryYears, supportsYear } from "../src/lib/content/years.ts";
-import { gameBrowsingDate, projectGameDates } from "../src/lib/content/game-date.ts";
+import { GAME_DATE_POLICY, gameBrowsingDate, projectGameDates } from "../src/lib/content/game-date.ts";
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const invalid = (message: string): never => {
@@ -71,7 +71,7 @@ export function createMockRepository(options: StatusReadOptions = {}): ContentRe
       const timeZone = supportsYear(kind) ? statusTimeZone(options) : "UTC";
       const { cursor: _cursor, ...filters } = query;
       const order = query.order ?? (kind === "course" ? "title-asc" : "date-desc");
-      const fingerprint = createHash("sha256").update(JSON.stringify([kind, timeZone, ...(kind === "game" ? ["max-play-day-v2"] : []), Object.fromEntries(Object.entries({...filters, limit, order}).sort(([a], [b]) => a.localeCompare(b)))])).digest("base64url");
+      const fingerprint = createHash("sha256").update(JSON.stringify([kind, timeZone, ...(kind === "game" ? [GAME_DATE_POLICY] : []), Object.fromEntries(Object.entries({...filters, limit, order}).sort(([a], [b]) => a.localeCompare(b)))])).digest("base64url");
       let offset = 0;
       if (query.cursor) {
         const parts = /^m1\.([A-Za-z0-9_-]{43})\.(\d+)$/.exec(query.cursor);
