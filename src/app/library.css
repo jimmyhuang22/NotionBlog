@@ -119,7 +119,16 @@
 .cover-slot > * { grid-area: 1 / 1; min-width: 0; }
 /* Until it arrives the image draws nothing of its own, or its backing would hide the spine beneath it. */
 .cover--waiting + .cover { background: none; box-shadow: none; }
-@media (prefers-reduced-motion: no-preference) { .cover--waiting span { animation: cover-wait 0.25s 0.3s both; } }
+/*
+ * Waiting is not "no cover" (round four, M-13): the faint breathing wash of the other loading states, without
+ * the ink spine, and the title only after a second, in grey. The spine stays for a work that has no cover.
+ */
+.cover-slot > .cover--empty.cover--waiting { box-shadow: none; background: color-mix(in srgb, var(--ink) 7%, var(--bg)); color: var(--muted); }
+.library__item:hover .cover-slot > .cover--empty.cover--waiting { box-shadow: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .cover-slot > .cover--waiting { animation: breathe 2.4s ease-in-out infinite; }
+  .cover--waiting span { animation: cover-wait 0.3s 1s both; }
+}
 @keyframes cover-wait { from { opacity: 0; } }
 /* Landscape tiles (games, albums) keep the title horizontal, up to three lines. */
 .library__grid--game .cover--empty, .work--game .cover--empty, .album-card__cover.album-card__cover--empty { display: flex; align-items: center; padding: 6% 8% 6% 9%; }
@@ -136,6 +145,16 @@
 /* A detail page sits in one centred column: a large cover beside what is known, the record below at the same width. */
 .work { display: flex; flex-wrap: wrap; gap: 28px 48px; max-width: 980px; margin-inline: auto; padding-block: 12px 36px; }
 .work ~ .reading__article { max-width: 980px; margin-inline: auto; }
+/*
+ * Ink and Apple write a work's record straight on the page, as the notes are (round four, H-09): no sheet, and
+ * the outline from Notion is one line of small links between two hairlines instead of a grey block. The island
+ * and Y2K keep their sheet, which is what they are.
+ */
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc { margin: 0 0 28px; padding: 10px 0; border-block: 1px solid var(--rule); border-radius: 0; background: none; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 20px; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc::before { content: "本文"; margin-right: 4px; font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--muted); }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc a { padding: 6px 0; }
 .work__cover { flex: 0 0 300px; max-width: 100%; }
 .work--book .work__cover { flex-basis: 260px; }
 .work__info { flex: 1 1 320px; min-width: 0; }
@@ -264,6 +283,8 @@
 .search__kinds { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 4px 0; }
 .search__kinds .tag { min-height: 34px; padding: 4px 14px; }
 .search__kinds .tag:hover { color: var(--accent); }
+/* At least as tall as the loading state that stands in for it (page-loading, 100vh): the footer, below the first screen while the results are read, then stays put when they arrive instead of rising into view (S13-5). */
+.search { min-height: 100vh; }
 .search__body { padding-top: 24px; }
 .search-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; color: var(--muted); }
 .search-recovery p { flex: 1 1 240px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
@@ -360,8 +381,8 @@
 .search__kinds a:has(.link-pending[data-pending]) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
 .wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-head:has(.link-pending[data-pending]) + .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { opacity: 0.45; }
 @media (prefers-reduced-motion: no-preference) {
-  /* A short delay, so a list that arrives quickly never flickers. */
-  .library__group, .library__more, .library__filters ~ .state, .status-head + .timeline, .search__kinds ~ .search__body { transition: opacity 0.2s 0.1s; }
+  /* Dims after a short delay, so a list that arrives quickly never flickers. It comes back at once: the new rows take over from 45% (round four, M-12). */
+  .wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-head:has(.link-pending[data-pending]) + .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { transition: opacity 0.2s 0.1s; }
 }
 
 /* A work's page on its way: the same layout, quiet bars in place of the words. */

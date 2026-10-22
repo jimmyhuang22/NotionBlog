@@ -230,6 +230,8 @@ function followed(event: MouseEvent): string | null {
   if (!event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
   const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
   if (!link || (link.target && link.target !== "_self") || link.hasAttribute("download")) return null;
+  // A link that opens something in place (the about card on the avatar) is not leaving the page, though it keeps an address for a new tab (M-11).
+  if (link.hasAttribute("aria-haspopup")) return null;
   const url = new URL(link.href, location.href);
   // The same address with other filters, sorts or a fragment is not another page.
   if (url.origin !== location.origin || url.pathname === location.pathname) return null;

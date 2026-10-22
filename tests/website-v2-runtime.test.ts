@@ -46,6 +46,17 @@ async function clean(f: Awaited<ReturnType<typeof fixture>>) {
   assert.equal((await readdir(f.inputs)).some(n => n === "manual-run.lock" || n.startsWith(".website-runtime-env-")), false);
   assert.equal((await readdir(f.state)).includes("worker.lock"), false);
 }
+test("a worker-lock cleanup error cannot strand the independent manual lock or temporary environment", async t => {
+  const f = await fixture(t);
+  await writeFile(join(f.project, "scripts/website-sync/run.ts"), `import {renameSync,writeFileSync} from 'node:fs';
+    renameSync(process.env.WEBSITE_STATE_DIR,process.env.WEBSITE_STATE_DIR+'.saved');
+    writeFileSync(process.env.WEBSITE_STATE_DIR,'fixture-blocks-worker-lock-cleanup');`);
+  await f.saveManifest();
+  const result = await invoke([...f.args, "--mode", "stage"]);
+  assert.equal(result.code, 1);
+  assert.equal((await readdir(f.inputs)).some(n => n === "manual-run.lock" || n.startsWith(".website-runtime-env-")), false);
+  assert.equal((await readdir(f.state + ".saved")).includes("worker.lock"), true, "Never delete a lock moved outside the owned path");
+});
 test("v2 offline check accepts Next.js dynamic route releases without locks, sessions, cache writes or child startup", async t => {
   const f = await fixture(t), result = await invoke([...f.args, "--mode", "publish", "--check"]);
   assert.equal(result.code, 0, result.err); const value = JSON.parse(result.out);
@@ -94,6 +105,19 @@ test("v2 host binds capture opt-in and rejects non-boolean capture settings", as
   assert.equal(JSON.parse(enabled.out.split("\n")[0]).capture, "true"); await clean(f);
   Object.assign(f.config, { captureCollection: "true" }); await f.saveConfig();
   assert.equal((await invoke([...f.args, "--check"])).code, 1); await clean(f);
+});
+test("v2 host refuses recovery flags, orphan previous-source input and unknown course bypasses before startup", async t => {
+  const f = await fixture(t);
+  for (const extra of [
+    { resumeRecovery: true }, { resumeRecovery: "unknown-transition" },
+    { resumeSource: { file: "/missing", sha256: "a".repeat(64) } },
+    { courseProjectionRefresh: true }, { configurationTransition: {} },
+  ]) {
+    await writeFile(f.configFile, JSON.stringify({ ...f.config, ...extra }), { mode: 0o600 });
+    const result = await invoke([...f.args, "--check"]);
+    assert.equal(result.code, 1); assert.match(result.err, /PRIVATE_INPUT_INVALID/);
+    assert.equal(result.out.includes('"child"'), false); await clean(f);
+  }
 });
 test("persistent host mode requires stored originals, an extension release and a matching child receipt", async t => {
   const f = await fixture(t), path = join(f.inputs, "supabase-worker.env"), original = await readFile(path, "utf8");
