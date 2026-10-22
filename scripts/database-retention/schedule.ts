@@ -24,6 +24,30 @@ async function privateText(path:string){
  }finally{await file.close();}
 }
 async function exists(path:string){try{await lstat(path);return true;}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return false;throw e;}}
+/** A successful pipeline may explicitly preserve a cache-header failure and bind its
+ * same-plan continuation. Both immutable receipts remain window proofs. */
+export async function verifyVisitorAcceptance(operation:string,runId:string,pipeline:Record<string,unknown>,proof:(path:string)=>Promise<Record<string,unknown>>){
+ const reject=()=>{throw Error("RETENTION_VISITOR_NOT_VERIFIED");};
+ if(!operation.startsWith("/")||resolve(operation)!==operation)reject();
+ const originalPath=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json");
+ const original=await proof(originalPath);
+ if(original.runId!==runId||pipeline.status!=="PASS"||pipeline.runId!==runId)reject();
+ if(!Object.hasOwn(pipeline,"visitorContinuationReceipt")){
+  if(original.status!=="PASS")reject();return {continued:false,receipt:originalPath};
+ }
+ const path=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_CONTINUATION_RECEIPT_PRIVATE.json");
+ if(pipeline.visitorContinuationReceipt!==path||pipeline.firstAttemptStatus!=="FAIL"||pipeline.firstAttemptReason!=="PRODUCTION-VISITOR_FAILED"||
+  original.status!=="FAIL"||original.errorCode!=="VISITOR_CACHE_HEADERS"||typeof original.planSHA256!=="string"||!/^[a-f0-9]{64}$/.test(original.planSHA256))reject();
+ let canonicalOrigin=false;
+ try{const url=new URL(original.origin as string);canonicalOrigin=url.protocol==="https:"&&url.origin===original.origin;}catch{}
+ if(!canonicalOrigin)reject();
+ const continuation=await proof(path);
+ const first=Date.parse(original.finishedAtUTC as string),last=Date.parse(continuation.finishedAtUTC as string),finished=Date.parse(pipeline.finishedAtUTC as string);
+ if(continuation.status!=="PASS"||continuation.runId!==runId||continuation.planSHA256!==original.planSHA256||continuation.origin!==original.origin||
+  continuation.priorFailure!==original.errorCode||continuation.continuationPolicy!=="nb-public-cache-v1"||continuation.failure!==null||
+  ![first,last,finished].every(Number.isFinite)||last<first||last>finished)reject();
+ return {continued:true,receipt:path};
+}
 /** Read-only operator inspection. No locks, credential access, child process or database calls. */
 export async function inspectScheduledReadiness(config:ScheduledConfig){
  if(config.format!=="retention-daily-config-v2")throw Error("RETENTION_CONFIG_INVALID");
@@ -95,8 +119,9 @@ export async function scheduledTick(config:ScheduledConfig){
   if(pipeline.status!=="PASS"||pipeline.runId!==sync.runId)throw Error("RETENTION_PIPELINE_NOT_VERIFIED");
   for(const path of [
    `thumbnail-post/runs/${sync.runId}/receipt-private.json`,"proved-thumbnail-post/RECEIPT_PRIVATE.json",
-   "acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json","acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json",
+   "acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json",
   ]){const r=await proof(join(sync.operation,path));if(r.status!=="PASS"||r.runId!==sync.runId)throw Error("RETENTION_SAME_BATCH_PROOF_MISSING");}
+  await verifyVisitorAcceptance(sync.operation,sync.runId,pipeline,proof);
   const catalogRaw=await privateText(config.tailCatalog),catalogSHA=sha256(catalogRaw);
   proofs.push({path:config.tailCatalog,sha256:catalogSHA});
   let tail;

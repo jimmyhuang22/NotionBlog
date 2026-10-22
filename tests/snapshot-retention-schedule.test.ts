@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {mkdtemp,writeFile,readFile,lstat,unlink,rm,chmod,symlink,mkdir,readdir} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {acquireRetentionLocks,dailyDecision,scheduledTick,inspectScheduledReadiness,type ScheduledConfig} from "../scripts/database-retention/schedule.ts";
+import {acquireRetentionLocks,dailyDecision,scheduledTick,inspectScheduledReadiness,verifyVisitorAcceptance,type ScheduledConfig} from "../scripts/database-retention/schedule.ts";
 import {createArchiveStore} from "../scripts/database-retention/archive.ts";
 import {sha256} from "../scripts/database-retention/daily.ts";
 
@@ -115,21 +115,62 @@ test("the selected one-or-two run limit reaches the actual spawned window unchan
     await writeFile(path,JSON.stringify({status:"PASS",runId}),{mode:0o600});
    }
    await writeFile(sync,JSON.stringify({status:"PASS",runId,operation}),{mode:0o600});await writeFile(catalog,"{}",{mode:0o600});
+   const visitor=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json");
+   const continuation=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_CONTINUATION_RECEIPT_PRIVATE.json");
+   if(maximumRuns===2){
+    await writeFile(join(operation,"PIPELINE_FINISHED_PRIVATE.json"),JSON.stringify({status:"PASS",runId,firstAttemptStatus:"FAIL",firstAttemptReason:"PRODUCTION-VISITOR_FAILED",visitorContinuationReceipt:continuation,finishedAtUTC:"2026-01-01T00:02:00Z"}),{mode:0o600});
+    await writeFile(visitor,JSON.stringify({status:"FAIL",runId,errorCode:"VISITOR_CACHE_HEADERS",planSHA256:"a".repeat(64),origin:"https://example.org",finishedAtUTC:"2026-01-01T00:00:00Z"}),{mode:0o600});
+    await writeFile(continuation,JSON.stringify({status:"PASS",runId,planSHA256:"a".repeat(64),origin:"https://example.org",priorFailure:"VISITOR_CACHE_HEADERS",continuationPolicy:"nb-public-cache-v1",failure:null,finishedAtUTC:"2026-01-01T00:01:00Z"}),{mode:0o600});
+   }
    const tail=join(dir,"tail",runId,sha256("{}"));await mkdir(tail,{recursive:true,mode:0o700});
    await writeFile(join(tail,"RECEIPT_PRIVATE.json"),JSON.stringify({status:"PASS",runId,catalogSHA256:sha256("{}"),connectionsClosed:true,
     ownLocksReleased:true,inFlight:null,unknownWriteGroup:null,acknowledgedUnverifiedGroup:null}),{mode:0o600});
    const envFile=join(dir,"empty.env"),cli=join(dir,"inspect-window.mjs");await writeFile(envFile,"",{mode:0o600});
    const program=`import {readFile,writeFile} from 'node:fs/promises';import {dirname,join} from 'node:path';
     const path=process.argv.at(-1),window=JSON.parse(await readFile(path,'utf8'));
-    await writeFile(join(dirname(path),'OBSERVED_PRIVATE.json'),JSON.stringify({maximumRuns:window.maximumRuns,format:window.format}),{mode:0o600});`;
+    await writeFile(join(dirname(path),'OBSERVED_PRIVATE.json'),JSON.stringify({maximumRuns:window.maximumRuns,format:window.format,proofs:window.proofs}),{mode:0o600});`;
    await writeFile(cli,program,{mode:0o600});
    const config:ScheduledConfig={format:"retention-daily-config-v2",maximumRuns,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),
     syncState:sync,websitePause:join(dir,"pause"),lockFiles:[0,1,2,3].map(n=>join(dir,`lock${n}`)),absentLocks:[join(dir,"native")],envFile,
     healthURL:"https://example.org/api/health/content",cli,tailCatalog:catalog,tailRunsDirectory:join(dir,"tail"),programFiles:[{path:cli,sha256:sha256(program)}]};
    const result=await scheduledTick(config);assert.equal(result.status,"PASS");assert.ok(result.operation);
-   assert.deepEqual(JSON.parse(await readFile(join(config.directory,result.operation,"OBSERVED_PRIVATE.json"),"utf8")),{maximumRuns,format:"retention-daily-window-v2"});
+   const observed=JSON.parse(await readFile(join(config.directory,result.operation,"OBSERVED_PRIVATE.json"),"utf8"));
+   assert.equal(observed.maximumRuns,maximumRuns);assert.equal(observed.format,"retention-daily-window-v2");
+   for(const path of maximumRuns===2?[visitor,continuation]:[visitor]){
+    const expected=sha256(await readFile(path,"utf8"));
+    assert.ok(observed.proofs.some((p:{path:string;sha256:string})=>p.path===path&&p.sha256===expected));
+   }
    assert.equal((await readdir(config.directory)).filter(name=>name!=="STATE_PRIVATE.json").length,1);
    for(const lock of config.lockFiles)await assert.rejects(lstat(lock),{code:"ENOENT"});
   }finally{await rm(dir,{recursive:true,force:true});}
  }
+});
+
+test("cache-header continuation binds the original failure and the exact same-plan success",async()=>{
+ const operation="/private/fixture/operation",runId="00000000-0000-0000-0000-000000000001";
+ const originalPath=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json");
+ const path=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_CONTINUATION_RECEIPT_PRIVATE.json");
+ const original={status:"FAIL",runId,errorCode:"VISITOR_CACHE_HEADERS",planSHA256:"a".repeat(64),origin:"https://example.org",finishedAtUTC:"2026-01-01T00:00:00Z"};
+ const continuation={status:"PASS",runId,planSHA256:original.planSHA256,origin:original.origin,priorFailure:"VISITOR_CACHE_HEADERS",continuationPolicy:"nb-public-cache-v1",failure:null,finishedAtUTC:"2026-01-01T00:01:00Z"};
+ const pipeline={status:"PASS",runId,firstAttemptStatus:"FAIL",firstAttemptReason:"PRODUCTION-VISITOR_FAILED",visitorContinuationReceipt:path,finishedAtUTC:"2026-01-01T00:02:00Z"};
+ const observed:string[]=[];
+ const proof=async(p:string)=>{observed.push(p);return p===originalPath?original:continuation;};
+ assert.deepEqual(await verifyVisitorAcceptance(operation,runId,pipeline,proof),{continued:true,receipt:path});
+ assert.deepEqual(observed,[originalPath,path]);
+ assert.equal(original.status,"FAIL");
+ assert.deepEqual(await verifyVisitorAcceptance(operation,runId,{status:"PASS",runId},async()=>({status:"PASS",runId})),{continued:false,receipt:originalPath});
+ for(const bad of [
+  {status:"FAIL"}, {runId:"00000000-0000-0000-0000-000000000002"}, {planSHA256:"b".repeat(64)},
+  {origin:"https://other.example.org"}, {priorFailure:"OTHER_FAILURE"}, {continuationPolicy:"unknown"},
+  {failure:"unresolved"}, {finishedAtUTC:"2025-12-31T23:59:59Z"}, {finishedAtUTC:"2026-01-01T00:03:00Z"}, {finishedAtUTC:null},
+ ])await assert.rejects(verifyVisitorAcceptance(operation,runId,pipeline,async p=>p===originalPath?original:{...continuation,...bad}),/RETENTION_VISITOR_NOT_VERIFIED/);
+ for(const bad of [{visitorContinuationReceipt:"/private/another/receipt.json"},{visitorContinuationReceipt:null},{status:"FAIL"},{runId:"other"},{firstAttemptReason:"OTHER_FAILURE"}]){
+  let reads=0;
+  await assert.rejects(verifyVisitorAcceptance(operation,runId,{...pipeline,...bad},async()=>{reads++;return original;}),/RETENTION_VISITOR_NOT_VERIFIED/);
+  assert.equal(reads,1);
+ }
+ for(const bad of [{status:"PASS"},{errorCode:"OTHER_FAILURE"},{planSHA256:"invalid"},{origin:"https://user:password@example.org"}]){
+  await assert.rejects(verifyVisitorAcceptance(operation,runId,pipeline,async p=>p===originalPath?{...original,...bad}:continuation),/RETENTION_VISITOR_NOT_VERIFIED/);
+ }
+ await assert.rejects(verifyVisitorAcceptance(operation,runId,{status:"PASS",runId},async()=>original),/RETENTION_VISITOR_NOT_VERIFIED/);
 });
