@@ -11,7 +11,8 @@ import { normalizeId } from "./config.ts";
 import { assertWebsiteSourceSchema as assertSourceSchema } from "./website-config.ts";
 import type { WebsiteNotionSource as NotionSource, WebsiteNotionConfig as NotionSourcesConfig } from "./website-config.ts";
 import { compareContent, contentDate, matchesContent } from "../../lib/content/website.ts";
-import { projectGameDates } from "../../lib/content/game-date.ts";
+import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
+import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/content/movie-rating.ts";
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
 import { mapBounded } from "./bounded-work.ts";
@@ -327,7 +328,12 @@ class ReadSession {
         progressPercent: pagesRead !== null && totalPages !== null && totalPages > 0 && pagesRead <= totalPages ? Math.round(pagesRead / totalPages * 1000) / 10 : null,
         personalRating: getRating(page, f.personalRating), doubanRating: getNumber(page, f.doubanRating), externalUrl: getPublicUrl(page, f.externalUrl) };
     }
-    if (source.kind === "movie") return { ...base, kind: "movie", originalTitle: getSelect(page, f.originalTitle), mediaType: getSelect(page, f.mediaType), status: state(["watched", "wishlist"]) as ContentByKind["movie"]["status"], watchedDate: getDate(page, f.watchedDate), releaseDate: getDate(page, f.releaseDate), director: getSelect(page, f.director), actors: getValues(page, f.actors), rating: getRating(page, f.rating), doubanRating: getNumber(page, f.doubanRating) };
+    if (source.kind === "movie") {
+      const publicRating = getNumber(page, f.publicRating ?? f.doubanRating);
+      if (!isMoviePublicRating(publicRating)) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid public movie rating.");
+      return { ...base, kind: "movie", originalTitle: getSelect(page, f.originalTitle), mediaType: getSelect(page, f.mediaType), status: state(["watched", "wishlist"]) as ContentByKind["movie"]["status"], watchedDate: getDate(page, f.watchedDate), releaseDate: getDate(page, f.releaseDate), director: getSelect(page, f.director), actors: getValues(page, f.actors), rating: getRating(page, f.rating), doubanRating: getNumber(page, f.doubanRating), publicRating,
+        ratingSource: publicRating === null ? null : normalizeMovieRatingSource(getSelect(page, f.ratingSource)) };
+    }
     if (source.kind === "game") {
       const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime), estimated = getNumber(page, f.estimatedTime);
       return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms: getValues(page, f.platforms), playedDate: getDate(page, f.playedDate), lastPlayedDate: getLastPlayedDate(page, f.lastPlayedDate), firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
@@ -621,7 +627,7 @@ function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?
       const order = query.order ?? (kind === "course" ? "title-asc" : "date-desc");
       records.sort((a, b) => compareContent(a.item, b.item, order, timeZone));
       const { cursor: _cursor, ...filters } = query;
-      const fingerprint = createHash("sha256").update(JSON.stringify({ kind, timeZone, ...(kind === "game" ? { gameDatePolicy: "max-play-day-v2" } : {}), filters: Object.fromEntries(Object.entries(filters).sort(([a], [b]) => a.localeCompare(b))), sources: options.config.sources, records: records.map(({ item }) => [item.id, item.title, dateOf(item), item.updatedAt]) })).digest("base64url");
+      const fingerprint = createHash("sha256").update(JSON.stringify({ kind, timeZone, ...(kind === "game" ? { gameDatePolicy: GAME_DATE_POLICY } : {}), filters: Object.fromEntries(Object.entries(filters).sort(([a], [b]) => a.localeCompare(b))), sources: options.config.sources, records: records.map(({ item }) => [item.id, item.title, dateOf(item), item.updatedAt]) })).digest("base64url");
       let offset = 0;
       if (query.cursor) {
         const match = /^n1\.([A-Za-z0-9_-]{43})\.(\d+)$/.exec(query.cursor);

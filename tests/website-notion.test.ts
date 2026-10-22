@@ -68,7 +68,7 @@ test("route metadata checks preserve exact About authorization and never load bl
  assert.equal(await repo.getContentMetadata!("game",id(10)),null);
 });
 
-test("Game latest-play rollups drive years without altering personal dates or exposing platform rows", async () => {
+test("Game rollups stay independent of stable experience years and do not expose platform rows", async () => {
  const s=setup(), page=s.pages.get(id(10))!;
  const original={start:"2023-06-01",end:"2023-08-01",time_zone:null};
  const latest={start:"2025-12-31T14:30:00Z",end:null,time_zone:null};
@@ -83,13 +83,14 @@ test("Game latest-play rollups drive years without altering personal dates or ex
  const config={...s.config,sources:[{...s.config.sources[0],fields:{...s.config.sources[0].fields,lastPlayedDate:"Last",firstPlayedDate:"First"}},s.config.sources[1]]};
  s.client.listBlocks=async()=>{throw Error("Latest-play metadata must not load bodies");};
  const repo=createWebsiteNotionRepository({client:s.client,config:parseWebsiteNotionConfig(config),timeZone:()=>"Australia/Melbourne",registerImage:async()=>{throw Error("Metadata must not register media");}});
- const result=await repo.list("game",{year:2026});
+ const result=await repo.list("game",{year:2023});
+ assert.equal((await repo.list("game",{year:2026})).total,0);
  assert.equal(result.total,1);
  assert.deepEqual(result.items[0].lastPlayedDate,{start:"2026-01-01",end:null,precision:"date"});
- assert.deepEqual(result.items[0].archiveDate,result.items[0].lastPlayedDate);
+ assert.deepEqual(result.items[0].archiveDate,{start:"2023-08-01",end:null,precision:"date"});
  assert.deepEqual(result.items[0].firstPlayedDate,{start:"2025-01-01",end:null,precision:"date"});
  assert.deepEqual(result.items[0].playedDate,{start:"2023-06-01",end:"2023-08-01",precision:"date"});
- assert.deepEqual((await repo.getLibraryYears!("game")).years,[{year:2026,count:1}]);
+ assert.deepEqual((await repo.getLibraryYears!("game")).years,[{year:2023,count:1}]);
  assert.equal(JSON.stringify(result).includes("relation"),false);
  assert.deepEqual(page.properties.Date,{id:"d",type:"date",date:original});
  page.properties.Date={id:"d",type:"date",date:{start:"2023-06-01",end:"2027-01-02",time_zone:null}};

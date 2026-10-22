@@ -16,7 +16,7 @@ const fields: Record<ContentKind, Record<string, PropertyType[]>> = {
   post: { ...common, publishedAt: date },
   album: { ...common, date, photoCount: number },
   book: { ...common, authors: [...label, "multi_select"], status: label, readingDate: date, pagesRead: number, totalPages: number, personalRating: [...label, "number"], doubanRating: number, externalUrl: ["url"] },
-  movie: { ...common, originalTitle: label, mediaType: label, status: label, watchedDate: date, releaseDate: date, director: label, actors: [...label, "multi_select"], rating: [...label, "number"], doubanRating: number },
+  movie: { ...common, originalTitle: label, mediaType: label, status: label, watchedDate: date, releaseDate: date, director: label, actors: [...label, "multi_select"], rating: [...label, "number"], doubanRating: number, publicRating: number, ratingSource: label },
   game: { ...common, status: label, platforms: ["multi_select"], playedDate: date, lastPlayedDate: ["date", "rollup"], firstPlayedDate: ["date", "rollup"], releaseDate: date, playedTime: number, estimatedTime: number, platformMinutes: number, steamMinutes: number, rating: [...label, "number"] },
   project: { ...common, period: date, role: label, stack: ["multi_select"], repositoryUrl: ["url"], demoUrl: ["url"] },
   page: { title: ["title"] },
