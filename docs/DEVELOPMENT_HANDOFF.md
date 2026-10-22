@@ -8,7 +8,7 @@
 
 在目标工程目录先检查本地改动、当前分支和远端。已有 worker 分支可能与主线分叉，不能用旧补丁覆盖新代码。保存本机未推送提交与改动后再合并，冲突保留双方已完成工作。
 
-遵守最新 `AGENTS.md` 的分支约定：`develop` 是日常集成分支，`main` 是线上分支。每项工作从最新 develop 建短期分支，提交与合并请求使用英文；按改动影响完成本机验证、无冲突并核对实际差异后自行合并 develop，不等待逐 PR 平台 CI。CI 默认两小时集中检查，有已知代码失败仍须修复；详见 [集中 CI 决策](decisions/2026-10-13-batched-development-ci.md)。不为无关 develop 更新反复同步与重跑；冲突、同一逻辑或依赖／契约／配置／迁移／检查环境变化时先整合验证。纯说明／记录文档做记录格式、相关链接、差异和隐私检查，应用或构建输入改变集中 check／build。发布到 main 仍检查当前完整集成版本并通过平台 CI，只由用户合并或按单次明确委托执行。
+遵守最新 `AGENTS.md` 的分支约定：`develop` 是日常集成分支，`main` 是线上分支。每项工作从最新 develop 建短期分支，提交与合并请求使用英文；按改动影响完成本机验证、无冲突、PR 正文写明受检提交／验证方式／限制并核对实际差异后自行合并 develop，不等待平台 CI。当前 Mac mini 运行器已退役，私人 PR 的平台应用检查跳过，`SKIPPED` 不算通过，没有两小时集中检查；恢复另行约定，已知代码、协议或构建失败仍须先解决，详见[本机验证合并决定](decisions/2026-10-22-develop-merge-local-verification.md)。不为无关 develop 更新反复同步与重跑；冲突、同一逻辑或依赖／契约／配置／迁移／检查环境变化时先整合验证。纯说明／记录文档做记录格式、相关链接、差异和隐私检查，应用或构建输入改变集中 check／build。发布到 main 仍检查当前完整集成版本并通过平台 CI，只由用户合并或按单次明确委托执行。
 
 合入 develop 前先核对是否有打开的 develop → main 发布请求。有的话暂缓合入，继续在独立工作分支开发、验证和推送；等发布合并后恢复，避免发布检查因 develop 的新变化重排。用户另行明确解除暂停时按其指令执行，见 [发布窗口决定](decisions/2026-10-13-develop-hold-during-release.md)。
 
@@ -94,6 +94,6 @@ node scripts/notion-sync/cli.ts --demo --mode dry-run --state-dir "$SYNC_PRIVATE
 
 ## 自动检查与分支部署
 
-`.github/workflows/check.yml` 自动检查 main 的合并请求与推送，另支持手动选择 develop／main 和每两小时集中检查 develop。完整检查使用 Node 24、安装上述两份锁文件，运行 `npm run check` 和 `npm run build`；相同受检树复用两周内的完整通过记录，纯文档只做记录格式和隐私检查，见 [运行说明](GITHUB_ACTIONS_RUNNER.md)。日常 develop 按影响完成本机验证后合并，集中检查失败再定位修复；main 发布仍验收当前完整版本。只有仓库只读权限，不读取私人环境或部署 Token；Actions 固定官方提交，checkout 不保留凭据。
+`.github/workflows/check.yml` 保留 main／develop PR 与手动入口，没有 push 或 schedule，也不复用旧树缓存。当前私人 PR 的应用检查跳过；专用 Mac mini 运行器已退役，不再手动派发私人任务。公开后使用标准托管 Ubuntu，完整检查使用 Node 24、安装上述两份锁文件，运行 `npm run check` 和 `npm run build`，该路径仍须实际验收，见[运行说明](GITHUB_ACTIONS_RUNNER.md)。日常 develop 按影响完成本机验证后合并；main 发布规则保持，CI 停用期间如何满足平台验收待用户另行决定。只有仓库只读权限，不读取私人环境或部署 Token；Actions 固定官方提交，checkout 不保留凭据。
 
-`vercel.json` 的自动 Git 部署只允许 main，develop 和工作分支不生成新预览；日常合并依赖按影响的本机验证，GitHub 集中检查另按上述节奏执行。集中积累改动后再开 develop → main 的发布请求，由用户合并。旧工作分支需要先整合最新 develop 才取得此配置；历史 Preview 保持旧代码。Git 配置不控制手动部署、重新部署或部署钩子，只有用户明确要求时才执行；内容同步和刷新页面不需要部署。配置依据见 [Vercel Git 配置](https://vercel.com/docs/project-configuration/git-configuration)。
+`vercel.json` 的自动 Git 部署只允许 main，develop 和工作分支不生成新预览；日常合并依赖按影响的本机验证，平台检查恢复另行约定。集中积累改动后再开 develop → main 的发布请求，由用户合并。旧工作分支需要先整合最新 develop 才取得此配置；历史 Preview 保持旧代码。Git 配置不控制手动部署、重新部署或部署钩子，只有用户明确要求时才执行；内容同步和刷新页面不需要部署。配置依据见 [Vercel Git 配置](https://vercel.com/docs/project-configuration/git-configuration)。
