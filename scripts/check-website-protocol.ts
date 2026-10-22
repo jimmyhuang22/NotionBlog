@@ -39,6 +39,11 @@ if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${
   throw new Error("Qualified revalidation extension differs from its manifest.");
 console.log("Qualified revalidation extension verified; original deadlines cannot be extended.");
 
+const context=JSON.parse(await readFile(new URL("../database/search-context-protocol.json",import.meta.url),"utf8")) as {migration:{file:string;sha256:string}};
+if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${context.migration.file}`,import.meta.url))).digest("hex")!==context.migration.sha256)
+  throw new Error("Search context extension differs from its manifest.");
+console.log("Independent search context extension verified; existing readers unchanged.");
+
 const freshQualification=JSON.parse(await readFile(new URL("../database/fresh-qualification-protocol.json",import.meta.url),"utf8")) as {migration:{file:string;sha256:string}};
 if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${freshQualification.migration.file}`,import.meta.url))).digest("hex")!==freshQualification.migration.sha256)
   throw new Error("Fresh collection qualification extension differs from its manifest.");

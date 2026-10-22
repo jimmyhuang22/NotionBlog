@@ -23,7 +23,7 @@ export function configureDevelopmentEnvironment(env: NodeJS.ProcessEnv, now = Da
     PUBLIC_CONTENT_CACHE: "disabled",
     SOCIAL_DISPLAY_MODE: "trial", SOCIAL_MEDIA_ENABLED: "false", SOCIAL_COLLECTION_PLAYBACK: "false",
     SOCIAL_COLLECTION_DAY_ADDITIONS: "false", DATABASE_CONTENT_VERSION: "1", DATABASE_READ_PROJECTION: "legacy",
-    DATABASE_PUBLICATION_MODE: "qualified", MEDIA_PROVIDER: "storage", MEDIA_THUMBNAILS: "disabled",
+    DATABASE_PUBLICATION_MODE: "qualified", DATABASE_SEARCH_CONTEXT: "off", MEDIA_PROVIDER: "storage", MEDIA_THUMBNAILS: "disabled",
     MEDIA_THUMBNAIL_QUALIFICATION: "live-notion", STORAGE_PROVIDER: "supabase", THUMBNAIL_STORAGE_PROVIDER: "supabase",
     COS_READ_TRANSPORT: "fetch", COS_READ_ENDPOINT: "regional", SITE_CONFIG_JSON: "{}", SITE_CONFIG: "",
     CONTENT_FEATURES_JSON: "{}", SITE_INDEXING_ENABLED: "false", SITE_DISCOVERY_KINDS_JSON: '["status","course","study-note"]',

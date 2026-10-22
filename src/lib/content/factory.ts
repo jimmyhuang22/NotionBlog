@@ -48,6 +48,7 @@ export function createFeatureGatedRepository(
     ? repository.getCourseMetadata(slug)
     : (await repository.get("course", slug))?.item ?? null;
   return {
+    ...(repository.readSearchSnapshot ? { readSearchSnapshot: (kinds: ContentKind[]) => repository.readSearchSnapshot!(kinds.filter(kind => enabled(kind))) } : {}),
     ...(repository.search ? { search: (query: SearchQuery) => searchRepository(repository, features, query) } : {}),
     async getContentMetadata(kind, slug) {
       if (!enabled(kind)) return null;

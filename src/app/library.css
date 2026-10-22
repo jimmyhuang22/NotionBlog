@@ -284,11 +284,14 @@
 .search-hit__kind > i { font-style: normal; }
 .search-hit__title { min-width: 0; font-family: var(--font-hand); font-size: var(--text-lg); line-height: 1.45; }
 .search-hit__excerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 6px; padding-left: 34px; font-size: var(--text-base); line-height: 1.7; color: var(--muted); }
+.search-context { display: block; margin-top: 5px; font-size: var(--text-sm); line-height: 1.65; color: var(--muted); overflow-wrap: anywhere; white-space: normal; }
+.search-context__course { color: var(--accent); font-weight: 500; }
+.search-hit > .search-context { padding-left: 34px; }
 .search-hit mark { padding: 0; border-radius: 0; background: none; color: inherit; text-decoration: underline 1.5px var(--accent); text-underline-offset: 4px; text-decoration-skip-ink: none; }
 /* In the excerpt a found word is only inked: underlines there read as links of their own inside the one link (X-10). */
 .search-hit__excerpt mark { text-decoration: none; color: var(--accent); }
 .palette mark { padding: 0 2px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink); }
-@media (max-width: 520px) { .search-hit__excerpt { padding-left: 0; } }
+@media (max-width: 520px) { .search-hit__excerpt, .search-hit > .search-context { padding-left: 0; } }
 
 /* Projects: one card per project, what it is on the left, stack and links on the right. */
 .project-card { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-bottom: 14px; padding: 26px 28px; border-radius: var(--radius-lg); }
@@ -319,12 +322,13 @@
 .palette__close span { display: none; font-size: var(--text-sm); color: var(--accent); }
 .palette__list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 0 8px; list-style: none; overflow-y: auto; }
 .palette__list:not(:empty) { padding-block: 8px; border-top: 1px solid var(--rule); }
-.palette__option a { display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); }
+.palette__option a { display: flex; min-height: 44px; align-items: baseline; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); }
 .palette__option a:hover { color: inherit; }
 .palette__option[aria-selected="true"] a { background: var(--soft); }
 .palette__option .tag { flex: 0 0 auto; white-space: nowrap; }
-.palette__title { flex: 0 1 auto; min-width: 0; max-width: 60%; font-family: var(--font-hand); font-size: var(--text-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.palette__excerpt { flex: 1 1 0; min-width: 0; font-size: var(--text-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette__content { flex: 1 1 0; min-width: 0; }
+.palette__title { display: block; font-family: var(--font-hand); font-size: var(--text-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette__excerpt { display: block; margin-top: 5px; min-width: 0; font-size: var(--text-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .palette__option--all a { font-size: var(--text-sm); color: var(--accent); }
 .palette__status { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; padding: 8px 20px; border-top: 1px solid var(--rule); font-size: var(--text-sm); color: var(--muted); }
 .palette__status p { flex: 1 1 240px; min-width: 0; margin: 6px 0; overflow-wrap: anywhere; }
