@@ -286,7 +286,8 @@ a.work-row__line:focus-visible { outline-offset: -3px; border-radius: var(--radi
 .works__grid--xiaohongshu { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 960px) { .works__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .works__grid--xiaohongshu { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .works__grid, .works__grid--xiaohongshu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
-.works__grid > li { min-width: 0; }
+/* A cell holds its card at the row's height, so cards side by side end level when one day line wraps and another does not (S13-2: 320 wide, a collection's "最后更新" and its date). */
+.works__grid > li { min-width: 0; display: grid; }
 /* The card: its cover, then title and day, with no card behind; positioned so screen-reader words stay inside it. */
 .works-card { position: relative; display: flex; flex-direction: column; gap: 4px; color: inherit; }
 .works-card__frame { order: -1; position: relative; display: block; overflow: hidden; border-radius: var(--radius-md); background: var(--soft); box-shadow: var(--shadow); }
