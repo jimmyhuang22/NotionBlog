@@ -41,13 +41,17 @@ test("cache keys preserve semantic query/provider boundaries and the one-day har
   assert.match(headers["Cache-Control"]!, /no-cache/);
 });
 
-test("a withdrawal during a cold read prevents its result entering the reusable cache; failures retry normally", async () => {
-  let stamp = "before", stored = 0;
+test("a withdrawal during a cold read discards its result and requalifies; unrelated failures are not retried", async () => {
+  let stamp = "before", stored = 0, loads = 0;
   const ports: PublicCachePorts = { stamp: async () => ({ version: 1, enabled: true, stamp }), async read(_k, _t, load) { const value = await load(); stored++; return value; } };
-  await assert.rejects(readPublicProjection("content", "detail", [], "fixture", ports, async () => { stamp = "after"; return { private: false }; }));
-  assert.equal(stored, 0);
+  assert.equal(await readPublicProjection("content", "detail", [], "fixture", ports, async () => {
+    if (++loads === 1) { stamp = "after"; return { private: false }; }
+    return null;
+  }), null);
+  assert.equal(loads, 2);
+  assert.equal(stored, 1, "only the newly qualified missing result reaches the cache");
   await assert.rejects(readPublicProjection("content", "detail", [], "fixture", ports, async () => { throw Error("unavailable"); }));
-  assert.equal(stored, 0);
+  assert.equal(stored, 1);
   assert.equal(await readPublicProjection("content", "detail", [], "fixture", ports, async () => "fresh"), "fresh");
   let largeReads = 0;
   for (let i = 0; i < 2; i++) {
@@ -55,7 +59,7 @@ test("a withdrawal during a cold read prevents its result entering the reusable 
     assert.equal(large.length, 2 * 1024 * 1024);
   }
   assert.equal(largeReads, 2, "valid large documents bypass storage instead of becoming unavailable");
-  assert.equal(stored, 1);
+  assert.equal(stored, 2);
 });
 
 test("origin cache headers never turn a missing/failed image into a cached 304", async () => {
