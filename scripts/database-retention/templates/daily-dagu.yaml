@@ -1,0 +1,16 @@
+# Supply an absolute frozen runtime directory and a protected config path at installation.
+# This is a separate DAG. Never append it inside the website content/thumbnail deadline.
+description: Archive and prune unreferenced historical website payloads after successful acceptance
+timeout_sec: 1850
+max_clean_up_time_sec: 30
+hist_retention_days: 14
+schedule: '*/15 * * * *'
+overlap_policy: skip
+env:
+  NODE_OPTIONS: ''
+  NODE_PATH: ''
+steps:
+  - id: daily_retention
+    run: |
+      umask 077
+      exec "$RETENTION_NODE" --conditions=react-server "$RETENTION_PROJECT/scripts/database-retention/scheduled-cli.ts" --config "$RETENTION_CONFIG"
