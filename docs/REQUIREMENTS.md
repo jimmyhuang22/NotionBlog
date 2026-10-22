@@ -1,5 +1,7 @@
 # 项目需求
 
+搜索候选归属（2026-10-23）：用户明确选择 PR #36 为唯一实现候选，关闭重复 PR #42，保留其分支、工作树和全部证据；本聊天后续只做独立复核，不继续维护第二份同名迁移。此选择不包含安装、启用、合并或部署，见[唯一候选决定](decisions/2026-10-23-single-search-scope-candidate.md)。
+
 搜索资格复用候选（2026-10-23）：用户批准实现默认关闭的 `filtered-scope` 模式、独立只读迁移与搜索专用能力检查。只有本条 SQL 实际候选集合含学习笔记时，才为整组候选复用同语句已证明的资格；候选外链接与媒体 owner 继续逐项检查。原三模式、公开／撤回、完整分页和最终版本复核保持。本项只完成本机验证与草稿 PR，不安装 SQL、不启用、不合并、不部署；见[决定](decisions/2026-10-23-search-filtered-scope.md)与[候选说明](SEARCH_FILTERED_SCOPE.md)。
 
 生产仓库接续（2026-10-23）：现有 Vercel 项目已接到干净新仓库，用户明确指定代合本次发布 PR 后，已普通合入 main 并晋升同一已验 Production 构建。现有域名、环境配置、数据库、媒体及独立业务运行根保留；生产分支保持 main，日常 develop 不自动部署。用户选择的本次 Vercel 云端完整 check／build 已实际通过，GitHub 私人 CI 仍停用；以后发布仍须逐次授权并明确平台验收，见[本次决定](decisions/2026-10-23-production-repository-rebind.md)和[执行记录](progress/2026-10-23-production-repository-rebind.md)。
