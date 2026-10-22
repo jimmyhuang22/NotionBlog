@@ -15,7 +15,11 @@ concurrency:
 jobs:
   check:
     name: Check and build (Node 24)
-    runs-on: ubuntu-latest
+    # A private preparation run is owner-dispatched; public PRs use an isolated hosted VM.
+    if: >-
+      github.event.repository.private == false ||
+      (github.event_name == 'workflow_dispatch' && github.actor == github.repository_owner)
+    runs-on: ${{ fromJSON(github.event.repository.private && '["self-hosted","macOS","ARM64","notionblog"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 45
     env:
       NOTIONBLOG_DEVELOPMENT_MODE: offline
