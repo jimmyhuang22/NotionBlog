@@ -5,8 +5,16 @@ import { collectionResumePlan } from "../scripts/website-sync/collection-resume-
 import type { CollectedPage } from "../scripts/website-sync/collection-capture.ts";
 import { demoId } from "../scripts/notion-sync/demo.ts";
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
+import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 
-function laterPublicationRepair(path:string,current:string,prior:string,producer:Parameters<typeof checkCaptureReleaseCompatibility>[0],consumer:Parameters<typeof checkCaptureReleaseCompatibility>[1]):boolean {
+function laterRejectedRuntime(path:string,current:string,prior:string,producer:Parameters<typeof checkCaptureReleaseCompatibility>[0],consumer:Parameters<typeof checkCaptureReleaseCompatibility>[1]):boolean {
+  if (syncDiagnosticSources[path] && current !== prior) {
+    assert.equal(current, syncDiagnosticSources[path], path);
+    const changed = structuredClone(consumer);
+    changed.files.find(file => file.path === path)!.sha256 = current;
+    assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });
+    return true;
+  }
   const reviewed=publicationRepair.reviewedSourceFiles.find(file=>file.path===path);
   if(!reviewed||current===prior)return false;
   assert.equal(current,reviewed.after,path);
@@ -68,7 +76,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
   assert.equal(checkCaptureReleaseCompatibility(producer,consumer).originalCaptureUnchanged,true);
   for(const pair of spec.files){
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
-    if(laterPublicationRepair(pair.path,current,pair.after,producer,consumer)) {
+    if(laterRejectedRuntime(pair.path,current,pair.after,producer,consumer)) {
       // Exact newer bytes are checked above without weakening this old spec.
     } else if(pair.path==="src/server/notion/website-repository.ts" || pair.path==="src/server/database/website-repository.ts") {
       // New mapper/website reader releases (including reader-only filtering) stay
@@ -104,7 +112,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
   assert.equal(checkCaptureReleaseCompatibility(producer, consumer).format, path.includes("media-reuse") ? "capture-bounded-media-reuse-compatibility-v1" : "capture-versioned-proof-compatibility-v1");
   for(const pair of spec.files) {
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
-    if(laterPublicationRepair(pair.path,current,pair.after,producer,consumer))continue;
+    if(laterRejectedRuntime(pair.path,current,pair.after,producer,consumer))continue;
     // New website/development capabilities remain outside these frozen transitions.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
     const expected = pair.path === "scripts/dev-real.mjs"

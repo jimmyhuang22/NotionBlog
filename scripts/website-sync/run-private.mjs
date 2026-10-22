@@ -157,7 +157,11 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   return summary;
  }finally{
   process.off('SIGINT',cancel);process.off('SIGTERM',cancel);if(temp)await unlink(temp).catch(()=>{});
-  await unlock?.();await manual?.close();if(inode){const now=await lstat(lockPath).catch(()=>null);if(now?.ino===inode.ino&&now?.dev===inode.dev&&!now.isSymbolicLink())await unlink(lockPath);}
+  try{await unlock?.();}
+  finally{
+   try{await manual?.close();}
+   finally{if(inode){const now=await lstat(lockPath).catch(()=>null);if(now?.ino===inode.ino&&now?.dev===inode.dev&&!now.isSymbolicLink())await unlink(lockPath);}}
+  }
  }
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

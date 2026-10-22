@@ -13,7 +13,8 @@ import { readPrivateFile, privateDirectory } from "../notion-sync/state.ts";
 import { createHeicConverter } from "../notion-sync/heic.ts";
 import { WorkerError, checkSignal, errorCode } from "../notion-sync/errors.ts";
 import { createWebsiteImageCache } from "./image-cache.ts";
-import { createWebsiteImageDownloader } from "./download.ts";
+import { createWebsiteImageDownloader, websiteImageFailure, type WebsiteImageFailure } from "./download.ts";
+import { finalizeWebsiteRun } from "./finalize-run.ts";
 import { createRuntimeNotionReader } from "./runtime-reader.ts";
 import { createRuntimeWriterSql } from "./runtime-sql.ts";
 import { prepareCollectionResume, type ResumeQualification } from "./collection-revalidation.ts";
@@ -61,6 +62,8 @@ async function main() {
   let capture: Awaited<ReturnType<typeof createCollectionCapture>> | undefined;
   let imageStatistics: (() => unknown) | undefined;
   let imageFailure: ReturnType<typeof createWebsiteImageDownloader>["failure"] | undefined;
+  let terminalImageFailure: WebsiteImageFailure | undefined;
+  let closeImageTransport: (() => void) | undefined;
   let runtimeSql: ReturnType<typeof createRuntimeWriterSql> | undefined;
   try {
     guard();
@@ -75,6 +78,7 @@ async function main() {
       convertHeic: createHeicConverter({ executable: env.SYNC_HEIC_CONVERTER_PATH ?? "", temporaryRoot: converterRoot }) }, { cache });
     imageStatistics = download.statistics;
     imageFailure = download.failure;
+    closeImageTransport = download.close;
     let storageEnv = parseEnv(await readPrivateFile(join(root, "supabase-worker.env"))), refresh: (() => Promise<void>) | undefined, refreshing: Promise<void> | undefined;
     const stableFields = ["SYNC_DATABASE_URL", "STORAGE_URL", "STORAGE_BUCKET", "STORAGE_API_KEY", "DATABASE_CA_CERT"];
     const originalEnv = { ...storageEnv };
@@ -221,6 +225,7 @@ async function main() {
     }
     report.outcome = mode === "publish" ? "published-verified" : result.outcome;
   } catch (error) {
+    terminalImageFailure = websiteImageFailure(error);
     report.outcome = report.published ? "published-unverified" : "failed";
     report.publicationMayHaveCommitted = report.promoteRequested;
     report.code = timedOut ? "RUN_BUDGET_EXCEEDED" : errorCode(error); process.exitCode = 1;
@@ -236,13 +241,11 @@ async function main() {
   } finally {
     clearTimeout(timeout); clearInterval(progress); process.off("SIGINT", cancel); process.off("SIGTERM", cancel); await pendingSave; await discoverySave;
     Object.assign(report, { collectionCapture: capture?.statistics(), seconds: Math.round((Date.now() - started) / 1000), notion: notion.statistics(), database: runtimeSql?.statistics(), imageTransfer: imageStatistics?.(), finishedAt: new Date().toISOString() });
-    const failure = imageFailure?.();
-    if (failure) {
-      await save("image-failure-private.json", { runId, ...failure });
-      report.imageFailure = { path: "image-failure-private.json", phase: failure.phase, attempt: failure.attempt,
-        httpStatus: failure.httpStatus, transportCode: failure.transportCode };
-    }
-    await save("receipt-private.json", report); await pool?.end(); await readerPool?.end();
+    const cleaned = await finalizeWebsiteRun({ report, save,
+      imageFailure: terminalImageFailure ?? imageFailure?.(), closeImageTransport,
+      closeWriter: pool ? () => pool!.end() : undefined,
+      closeReader: readerPool ? () => readerPool!.end() : undefined });
+    if (!cleaned) process.exitCode = 1;
   }
   console.log(JSON.stringify({ adapter: report.adapter, outcome: report.outcome, published: report.published, readerVerified: report.readerVerified,
     thumbnailHandoffStatus: report.thumbnailHandoffStatus, seconds: report.seconds, code: report.code }));
