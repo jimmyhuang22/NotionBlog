@@ -70,8 +70,12 @@
    * The quiet motions of 2026-10-20, the owner's second round: things that answer a hand rather than show off.
    * After a filter the first rows rise 6px into place one after another (use-filter-arrival.ts, study-overview.tsx).
    */
-  .is-arriving { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(60ms + var(--i, 0) * 25ms); }
-  @keyframes arrive-row { from { opacity: 0; transform: translateY(6px); } }
+  /* They rise from the 45% the old list was dimmed to, never from nothing, so the list is never blank in between (round four, M-12). */
+  .is-arriving { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
+  @keyframes arrive-row { from { opacity: 0.45; transform: translateY(6px); } }
+  /* The study overview fades a copy of its old rows out over the new ones instead (study-overview.tsx): its new rows still start from nothing, or the two would show through each other. */
+  .study-entries > .is-arriving { animation-name: arrive-row-clear; animation-delay: calc(60ms + var(--i, 0) * 25ms); }
+  @keyframes arrive-row-clear { from { opacity: 0; transform: translateY(6px); } }
   /* The course kinds' chosen look and the outline's mark slide; a tree branch's arrow turns as it opens or closes. */
   .study-views__pill { transition: transform 0.3s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.3s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.3s cubic-bezier(0.3, 1.25, 0.4, 1); }
   .study-views > button { transition: color 0.25s; }
