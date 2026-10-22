@@ -74,8 +74,8 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // New mapper/website reader releases (including reader-only filtering) stay
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
-        ? "e7003475c6cc4cfb0ebfecb30f9fc5adc76dd4a2f632bcc80fce6f0aa1c997fe"
-        : "7953e4da3832eb8bfb4564923612057e89f4a48648276d62680e852a1cc05a9c";
+        ? "90579122d17360d7340908cf0436271a1c368628c074a64c48904194f08f3ef1"
+        : "758648b8169b830e4cb18a94c1c631a5ccab975fc037015492339d5f5597d491";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});

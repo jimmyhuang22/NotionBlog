@@ -1,6 +1,9 @@
 import type { DateRange, Game } from "../../../contracts/content.ts";
 import { dateParts } from "../format.ts";
 
+/** Invalidate cursors made with the former latest-play archive policy. */
+export const GAME_DATE_POLICY = "experience-day-v3";
+
 function day(value: string, precision: DateRange["precision"], timeZone: string): string | null {
   const calendar = value.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(calendar)) return null;
@@ -19,7 +22,13 @@ export function platformPlayDay(range: DateRange | null | undefined, timeZone: s
 }
 
 function resolvedArchiveDate(game: Game, timeZone: string): DateRange | null {
-  const manual = game.playedDate ? day(game.playedDate.end ?? game.playedDate.start, game.playedDate.precision, timeZone) : null;
+  const start = game.playedDate ? day(game.playedDate.end ?? game.playedDate.start, game.playedDate.precision, timeZone) : null;
+  return start ? { start, end: null, precision: "date" } : null;
+}
+
+/** Playing activity can advance independently of the stable library archive. */
+export function gameActivityDate(game: Game, timeZone: string): DateRange | null {
+  const manual = resolvedArchiveDate(game, timeZone)?.start ?? null;
   const platform = platformPlayDay(game.lastPlayedDate, timeZone)?.start ?? null;
   const start = manual && platform ? manual > platform ? manual : platform : manual ?? platform;
   return start ? { start, end: null, precision: "date" } : null;
