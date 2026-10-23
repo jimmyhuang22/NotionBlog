@@ -2,9 +2,9 @@
 
 <h1>NotionBlog</h1>
 
-<p><strong>继续在 Notion 里写，访客看到的是你自己的网站。</strong></p>
+<p><strong>以 Notion 为内容后台的个人网站。</strong></p>
 
-<p>动态、课程笔记、书影游、相册，还有发在 B 站和小红书的作品，都汇进一个好看、打开就快的个人网站。<br />只公开你允许的内容，不会连着子页面一起被看见。</p>
+<p>同步程序通过 Notion API 只读拉取你指定的数据库，按每个来源的公开规则筛选，子页面不随父页面公开；<br />正文写入 PostgreSQL，图片转存到对象存储。Next.js 网站只从这里读取，渲染成动态、课程笔记、书影游和相册页面。</p>
 
 <p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
