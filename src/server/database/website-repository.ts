@@ -16,6 +16,10 @@ import { measureContentRead, measureContentReadAsync } from "../content-read-tim
 import { SCOPED_INDEX_SQL, SCOPED_SEARCH_SQL, SCOPED_FILTERED_SEARCH_SQL, SCOPED_FILTERED_SCOPE_SEARCH_SQL, SCOPED_SELECTED_SQL, SCOPED_VERSION_SQL, SCOPED_STATUS_INDEX_SQL } from "./scoped-reads.ts";
 import { contentReadBudgetIdentity } from "../content-read-budget.ts";
 import { STUDY_DIRECTORY_SQL, STUDY_NOTE_ELIGIBILITY_SQL, STUDY_NOTE_DETAIL_SQL } from "./study-reads.ts";
+import { readSearchContexts } from "./search-context.ts";
+import { SEARCH_CONTEXT_VERSION } from "../../lib/content/search-context.ts";
+import type { SearchHit } from "../../../contracts/website.ts";
+import type { Page } from "../../../contracts/content.ts";
 interface Projection { runId: string; revision: string; schemaDigest: string; records: ContentDetail<AnyContent>[]; links: string[]; mediaIds: string[]; hasMore?: boolean }
 /** Scrub references against CURRENT eligibility even when stored AST predates a withdrawal. */
 function project<T>(value: T, snapshot: Projection, timeZone: string): T {
@@ -39,6 +43,8 @@ function project<T>(value: T, snapshot: Projection, timeZone: string): T {
 }
 
 export interface WebsiteReadOptions extends StatusReadOptions {
+  /** Explicit opt-in after the independent context reader is installed and verified. */
+  searchContext?: boolean;
   scoped?: boolean;
   filteredSearch?: boolean;
   /** Opt in only with the independent filtered-scope SQL capability. */
@@ -67,6 +73,12 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     return p;
   };
   const version = (p: Projection) => `${p.runId}:${p.revision}`;
+  const searchVersion = (p: Projection) => `${version(p)}${options.searchContext ? `:${SEARCH_CONTEXT_VERSION}` : ""}`;
+  const contextPage = async (page: Page<SearchHit>, pin: Projection): Promise<Page<SearchHit>> => {
+    if (!options.searchContext) return page;
+    const contexts = await readSearchContexts(db, page.items.filter(hit => hit.kind === "study-note").map(hit => hit.id), pin);
+    return { ...page, items: page.items.map(hit => hit.kind === "study-note" ? { ...hit, context: contexts.get(hit.id) ?? null } : hit) };
+  };
   const readContent = async (kind: ContentKind, slug: string | null, documents: boolean,
     pin?: Projection, offset = 0, limit = 1, index = false) => validate(await callSql<Projection>(db,index ? options.scoped ? SCOPED_STATUS_INDEX_SQL : WEBSITE_STATUS_INDEX_SQL : WEBSITE_CONTENT_SQL,
       [kind,documents,slug,pin?.runId??null,pin?.revision??null,offset,limit]));
@@ -200,7 +212,7 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
             throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid search projection.");
           return records;
         });
-        const result = measureContentRead("search-match", () => searchContentSnapshot({ version: version(p), records }, query, selected));
+        const result = await contextPage(measureContentRead("search-match", () => searchContentSnapshot({ version: searchVersion(p), records }, query, selected)), p);
         if (version(await measureContentReadAsync("search-version", readVersion)) !== version(p))
           throw new ContentServiceError("INVALID_QUERY", "Content changed during search.");
         return result;
@@ -229,9 +241,10 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
           if (!p.hasMore) break;
         }
       }
+      const result = await contextPage(measureContentRead("search-match", () => searchContentSnapshot({ version: searchVersion(pin!), records }, query, selected)), pin!);
       const end = await measureContentReadAsync("search-version", readVersion);
       if (version(end) !== version(pin!)) throw new ContentServiceError("INVALID_QUERY", "Content changed during search.");
-      return measureContentRead("search-match", () => searchContentSnapshot({ version: version(pin!), records }, query, selected));
+      return result;
     },
     async getContentMetadata<K extends ContentKind>(kind: K, slug: string) {
       if (kind === "page" && slug !== "about") return null;

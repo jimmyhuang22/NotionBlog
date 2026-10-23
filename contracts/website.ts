@@ -12,5 +12,9 @@ export type TimelineEvent =
       /** Present on game events; the current public Game total, preserving its unit and unknown/zero distinction. */
       playedTime?: TimeAmount | null };
 export interface SearchQuery extends CursorQuery { q: string; kinds?: ContentKind[] }
-export interface SearchHit { id: string; kind: ContentKind; title: string; href: string; excerpt: string; updatedAt: string | null }
+/** Current public display text only; no source identities or new navigation targets. */
+export interface SearchContext { courseLabel: string; parentLabels: string[] }
+export interface SearchHit { id: string; kind: ContentKind; title: string; href: string; excerpt: string; updatedAt: string | null; context?: SearchContext | null }
+/** Optional server-only search projection; older snapshot providers remain compatible. */
+export interface SearchSnapshot extends PublicContentSnapshot { searchContexts?: Record<string, SearchContext | null> }
 export type TimelinePage = Page<TimelineEvent>;

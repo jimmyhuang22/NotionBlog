@@ -1,4 +1,4 @@
-import type { HighlighterCore, LanguageInput } from "shiki/core";
+import type { HighlighterCore, LanguageInput, ThemeRegistrationRaw } from "shiki/core";
 
 type Loader = () => Promise<{ default: LanguageInput }>;
 
@@ -44,16 +44,26 @@ export function normalizeLanguage(name: string): string | null {
   return Object.hasOwn(loaders, language) ? language : null;
 }
 
-const LIGHT = "github-light";
-const DARK = "github-dark-dimmed";
 /**
- * Both themes are drawn for their own editor background; on this site's softer code block
- * background a few of their colours fall under 4.5:1. Each is nudged in lightness only (same hue)
- * to just clear that ratio: comments, keywords, tags and variables in light, comments in dark.
+ * The site's own code colours (round four, C-06, in place of GitHub's): keywords and strings in the accent,
+ * comments muted, everything else, numbers, operators and punctuation included, in ink. The theme names roles,
+ * not colours: each span reads var(--code-ink), var(--code-key) or var(--code-note), which prose.css sets from the
+ * skin's own tokens, so every skin and both schemes follow without a second theme.
  */
-export const colorReplacements: Record<string, Record<string, string>> = {
-  [LIGHT]: { "#6a737d": "#646d76", "#d73a49": "#cc2939", "#22863a": "#1f7c36", "#e36209": "#b24d07" },
-  [DARK]: { "#768390": "#88949f" },
+export const CODE_ROLES = ["--code-ink", "--code-key", "--code-note"] as const;
+const role = (name: (typeof CODE_ROLES)[number]) => `var(${name})`;
+const THEME: ThemeRegistrationRaw = {
+  name: "site",
+  type: "light",
+  colors: { "editor.foreground": role("--code-ink"), "editor.background": "transparent" },
+  settings: [
+    { settings: { foreground: role("--code-ink") } },
+    { scope: ["comment", "punctuation.definition.comment", "string.quoted.docstring.multi"], settings: { foreground: role("--code-note") } },
+    { scope: ["keyword", "storage.type", "storage.modifier", "entity.name.tag", "support.type.property-name.json"], settings: { foreground: role("--code-key") } },
+    { scope: ["string", "markup.inline.raw", "markup.fenced_code"], settings: { foreground: role("--code-key") } },
+    // More specific than "keyword" and "string": the colons in a MAC address or the = in a formula stay ink.
+    { scope: ["keyword.operator", "keyword.control.ternary", "punctuation", "punctuation.definition.string"], settings: { foreground: role("--code-ink") } },
+  ],
 };
 const MAX_LENGTH = 40_000;
 
@@ -61,18 +71,15 @@ let highlighter: Promise<HighlighterCore> | undefined;
 
 function getHighlighter(): Promise<HighlighterCore> {
   highlighter ??= (async () => {
-    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }, light, dark] = await Promise.all([
-      import("shiki/core"), import("shiki/engine/javascript"),
-      import("shiki/themes/github-light.mjs"), import("shiki/themes/github-dark-dimmed.mjs"),
-    ]);
+    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
     // The JavaScript regex engine avoids shipping a WebAssembly binary to the server runtime.
-    return createHighlighterCore({ themes: [light.default, dark.default], langs: [], engine: createJavaScriptRegexEngine() });
+    return createHighlighterCore({ themes: [THEME], langs: [], engine: createJavaScriptRegexEngine() });
   })();
   return highlighter;
 }
 
 /**
- * Token spans for the inside of a <pre><code>, coloured through --shiki-light / --shiki-dark.
+ * Token spans for the inside of a <pre><code>, each coloured by one of CODE_ROLES.
  * Returns null when the language is unknown, the block is very large, or highlighting fails,
  * so the caller falls back to plain text. The library escapes the code; nothing in it becomes markup.
  */
@@ -82,7 +89,7 @@ export async function highlightCode(code: string, languageName: string): Promise
   try {
     const instance = await getHighlighter();
     if (!instance.getLoadedLanguages().includes(language)) await instance.loadLanguage((await loaders[language]!()).default);
-    return instance.codeToHtml(code, { lang: language, themes: { light: LIGHT, dark: DARK }, colorReplacements, defaultColor: false, structure: "inline" });
+    return instance.codeToHtml(code, { lang: language, theme: "site", structure: "inline" });
   } catch {
     return null;
   }

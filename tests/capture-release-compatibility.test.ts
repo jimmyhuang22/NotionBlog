@@ -83,8 +83,8 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // New mapper/website reader releases (including reader-only filtering) stay
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
-        ? "90579122d17360d7340908cf0436271a1c368628c074a64c48904194f08f3ef1"
-        : "915a965c93bf13e356e5516e3b44998af50c5b941ad60f5b458267b9ff6981c9";
+        ? "035363383d2dd8d8e01e7412d58bcef26989bd3a6e759bd3c4b1c89170688147"
+        : "ebea58c270dcb1c4fbda9942bb2e61af3ce1e9774633c2fff2ec748f68a22d07";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});
@@ -117,7 +117,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     // New website/development capabilities remain outside these frozen transitions.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
     const expected = pair.path === "scripts/dev-real.mjs"
-      ? "0fd0db196fe51324f0824d9a1a2bd6c3fa4245f44c368e4443cbac7904bc918d"
+      ? "425464dc01fb77ee49fe383ed9e2101b93b6b16c8049d8d3b7130f842a2d53ac"
       : pair.path === "src/server/database/cos-storage.ts"
         ? "b49fdc2b2e67a6d5e3f565f63f96ed3f33a7d51a932ffe77f50872b668ac8cc4"
       : pair.path === "src/server/database/cos-config.ts"
@@ -125,7 +125,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
         ? "e2e085608893f8e1387a03994581a6b7ce7c8f0169fe3b0177c7f2bafb55b483"
       : pair.path === "src/server/database/runtime.ts"
-        ? "53c58db7e384010581671d858832595535210736d705c9a87df0965e133d59e1"
+        ? "5e099af3def60ef5f66e6c0937f07918ba4d2acedfc2736832d4cea11a52bc99"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "d8daa3226e30451f36dee6637537141b8a5d3632583a90400e77a1a7fc6dab54"
         : null;

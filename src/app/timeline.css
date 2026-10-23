@@ -333,8 +333,8 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
 @media (prefers-reduced-motion: no-preference) {
   .works__pill { transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.34s cubic-bezier(0.3, 1.25, 0.4, 1); }
   .works__platforms > a { transition: color 0.25s; }
-  /* A short delay, so an order that arrives quickly never flickers. */
-  .works__stage { transition: opacity 0.2s 0.1s; }
+  /* Dims after a short delay, so an order that arrives quickly never flickers; comes back at once, the new cards rising from 45% (round four, M-12). */
+  .works:has(.library__sort a:is(.is-turning, :has(.link-pending[data-pending]))) .works__stage { transition: opacity 0.2s 0.1s; }
   .works__stage.is-moving { transition: height 0.42s cubic-bezier(0.22, 0.8, 0.2, 1); }
   /* After a switch a cover that is not ready keeps its soft place and fades in, instead of appearing all at once. */
   .works__stage[data-switched] .works-card__cover { transition: opacity 0.2s; }

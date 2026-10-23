@@ -5,6 +5,7 @@ import filteredScopeProtocol from "../../../database/search-filtered-scope-proto
 import filteredProtocol from "../../../database/search-filtered-protocol.json" with { type: "json" };
 import type { PublicationMode } from "./publication.ts";
 import { callSql, type SqlExecutor } from "./sql.ts";
+import { SEARCH_CONTEXT_SQL } from "./search-context.ts";
 
 export function readProjectionMode(value: string | undefined, searchValue = process.env.DATABASE_SEARCH_PROJECTION): "legacy" | "scoped" {
   const projection = value ?? "legacy";
@@ -39,6 +40,10 @@ export function scopedReader(db: SqlExecutor, mode: PublicationMode,
       throw new ContentServiceError("CONTENT_UNAVAILABLE", "The scoped reader extension is incompatible.");
   };
   return { async query<T>(text: string, values?: unknown[]) {
+    if (text === SEARCH_CONTEXT_SQL) {
+      await (ready ??= check(false).catch(error => { ready = undefined; throw error; }));
+      return db.query<T>(text.replace("'qualified'", `'${mode}'`), values);
+    }
     if (text.includes("nb_read_api.read_search_filtered(") && searchProjection !== "filtered")
       throw new ContentServiceError("CONTENT_UNAVAILABLE", "Filtered search requires its reviewed capability.");
     if (text.includes("nb_read_api.read_search_filtered_scope(") && searchProjection !== "filtered-scope")

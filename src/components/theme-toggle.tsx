@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { spreadRadius } from "../lib/spread.ts";
-import { DEFAULT_SKIN, isScheme, isSkin, rootAttributes, schemeFor, skinOf, skins, type Scheme, type SkinId, currentSkin } from "../lib/skins.ts";
+import { DEFAULT_SKIN, isScheme, isSkin, rootAttributes, schemeFor, skinAfter, skinOf, skins, type Scheme, type SkinId, type Transition, currentSkin } from "../lib/skins.ts";
 
 
 /** Width of the soft edge behind the spreading ink front, as a share of the shorter viewport side. */
 const EDGE = 0.14;
 let runs = 0;
+/** The root marker that selects a transition's rules in globals.css: `data-theme-spread` is `themeSpread` in the dataset. */
+const markerOf = (transition: Transition) => `theme${transition[0]!.toUpperCase()}${transition.slice(1)}`;
+const markers = skins.map(skin => markerOf(skin.transition));
 
 /**
  * The tab icons follow the system theme through their media queries. Once the visitor has chosen
@@ -55,8 +58,11 @@ function applyChoice(skin: SkinId, theme: Scheme | null, origin: { x: number; y:
     syncIcons();
   };
   if (!animate || typeof document.startViewTransition !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { apply(); return; }
+  const marker = markerOf(skinOf(skin).transition);
+  // A choice made while the last one is still arriving replaces it: its marker goes too, or the
+  // rules of two transitions would both apply to the next one (arrow keys make this an everyday case).
+  for (const stale of markers) if (stale !== marker) delete root.dataset[stale];
   const transition = skinOf(skin).transition;
-  const marker = `theme${transition[0]!.toUpperCase()}${transition.slice(1)}`;
   const x = origin?.x ?? window.innerWidth / 2;
   const y = origin?.y ?? 0;
   const edge = transition === "spread" ? Math.min(window.innerWidth, window.innerHeight) * EDGE : 0;
@@ -162,6 +168,17 @@ export function ThemeControls() {
     setSkin(next);
     applyChoice(next, theme, centre(menuButton.current));
   };
+  // The skins are one radio group: Tab lands on the chosen one, and the arrow keys move along the
+  // list and choose as they go, wrapping round at either end. Space and Enter stay native clicks,
+  // which chooseSkin ignores for the skin already chosen, so a choice never runs twice.
+  const onSkinsKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const steps = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as Record<string, number>)[event.key];
+    if (!steps) return;
+    event.preventDefault();
+    const next = skinAfter(skin, steps);
+    chooseSkin(next);
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[skins.findIndex(item => item.id === next)]?.focus();
+  };
   const toggleScheme = () => {
     const next: Scheme = shown === "dark" ? "light" : "dark";
     if (!current.schemes.includes(next)) {
@@ -190,9 +207,9 @@ export function ThemeControls() {
         </button>
         <div id="theme-menu-panel" className="theme-menu__panel" hidden={!open}>
           <p className="theme-menu__title" id="theme-menu-skins">主题</p>
-          <div className="theme-menu__group" role="radiogroup" aria-labelledby="theme-menu-skins">
+          <div className="theme-menu__group" role="radiogroup" aria-labelledby="theme-menu-skins" onKeyDown={onSkinsKey}>
             {skins.map(item => (
-              <button key={item.id} type="button" role="radio" aria-checked={item.id === skin} className={`theme-menu__option theme-menu__option--${item.id}`} onClick={() => chooseSkin(item.id)}>
+              <button key={item.id} type="button" role="radio" aria-checked={item.id === skin} tabIndex={item.id === skin ? 0 : -1} className={`theme-menu__option theme-menu__option--${item.id}`} onClick={() => chooseSkin(item.id)}>
                 <span className="theme-menu__swatch" aria-hidden="true" />
                 {item.label}
               </button>

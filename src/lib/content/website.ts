@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { AnyContent, ContentDetail, ContentDocument, ContentKind, ContentLink, DateRange, ListQuery, Page } from "../../../contracts/content.ts";
 import type { ContentRepository } from "../../../contracts/repository.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
-import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, TimelineEvent } from "../../../contracts/website.ts";
+import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, SearchSnapshot, TimelineEvent } from "../../../contracts/website.ts";
 import { CONTENT_KINDS, type ContentFeatures } from "../../../config/features.ts";
 import { statusTimeZone, statusPreview } from "./status.ts";
 import { contentYear, supportsYear } from "./years.ts";
@@ -119,7 +119,7 @@ export function validateSearchQuery(query: SearchQuery): void {
 }
 
 /** Shared matching/ranking/cursors for full snapshots and compact SQL text. */
-export function searchContentSnapshot(all: PublicContentSnapshot, query: SearchQuery, selected: ContentKind[]): Page<SearchHit> {
+export function searchContentSnapshot(all: SearchSnapshot, query: SearchQuery, selected: ContentKind[]): Page<SearchHit> {
   const needle = query.q.normalize("NFKC").toLocaleLowerCase();
   const hits: (SearchHit & { score: number })[] = [];
   for (const { item, document } of all.records) {
@@ -128,7 +128,8 @@ export function searchContentSnapshot(all: PublicContentSnapshot, query: SearchQ
     const normalized = text.normalize("NFKC").toLocaleLowerCase(), offset = normalized.indexOf(needle);
     if (!title.includes(needle) && offset < 0) continue;
     const start = Math.max(0, offset - 45);
-    hits.push({ id: item.id, kind: item.kind, title: item.title, href: item.href, updatedAt: item.updatedAt, excerpt: text.slice(start, start + 180), score: title.includes(needle) ? 2 : 1 });
+    hits.push({ id: item.id, kind: item.kind, title: item.title, href: item.href, updatedAt: item.updatedAt, excerpt: text.slice(start, start + 180), score: title.includes(needle) ? 2 : 1,
+      ...(item.kind === "study-note" && all.searchContexts ? { context: all.searchContexts[item.id] ?? null } : {}) });
   }
   hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, "en") || a.id.localeCompare(b.id));
   const { cursor, limit } = query;
@@ -141,8 +142,11 @@ export function searchContentSnapshot(all: PublicContentSnapshot, query: SearchQ
 export async function searchRepository(repository: ContentRepository, features: ContentFeatures, query: SearchQuery): Promise<Page<SearchHit>> {
   validateSearchQuery(query);
   const selected = [...new Set(query.kinds ?? CONTENT_KINDS)].filter(kind => features[kind]).sort();
-  if (repository.search && selected.length) return repository.search({ ...query, kinds: selected });
-  return searchContentSnapshot(await publicSnapshot(repository, selected, true), query, selected);
+  const page = repository.search && selected.length ? await repository.search({ ...query, kinds: selected })
+    : searchContentSnapshot(repository.readSearchSnapshot && selected.includes("study-note")
+      ? await publicSnapshot({ ...repository, readSnapshot: repository.readSearchSnapshot }, selected, true) : await publicSnapshot(repository, selected, true), query, selected);
+  // A disabled course must not gain a display label through a still-enabled note search.
+  return features.course ? page : { ...page, items: page.items.map(hit => hit.context ? { ...hit, context: null } : hit) };
 }
 /** Adapter fallback is bounded and checks every continuation; failures never become empty results. */
 export async function publicSnapshot(repository: ContentRepository, kinds: ContentKind[], documents = false): Promise<PublicContentSnapshot> {
@@ -152,7 +156,7 @@ export async function publicSnapshot(repository: ContentRepository, kinds: Conte
     if (typeof result.version !== "string" || !result.version || !Array.isArray(result.records) || result.records.length > 20000 ||
       result.records.some(d => !d?.item || !kinds.includes(d.item.kind)) ||
       new Set(result.records.map(d => d.item.id)).size !== result.records.length ||
-      Buffer.byteLength(JSON.stringify(result.records)) > 16 * 1024 * 1024) unavailable();
+      Buffer.byteLength(JSON.stringify(result.records)) + ((result as SearchSnapshot).searchContexts ? Buffer.byteLength(JSON.stringify((result as SearchSnapshot).searchContexts)) : 0) > 16 * 1024 * 1024) unavailable();
     return result;
   }
   const records: ContentDetail<AnyContent>[] = [];

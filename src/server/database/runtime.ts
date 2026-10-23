@@ -14,6 +14,7 @@ import { measureContentRead } from "../content-read-timing.ts";
 import { readProjectionMode, scopedReader } from "./scoped-reads.ts";
 import { sharedContentReaderPool } from "./shared-reader-pool.ts";
 import { budgetedContentSql } from "../content-read-budget.ts";
+import { readSearchContextMode } from "./search-context.ts";
 
 let runtime: ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -22,6 +23,9 @@ function createRuntime() {
     throw new ContentServiceError("MISCONFIGURED", "Published content requires v2 and independent stored media.");
   }
   const projection=readProjectionMode(process.env.DATABASE_READ_PROJECTION);
+  const searchContext=readSearchContextMode(process.env.DATABASE_SEARCH_CONTEXT);
+  if(searchContext&&process.env.DATABASE_CONTENT_VERSION!=="2")
+    throw new ContentServiceError("MISCONFIGURED","Search context requires database v2.");
   if(projection==="scoped"&&process.env.DATABASE_CONTENT_VERSION!=="2")
     throw new ContentServiceError("MISCONFIGURED","Scoped reads require database v2.");
   const pool=sharedContentReaderPool(process.env.DATABASE_READER_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
@@ -43,6 +47,6 @@ function createRuntime() {
     });
   }
   const storage=()=>storageFor(objectProvider), thumbnailStorage=()=>storageFor(variantProvider);
-  return {db,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(rawDb,mode):db,{timeZone:()=>getSiteConfig().timeZone,...(projection==="scoped"?{scoped:true}:{})}),storage};
+  return {db,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(rawDb,mode):db,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})}),storage};
 }
 export function getDatabaseRuntime() { return measureContentRead("database-runtime", () => runtime??=createRuntime()); }

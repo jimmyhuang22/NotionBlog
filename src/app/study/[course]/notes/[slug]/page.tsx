@@ -63,7 +63,7 @@ export default async function NotePage({ params }: Props) {
             </p>
           ) : null}
           <h1 className="reading__title">{item.title}</h1>
-          {toc.length ? <details className="toc-drawer"><summary>本页目录</summary><TocList toc={toc} /></details> : null}
+          {toc.length ? <details className="toc-drawer"><summary>本页目录<span className="toc-drawer__count">· {toc.length} 条</span></summary><TocList toc={toc} /></details> : null}
           <RichDocumentBody document={document} imagePreviewWidth={800} />
           <Suspense fallback={null}><StudyChildPages href={item.href} linkedHrefs={documentStudyLinks(document)} /></Suspense>
         </article>
