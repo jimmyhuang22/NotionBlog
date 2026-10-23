@@ -34,7 +34,7 @@ export interface DailyContext {
   assertWindow(): Promise<void>;
   restore(schema: SchemaArchive, archive: RunArchive, store: ArchiveStore): Promise<void>;
   health(): Promise<void>;
-  maximumRuns: number; maximumDeleteCalls?: number; maximumReturnedBytes?: number; maximumPayloadBytes?: number;
+  maximumRuns: number; maximumDeletedRows?: number; maximumDeleteCalls?: number; maximumReturnedBytes?: number; maximumPayloadBytes?: number;
 }
 function requireValue(value: unknown, reason: string): asserts value {if (!value) throw Error(reason);}
 const stable = (value: unknown) => JSON.stringify(value);
@@ -63,6 +63,7 @@ export async function dailyRetention(context: DailyContext) {
   const maximumRuns=retentionRunLimit(context.maximumRuns);
   const returnedLimit=context.maximumReturnedBytes??MAXIMUM_RETURNED_BYTES;
   if(!Number.isSafeInteger(returnedLimit)||returnedLimit<1||returnedLimit>MAXIMUM_RETURNED_BYTES)throw Error("RETENTION_RESPONSE_BUDGET_INVALID");
+  if(context.maximumDeletedRows!==undefined&&(!Number.isSafeInteger(context.maximumDeletedRows)||context.maximumDeletedRows<1||context.maximumDeletedRows>250_000))throw Error("RETENTION_ROW_BUDGET_INVALID");
   const {db,store}=context, operation=randomUUID(), start=context.now(), stop=start+30*60*1000;
   const metrics={deleteCalls:0,deletedRows:0,returnedBytes:0,payloadBytes:0,newPayloadBytes:0,archivedRuns:0};
   let intent: string|null=null;
@@ -102,6 +103,7 @@ export async function dailyRetention(context: DailyContext) {
     // Missing blobs are counted even when another candidate may later supply the same hash.
     requireValue(metrics.returnedBytes+missingPayloadBound+deletionResponseBound+finalReadBound<=returnedLimit,"RETENTION_ADMISSION_BUDGET");
     requireValue(Object.values(archives).reduce((n,a)=>n+deletionOrder.reduce((m,t)=>m+Math.ceil(a.tables[t].length/500),0),0)<=(context.maximumDeleteCalls??750),"RETENTION_DELETE_BUDGET");
+    requireValue(archives.reduce((n,a)=>n+deletionOrder.reduce((m,t)=>m+a.tables[t].length,0),0)<=(context.maximumDeletedRows??375_000),"RETENTION_ROW_BUDGET");
     for(const archive of archives){
       for(const table of deletionOrder){
         const rows=archive.tables[table];
