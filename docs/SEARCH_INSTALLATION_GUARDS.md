@@ -50,6 +50,8 @@
 
 诊断工具按项目和类型返回 advisories，没有按对象过滤或条数限制参数，不能把客户端筛选写成服务端只审阅本次函数。项目级元数据及可能的 SQL 片段须列入独立范围，结果有界私存；发现项先按预期架构判断，不自动改权限、删除索引或修复。没有之前的诊断基线时，不把本次发现标为新引入，见 [Supabase Advisors](https://supabase.com/docs/guides/observability/advisors)。
 
+假定角色之前须核对操作者的 SET 能力，不能用 ADMIN 选项或 CREATEROLE 属性代替。连接器若被拒绝，不反复尝试或自动补 GRANT；改为准备通过已有受限 LOGIN 角色的凭据引用验收，连接、TLS和预算另行绑定。管理员调用结果不能冒充 reader 的实际执行，见 [PostgreSQL 角色成员关系](https://www.postgresql.org/docs/17/role-membership.html)。
+
 ## 配置与实例回退前像
 
 私人模板逐项保留“未读取”，区分未知、显式设置与确实未设置。它记录运行负责人、实际部署／构建提交及实例代次，限于以下非凭据字段：
