@@ -1,6 +1,6 @@
 # 干净仓库公开准备
 
-本仓库是从清洗后的源码快照建立的独立迁移准备仓库，已完成同名切换，当前保持 private，尚未公开。它不继承旧 Git 提交、PR、Actions 日志或私人运行文件；旧库继续保持私人。
+本仓库是从清洗后的源码快照建立的独立迁移准备仓库，已完成同名切换，已于 2026-10-23 按用户明确授权公开。它不继承旧 Git 提交、PR、Actions 日志或私人运行文件；旧库继续保持私人。
 
 ## 已准备的边界
 
@@ -10,7 +10,7 @@
 - 私有配置、Git 备份、项目记忆、运行回执和任务交接留在忽略目录或旧私人运行根。当前文件检查不保证将来的提交自动保持干净，每个开发环境仍须维护自己的私有标识阻止清单。
 - 私人验收的原生运行器已退役：云端注册和本机注册文件均已移除，精确系统服务已卸载并持久停用，账户、目录与守卫保留。该次验收的云端日志与单个 npm 缓存已按具体授权删除；私人原始日志与成功验收元数据保留，核对时 Actions 缓存与产物均为零。详见[清理记录](progress/2026-10-22-private-ci-retirement.md)。
 
-## 实际公开前
+## 公开交接检查
 
 1. 对最终提交与两条分支完成隐私、协议、应用测试、构建和平台检查，核对示例、媒体与日志。
 2. 维护者已选择 [MIT 许可证](../LICENSE) 用于项目原创源码；核对第三方许可，个人内容不随源码授权。
@@ -18,8 +18,8 @@
 4. 旧库改名、旧检出远端与新库同名切换已完成；继续核对每项任务的接续确认，部署绑定仍单独验收。
 5. 取得最终公开确认后再切换可见性，随即启用适用的分支保护与私密漏洞反馈，再验证标准托管 PR 检查。公开后的提交与 PR 同样可见，不能重新合入旧私人历史。
 
-本页说明新仓库的准备范围，不声称已经删除旧私人仓库的数据、完成全部运行链路验收或公开仓库。详细流程见[迁移说明](REPOSITORY_MIGRATION.md)和[隐私约定](PRIVACY.md)。
+本次公开的隐私复核、分支保护及标准托管 CI 见[执行记录](progress/2026-10-23-public-github-hosted-ci.md)。旧私人仓库的数据与独立运行程序保持，不把源码公开等同于全部业务运行链路验收。详细流程见[迁移说明](REPOSITORY_MIGRATION.md)和[隐私约定](PRIVACY.md)。
 
-私人准备阶段曾由所有者手动复用专用自托管运行器，现已退役，详见[检查说明](GITHUB_ACTIONS_RUNNER.md)。当前不要再次派发私人手动检查；公开后改用标准托管运行器，并实际验证该路径。
+私人准备阶段曾由所有者手动复用专用自托管运行器，现已退役，详见[检查说明](GITHUB_ACTIONS_RUNNER.md)。不恢复私人手动检查；当前公开 PR 与手动检查使用标准 GitHub 托管 Ubuntu。
 
-GitHub Free 的私人仓库不提供本轮所需的分支保护／规则集接口；本次只读核对返回套餐限制，没有更改套餐或提前公开。规则先准备，在另行授权的公开窗口启用；私密漏洞报告同样是公开仓库设置。依据：[分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches)、[私密漏洞报告](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)。
+准备阶段曾受 GitHub Free 私人仓库的分支保护接口限制；取得本次公开授权后已启用 main／develop 保护与私密漏洞报告，不需要更改套餐。依据：[分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches)、[私密漏洞报告](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)。
