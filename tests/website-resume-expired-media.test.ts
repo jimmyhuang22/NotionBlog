@@ -4,6 +4,7 @@ import type { BlockObjectResponse } from "@notionhq/client";
 import type { CollectedPage } from "../scripts/website-sync/collection-capture.ts";
 import { createDemo, demoId, demoParagraph, DEMO_PNG } from "../scripts/notion-sync/demo.ts";
 import { runWebsiteSync } from "../scripts/website-sync/worker.ts";
+import { createWebsiteImageDownloader, websiteImageFailure } from "../scripts/website-sync/download.ts";
 
 test("resumed expired images share owner checks while retaining live locators and final revocation checks", async t => {
   for (const revoke of [false, true]) await t.test(revoke ? "revoked during reuse" : "unchanged forty-image page", async () => {
@@ -46,4 +47,29 @@ test("resumed expired images share owner checks while retaining live locators an
     assert.ok(pages < 10 && schemas < 10, `Owner checks must not grow with image count: ${pages} pages, ${schemas} schemas`);
     t.diagnostic(`reuse=${!revoke}: page reads=${pages}, schema reads=${schemas}, locator reads=${blocks}`);
   });
+});
+
+test("a resumed image failure carries its existing locator and never stages a partial batch", async t => {
+  const demo = createDemo(1), owner = demoId(1000), block = demoId(9100);
+  demo.pages.get(owner)!.cover = null;
+  const image = { ...demoParagraph(block, owner, ""), type: "image", image: { type: "external", external: { url: "https://assets.example.test/image.png" }, caption: [] } } as BlockObjectResponse;
+  demo.blocks.set(owner, [image]);
+  const config = { schemaVersion: 2, sources: [{ ...demo.config.sources[0], kind: "game" }] };
+  const captured: CollectedPage[] = [];
+  await runWebsiteSync({ client: demo.client, config, mode: "dry-run", download: async () => ({ bytes: DEMO_PNG, mime: "image/png" }),
+    mediaSources: { stage: async () => assert.fail() },
+    captureCollection: { save: async page => { captured.push(page); }, seal: async () => {} } });
+  const download = createWebsiteImageDownloader({ resolve: async () => [{ address: "8.8.8.8", family: 4 }],
+    request: async () => ({ status: 404, headers: {}, bytes: (async function* () {})(), cancel() {} }) });
+  t.after(download.close);
+  let failedLease = false, escaped: unknown;
+  await assert.rejects(runWebsiteSync({ client: demo.client, config, mode: "publish", download,
+    storage: { put: async () => assert.fail(), read: async () => assert.fail() },
+    writer: { begin: async (runId, configDigest) => ({ runId, configDigest, fence: "1", revision: "1", deniedPageIds: [] }),
+      renew: async () => {}, stage: async () => assert.fail("No partial stage"), promote: async () => assert.fail("No partial publish"), fail: async () => { failedLease = true; } },
+    mediaSources: { stage: async () => assert.fail() }, resumeCollection: { pages: captured, bind: async () => () => {} },
+    captureCollection: { save: async () => assert.fail(), seal: async () => assert.fail() },
+  }), error => { escaped = error; return error instanceof Error && "code" in error && error.code === "IMAGE_UNAVAILABLE"; });
+  assert.equal(failedLease, true);
+  assert.deepEqual(websiteImageFailure(escaped)?.context, { ownerPageId: owner, locator: { kind: "block", id: block } });
 });

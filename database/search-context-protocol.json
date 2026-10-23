@@ -1,0 +1,7 @@
+{
+  "capability": "notionblog-search-context-v1",
+  "migration": {
+    "file": "20261022133258_search_result_context.sql",
+    "sha256": "c2bd78c713d16ad474fa11f207ef952e4d81e4c2974952b0f64cfc5e2b03aa64"
+  }
+}

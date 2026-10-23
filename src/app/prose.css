@@ -15,6 +15,8 @@
 .prose__h--1 { font-size: var(--text-3xl); }
 .prose__h--2 { font-size: var(--text-2xl); }
 .prose__h--3 { font-size: var(--text-xl); margin-top: 28px; }
+/* A phone steps the page title down to 27px; the text's own headings step down with it, so the title stays the largest (round four, T-09). */
+@media (max-width: 540px) { .prose__h--1 { font-size: var(--text-2xl); } .prose__h--2 { font-size: var(--text-xl); } .prose__h--3 { font-size: var(--text-lg); } }
 .prose hr { margin: 32px 0; border: 0; border-top: 1px solid var(--rule); }
 .prose blockquote { margin: 0 0 18px; padding: 4px 0 4px 20px; border-left: 2px solid var(--accent); font-family: var(--font-hand); font-size: var(--text-lg); }
 
@@ -25,6 +27,14 @@
 .rt-muted { color: var(--muted); }
 .rt-accent { color: var(--accent); }
 .rt-warning { color: var(--warning); }
+/*
+ * A heading coloured red, orange or yellow in Notion keeps the ink of the other headings, with a faint stroke of that
+ * colour under it, like the one under the owner's name (round four, H-10): the emphasis stays and the page keeps one
+ * colour. Ink and Apple; the island and Y2K keep the colour. ::after is the outline's arrival stroke (motion.css).
+ */
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .prose__h:has(.rt-warning) { position: relative; width: fit-content; max-width: 100%; padding-bottom: 6px; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .prose__h .rt-warning { color: inherit; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) .prose__h:has(.rt-warning)::before { content: ""; position: absolute; left: 0; bottom: -4px; width: min(12em, 100%); height: 9px; background: var(--warning); opacity: 0.55; pointer-events: none; -webkit-mask: var(--pen-stroke) center / 100% 100% no-repeat; mask: var(--pen-stroke) center / 100% 100% no-repeat; }
 
 .list { margin: 0 0 18px; padding-left: 1.4em; }
 .list li { padding: 2px 0; }
@@ -68,9 +78,8 @@
 }
 .code pre { margin: 0; padding: 6px 20px 18px; overflow-x: auto; font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.75; overflow-wrap: normal; }
 /* Highlighted tokens carry both theme colours as variables; the active theme picks one. */
-.shiki span { color: var(--shiki-light); }
-:root[data-theme="dark"] .shiki span { color: var(--shiki-dark); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .shiki span { color: var(--shiki-dark); } }
+/* The colours the highlighter names (render/highlight.ts), taken from the skin's own tokens (round four, C-06). */
+.shiki { --code-ink: var(--ink); --code-key: var(--accent); --code-note: var(--muted); color: var(--code-ink); }
 .code figcaption, .figure figcaption, .embed figcaption { padding: 10px 4px 0; font-size: var(--text-sm); color: var(--muted); text-align: center; }
 .code figcaption { padding: 0 20px 14px; text-align: left; }
 

@@ -6,6 +6,8 @@
 
 日常 develop PR 按影响完成本机验证，无冲突、正文注明受检提交／验证方式／限制并核对实际合入差异后自行普通合并，不等待平台检查。当前私人 PR 的平台应用检查为 `SKIPPED`，不算通过；本机结果也不能写成平台通过。没有两小时集中检查，已知代码、协议或构建失败仍须先解决，见[合并规则决定](decisions/2026-10-22-develop-merge-local-verification.md)。main 发布的平台验收要求与发布期间暂停 develop 合并的规则保持；CI 停用期间如何满足 main 平台验收仍待用户另行决定。
 
+2026-10-23 的生产仓库接续发布已由用户单独指定使用 Vercel 云端完整 check／build，并实际通过后上线；本机覆盖 Mac 专用测试，云端如实保留 Linux 平台跳过数。该安排仅适用于这一次发布，没有恢复私人 GitHub CI，也没有将 GitHub 的 SKIPPED 写成通过。以后发布仍须另行明确平台验收，见[本次决定](decisions/2026-10-23-production-repository-rebind.md)和[执行记录](progress/2026-10-23-production-repository-rebind.md)。
+
 ## 工作流保留的路由
 
 工作流按仓库的实际可见性选择运行环境，Node 版本固定为 24；下表说明保留的配置，私人手动路径当前不可用：

@@ -66,6 +66,24 @@ test("discovery reports completed courses and cumulative nodes without additiona
   assert.deepEqual(events.at(-1), { phase: "complete", courseIndex: 2, courseCount: 2, coursesCompleted: 2, pagesDiscovered: 7, blocksScanned: 7 });
   assert.equal(JSON.stringify(events).includes(id(10)), false);
 });
+test("search context reuses qualified physical metadata, current titles and course-name fallback without extra reads", async () => {
+  const plain = setup(), contextual = setup();
+  const before = await repo(plain).readSnapshot!(["study-note"], true);
+  const after = await repo(contextual).readSearchSnapshot!(["study-note"]);
+  assert.deepEqual(after.records, before.records); assert.deepEqual(contextual.calls, plain.calls);
+  assert.deepEqual(after.searchContexts?.[id(32)], { courseLabel: "Synthetic course", parentLabels: ["Week 10", "Child 10"] });
+  assert.deepEqual(after.searchContexts?.[id(20)], { courseLabel: "Synthetic course", parentLabels: [] });
+  const renamed = contextual.pages.get(id(30))!;
+  if (renamed.properties.Name.type === "title") renamed.properties.Name.title = [rich("Updated activity")] as typeof renamed.properties.Name.title;
+  const current = await repo(contextual).readSearchSnapshot!(["study-note"]);
+  assert.notEqual(after.version, current.version);
+  assert.deepEqual(current.searchContexts?.[id(32)]?.parentLabels, ["Week 10", "Updated activity"]);
+  const withdrawn = await repo(contextual, new Set([id(20)])).readSearchSnapshot!(["study-note"]);
+  assert.equal(withdrawn.records.some(record => record.item.id === id(32)), false);
+  assert.equal(withdrawn.searchContexts?.[id(32)], undefined);
+  contextual.client.listBlocks = async () => { throw Error("Fixture provider unavailable"); };
+  await assert.rejects(repo(contextual).readSearchSnapshot!(["study-note"]));
+});
 test("a failed course scan retains partial progress and never reports complete", async () => {
   const s = setup(), events: StudyDiscoveryProgress[] = [];
   const list = s.client.listBlocks;

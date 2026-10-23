@@ -1,0 +1,7 @@
+{
+  "capability": "mapped-fresh-collection-qualification-v2",
+  "migration": {
+    "file": "20261022123806_mapped_collection_revalidation.sql",
+    "sha256": "f1c2b95fb969980422a07f6f2689c5f055a9d169abc1098f98db0b0130a9331b"
+  }
+}

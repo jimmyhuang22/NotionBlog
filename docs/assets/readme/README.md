@@ -17,4 +17,8 @@
 | `reading.png` | `/study/demo101/notes/week-4` | 墨水 |
 | `blocks.png` | `/preview/blocks` | 墨水 |
 
+## 结构图
+
+`architecture-light.png` 与 `architecture-dark.png` 是 README“内容怎样到达页面”一节的插图，不是截图。原稿是 `architecture.svg`：修改后给根元素加上 `class="dark"` 得到深色版，用浏览器按 1200 × 580、两倍像素渲染成 PNG。
+
 截图作为项目文档素材随原创源码的 MIT 许可证提供；依赖字体仍遵守各自许可证。本目录不包含浏览器配置、运行日志或截图工具的私人回执。
