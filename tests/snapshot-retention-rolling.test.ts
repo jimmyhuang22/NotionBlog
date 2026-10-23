@@ -147,3 +147,16 @@ test("a missing course acceptance stops before reservation or a child",async()=>
   const ledger=JSON.parse(await readFile(rollingLedgerPath(f.config.archiveDirectory),"utf8"));assert.equal(ledger.entries.length,0);
  }finally{await rm(f.dir,{recursive:true,force:true});}
 });
+
+
+test("binary dependency proofs use raw bytes and reject byte changes with the same replacement text",async()=>{
+ const f=await fixture();
+ try{
+  const path=join(f.dir,"dependency.wasm"),before=Buffer.from([0xff,0x00,0x61]),after=Buffer.from([0xfe,0x00,0x61]);
+  assert.equal(before.toString("utf8"),after.toString("utf8"));assert.notEqual(sha256(before),sha256(after));
+  await writeFile(path,before,{mode:0o600});f.config.programFiles.push({path,sha256:sha256(before)});
+  assert.equal((await inspectScheduledReadiness(f.config)).status,"READY");
+  await writeFile(path,after,{mode:0o600});await assert.rejects(inspectScheduledReadiness(f.config),/RETENTION_PROGRAM_CHANGED/);
+  const ledger=JSON.parse(await readFile(rollingLedgerPath(f.config.archiveDirectory),"utf8"));assert.equal(ledger.entries.length,0);
+ }finally{await rm(f.dir,{recursive:true,force:true});}
+});

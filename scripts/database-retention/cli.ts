@@ -46,7 +46,7 @@ async function main(){
   const state=JSON.parse((await privateFile(window.syncState)).raw);
   if(state.status!=="PASS"||state.runId!==window.runId||state.operation!==window.operation)throw Error("RETENTION_SUCCESS_CHANGED");
   for(const proof of window.proofs)if(sha256((await privateFile(proof.path)).raw)!==proof.sha256)throw Error("RETENTION_PROOF_CHANGED");
-  for(const proof of window.programFiles){const s=await lstat(proof.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(proof.path,"utf8"))!==proof.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
+  for(const proof of window.programFiles){const s=await lstat(proof.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(proof.path))!==proof.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  }
  await assertWindow();
  const budget=new RetentionResponseBudget(rolling?.limits.returnedBytes);

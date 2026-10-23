@@ -67,7 +67,7 @@ export async function verifyVisitorAcceptance(operation:string,runId:string,pipe
 export async function inspectScheduledReadiness(config:ScheduledConfig){
  if(!["retention-daily-config-v2","retention-after-sync-config-v3"].includes(config.format))throw Error("RETENTION_CONFIG_INVALID");
  retentionRunLimit(config.maximumRuns);
- for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
+ for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  const stateFile=join(config.directory,"STATE_PRIVATE.json"),last=await exists(stateFile)?JSON.parse(await privateText(stateFile)):null;
  const sync=JSON.parse(await privateText(config.syncState));
  let status:string=await admission(config,last,sync,Date.now());
@@ -152,7 +152,7 @@ export async function scheduledTick(config:ScheduledConfig){
   if(["PENDING","RUNNING"].includes(tail.status)||(tail.status==="PASS"&&(!tail.connectionsClosed||!tail.ownLocksReleased)))throw Error("RETENTION_SKIP_WAITING_FOR_TAIL");
   if(tail.status!=="PASS"||tail.runId!==sync.runId||tail.catalogSHA256!==catalogSHA||!tail.connectionsClosed||!tail.ownLocksReleased||
    [tail.inFlight,tail.unknownWriteGroup,tail.acknowledgedUnverifiedGroup].some(value=>value!==null&&value!==undefined))throw Error("RETENTION_TAIL_NOT_VERIFIED");
-  for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
+  for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
   await privateText(config.envFile); // Check permissions without logging or copying values.
   const folder=join(config.directory,operation);await mkdir(folder,{mode:0o700});completionPath=join(folder,"COMPLETION_PRIVATE.json");
   const windowPath=join(folder,"WINDOW_PRIVATE.json"),deadline=Date.now()+30*60*1000;

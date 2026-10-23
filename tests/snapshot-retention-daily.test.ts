@@ -233,8 +233,9 @@ test("actual rolling CLI closes its SQL adapter and accounts identity plus extra
    for(let n=0;n<4;n++){const path=join(dir,`proof${n}.json`);await writeFile(path,"{}",{mode:0o600});proofs.push({path,sha256:sha256("{}")});}
    const locks=[];
    for(let n=0;n<4;n++){const path=join(dir,`lock${n}`);await writeFile(path,"owned",{mode:0o600});const st=await lstat(path);locks.push({path,ino:st.ino,dev:st.dev,sha256:sha256("owned")});}
+   const binary=join(dir,"dependency.wasm"),binaryBytes=Buffer.from([0xff,0x00,0x61]);await writeFile(binary,binaryBytes,{mode:0o600});
    const windowPath=join(folder,"WINDOW_PRIVATE.json"),window={format:"retention-after-sync-window-v3",maximumRuns:2,runId:id(5),deadline:Date.now()+300_000,syncState:sync,operation,
-    locks,absentLocks:[join(dir,"absent")],proofs,archiveDirectory:archive,healthURL:"https://example.org/api/health/content",programFiles:[{path:entry,sha256:sha256(await readFile(entry,"utf8"))}],
+    locks,absentLocks:[join(dir,"absent")],proofs,archiveDirectory:archive,healthURL:"https://example.org/api/health/content",programFiles:[{path:entry,sha256:sha256(await readFile(entry,"utf8"))},{path:binary,sha256:sha256(binaryBytes)}],
     rolling:{reservationId,stateDirectory:state,limits:ledger.entries.at(-1)!.reserved}};
    const rawWindow=JSON.stringify(window);await writeFile(windowPath,rawWindow,{mode:0o600});
    process.env.RETENTION_DATABASE_URL="postgresql://fixture:fixture@127.0.0.1:1/fixture";process.env.DATABASE_TLS="disable";

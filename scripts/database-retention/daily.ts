@@ -3,7 +3,7 @@ import {PAYLOAD_TABLES, type DeleteGuard, type PayloadRef, type PayloadTable} fr
 import {MAXIMUM_RETURNED_BYTES,retentionRunLimit} from "./limits.ts";
 
 export const deletionOrder: readonly PayloadTable[] = ["nb_thumbnails.media","nb_v2_media.sources","nb_v2.media","nb_v2.tombstones","nb_v2.records"];
-export const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+export const sha256 = (value: string|Uint8Array) => createHash("sha256").update(value).digest("hex");
 export const hashesDigest = (values: readonly string[]) => sha256([...values].sort().join(""));
 export interface Candidate extends Record<string, unknown> {id: string; summary_json: string; summary_sha256: string}
 export interface RetentionPlan {
