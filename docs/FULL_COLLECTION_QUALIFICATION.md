@@ -1,6 +1,6 @@
 # 完整新采集的服务端资格绑定候选
 
-本项提供独立工程入口，不接入既有CLI、主机或排程。它补齐“普通新租约不返回服务器有效期”的源码部分，不安装数据库能力，不授予reader／writer新权限，也不把源码候选当作运行许可。
+本项提供完整新采集资格入口及默认关闭的私有host接线源码。它补齐“普通新租约不返回服务器有效期”的证据，不安装数据库能力，不授予reader／writer新权限，也不把源码候选当作运行许可。共享入口源码范围已获[明确确认](decisions/2026-10-23-full-collection-host-wiring.md)。
 
 `scripts/website-sync/full-collection.ts` 提供 `qualifyFullCollectionLease` 和 `runFullCollection`。只支持qualified模式下的stage／publish，所有页面由普通collector重新采集；旧capture、resume参数、先前批次比较和incremental baseline输入均拒绝。媒体仍执行原字节及owner验证，不因本入口放宽缓存或公开范围。
 
@@ -16,16 +16,20 @@ SELECT在一个语句中观察提交快照；时间使用数据库的 `clock_tim
 
 ## owner连接与运行接线
 
-owner executor由未来运行负责人显式提供；本模块不创建连接、不读取环境或凭据。普通reader／writer没有基础表权限，不能传给此入口，也不能将维护cache适配器加白名单来替代owner。实际连接必须有原本已有的必要读取权限、正确TLS及身份，并使用独立固定的请求／字节／期限预算。源码没有新增角色、GRANT、RPC、SQL迁移或安装器，也不预设mapped接口存在。
+owner连接由未来运行负责人通过父进程API显式提供；源码不加载owner凭据，没有默认owner连接工厂。普通reader／writer没有基础表权限，不能传给此入口，也不能将维护cache适配器加白名单来替代owner。实际端口必须事先验证身份和严格TLS，使用独占连接、服务器语句超时不超过10秒，并支持abort与销毁连接；晚返回的端口也会关闭。源码没有新增角色、GRANT、RPC、SQL迁移或安装器，也不预设mapped接口存在。
 
-现有host配置及receipt schema未修改，旧publication-binding仍拒绝缺少fresh-resume证明的输入，不能假补标签。后续应审阅完整新采集prepare、host调用本入口、独立owner元数据读取端口与同批后置绑定的具体接线；采用新的显式参数时须按共享入口范围确认。最终release／runtime／来源schema、空lease／未决写入、新预算、停止窗口及软件回退仍由原运行负责人固定。活跃自然周期不作为移交窗口。
+`run-private.mjs` 可选 `fullCollection` 参数块必须含 `format: website-full-collection-plan-v1`、`expectation` 与 `postSeconds`；expectation严格包含配置摘要、revision、epoch、当前成功、freshness与minimumRemainingSeconds。最短剩余时间须覆盖本次content timeout及postSeconds。所有resume键与此块互斥，只接受qualified的stage／publish；省略此块沿用原流程。`--check` 只校验本机输入，不创建owner连接、子进程、锁或预算。普通命令行不提供owner工厂，新模式执行会拒绝；工程调用者须显式传入父进程 `ownerMetadata` 端口，不能用环境变量偷偷接通。
+
+父子进程使用Node IPC固定消息，绑定父进程创建的新run与随机nonce；子进程没有owner凭据或通用SQL端口。父进程只执行固定元数据SELECT，最多一次、10秒、4KiB响应；查询前持久记录独立owner预算，失败／未知结果不退款、不重试。关闭owner连接后才交付元数据，子进程仍执行原资格检查。超时并不证明远端已结束，连接销毁失败会使host失败并要求人工核对。
+
+`run.ts` 在显式新模式调用 `runFullCollection`。独立qualification与binding同时保存在原私有receipt及单独文件中，绑定新run、原始来源SHA、release commit、manifest／runtime SHA与服务器期限；不添加resume标签。`full-collection-control.ts` 提供纯prepare／binding／四阶段post校验，拒绝旧run、来源／release／预算输入漂移、过期、缺失或重复后置，以及混入fresh-resume证明。JSON只提供审计证据，不授予运行权限。
+
+控制器prepare、publication-binding、content driver与body admission／最终join仅在私人离线副本中适配。缺省仍走原fresh-resume分支；完整新采集需独立新预算及显式父进程launcher。content后置完成后保持等待body，同批thumbnail／snapshot／visitor／body全部通过，且连接和自有锁结清、无未决写入，最终join才返回可持久化的完成提案。保留原维护限额、游戏日期／课程树消费者修复、正文分组和补充回执处理；没有替换已安装文件或修改DAG。私人副本不是可执行安装包。
 
 owner资格读取是以后真实执行的一部分，需要其当次范围和预算，不能重用先前一次metadata导出许可。旧成功、controller、排程、媒体贡献、失败账本、原完整新采集预算及其他任务状态均不由本源码候选改变。
 
-## 下一步待确认的接线方案
+## 验证与后续执行边界
 
-- `run-private.mjs` 增加默认缺省的fullCollection参数块；与所有resume输入互斥，check模式仍不启动连接、子进程或预算。既有模式保持原行为。
-- 新增固定的本机owner读取旁路，父进程持有连接，采集子进程不取得owner数据库凭据。只允许本次新run的固定元数据语句，最多一次、10秒、4KiB返回；只读、无通用SQL、无自动重试，计入新独立预算。这里的数字是候选上限，不是已授予的真实窗口。
-- `run.ts` 在显式新模式调用本桥，将独立full-collection回执写进原私有receipt；不假补resume标签，不把旧capture、旧run资格或工作站时间当作新许可。
-- 控制器准备和同批后置增加对应的默认关闭候选分支，绑定新run、配置及release／来源摘要和服务器期限；保留原有fresh-resume、限额适配及验收修复。只在离线副本编写、验证，不替换已安装文件或修改排程。
-- 这一步仍仅源码及草稿PR：不新增迁移或权限，不读取真实凭据／来源／数据库，不创建可执行的真实配置，不安装、运行同步、合并或部署。真实角色选择、预算、停止／回退和owner移交继续另审。
+验证使用虚构来源、受限角色的本机PGlite和真实父子进程IPC；冻结host夹具覆盖原fresh-resume和缺省入口。服务器期限先按数据库时间与单调时钟约束采集，控制器审计仍受原绝对停止窗口约束；本机结果不证明实际owner／TLS或云端已验。
+
+本轮仅源码、离线副本及草稿PR：不新增迁移或权限，不读取真实凭据／来源／数据库，不创建可执行的真实配置，不安装、同步、合并或部署。最终release／runtime／来源schema、实际owner端口、空lease／未决写入、新预算、停止窗口及软件回退仍由原运行负责人固定。活跃自然周期不作为移交窗口。这里的预算数字是源码上限，不是已授予的真实窗口。

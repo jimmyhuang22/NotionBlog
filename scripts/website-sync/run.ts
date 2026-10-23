@@ -26,6 +26,9 @@ import { configDigest } from "../../src/server/database/website-validation.ts";
 import { exportPublicationHandoff } from "./publication-handoff.ts";
 import { prepareHostCaptureRecovery } from "./capture-recovery-compatibility.ts";
 import { PublicationRevalidationError, type PublicationRevalidationProgress } from "./publication-revalidation.ts";
+import { runFullCollection } from "./full-collection.ts";
+import { bindFullCollection, prepareFullCollection, type FullCollectionPrepared } from "./full-collection-control.ts";
+import { fullCollectionOwnerClient } from "./full-collection-owner.ts";
 
 /** Internal child: the host entry verifies the frozen release and holds BOTH host locks. */
 async function main() {
@@ -47,6 +50,19 @@ async function main() {
   const sourceBytes = await readPrivateFile(env.NOTION_SOURCES_CONFIG ?? "");
   if (createHash("sha256").update(sourceBytes).digest("hex") !== env.WEBSITE_SOURCE_SHA256) throw new WorkerError("MISCONFIGURED");
   const config = JSON.parse(sourceBytes); parseWebsiteNotionConfig(config);
+  let fullCollection: FullCollectionPrepared | undefined;
+  if ((env.WEBSITE_FULL_COLLECTION_PREPARED === undefined) !== (env.WEBSITE_FULL_COLLECTION_OWNER_NONCE === undefined)) throw new WorkerError("MISCONFIGURED");
+  if (env.WEBSITE_FULL_COLLECTION_PREPARED !== undefined) {
+    const text = env.WEBSITE_FULL_COLLECTION_PREPARED;
+    if (text.length > 8192 || !/^[A-Za-z0-9_-]+$/.test(text) || publication !== "qualified" || mediaProvider !== "notion" || mode === "dry-run" ||
+        Object.keys(env).some(k => k.startsWith("WEBSITE_RESUME_")) || !process.connected) throw new WorkerError("MISCONFIGURED");
+    const saved = JSON.parse(Buffer.from(text, "base64url").toString("utf8"));
+    if (saved?.format !== "website-full-collection-prepared-v1") throw new WorkerError("MISCONFIGURED");
+    const { format: _format, ...input } = saved;
+    fullCollection = prepareFullCollection(input, configDigest(parseWebsiteNotionConfig(config)));
+    if (fullCollection.runId !== runId || fullCollection.timeoutSeconds !== seconds || fullCollection.sourceSha256 !== env.WEBSITE_SOURCE_SHA256 ||
+        fullCollection.releaseCommit !== env.WEBSITE_RELEASE_COMMIT || fullCollection.runtimeSha256 !== env.WEBSITE_SHARED_BUDGET_RUNTIME_SHA256) throw new WorkerError("MISCONFIGURED");
+  }
   if ((env.WEBSITE_RESUME_SOURCE_FILE === undefined) !== (env.WEBSITE_RESUME_SOURCE_SHA256 === undefined)) throw new WorkerError("MISCONFIGURED");
   if ((env.WEBSITE_RESUME_SOURCE_FILE !== undefined || env.WEBSITE_RESUME_SOURCE_SHA256 !== undefined || env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 !== undefined) &&
       !env.WEBSITE_RESUME_RECOVERY_ID) throw new WorkerError("MISCONFIGURED");
@@ -190,7 +206,7 @@ async function main() {
       if(resumeBudget.plan.limits.notionRequests-resumeBudget.read().counters.notionRequests<reserve)throw new WorkerError("LIMIT_EXCEEDED");
     }
     const publicationChecks: PublicationRevalidationProgress[] = [];
-    const result = await runWebsiteSync({resumeCollection,
+    const workerOptions: Parameters<typeof runWebsiteSync>[0] = {resumeCollection,
       publicationRepair: capture ? { maxPages: 32, maxPasses: 2 } : undefined,
       onPublicationRevalidation: async value => {
         guard();
@@ -217,7 +233,20 @@ async function main() {
             .catch(() => { report.discoveryProgressWriteFailed = true; });
         }
       },
-      download: async url => { guard(); const image = await download(url, signal); guard(); return image; } });
+      download: async url => { guard(); const image = await download(url, signal); guard(); return image; } };
+    const run = async () => {
+      if (!fullCollection) return runWebsiteSync(workerOptions);
+      const { resumeCollection: _resume, onResumePlan: _plan, onResumeProgress: _progress, onIncrementalBaseline: _baseline, ...full } = workerOptions;
+      return runFullCollection({ ...full, mode: mode as "stage" | "publish", publicationMode: "qualified", writer: writer!,
+        owner: fullCollectionOwnerClient(runId, env.WEBSITE_FULL_COLLECTION_OWNER_NONCE!, signal), expectation: fullCollection.plan.expectation,
+        onQualified: async receipt => {
+          report.fullCollectionQualification = receipt;
+          report.fullCollectionBinding = bindFullCollection(fullCollection!, receipt);
+          await save("full-collection-qualification-private.json", report.fullCollectionBinding);
+          await save("receipt-private.json", report);
+        } });
+    };
+    const result = await run();
     Object.assign(report, result);
     if (mode === "publish") {
       const publishedDb = publicationReader(sqlExecutor(readerPool!), publication);
@@ -264,10 +293,12 @@ async function main() {
       closeWriter: pool ? () => pool!.end() : undefined,
       closeReader: readerPool ? () => readerPool!.end() : undefined });
     if (!cleaned) process.exitCode = 1;
+    if (fullCollection && process.connected) process.disconnect?.();
   }
   console.log(JSON.stringify({ adapter: report.adapter, outcome: report.outcome, published: report.published, readerVerified: report.readerVerified,
     thumbnailHandoffStatus: report.thumbnailHandoffStatus, seconds: report.seconds, code: report.code }));
 }
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
-  main().catch(() => { console.error(JSON.stringify({ adapter: "private-host-v2", outcome: "preparation-failed", code: "MISCONFIGURED" })); process.exitCode = 1; });
+  main().catch(() => { console.error(JSON.stringify({ adapter: "private-host-v2", outcome: "preparation-failed", code: "MISCONFIGURED" })); process.exitCode = 1;
+    if (process.connected) process.disconnect?.(); });
 }

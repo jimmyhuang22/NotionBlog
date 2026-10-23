@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { initializeSharedBudget, openSharedBudget, validateSharedPlan, budgetFail, SharedBudgetError, type SharedLimits } from "./shared-budget.ts";
 import { installSharedTransports } from "./shared-budget-transport.ts";
+import type { OpenFullCollectionOwner } from "./full-collection-owner.ts";
 
 interface BudgetInput { format: "qualified-budget-input-v1"; runtimeSha256: string; storageOrigin: string; durationMs: number; cleanupMs: number; limits: SharedLimits }
 export function parseQualifiedBudgetInput(value: unknown): BudgetInput {
@@ -13,7 +14,7 @@ export function parseQualifiedBudgetInput(value: unknown): BudgetInput {
     cleanupMs: b.cleanupMs, runtimeSha256: b.runtimeSha256, storageOrigin: b.storageOrigin, limits: b.limits });
   return b;
 }
-export async function qualifiedBudgetMain(args: readonly string[]) {
+export async function qualifiedBudgetMain(args: readonly string[], ports: { ownerMetadata?: OpenFullCollectionOwner } = {}) {
   if (args.length === 1 && args[0] === "--help") {
     console.log("node scripts/website-sync/qualified-budget-cli.ts --config PRIVATE_RUNTIME --budget PRIVATE_BUDGET --ledger FRESH_PRIVATE_DIRECTORY --mode dry-run|stage|publish [--check|--execute]\nDefault: offline check. Execute runs exactly one original qualified host job, with a shared durable parent/child budget. No policy setup, installation or automatic retry."); return 0;
   }
@@ -30,14 +31,15 @@ export async function qualifiedBudgetMain(args: readonly string[]) {
   const checked = await runPrivateWebsiteWorker({ configFile: values.config, mode: values.mode, check: true, sharedBudget });
   if (checked.resumePlan && input.limits.notionRequests < checked.resumePlan.requestReserve) budgetFail("SHARED_BUDGET_INPUT_INVALID");
   if (!values.execute) {
-    console.log(JSON.stringify({ adapter: "qualified-shared-budget-v1", offlineCheck: true, workerStarted: false, networkChecked: false, releaseCommit: checked.releaseCommit, resumePlan: checked.resumePlan })); return 0;
+    console.log(JSON.stringify({ adapter: "qualified-shared-budget-v1", offlineCheck: true, workerStarted: false, networkChecked: false, releaseCommit: checked.releaseCommit, resumePlan: checked.resumePlan, fullCollectionPlan: checked.fullCollectionPlan })); return 0;
   }
+  if (checked.fullCollectionPlan && typeof ports.ownerMetadata !== "function") budgetFail("SHARED_BUDGET_INPUT_INVALID");
   const bridge = initializeSharedBudget(values.ledger, { format: "qualified-shared-budget-v1", parentPid: process.pid, nonce: randomUUID(),
     deadline: Date.now() + input.durationMs, cleanupMs: input.cleanupMs, runtimeSha256: input.runtimeSha256, storageOrigin: input.storageOrigin, limits: input.limits });
   const budget = openSharedBudget(bridge), transport = installSharedTransports(budget);
   try {
     transport.guard();
-    const result = await runPrivateWebsiteWorker({ configFile: values.config, mode: values.mode, sharedBudget: { ...sharedBudget, bridge } });
+    const result = await runPrivateWebsiteWorker({ configFile: values.config, mode: values.mode, sharedBudget: { ...sharedBudget, bridge }, ownerMetadata: ports.ownerMetadata });
     const failedBudget = !!budget.read().failure;
     console.log(JSON.stringify({ adapter: "qualified-shared-budget-v1", outcome: result.outcome, published: result.published,
       readerVerified: result.readerVerified, publicationMayHaveCommitted: result.publicationMayHaveCommitted,

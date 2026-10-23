@@ -104,7 +104,7 @@ const allowed = new Set(["client", "config", "mode", "writer", "storage", "downl
   "signal", "onStudyDiscoveryProgress", "collectionConcurrency", "onCollectionProgress", "revalidateCollectionOwners",
   "publicationRepair", "onPublicationRevalidation", "captureCollection", "publicationMode", "owner", "expectation", "onQualified"]);
 
-/** Engineering entry only: no CLI, scheduler or host imports this module.
+/** Explicit full-collection entry, opt-in through the private host.
  * All records use the ordinary collector, with no saved-page input. Existing
  * source/image verification, writer fencing, limits and failure semantics stay.
  */
