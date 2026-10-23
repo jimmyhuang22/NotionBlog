@@ -30,6 +30,17 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             scripts/game-sync/package-lock.json
+      - name: Isolate Node runtime for release verification
+        shell: bash
+        run: |
+          node -e 'const fs = require("node:fs"); console.log("Hosted Node mode:", (fs.statSync(process.execPath).mode & 0o777).toString(8));'
+          node_source="$(node -p 'process.execPath')"
+          node_bin="$RUNNER_TEMP/notionblog-ci-node/bin"
+          install -d -m 700 "$node_bin"
+          install -m 755 "$node_source" "$node_bin/node"
+          cmp --silent "$node_source" "$node_bin/node"
+          "$node_bin/node" -e 'const fs = require("node:fs"); if (fs.statSync(process.execPath).mode & 0o022) throw new Error("Writable Node runtime");'
+          echo "$node_bin" >> "$GITHUB_PATH"
       - name: Install dependencies
         run: |
           npm ci
