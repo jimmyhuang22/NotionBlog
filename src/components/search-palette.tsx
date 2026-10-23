@@ -24,6 +24,19 @@ const Magnifier = () => (
  * page: results appear while typing, arrow keys choose, Enter opens. The entry is still a link to
  * the search page, so it works without scripts, in a new tab, and for the full result list.
  */
+const allLabel = (results: Results) => typeof results.total === "number" && results.total > results.hits.length ? `查看全部 ${results.total} 条结果` : "在搜索页里查看";
+
+function HitRow({ hit, query }: { hit: SearchHit; query: string }) {
+  const title = <span className="palette__title"><Marked text={hit.title} query={query} /></span>;
+  const excerpt = hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={query} /></span> : null;
+  return (
+    <>
+      <span className="tag">{kindLabels[hit.kind] ?? "内容"}</span>
+      {hit.context ? <span className="palette__content">{title}<SearchContextLine context={hit.context} />{excerpt}</span> : <>{title}{excerpt}</>}
+    </>
+  );
+}
+
 export function SearchPalette() {
   const router = useRouter();
   const pathname = usePathname();
@@ -36,6 +49,8 @@ export function SearchPalette() {
   // Text being composed by an input method is not a query yet; the search waits until it is committed.
   const [composing, setComposing] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // The last completed list stays in place, dimmed and inert, until the next one replaces it (no collapse per keystroke).
+  const [previous, setPrevious] = useState<Results | null>(null);
   const listId = useId();
   const query = readQuery(text);
   // Input changes render before the debounce runs; only the current query can offer options.
@@ -43,6 +58,8 @@ export function SearchPalette() {
   // The last option leads to the search page with everything that matched.
   const count = showingResults ? results.hits.length + 1 : 0;
   const selected = active >= 0 && active < count ? active : -1;
+  const stale = !showingResults && !!query && (composing || results.query !== query || results.status === "idle" || results.status === "loading")
+    && previous?.status === "done" && previous.hits.length > 0 ? previous : null;
 
   useEffect(() => {
     if (open && selected >= 0) document.getElementById(`${listId}-${selected}`)?.scrollIntoView({ block: "nearest" });
@@ -71,7 +88,7 @@ export function SearchPalette() {
 
   useEffect(() => {
     if (!open) return;
-    if (!query) { setResults(idle); setActive(-1); return; }
+    if (!query) { setResults(idle); setPrevious(null); setActive(-1); return; }
     if (composing) return;
     const control = new AbortController();
     const timer = setTimeout(async () => {
@@ -82,14 +99,15 @@ export function SearchPalette() {
         if (control.signal.aborted) return;
         if (response.ok && body?.data) {
           const page = body.data as Page<SearchHit>;
-          setResults({ status: "done", query, hits: page.items, total: page.total ?? null });
+          const done: Results = { status: "done", query, hits: page.items, total: page.total ?? null };
+          setResults(done); setPrevious(done);
           setActive(page.items.length ? 0 : -1);
         } else {
-          setResults({ status: body?.error?.code === "RATE_LIMITED" ? "busy" : "failed", query, hits: [], total: null });
+          setResults({ status: body?.error?.code === "RATE_LIMITED" ? "busy" : "failed", query, hits: [], total: null }); setPrevious(null);
           setActive(-1);
         }
       } catch {
-        if (!control.signal.aborted) { setResults({ status: "failed", query, hits: [], total: null }); setActive(-1); }
+        if (!control.signal.aborted) { setResults({ status: "failed", query, hits: [], total: null }); setPrevious(null); setActive(-1); }
       }
     }, DELAY);
     return () => { clearTimeout(timer); control.abort(); };
@@ -145,7 +163,7 @@ export function SearchPalette() {
       </Link>
       <dialog
         ref={dialog} className="palette" aria-label="搜索"
-        onClose={() => { setOpen(false); setText(""); setResults(idle); setActive(-1); setComposing(false); }}
+        onClose={() => { setOpen(false); setText(""); setResults(idle); setPrevious(null); setActive(-1); setComposing(false); }}
         onClick={event => { if (event.target === dialog.current) close(); }}
       >
         {open ? (
@@ -162,32 +180,35 @@ export function SearchPalette() {
               />
               <button type="button" className="palette__close" onClick={close} aria-label="关闭搜索"><kbd aria-hidden="true">Esc</kbd><span aria-hidden="true">关闭</span></button>
             </div>
-            <ul id={listId} className="palette__list" role="listbox" aria-label="搜索结果" aria-busy={waiting}>
+            <ul id={listId} className={stale ? "palette__list palette__list--stale" : "palette__list"} role="listbox" aria-label="搜索结果" aria-busy={waiting || !!stale}>
               {showingResults ? results.hits.map((hit, index) => (
                 <li key={`${hit.kind}:${hit.id}`} id={`${listId}-${index}`} className="palette__option" role="option" aria-selected={index === selected} onPointerMove={() => setActive(index)}>
                   <Link href={searchResultHref(hit)} aria-label={searchResultLabel(hit)} prefetch={false} tabIndex={-1} onClick={close}>
-                    <span className="tag">{kindLabels[hit.kind] ?? "内容"}</span>
-                    {hit.context ? <span className="palette__content">
-                      <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
-                      <SearchContextLine context={hit.context} />
-                      {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
-                    </span> : <>
-                      <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
-                      {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
-                    </>}
+                    <HitRow hit={hit} query={results.query!} />
                   </Link>
                 </li>
-              )) : null}
+              )) : stale ? (
+                <>
+                  {stale.hits.map(hit => (
+                    <li key={`${hit.kind}:${hit.id}`} className="palette__option" role="presentation" aria-hidden="true">
+                      <span className="palette__row"><HitRow hit={hit} query={stale.query!} /></span>
+                    </li>
+                  ))}
+                  <li className="palette__option palette__option--all" role="presentation" aria-hidden="true">
+                    <span className="palette__row">{allLabel(stale)}</span>
+                  </li>
+                </>
+              ) : null}
               {count > 0 ? (
                 <li id={`${listId}-${count - 1}`} className="palette__option palette__option--all" role="option" aria-selected={selected === count - 1} onPointerMove={() => setActive(count - 1)}>
                   <Link href={searchHref(results.query!, null)} prefetch={false} tabIndex={-1} onClick={close}>
-                    {typeof results.total === "number" && results.total > results.hits.length ? `查看全部 ${results.total} 条结果` : "在搜索页里查看"}
+                    {allLabel(results)}
                   </Link>
                 </li>
               ) : null}
             </ul>
             {/* Before any typing the hint would only repeat the placeholder on screen; it is still read out (X-03). */}
-            <div className={!query && !text.trim() ? "palette__status visually-hidden" : "palette__status"}>
+            <div className={(!query && !text.trim()) || (stale && waiting) ? "palette__status visually-hidden" : "palette__status"}>
               <p role="status">{message}</p>
               {retryable ? (
                 <button type="button" className="search-recovery__action" onClick={() => {
