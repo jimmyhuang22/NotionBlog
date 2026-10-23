@@ -68,6 +68,10 @@ COMMIT可能已提交后不得补发ROLLBACK或自动逆向。应答丢失始终
 
 下一份只读提案绑定这次观察与唯一影视data source：最多两个连接器调用，先一条固定SQL重读状态和publication pointer，报告限4KiB；状态变更、lease、非空pointer、缺行或错误立即停止，不调用Notion。只有通过才fetch一次该data source的schema和集合元数据，不查询条目或跟随其他ID；工具可能附带库名、描述和属性选项，接纳摘要限64KiB，原始返回不可预过滤或硬限流。共用新的60秒提交窗口及256KiB结果／封装保守预留，无重试，不能将未发调用换作别的SQL。13项本地只读SQL／停止条件／固定请求检查通过；新范围尚未批准。此观察没有替代owner交接、软件回退前像或安装／policy写／采集许可。
 
+用户随后批准该条件范围，实际仅执行SQL一次和条件Notion fetch一次，均在提交窗口内：状态与前次一致、无lease、publication pointer为空，才进入第二步。返回26个属性的集合schema，评分列为number、来源列为连接器标准化text，目标data source ID及collection标记匹配；没有查询记录、页面正文或下载图片。连接器不提供原始property ID／REST类型，导航URL不当作data source ID，schema命名空间键与显示名分别保留；未执行返回中的SQL示例或跟随任何关联链接。原13项检查保留，新增9项规范化／拒绝与实际返回本地重放检查通过，没有重复远端读取。
+
+该次SQL报告366B，Notion工具紧凑JSON73730B，精简schema6105B；工具字节不是物理流量，256KiB预留保留，两调用授权余额0。当前原来源JSON和实际字段映射仍未读，不能因此安装或写policy。下一份仅本机读取提案限运行模板及其唯一指向的来源JSON各64KiB，总128KiB；核对原SHA、已观察配置digest与影视来源，只生成两键候选和配置前像，不改原文件，不调用SQL／Notion／HTTP。异常、摘要漂移、未解析property ID或凭据格式即停；新范围尚未批准，完整软件回退和owner交接仍未完成。
+
 ## 持锁结算顺序
 
 未来owner接入应先取得原控制器锁，再重新读取同一operation的实际pipeline、worker和全部后置证据，校验新run／配置／release／服务器期限与无未决写入。读取的完整控制器前像必须与候选期望字节一致，不能只比较runId。通过后才原子保存一次完成提案，读回确切结果再释放自己的锁。
