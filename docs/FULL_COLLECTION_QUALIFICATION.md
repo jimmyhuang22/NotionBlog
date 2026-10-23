@@ -34,6 +34,8 @@ owner连接由未来运行负责人通过父进程API显式提供；源码不加
 
 owner资格读取是以后真实执行的一部分，需要其当次范围和预算，不能重用先前一次metadata导出许可。旧成功、controller、排程、媒体贡献、失败账本、原完整新采集预算及其他任务状态均不由本源码候选改变。
 
+私人owner会话适配候选已完成29项本机TLS／PGlite／故障检查，并用固定版本pg.Client经本机PostgreSQL协议夹具接通原broker。拟议五条会话SQL的费用单独列明，保留原一次元数据查询上限；无环境或文件凭据默认入口。另在固定最新develop上组合两项草稿，2620项完整检查、构建及48项trace通过；无Git组合包含Node、两套锁定依赖及候选模块，原release格式和虚构host检查通过。实际动态后置程序、owner资料、runtime及回退仍未绑定，见[安装前审阅](FULL_COLLECTION_INSTALLATION_READINESS.md)。
+
 ## 验证与后续执行边界
 
 验证使用虚构来源、受限角色的本机PGlite和真实父子进程IPC；冻结host夹具覆盖原fresh-resume和缺省入口。服务器期限先按数据库时间与单调时钟约束采集，控制器审计仍受原绝对停止窗口约束；本机结果不证明实际owner／TLS或云端已验。

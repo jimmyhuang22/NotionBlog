@@ -12,9 +12,9 @@ owner预算的预写入可能在IPC截止后才完成。原来预写入与终态
 
 | 项目 | 当前证据 | 实际运行前所缺材料 |
 | --- | --- | --- |
-| 源码及release | 草稿源码、离线检查和构建 | 最终组合的完整无Git release清单、Node及全部动态控制器／媒体后置依赖；不能直接使用审阅工作树 |
+| 源码及release | 最新固定develop、两项草稿及Node／双依赖树的无Git离线组合包，原release校验及虚构host检查通过 | 实际runtime及全部动态控制器／媒体后置程序仍须固定；离线组合包不自动成为真实安装包 |
 | 影视映射及policy | 两键新增guard、独占owner事务及回退源码 | 当次来源schema证明、实际旧／新映射摘要、revision／epoch／currentRun；旧前像不能当当前状态 |
-| owner端口 | 固定新run／nonce的1次SELECT、10秒、4KiB旁路 | 明确的现有角色、目标、严格TLS、独占连接、服务器有效超时和销毁行为；没有默认凭据加载器 |
+| owner端口 | 原1次SELECT旁路及私人独占连接适配候选，真实本机TLS／pg.Client与虚构PGlite验证通过 | 明确实际角色、目标、CA及当次服务器证明；五条拟议会话SQL须单独批准记账，没有默认凭据加载器 |
 | 预算与窗口 | 源码上限及虚构预算 | 新nonce／截止／连接、查询和接收字节预算；身份或会话验证的额外请求必须单列，不能藏在工厂内或复用旧余额 |
 | 同批后置 | 实际pipeline与四阶段join的离线拒绝校验 | thumbnail、snapshot、目录、visitor、body及cache的实际同批证据；失败补充材料保持原始失败可追溯 |
 | 控制器写回 | 纯完成提案及私人文件适配候选，虚构目录中的持锁／原子写回／丢ACK验证通过 | 实际owner文件映射、完整输入清单与当次锁协议交接仍须固定；具体接入尚未安装 |
@@ -25,6 +25,10 @@ owner预算的预写入可能在IPC截止后才完成。原来预写入与终态
 ## owner与只读证明
 
 实际端口不能只凭连接字符串、客户端超时或启动参数声称角色、只读会话和服务器超时已验证。必须记录当次服务器实际效果以及验证成本；若既定一次SELECT范围无法覆盖额外证明，先固定新的具体方案和范围，不能自动加SQL、BEGIN、SET或重连。当前固定元数据SELECT保持不变，不新增迁移、角色、GRANT或通用SQL通道。
+
+私人适配候选只接受父进程显式传入的连接资料，在独占连接中拟采用BEGIN READ ONLY、SET LOCAL八秒限制、身份／只读／实际限时SELECT、原固定元数据SELECT及ROLLBACK，正常路径共五次SQL提交、一次连接；最多8KiB逻辑请求与6KiB逻辑响应，旧broker的一次元数据／10秒／4KiB上限保持。临时设置依据[PostgreSQL SET LOCAL](https://www.postgresql.org/docs/17/sql-set.html)，独占client依据[node-postgres事务说明](https://node-postgres.com/features/transactions)。这些是源码候选的成本，未授予实际额度；逻辑字节不当TCP流量，查询未知保守扣账且不重试。
+
+host在内部生成新run，适配器在首个固定请求绑定该run；原broker仍校验run及nonce。回滚、关闭或终态保存未证实时不交付元数据，迟到attempt不会覆盖终态。该只读端口只服务资格元数据，不能用于policy写事务；后者仍需独立owner事务及当次窗口。实际配置／服务器与pooler效果未由本机TLS／PGlite／协议夹具证明。
 
 ## 持锁结算顺序
 
