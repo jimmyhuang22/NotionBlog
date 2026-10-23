@@ -49,6 +49,21 @@ Notion 适合记录，却不适合直接给人看。把页面“发布到网页�
 
 首页以动态为主线，穿插你看过的电影、读完的书、玩过的游戏、新的相册，还有发在 B 站和小红书的作品。动态可以展开全文、点开大图，也能按年份往回翻。
 
+### 书影游与作品，各有专门的页面
+
+影视、书籍、游戏按年份分组，可以按状态和年份筛选；游戏卡片带平台、游玩时长和评分，作品页显示播放量和集数。下面是作者自己网站上的真实页面：
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>作品 · B 站视频与合集</strong><br /><img src="docs/assets/readme/live-works.jpg" alt="作品页：B 站视频与合集卡片，显示播放量、集数和最后更新日期" /></td>
+    <td width="50%" align="center"><strong>影视 · 按年份筛选</strong><br /><img src="docs/assets/readme/live-movies.jpg" alt="影视页：选中 2024 年，海报网格下方是片名和星级评分" /></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>书籍 · 封面与作者</strong><br /><img src="docs/assets/readme/live-books.jpg" alt="书籍页：已读书目按年份分组，显示封面、书名和作者" /></td>
+    <td width="50%" align="center"><strong>游戏 · 平台、时长与评分</strong><br /><img src="docs/assets/readme/live-games.jpg" alt="游戏页：选中 2023 年，卡片显示平台标签、游玩小时数和星级评分" /></td>
+  </tr>
+</table>
+
 ### 课程笔记，按原来的层级读
 
 笔记在 Notion 里怎么嵌套，网站上就怎么排。左边是课程目录，正文旁有页内目录，读完一篇直接点下一篇。
@@ -211,4 +226,4 @@ tests/                  测试
 
 ## 许可
 
-源码采用 [MIT License](LICENSE)。个人内容、头像和真实站点资料不在授权范围内；第三方依赖、字体和媒体遵守各自的许可。
+源码采用 [MIT License](LICENSE)。个人内容、头像和真实站点资料不在授权范围内；截图里的影视、书籍、游戏封面归各自的版权方所有；第三方依赖、字体和媒体遵守各自的许可。
