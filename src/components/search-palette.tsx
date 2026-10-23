@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Page } from "../../contracts/content.ts";
 import type { SearchHit } from "../../contracts/website.ts";
-import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, readableExcerpt, searchHref, searchResultHref, stepOption } from "../lib/search.ts";
+import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, readableExcerpt, searchHref, searchResultHref, searchResultLabel, stepOption } from "../lib/search.ts";
 import { Marked } from "./search-results";
+import { SearchContextLine } from "./search-context-line";
 
 const LIMIT = 6;
 const DELAY = 280;
@@ -42,6 +43,10 @@ export function SearchPalette() {
   // The last option leads to the search page with everything that matched.
   const count = showingResults ? results.hits.length + 1 : 0;
   const selected = active >= 0 && active < count ? active : -1;
+
+  useEffect(() => {
+    if (open && selected >= 0) document.getElementById(`${listId}-${selected}`)?.scrollIntoView({ block: "nearest" });
+  }, [open, selected, listId]);
 
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
@@ -160,10 +165,16 @@ export function SearchPalette() {
             <ul id={listId} className="palette__list" role="listbox" aria-label="搜索结果" aria-busy={waiting}>
               {showingResults ? results.hits.map((hit, index) => (
                 <li key={`${hit.kind}:${hit.id}`} id={`${listId}-${index}`} className="palette__option" role="option" aria-selected={index === selected} onPointerMove={() => setActive(index)}>
-                  <Link href={searchResultHref(hit)} prefetch={false} tabIndex={-1} onClick={close}>
+                  <Link href={searchResultHref(hit)} aria-label={searchResultLabel(hit)} prefetch={false} tabIndex={-1} onClick={close}>
                     <span className="tag">{kindLabels[hit.kind] ?? "内容"}</span>
-                    <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
-                    {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
+                    {hit.context ? <span className="palette__content">
+                      <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
+                      <SearchContextLine context={hit.context} />
+                      {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
+                    </span> : <>
+                      <span className="palette__title"><Marked text={hit.title} query={results.query!} /></span>
+                      {hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={results.query!} /></span> : null}
+                    </>}
                   </Link>
                 </li>
               )) : null}

@@ -3,11 +3,12 @@
 import Link from "next/link";
 import type { Page } from "../../contracts/content.ts";
 import type { SearchHit } from "../../contracts/website.ts";
-import { kindLabels, kindMarks, readableExcerpt, searchResultHref, splitMatch } from "../lib/search.ts";
+import { kindLabels, kindMarks, readableExcerpt, searchResultHref, searchResultLabel, splitMatch } from "../lib/search.ts";
 import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { ARRIVING_ROWS, arrivalStyle, useFilterArrival } from "./use-filter-arrival";
 import { SearchEmpty } from "./search-recovery";
+import { SearchContextLine } from "./search-context-line";
 
 /** The excerpt is plain text from the search entry; the match is marked here, never taken as markup. */
 export function Marked({ text, query }: { text: string; query: string }) {
@@ -27,12 +28,13 @@ export function SearchResults({ initial, query, kind, pageSize }: { initial: Pag
       <ol className="search__hits" aria-label="搜索结果">
         {items.map((hit, index) => (
           <li key={`${hit.kind}:${hit.id}`} className={arriving && index < ARRIVING_ROWS ? "is-arriving" : undefined} style={arriving && index < ARRIVING_ROWS ? arrivalStyle(index) : undefined}>
-            <Link className="search-hit" href={searchResultHref(hit)} prefetch={false}>
+            <Link className="search-hit" href={searchResultHref(hit)} aria-label={searchResultLabel(hit)} prefetch={false}>
               <span className="search-hit__top">
                 {/* A kind is one character in a ring (2026-10-20), its name read out. */}
                 <span className="search-hit__kind" title={kindLabels[hit.kind] ?? "内容"}><i aria-hidden="true">{kindMarks[hit.kind] ?? "内"}</i><span className="visually-hidden">{kindLabels[hit.kind] ?? "内容"}</span></span>
                 <span className="search-hit__title"><Marked text={hit.title} query={query} /></span>
               </span>
+              <SearchContextLine context={hit.context} />
               {hit.excerpt ? <span className="search-hit__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={query} /></span> : null}
             </Link>
           </li>

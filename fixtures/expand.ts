@@ -40,4 +40,23 @@ export function expandFixtures(items: { [K in ContentKind]: ContentByKind[K][] }
     documents[id] = document;
     trees["mock-course-demo101"]!.nodes.push({ id, title: items["study-note"].at(-1)!.title, href: `/study/demo101/notes/${id}`, hasChildren: false, children: [] });
   }
+  // Identical titles distinguish course and physical-parent context in both search UIs.
+  for (const [index, parentId] of ["mock-note-week4", "mock-note-knowledge", "mock-note-workshop"].entries()) {
+    const parent = items["study-note"].find(note => note.id === parentId)!;
+    const course = items.course.find(course => course.id === parent.courseId)!;
+    const id = `mock-note-introduction-${index}`, href = `/study/${course.slug}/notes/${id}`;
+    const note = { ...parent, id, slug: id, href, title: "[演示] Introduction", summary: null, date: null,
+      noteType: "note" as const, parentId, breadcrumbs: [...parent.breadcrumbs, { title: parent.title, href: parent.href }] };
+    items["study-note"].push(note);
+    documents[id] = { blocks: [{ id: `${id}-p`, type: "paragraph", text: [{ text: "Fictional introduction for navigation examples." }] }], toc: [], completeness: "complete" };
+    const attach = (nodes: CourseTree["nodes"]): boolean => {
+      for (const node of nodes) {
+        if (node.id === parentId) { node.hasChildren = true; (node.children ??= []).push({ id, title: note.title, href, hasChildren: false, children: [] }); return true; }
+        if (node.children && attach(node.children)) return true;
+      }
+      return false;
+    };
+    attach(trees[course.id]!.nodes);
+  }
+
 }

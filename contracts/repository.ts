@@ -2,7 +2,7 @@ import type {
   ContentKind, ContentByKind, ContentDetail, ListQuery,
   Page, HomeSummary, CourseTree, Course, StatusYears, SitePage, LibraryKind, LibraryYears, LibraryYearsQuery,
 } from "./content.ts";
-import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, TimelinePage } from "./website.ts";
+import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, SearchSnapshot, TimelinePage } from "./website.ts";
 
 export interface ContentRepository {
   /** Public eligibility and item fields only, without loading a document. */
@@ -10,6 +10,8 @@ export interface ContentRepository {
   getPage?(key: "about"): Promise<SitePage | null>;
   getTimeline?(query?: CursorQuery): Promise<TimelinePage>;
   search?(query: SearchQuery): Promise<Page<SearchHit>>;
+  /** Search bodies and optional context from one qualification scope; never a browser endpoint. */
+  readSearchSnapshot?(kinds: ContentKind[]): Promise<SearchSnapshot>;
   /** One bounded, internally consistent read; never exposed as an HTTP endpoint. */
   readSnapshot?(kinds: ContentKind[], documents?: boolean): Promise<PublicContentSnapshot>;
   /** Server-side timeline/list index; every document is null, including Status. */
