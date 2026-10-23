@@ -1,5 +1,7 @@
 # 项目需求
 
+搜索目录显式事务核查（2026-10-23）：用户另行批准已列明的新窗口，实际完成 BEGIN READ ONLY、两条 SET LOCAL、一次目录 SELECT 与 ROLLBACK；实际只读状态及限时验证通过，客户端与转发器关闭，额度消费后不重试。迁移登记行仍未读取，目录成功不等于安装、启用或性能验收授权；见[本轮决定](decisions/2026-10-23-search-catalog-readonly-transaction.md)与[执行记录](progress/2026-10-23-search-catalog-readonly-transaction.md)。
+
 搜索目录核查（2026-10-23）：用户另行确认一次有限的真实目录元数据只读读取，不扩大安装、启用、合并、部署或业务操作范围。受限身份不能读取的登记表保持未读；本次已结束且未通过会话只读验证，不重试或续用许可。后续显式只读事务须按新的具体范围处理，见[决定](decisions/2026-10-23-search-catalog-preflight-read.md)与[记录](progress/2026-10-23-search-catalog-preflight-read.md)。
 
 搜索资格复用候选（2026-10-23）：用户确认独立、默认关闭的 `filtered-scope` 实现范围；仅在候选包含学习笔记时，复用同一搜索语句内已通过资格的记录 ID，未知引用仍实时判断。新只读迁移和能力摘要与原三条路径分开，保留全部排序／分页、撤回、预算和末尾版本复核。此次仅源码、本机验证和草稿 PR，不安装、启用、合并或部署；见[决定](decisions/2026-10-23-filtered-search-scope.md)与[接入说明](FILTERED_SEARCH_SCOPE.md)。
