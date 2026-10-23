@@ -1,7 +1,7 @@
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -115,6 +115,20 @@ test("a failed owner budget write stops before connection or query and keeps an 
   assert.equal(closes, 1);
 });
 
+test("closing an in-flight owner request marks uncertainty before asynchronous rejection finishes", async () => {
+  const p = prepared(); let finish: (() => void) | undefined;
+  const b = createFullCollectionOwnerBroker(p.runId, async () => ({ executor: { async query<T>() {
+    await new Promise<void>(done => { finish = done; }); return { rows: [metadata(p.runId, p.plan) as T] };
+  } }, close: async () => {} }), new AbortController().signal);
+  const pending = assert.rejects(b.request(request(p.runId, b.nonce)));
+  for (let i = 0; i < 10 && !finish; i++) await Promise.resolve();
+  assert.equal(typeof finish, "function");
+  const closing = b.close();
+  assert.equal(b.statistics().failed, true); assert.equal(b.statistics().outcome, "unknown");
+  finish!(); await closing; await pending;
+  assert.equal(b.statistics().queryCount, 1);
+});
+
 test("controller bindings pin the complete same batch, raw inputs, deadline and all four posts", () => {
   const p = prepared(), q = qualified(p), b = bindFullCollection(p, q);
   const worker = { runId: p.runId, cloudRunId: p.runId, mode: "publish", published: true, readerVerified: true, fullCollectionBinding: b };
@@ -148,7 +162,7 @@ Object.assign(report,result,{outcome:'published-verified',published:true,readerV
 }catch(error){Object.assign(report,{outcome:'failed',code:error.code??'CONTENT_UNAVAILABLE',sourceCalls:calls});await save();process.exitCode=1;}
 finally{if(process.connected)process.disconnect();}`;
 
-async function frozenHost(t: TestContext) {
+async function frozenHost(t: TestContext, delayedBudgetWrite = false) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "full-host-"))); await chmod(root, 0o700); t.after(() => rm(root, { recursive: true, force: true }));
   const project = join(root, "project"), inputs = join(root, "inputs"), state = join(inputs, "state"), cache = join(root, "cache");
   for (const p of [project, inputs, state, cache]) await mkdir(p, { mode: 0o700 });
@@ -162,6 +176,21 @@ async function frozenHost(t: TestContext) {
   for (const p of ["scripts/website-sync/run-private.mjs", "scripts/website-sync/run.ts", "scripts/notion-sync/demo.ts", "scripts/website-sync/shared-budget-preload.ts",
     "scripts/website-sync/qualified-budget-cli.ts", "package-lock.json", "database/website-protocol.json", "database/website-media-protocol.json"]) await copy(p);
   files.set("scripts/website-sync/run.ts", childFixture);
+  if (delayedBudgetWrite) {
+    // Only the synthetic frozen host delays its first real atomic budget write.
+    // The real IPC deadline and terminal receipt path remain production code.
+    const path = "scripts/website-sync/run-private.mjs", original = files.get(path)!;
+    assert.equal(original.split("async function saveState(state,name,data){").length, 2);
+    files.set(path, `import {writeFile as fixtureWriteFile} from 'node:fs/promises';
+let fixtureBudgetDelayed=false;
+async function saveState(state,name,data){
+ const delayed=name.startsWith('full-collection-owner-budget')&&!fixtureBudgetDelayed;
+ if(delayed){fixtureBudgetDelayed=true;await new Promise(done=>setTimeout(done,11000));}
+ await originalSaveState(state,name,data);
+ if(delayed)await fixtureWriteFile(join(state,'owner-budget-delay-finished-private.json'),'{}',{mode:0o600});
+}
+` + original.replace("async function saveState(state,name,data){", "async function originalSaveState(state,name,data){"));
+  }
   for (const [path, text] of files) { await mkdir(dirname(join(project, path)), { recursive: true, mode: 0o700 }); await writeFile(join(project, path), text); }
   await symlink(join(sourceRoot, "node_modules"), join(project, "node_modules"));
   const nodePath = await realpath(process.execPath), manifest = join(inputs, "manifest-private.json");
@@ -226,4 +255,30 @@ test("frozen opt-in host checks without opening owner or budget; real IPC recoll
   assert.equal(failedReceipt.sourceCalls, 0); assert.equal(failedReceipt.promoteRequested, false);
   const ownerBudget = JSON.parse(await readFile(join(f.state, "website-v2", failedId, "full-collection-owner-budget-private.json"), "utf8"));
   assert.equal(ownerBudget.queryCount, 1); assert.equal(ownerBudget.outcome, "unknown"); assert.equal(ownerBudget.failed, true);
+});
+
+test("a late budget write cannot overwrite the final failed owner receipt after the IPC deadline", async t => {
+  const f = await frozenHost(t, true);
+  const runHost: typeof runPrivateWebsiteWorker = (await import(pathToFileURL(join(f.runtime.project, "scripts/website-sync/run-private.mjs")).href)).runPrivateWebsiteWorker;
+  const bridge = initializeSharedBudget(join(f.root, "ledger"), { format: "qualified-shared-budget-v1", parentPid: process.pid, nonce: randomUUID(),
+    deadline: Date.now() + 60000, cleanupMs: 1000, ...f.shared, limits: { notionRequests: 0, httpRequests: 0, storageRequests: 0, authRequests: 0, imageRequests: 0,
+      notionResponseBytes: 0, storageResponseBytes: 0, authResponseBytes: 0, imageResponseBytes: 0, uploadBodyBytes: 0,
+      sqlRequests: 0, sqlRequestBytes: 0, sqlResponseBytes: 0, cleanupSqlRequests: 0, cleanupSqlRequestBytes: 0, cleanupSqlResponseBytes: 0 } });
+  const result = await runHost({ configFile: f.configFile, mode: "publish", sharedBudget: { ...f.shared, bridge },
+    ownerMetadata: async () => assert.fail("No owner open after a delayed pre-attempt write") });
+  assert.equal(result.exitCode, 1); assert.equal(result.requiresReceiptCheck, true);
+  const runId = (await readdir(join(f.state, "website-v2"))).find(name => /^[a-f0-9-]{36}$/.test(name))!;
+  const output = join(f.state, "website-v2", runId), terminal = join(output, "full-collection-owner-budget-private.json");
+  const finalBytes = await readFile(terminal, "utf8"); assert.equal(JSON.parse(finalBytes).failed, true);
+  const until = Date.now() + 10000;
+  for (;;) {
+    try { await access(join(output, "owner-budget-delay-finished-private.json")); break; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT" || Date.now() >= until) throw error; }
+    await new Promise(done => setTimeout(done, 20));
+  }
+  assert.equal(await readFile(terminal, "utf8"), finalBytes, "Late persistence must not replace the failed terminal budget");
+  const attempts = (await readdir(output)).filter(name => /^full-collection-owner-budget-attempt-[1-9][0-9]*-private\.json$/.test(name));
+  assert.equal(attempts.length, 1);
+  const receipt = JSON.parse(await readFile(join(output, "receipt-private.json"), "utf8"));
+  assert.equal(receipt.sourceCalls, 0); assert.equal(receipt.promoteRequested, false);
 });

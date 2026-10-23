@@ -22,6 +22,8 @@ owner连接由未来运行负责人通过父进程API显式提供；源码不加
 
 父子进程使用Node IPC固定消息，绑定父进程创建的新run与随机nonce；子进程没有owner凭据或通用SQL端口。父进程只执行固定元数据SELECT，最多一次、10秒、4KiB响应；查询前持久记录独立owner预算，失败／未知结果不退款、不重试。关闭owner连接后才交付元数据，子进程仍执行原资格检查。超时并不证明远端已结束，连接销毁失败会使host失败并要求人工核对。
 
+预算预写入与最终终态使用不同文件，避免迟到的本机写入覆盖失败终态。关闭中的未完成请求同步标明失败／未知，读取终态不能挑选旧attempt充当成功。安装材料、实际owner证明、同批持锁结算及软件／政策回退见[安装前审阅](FULL_COLLECTION_INSTALLATION_READINESS.md)。
+
 `run.ts` 在显式新模式调用 `runFullCollection`。独立qualification与binding同时保存在原私有receipt及单独文件中，绑定新run、原始来源SHA、release commit、manifest／runtime SHA与服务器期限；不添加resume标签。`full-collection-control.ts` 提供纯prepare／binding／四阶段post校验，拒绝旧run、来源／release／预算输入漂移、过期、缺失或重复后置，以及混入fresh-resume证明。JSON只提供审计证据，不授予运行权限。
 
 两份测试helper仅更新“当前候选”的host／child摘要，历史兼容JSON和拒绝断言保留。新release字节不因此取得任何旧producer转换许可；保留fresh-resume代码路径不表示旧capture可直接跨到本候选。

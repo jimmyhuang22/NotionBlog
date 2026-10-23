@@ -75,6 +75,12 @@ export function createFullCollectionOwnerBroker(runId: string, openOwner: OpenFu
     },
     statistics,
     async close() {
+      // Close may beat the asynchronous request rejection after child exit.
+      // Its terminal snapshot must already record the unfinished attempt.
+      if (used && outcome !== "received") {
+        failure = true;
+        if (outcome === "pending") outcome = "unknown";
+      }
       stop(); signal.removeEventListener("abort", stop);
       if (port) {
         let timer: ReturnType<typeof setTimeout> | undefined;

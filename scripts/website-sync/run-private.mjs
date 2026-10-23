@@ -146,8 +146,11 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   const output=join(stateDir,'website-v2',runId);await mkdir(output,{mode:0o700});await directory(output);
   const prepared=fullCollection?prepareFullCollection({runId,plan:fullCollection,timeoutSeconds:config.timeoutSeconds,
    sourceSha256:config.sourceSha256,releaseCommit:release.commit,manifestSha256:hash(fullManifest),runtimeSha256:hash(configBytes)},fullCollection.expectation.configDigest):undefined;
+  let ownerBudgetAttempt=0;
   if(prepared)ownerBroker=createFullCollectionOwnerBroker(runId,ownerMetadata,controller.signal,
-   budget=>saveState(output,'full-collection-owner-budget-private.json',budget));
+   // An attempt write can finish after cancellation. It must never replace the
+   // terminal budget below, even when the local filesystem stalls past cutoff.
+   budget=>saveState(output,`full-collection-owner-budget-attempt-${++ownerBudgetAttempt}-private.json`,budget));
   const env={NOTION_TOKEN:notion.NOTION_TOKEN,NOTION_API_VERSION:notion.NOTION_API_VERSION,
    SYNC_DATABASE_URL:writer.SYNC_DATABASE_URL,DATABASE_TLS:'verify',DATABASE_CA_CERT:writer.DATABASE_CA_CERT,
    SYNC_PUBLICATION_MODE:publicationMode,SYNC_MEDIA_PROVIDER:mediaProvider,
