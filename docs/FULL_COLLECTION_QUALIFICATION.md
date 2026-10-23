@@ -24,6 +24,8 @@ owner连接由未来运行负责人通过父进程API显式提供；源码不加
 
 `run.ts` 在显式新模式调用 `runFullCollection`。独立qualification与binding同时保存在原私有receipt及单独文件中，绑定新run、原始来源SHA、release commit、manifest／runtime SHA与服务器期限；不添加resume标签。`full-collection-control.ts` 提供纯prepare／binding／四阶段post校验，拒绝旧run、来源／release／预算输入漂移、过期、缺失或重复后置，以及混入fresh-resume证明。JSON只提供审计证据，不授予运行权限。
 
+两份测试helper仅更新“当前候选”的host／child摘要，历史兼容JSON和拒绝断言保留。新release字节不因此取得任何旧producer转换许可；保留fresh-resume代码路径不表示旧capture可直接跨到本候选。
+
 控制器prepare、publication-binding、content driver与body admission／最终join仅在私人离线副本中适配。缺省仍走原fresh-resume分支；完整新采集需独立新预算及显式父进程launcher。content后置完成后保持等待body，同批thumbnail／snapshot／visitor／body全部通过，且连接和自有锁结清、无未决写入，最终join才返回可持久化的完成提案。保留原维护限额、游戏日期／课程树消费者修复、正文分组和补充回执处理；没有替换已安装文件或修改DAG。私人副本不是可执行安装包。
 
 owner资格读取是以后真实执行的一部分，需要其当次范围和预算，不能重用先前一次metadata导出许可。旧成功、controller、排程、媒体贡献、失败账本、原完整新采集预算及其他任务状态均不由本源码候选改变。
