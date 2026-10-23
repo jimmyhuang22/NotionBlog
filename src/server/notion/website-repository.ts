@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import type { SearchContext, SearchSnapshot } from "../../../contracts/website.ts";
+import { makeSearchContext } from "../../lib/content/search-context.ts";
 import type { WebsiteRecord } from "../../../contracts/website-sync.ts";
 import type { PageObjectResponse } from "@notionhq/client";
 import type { AnyContent, ContentByKind, ContentDetail, ContentDocument, ContentKind, ContentLink, Course, CourseTree, DateRange, ImageAsset, ListQuery, Page, StatusEntry, StudyNode, StudyNote, StudyNoteType, TextRun } from "../../../contracts/content.ts";
@@ -464,6 +466,27 @@ export function createWebsiteNotionRepository(options: NotionRepositoryOptions):
 function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?: (entries: StudyEntry[]) => void): NotionRepository {
   options = { ...options, timeZone: options.timeZone ?? options.config.timeZone };
   const session = (denied = options.deniedPageIds) => new ReadSession({ ...options, deniedPageIds: denied });
+  const readSnapshot = async (kinds: ContentKind[], documents = false, withContext = false): Promise<SearchSnapshot> => {
+      const reader = session(), records: ContentDetail<AnyContent>[] = [];
+      const searchContexts: Record<string, SearchContext | null> = {};
+      for (const kind of [...new Set(kinds)]) {
+        const ids = await reader.publishedIds(kind);
+        if (records.length + ids.length > 20000) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Public snapshot exceeds the supported size.");
+        await reader.prefetchPages(ids);
+        const selected = await mapBounded(ids, 4, async id => {
+          const resolved = await reader.resolve(id, kind);
+          if (!resolved) return null;
+          const item = await reader.item(resolved), document = documents || kind === "status" ? await reader.document(resolved) : null;
+          if (withContext && item.kind === "study-note") searchContexts[item.id] = resolved.course
+            ? makeSearchContext(getSelect(resolved.course.page, resolved.course.source.fields.code), titleOf(resolved.course.page, resolved.course.source), resolved.ancestors.map(page => titleOf(page, resolved.source)), normalizeId(resolved.course.page.id)) : null;
+          hydrateBody(item, document);
+          return { item, document };
+        });
+        records.push(...selected.filter((x): x is ContentDetail<AnyContent> => x !== null));
+      }
+      records.sort((a, b) => a.item.id.localeCompare(b.item.id));
+      return { version: configDigest([options.config, records, ...(withContext ? [searchContexts] : [])]), records, ...(withContext ? { searchContexts } : {}) };
+  };
   return {
     async getContentMetadata<K extends ContentKind>(kind: K, slug: string): Promise<ContentByKind[K] | null> {
       const reader = session();
@@ -482,24 +505,8 @@ function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?
       const item = await reader.item(resolved, false);
       return { slug: "about", title: item.title, updatedAt: item.updatedAt, document: await reader.document(resolved) };
     },
-    async readSnapshot(kinds, documents = false) {
-      const reader = session(), records: ContentDetail<AnyContent>[] = [];
-      for (const kind of [...new Set(kinds)]) {
-        const ids = await reader.publishedIds(kind);
-        if (records.length + ids.length > 20000) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Public snapshot exceeds the supported size.");
-        await reader.prefetchPages(ids);
-        const selected = await mapBounded(ids, 4, async id => {
-          const resolved = await reader.resolve(id, kind);
-          if (!resolved) return null;
-          const item = await reader.item(resolved), document = documents || kind === "status" ? await reader.document(resolved) : null;
-          hydrateBody(item, document);
-          return { item, document };
-        });
-        records.push(...selected.filter((x): x is ContentDetail<AnyContent> => x !== null));
-      }
-      records.sort((a, b) => a.item.id.localeCompare(b.item.id));
-      return { version: configDigest([options.config, records]), records };
-    },
+    readSnapshot,
+    readSearchSnapshot: kinds => readSnapshot(kinds, true, true),
     async collectRecords(documents = true, denied: ReadonlySet<string> = new Set()) {
       const maxCollectionBytes = options.maxCollectionBytes ?? 16 * 1024 * 1024;
       if (!Number.isSafeInteger(maxCollectionBytes) || maxCollectionBytes < 1 || maxCollectionBytes > 64 * 1024 * 1024) throw new ContentServiceError("MISCONFIGURED", "Invalid collection byte budget.");

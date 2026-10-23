@@ -8,6 +8,7 @@ import { validateListQuery, validateLibraryYearsQuery } from "../src/lib/content
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../src/lib/content/status.ts";
 import { contentYear, libraryYears, supportsYear } from "../src/lib/content/years.ts";
 import { GAME_DATE_POLICY, gameBrowsingDate, projectGameDates } from "../src/lib/content/game-date.ts";
+import { contextFromItems } from "../src/lib/content/search-context.ts";
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const invalid = (message: string): never => {
@@ -52,6 +53,12 @@ function findNode(nodes: StudyNode[], id: string): StudyNode | null {
 export function createMockRepository(options: StatusReadOptions = {}): ContentRepository {
   const publicItem = <T extends AnyContent>(item: T): T => (item.kind === "game" ? projectGameDates(item, statusTimeZone(options)) : item) as T;
   return {
+    async readSearchSnapshot(kinds) {
+      const records = kinds.flatMap(kind => fixtureItems[kind].map(item => ({ item: publicItem(item), document: fixtureDocuments[item.id] ?? null })));
+      const items = new Map<string, AnyContent>([...fixtureItems.course, ...fixtureItems["study-note"]].map(item => [item.id, item]));
+      const searchContexts = Object.fromEntries(records.flatMap(({ item }) => item.kind === "study-note" ? [[item.id, contextFromItems(item, items)]] : []));
+      return clone({ version: createHash("sha256").update(JSON.stringify([records, searchContexts])).digest("base64url"), records, searchContexts });
+    },
     async getContentMetadata<K extends ContentKind>(kind: K, slug: string) {
       const item = fixtureItems[kind].find(item => item.slug === slug);
       return item ? clone(publicItem(item)) as ContentByKind[K] : null;

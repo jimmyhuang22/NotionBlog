@@ -3,6 +3,7 @@ import type { WebsiteWriter } from "../../../contracts/website-sync.ts";
 import protocol from "../../../database/publication-protocol.json" with { type: "json" };
 import { callSql, type SqlExecutor } from "./sql.ts";
 import { createWebsiteWriter } from "./website-writer.ts";
+import { SEARCH_CONTEXT_SQL } from "./search-context.ts";
 
 export type PublicationMode = "qualified" | "published";
 
@@ -23,6 +24,10 @@ export function publicationReader(db: SqlExecutor, mode: PublicationMode): SqlEx
   if (mode === "qualified") return db;
   let ready: Promise<void> | undefined;
   return { async query<T>(text: string, values?: unknown[]) {
+    if (text === SEARCH_CONTEXT_SQL) {
+      await (ready ??= verifyPublication(db).catch(error => { ready = undefined; throw error; }));
+      return db.query<T>(text.replace("'qualified'", "'published'"), values);
+    }
     const query = text.replace(/\bnb_v2_api\.(read_content|read_snapshot|read_media)\b/g, "nb_publication_api.$1");
     if (query === text) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Unsupported publication read.");
     await (ready ??= verifyPublication(db).catch(error => { ready = undefined; throw error; }));

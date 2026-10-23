@@ -31,6 +31,11 @@ export function searchResultHref(hit: Pick<SearchHit, "kind" | "id" | "href">): 
   return hit.kind === "status" ? statusFocusHref(hit.id) : hit.href;
 }
 
+/** Course and parents distinguish duplicate titles for both keyboard and screen-reader users. */
+export function searchResultLabel(hit: SearchHit): string {
+  return [kindLabels[hit.kind] ?? "内容", hit.title, ...(hit.context ? [hit.context.courseLabel, ...hit.context.parentLabels] : [])].join("，");
+}
+
 /**
  * The text before, at and after the first place the query appears, ignoring case, so the match can
  * be marked. Null when it does not appear as written (a result can match on its title or a variant form).
