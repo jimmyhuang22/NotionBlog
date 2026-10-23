@@ -1,5 +1,7 @@
 # 项目需求
 
+搜索结构核查（2026-10-23）：用户另行批准一次原连接器固定元数据 SELECT、128 KiB 结果、代理零重试，并接受该通道的传输／截止限制。实际返回 CATALOG_LIMIT_EXCEEDED，仅有不完整标记，未接收结构前像；许可已消费关闭，不追加查询或扩大上限。较窄的固定依赖名单与超限计数草稿仅在本机验证，未获准执行；安装、配置读取、启用、合并与部署仍各自处理，见[决定](decisions/2026-10-23-search-structure-limited-read.md)与[记录](progress/2026-10-23-search-structure-limited-read.md)。
+
 源码公开与 CI（2026-10-23）：用户明确要求公开干净新仓库并把 CI 转到 GitHub。新仓库已公开，旧归档保持私人；PR 与手动检查采用标准 GitHub 托管 Ubuntu、Node 24、双锁文件、完整 check／build 和只读 Token，保持离线 fixtures。启用 main／develop 分支保护、外部贡献者工作流审批与私密漏洞报告。此决定取代下方此前“暂不公开”和“平台检查另行约定”的当前状态；私人 CI 历史结果仍如实保留，develop 本机验证合并规则、发布期间暂停及 main 逐次发布授权继续有效，见[决定](decisions/2026-10-23-public-github-hosted-ci.md)与[执行记录](progress/2026-10-23-public-github-hosted-ci.md)。
 
 搜索安装身份与登记核查（2026-10-23）：用户另行批准原连接器的一次固定只读 SELECT，并接受该通道无法强制原客户端连接数、TCP 字节与截止守卫。实际身份与两项 schema owner 符合预期，版本 1–3 登记摘要匹配，当前快照无版本 5；单次调用额度已消费关闭、零重试。此结果仅完成这一范围的元数据核对，结构／底层权限、配置回退和操作窗口继续独立准备，不授权安装、启用、合并、部署或 S13 请求；见[决定](decisions/2026-10-23-search-owner-ledger-read.md)与[执行记录](progress/2026-10-23-search-owner-ledger-read.md)。
