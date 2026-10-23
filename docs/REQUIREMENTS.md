@@ -1,5 +1,7 @@
 # 项目需求
 
+搜索依赖核查（2026-10-23）：用户另行批准收窄后的固定 SELECT，一次连接器调用、128 KiB、代理零重试。实际只返回目录超限标记与有界计数：触发器达到 33，表示至少 33 项，超过 32 项上限；完整结构／权限／登记结果仍未验收，许可消费关闭，不补探针或重试。只调整触发器预算的新草稿仍属离线准备，不授予配置读取、安装、启用、合并或部署；见[决定](decisions/2026-10-23-search-dependency-read-limit.md)与[记录](progress/2026-10-23-search-trigger-limit-and-timer-test.md)。
+
 搜索结构核查（2026-10-23）：用户另行批准一次原连接器固定元数据 SELECT、128 KiB 结果、代理零重试，并接受该通道的传输／截止限制。实际返回 CATALOG_LIMIT_EXCEEDED，仅有不完整标记，未接收结构前像；许可已消费关闭，不追加查询或扩大上限。较窄的固定依赖名单与超限计数草稿仅在本机验证，未获准执行；安装、配置读取、启用、合并与部署仍各自处理，见[决定](decisions/2026-10-23-search-structure-limited-read.md)与[记录](progress/2026-10-23-search-structure-limited-read.md)。
 
 源码公开与 CI（2026-10-23）：用户明确要求公开干净新仓库并把 CI 转到 GitHub。新仓库已公开，旧归档保持私人；PR 与手动检查采用标准 GitHub 托管 Ubuntu、Node 24、双锁文件、完整 check／build 和只读 Token，保持离线 fixtures。启用 main／develop 分支保护、外部贡献者工作流审批与私密漏洞报告。此决定取代下方此前“暂不公开”和“平台检查另行约定”的当前状态；私人 CI 历史结果仍如实保留，develop 本机验证合并规则、发布期间暂停及 main 逐次发布授权继续有效，见[决定](decisions/2026-10-23-public-github-hosted-ci.md)与[执行记录](progress/2026-10-23-public-github-hosted-ci.md)。
