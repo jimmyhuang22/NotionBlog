@@ -1,4 +1,6 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ContentServiceError } from "../../../contracts/repository.ts";
+import { checkContentReadBudget } from "../content-read-budget.ts";
 import { publicCacheKey, publicCacheTags, publicCacheWindow, type PublicCacheScope } from "./policy.ts";
 
 export interface PublicCacheStamp { version: 1; enabled: true; stamp: string }
@@ -17,26 +19,39 @@ class OversizeProjection extends Error {
   readonly value: unknown;
   constructor(value: unknown) { super("Public projection is too large for the data cache."); this.value = value; }
 }
+class ProjectionChanged extends ContentServiceError {
+  constructor() { super("CONTENT_UNAVAILABLE", "Publication changed while preparing cached content."); }
+}
+const generation = new AsyncLocalStorage<string>();
+/** Request-local service memos must not carry a rejected generation into a retry. */
+export const publicProjectionGeneration = () => generation.getStore();
+const MAX_ATTEMPTS = 3;
 
-/** Errors never become a cached success. Generation checks reject in-flight withdrawals. */
+/** Retry only our generation/window guard, with a fresh key and full load each time.
+ * Errors never become a cached success; continuous changes still fail closed. */
 export async function readPublicProjection<T>(scope: PublicCacheScope, operation: string, args: unknown,
   namespace: string, ports: PublicCachePorts, load: () => Promise<T>): Promise<T> {
-  const now = ports.now ?? Date.now, first = validatePublicCacheStamp(await ports.stamp()), window = publicCacheWindow(now());
-  const key = publicCacheKey([namespace, scope, operation, args, first.stamp, window.bucket]);
-  let entry: { value: T; stamp: string; expiresAt: number };
-  try { entry = await ports.read(key, publicCacheTags(scope), async () => {
-    const value = await load();
-    const current = validatePublicCacheStamp(await ports.stamp());
-    if (current.stamp !== first.stamp || now() >= window.expiresAt)
-      throw new ContentServiceError("CONTENT_UNAVAILABLE", "Publication changed while preparing cached content.");
-    if (Buffer.byteLength(JSON.stringify(value)) > 2 * 1024 * 1024 - 4096) throw new OversizeProjection(value);
-    return { value, stamp: first.stamp, expiresAt: window.expiresAt };
-  }); } catch (error) {
-    // Preserve large valid documents without storing them or weakening generation checks.
-    if (error instanceof OversizeProjection) return structuredClone(error.value) as T;
-    throw error;
+  const now = ports.now ?? Date.now;
+  for (let attempt = 1; ; attempt++) {
+    checkContentReadBudget(); // A retry shares the caller's existing deadline and cancellation.
+    try {
+      const first = validatePublicCacheStamp(await ports.stamp()), window = publicCacheWindow(now());
+      const key = publicCacheKey([namespace, scope, operation, args, first.stamp, window.bucket]);
+      const entry = await ports.read(key, publicCacheTags(scope), async () => {
+        const value = await generation.run(first.stamp, load);
+        const current = validatePublicCacheStamp(await ports.stamp());
+        if (current.stamp !== first.stamp || now() >= window.expiresAt) throw new ProjectionChanged();
+        if (Buffer.byteLength(JSON.stringify(value)) > 2 * 1024 * 1024 - 4096) throw new OversizeProjection(value);
+        return { value, stamp: first.stamp, expiresAt: window.expiresAt };
+      });
+      if (entry.stamp !== first.stamp || entry.expiresAt !== window.expiresAt)
+        throw new ContentServiceError("CONTENT_UNAVAILABLE", "Public projection cache is out of date.");
+      if (now() >= entry.expiresAt) throw new ProjectionChanged();
+      return structuredClone(entry.value);
+    } catch (error) {
+      // Preserve large valid documents without storing them or weakening generation checks.
+      if (error instanceof OversizeProjection) return structuredClone(error.value) as T;
+      if (!(error instanceof ProjectionChanged) || attempt >= MAX_ATTEMPTS) throw error;
+    }
   }
-  if (entry.stamp !== first.stamp || entry.expiresAt !== window.expiresAt || now() >= entry.expiresAt)
-    throw new ContentServiceError("CONTENT_UNAVAILABLE", "Public projection cache is out of date.");
-  return structuredClone(entry.value);
 }
