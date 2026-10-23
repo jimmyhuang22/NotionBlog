@@ -133,6 +133,8 @@
 }
 [data-skin="island"] body { font-weight: 500; letter-spacing: 0.01em; }
 [data-skin="island"] :is(.hero h1, .page-head h1, .reading__title, .course-head h1, .work__info h1, .album-head h1, .section-title, .timeline__head h2, .entry__card-title, .event__title, .site-header__brand, .bili-card__title, .works-card__title, .library__title) { font-weight: 800; letter-spacing: 0.015em; }
+/* At 320 the bold name's extra tracking pushed the three buttons onto a row of their own (a three-row header); narrow phones set the name without it. */
+@media (max-width: 380px) { [data-skin="island"] .site-header .site-header__brand { letter-spacing: 0; } }
 [data-skin="island"] .entry__card--brief .entry__card-title { font-weight: 700; }
 /* The app bar: mint by day, deep teal by night, sitting on a solid ledge. */
 [data-skin="island"] .site-header { background: var(--island-bar); box-shadow: 0 4px 0 var(--island-bar-edge); border-bottom: 0; }
@@ -210,7 +212,8 @@
 }
 [data-skin="y2k"] .site-header { background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.25)); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 0 rgba(120, 180, 235, 0.35); }
 [data-skin="y2k"] .site-header__brand { font-weight: 800; font-size: var(--text-xl); }
-@media (max-width: 380px) { [data-skin="y2k"] .site-header__brand { font-size: var(--text-base); } }
+/* The heavier name needs the smaller size up to 389 wide: from 381 to 387 the 18-character live name and the three buttons did not share a row and the header took three (2026-10-23). */
+@media (max-width: 389px) { [data-skin="y2k"] .site-header__brand { font-size: var(--text-base); } }
 /* Its wider name and buttons need the two-row header a little past the usual 760 once five sections show. */
 @media (min-width: 761px) and (max-width: 780px) {
   [data-skin="y2k"] .site-header__inner:has(.site-nav__list > li:nth-child(5 of :not(.site-nav__wide))) .site-header__tools { order: 2; margin-left: auto; }
