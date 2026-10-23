@@ -40,8 +40,10 @@ function failure(code: string): never { throw new Error(code); }
  * framing. TLS, startup/auth and other connections still need the wire relay. */
 export const RESPONSE_ENVELOPE_BYTES = 512;
 
-function referenceSets(result: string): { valid: string; value: string } {
-  let value = result;
+// Read reference arrays before removing generation fields, so each lookup does
+// not copy the complete document merely to discard its run/revision.
+function referenceSets(result: string, strippedValue: string): { valid: string; value: string } {
+  let value = strippedValue;
   const checks: string[] = [];
   for (const field of ["links", "mediaIds"]) {
     const array = `CASE WHEN jsonb_typeof(${result}->'${field}')='array' THEN ${result}->'${field}' ELSE '[]'::jsonb END`;
@@ -68,7 +70,7 @@ export function projectionSql(text: string, parameters: number, spec: Projection
   const result = "(data->'result')";
   const fields = ["runId", "revision", ...(spec.freshThumbnail ? ["thumbnail"] : [])];
   const strip = spec.cache ? `CASE WHEN jsonb_typeof(${result})='object' THEN ${result}-ARRAY[${fields.map(k => `'${k}'`).join(",")}] ELSE ${result} END` : result;
-  const references = spec.canonicalReferenceSets ? referenceSets(strip) : null;
+  const references = spec.canonicalReferenceSets ? referenceSets(result, strip) : null;
   const generation = spec.cache ? `CASE WHEN jsonb_typeof(${result})='object' THEN
     (CASE WHEN ${result} ? 'runId' THEN jsonb_build_object('runId',${result}->'runId') ELSE '{}'::jsonb END)||
     (CASE WHEN ${result} ? 'revision' THEN jsonb_build_object('revision',${result}->'revision') ELSE '{}'::jsonb END)${spec.freshThumbnail ? `||jsonb_build_object('thumbnail',${result}->'thumbnail')` : ""}
@@ -81,21 +83,23 @@ export function projectionSql(text: string, parameters: number, spec: Projection
   const ordinalCheck = spec.shape === "ordinal-result" ?
     "AND COALESCE(min((data->>'ordinal')::integer),0)=0 AND COALESCE(max((data->>'ordinal')::integer),-1)=count(*)-1 AND count(DISTINCT data->'ordinal')=count(*)" : "AND count(*)<=1";
   const known = `$${parameters + 1}::text`, cap = `$${parameters + 2}::integer`;
+  // Materialize the response once; later stages retain only small digest/size
+  // fields. Carrying payload through every CTE can spill the same body repeatedly.
   return `WITH operator_source AS MATERIALIZED (${text}),
     operator_rows AS MATERIALIZED (SELECT to_jsonb(q) AS data,row_number() OVER () AS position FROM operator_source q),
     operator_serialized AS MATERIALIZED (SELECT
       COALESCE(jsonb_agg(${projected} ORDER BY ${order}),'[]'::jsonb)::text AS payload,
       COALESCE(jsonb_agg(${generation} ORDER BY ${order}),'[]'::jsonb)::text AS generations,
       COALESCE(bool_and(${valid}),true) AND count(*)<=1024 ${ordinalCheck} AS valid FROM operator_rows),
-    operator_digest AS MATERIALIZED (SELECT *,encode(sha256(convert_to(payload,'UTF8')),'hex') AS digest,
+    operator_digest AS MATERIALIZED (SELECT valid,encode(sha256(convert_to(payload,'UTF8')),'hex') AS digest,
       octet_length(payload) AS content_bytes,octet_length(generations) AS generation_bytes FROM operator_serialized),
-    operator_size AS MATERIALIZED (SELECT *,${spec.cache ? `digest=${known}` : `${known} IS NOT NULL AND false`} AS matched FROM operator_digest),
-    operator_checked AS MATERIALIZED (SELECT *,${RESPONSE_ENVELOPE_BYTES}+generation_bytes+
+    operator_size AS (SELECT *,${spec.cache ? `digest=${known}` : `${known} IS NOT NULL AND false`} AS matched FROM operator_digest),
+    operator_checked AS (SELECT *,${RESPONSE_ENVELOPE_BYTES}+generation_bytes+
       CASE WHEN COALESCE(matched,false) THEN 0 ELSE content_bytes END AS response_bytes FROM operator_size)
     SELECT CASE WHEN NOT valid THEN 'INVALID_ROWS' WHEN response_bytes>${cap} THEN 'OVER_LIMIT'
         WHEN COALESCE(matched,false) THEN 'HIT' ELSE 'MISS' END AS status,
-      CASE WHEN valid AND response_bytes<=${cap} AND NOT COALESCE(matched,false) THEN payload END AS payload,
-      CASE WHEN valid AND response_bytes<=${cap} THEN generations END AS generations,
+      CASE WHEN valid AND response_bytes<=${cap} AND NOT COALESCE(matched,false) THEN (SELECT payload FROM operator_serialized) END AS payload,
+      CASE WHEN valid AND response_bytes<=${cap} THEN (SELECT generations FROM operator_serialized) END AS generations,
       CASE WHEN valid AND response_bytes<=${cap} THEN digest END AS digest,
       CASE WHEN valid AND response_bytes<=${cap} THEN response_bytes ELSE ${RESPONSE_ENVELOPE_BYTES} END AS response_bytes,
       content_bytes FROM operator_checked`;
