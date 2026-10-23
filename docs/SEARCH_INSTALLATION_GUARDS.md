@@ -42,7 +42,7 @@
 
 本轮不读取云端环境、保护配置或凭据，不用代码默认值填入实际运行配置。新增结构查询也不包含配置读取；实际前像的获取方式、有限调用和负责人须另行明确。
 
-配置前像分为项目设置、部署／实例实际状态和直接构造选项，不能互相代填。[Vercel 环境变量说明](https://vercel.com/docs/environment-variables)明确环境变量变更只作用于新部署；读取当前项目设置不能证明旧实例的实际值。[列表接口](https://vercel.com/docs/rest-api/projects/retrieve-the-environment-variables-of-a-project-by-id-or-name)没有按键过滤参数，而[逐项接口](https://vercel.com/docs/rest-api/projects/retrieve-the-decrypted-value-of-an-environment-variable-of-a-project-by-id)需要变量 ID；不能把客户端筛选说成服务端只返回七项，也不把列表缺项当作已证明未设置或不存在继承值。受限项目设置读取草案、结果过滤与拒绝守卫仅离线准备，实际读取窗口尚未批准；见[准备记录](progress/2026-10-23-search-runtime-beforeimage-plan.md)。
+配置前像分为项目设置、部署／实例实际状态和直接构造选项，不能互相代填。[Vercel 环境变量说明](https://vercel.com/docs/environment-variables)明确环境变量变更只作用于新部署；读取当前项目设置不能证明旧实例的实际值。[列表接口](https://vercel.com/docs/rest-api/projects/retrieve-the-environment-variables-of-a-project-by-id-or-name)没有按键过滤参数，而[逐项接口](https://vercel.com/docs/rest-api/projects/retrieve-the-decrypted-value-of-an-environment-variable-of-a-project-by-id)需要变量 ID；不能把客户端筛选说成服务端只返回七项，也不把列表缺项当作已证明未设置或不存在继承值。受限结果过滤及拒绝守卫已离线验证。项目设置窗口随后另获明确批准；实际只提交一次名单工具调用，未取得可验收结果即闭窗，没有逐项取值或重试。所有具体回执只私存，见[决定](decisions/2026-10-23-search-project-config-read.md)与[准备及执行记录](progress/2026-10-23-search-runtime-beforeimage-plan.md)。
 
 未来回退恢复确切前值，原来未设置的字段恢复为未设置；保留原 publication、上下文及缓存选择。使用受检旧模式创建新实例，排空旧实例和在途请求，再验证实际选择的 SQL。仅修改当前 shell 或环境存储不代表已有实例完成回退。
 
