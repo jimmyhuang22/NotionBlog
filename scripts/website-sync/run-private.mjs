@@ -8,8 +8,10 @@ import {spawn} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
 import {directory,privateText,fileDigest,verifyRelease,fail} from './release.mjs';
 import {acquireLock,privateDirectory} from '../notion-sync/state.ts';
+import {parseFullCollectionPlan,prepareFullCollection,verifyFullCollectionBinding} from './full-collection-control.ts';
+import {createFullCollectionOwnerBroker} from './full-collection-owner.ts';
 const modes=new Set(['dry-run','stage','publish']);
-const keys=new Set(['format','project','manifest','privateRoot','stateDir','sourcesFile','sourceSha256','cacheDirectory','originalsDirectory','readerEnv','readerUrlFile','refreshSha256','converterSha256','timeoutSeconds','maxMediaBytes','maxCollectionBytes','notionIntervalMs','collectionConcurrency','captureCollection','resumeRunId','resumeIndexSha256','resumeRequestReserve','resumePostSeconds','resumeProducer','resumeQualification','resumeRecovery','resumeSource','resumeConsumerManifestSha256']);
+const keys=new Set(['format','project','manifest','privateRoot','stateDir','sourcesFile','sourceSha256','cacheDirectory','originalsDirectory','readerEnv','readerUrlFile','refreshSha256','converterSha256','timeoutSeconds','maxMediaBytes','maxCollectionBytes','notionIntervalMs','collectionConcurrency','captureCollection','fullCollection','resumeRunId','resumeIndexSha256','resumeRequestReserve','resumePostSeconds','resumeProducer','resumeQualification','resumeRecovery','resumeSource','resumeConsumerManifestSha256']);
 const publicCodes=new Set(['PRIVATE_DIRECTORY_INVALID','PRIVATE_INPUT_INVALID','RELEASE_INVALID','INVALID_ARGUMENTS','RUN_BUSY','RUN_CANCELLED','WORKER_START_FAILED']);
 const receiptCodes=new Set(['MISCONFIGURED','CONTENT_UNAVAILABLE','RATE_LIMITED','SCOPE_INCOMPLETE','IMAGE_REJECTED','IMAGE_UNAVAILABLE','LIMIT_EXCEEDED','BUSY','CANCELLED','LEASE_INVALID','CHECKPOINT_FAILED','RUN_BUDGET_EXCEEDED']);
 const hash=text=>createHash('sha256').update(text).digest('hex');
@@ -22,23 +24,24 @@ async function saveState(state,name,data){
  const temp=join(state,'.tmp-'+randomUUID()),h=await open(temp,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
  try{try{await h.writeFile(JSON.stringify(data)+'\n');await h.sync();}finally{await h.close();}await rename(temp,join(state,name));}finally{await unlink(temp).catch(()=>{});}
 }
-async function childRun(project,temp,mode,seconds,signal,budgetBridge){
+async function childRun(project,temp,mode,seconds,signal,budgetBridge,ownerBroker){
  return new Promise((done,reject)=>{
   if(signal.aborted)return reject(Object.assign(new Error(),{code:'RUN_CANCELLED'}));
   const args=['--env-file='+temp,...(budgetBridge?['--import',join(project,'scripts/website-sync/shared-budget-preload.ts')]:[]),join(project,'scripts/website-sync/run.ts'),'--mode',mode];
   const budgetEnv=budgetBridge?{WEBSITE_SHARED_BUDGET_DIRECTORY:budgetBridge.directory,WEBSITE_SHARED_BUDGET_DIGEST:budgetBridge.planDigest,
    WEBSITE_SHARED_BUDGET_NONCE:budgetBridge.nonce,WEBSITE_SHARED_BUDGET_RUNTIME_SHA256:budgetBridge.runtimeSha256}:{};
   const child=spawn(process.execPath,args,{
-   cwd:project,shell:false,stdio:'inherit',env:{PATH:'/usr/bin:/bin',NEXT_TELEMETRY_DISABLED:'1',...budgetEnv},
+   cwd:project,shell:false,stdio:ownerBroker?['inherit','inherit','inherit','ipc']:'inherit',env:{PATH:'/usr/bin:/bin',NEXT_TELEMETRY_DISABLED:'1',...budgetEnv},
   });
+  const detach=ownerBroker?.attach(child);
   let forced;const cancel=()=>{child.kill('SIGTERM');forced??=setTimeout(()=>child.kill('SIGKILL'),60000);};
   signal.addEventListener('abort',cancel,{once:true});const deadline=setTimeout(cancel,(seconds+30)*1000);
-  const clean=()=>{clearTimeout(deadline);clearTimeout(forced);signal.removeEventListener('abort',cancel);};
+  const clean=()=>{detach?.();clearTimeout(deadline);clearTimeout(forced);signal.removeEventListener('abort',cancel);};
   child.once('error',()=>{clean();reject(Object.assign(new Error(),{code:'WORKER_START_FAILED'}));});
   child.once('close',(code,signal)=>{clean();done({exitCode:code??1,forcedOrSignalled:signal!==null});});
  });
 }
-export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=false,sharedBudget}){
+export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=false,sharedBudget,ownerMetadata}){
  if(!modes.has(mode))fail('INVALID_ARGUMENTS');
  const configBytes=await input(configFile),config=JSON.parse(configBytes);
  if(sharedBudget&&hash(configBytes)!==sharedBudget.runtimeSha256)fail('PRIVATE_INPUT_INVALID');
@@ -51,6 +54,9 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   !Number.isSafeInteger(config.maxMediaBytes)||config.maxMediaBytes<1||config.maxMediaBytes>2147483648||
   !['sourceSha256','refreshSha256','converterSha256'].every(k=>/^[a-f0-9]{64}$/.test(config[k])))fail('PRIVATE_INPUT_INVALID');
  const resume=config.resumeRunId!==undefined;
+ const fullCollection=config.fullCollection===undefined?undefined:parseFullCollectionPlan(config.fullCollection,config.timeoutSeconds);
+ if(fullCollection&&(mode==='dry-run'||!sharedBudget||Object.keys(config).some(k=>k.startsWith('resume')))||
+  ownerMetadata!==undefined&&(!fullCollection||typeof ownerMetadata!=='function')||fullCollection&&!check&&!ownerMetadata)fail('PRIVATE_INPUT_INVALID');
  if(resume?(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(config.resumeRunId)||
   !/^[a-f0-9]{64}$/.test(config.resumeIndexSha256)||config.captureCollection!==true||mode==='dry-run'||!sharedBudget||
   !Number.isSafeInteger(config.resumeRequestReserve)||config.resumeRequestReserve<1||config.resumeRequestReserve>50000||
@@ -66,12 +72,20 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   Object.keys(config.resumeSource).sort().join(',')!=='file,sha256'||typeof config.resumeSource.file!=='string'||
   !/^[a-f0-9]{64}$/.test(config.resumeSource.sha256)))fail('PRIVATE_INPUT_INVALID');
  const {project,privateRoot,stateDir,cacheDirectory,originalsDirectory}=config;
+ const fullManifest=fullCollection?await input(config.manifest):undefined;
  const release=await verifyRelease(project,config.manifest);
+ if(fullManifest&&(hash(await privateText(config.manifest))!==hash(fullManifest)||JSON.stringify(JSON.parse(fullManifest))!==JSON.stringify(release)))fail('RELEASE_INVALID');
  await directory(privateRoot);await directory(stateDir);await directory(cacheDirectory);
  if(stateDir!==join(privateRoot,'state'))fail('PRIVATE_DIRECTORY_INVALID');
  if(originalsDirectory){await directory(originalsDirectory);await directory(join(originalsDirectory,'sha256'));
   if(cacheDirectory===originalsDirectory||cacheDirectory.startsWith(originalsDirectory+sep)||originalsDirectory.startsWith(cacheDirectory+sep))fail('PRIVATE_DIRECTORY_INVALID');}
  const source=await input(config.sourcesFile);JSON.parse(source);if(hash(source)!==config.sourceSha256)fail('PRIVATE_INPUT_INVALID');
+ if(fullCollection){
+  const {parseWebsiteNotionConfig}=await import('../../src/server/notion/website-config.ts');
+  const {configDigest}=await import('../../src/server/database/website-validation.ts');
+  if(configDigest(parseWebsiteNotionConfig(JSON.parse(source)))!==fullCollection.expectation.configDigest||
+   !['full-collection.ts','full-collection-control.ts','full-collection-owner.ts'].every(name=>release.files.some(f=>f.path==='scripts/website-sync/'+name)))fail('PRIVATE_INPUT_INVALID');
+ }
  let recovery;
  if(config.resumeRecovery){
   const {prepareHostCaptureRecovery}=await import('./capture-recovery-compatibility.ts');
@@ -85,6 +99,7 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
  // The shared v1 writer file may contain SYNC_MEDIA_PROVIDER=storage. Qualified
  // host releases historically ignore it and must keep their hybrid delivery.
  const publicationMode=writer.SYNC_PUBLICATION_MODE??'qualified',mediaProvider=publicationMode==='published'?(writer.SYNC_MEDIA_PROVIDER??'notion'):'notion';
+ if(fullCollection&&(publicationMode!=='qualified'||mediaProvider!=='notion'))fail('PRIVATE_INPUT_INVALID');
  if(!['qualified','published'].includes(publicationMode)||!['notion','storage'].includes(mediaProvider)||
   (publicationMode==='published'&&mediaProvider!=='storage'))fail('PRIVATE_INPUT_INVALID');
  if(publicationMode==='published'&&!['src/server/database/publication.ts','database/publication-protocol.json'].every(path=>release.files.some(file=>file.path===path)))fail('RELEASE_INVALID');
@@ -118,8 +133,8 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   if(!saved.pages.length||saved.pages.some(p=>!p.lease||p.lease.runId!==config.resumeRunId))fail('PRIVATE_INPUT_INVALID');
   resumePlan={...collectionResumePlan(recovery?saved.pages.filter(p=>p.record.detail.item.kind!=='course'):saved.pages),courseProjectionRefresh:recovery?{forcedCoursePages:saved.pages.filter(p=>p.record.detail.item.kind==='course').length,originalCaptureUnchanged:true}:undefined,qualification:config.resumeQualification??'original',compatibility,requestReserve:config.resumeRequestReserve,postSeconds:config.resumePostSeconds};
  }
- if(check)return {resumePlan,adapter:'private-host-v2',offlineCheck:true,releaseCommit:release.commit,mode,publicationMode,mediaProvider,networkChecked:false,sessionRefreshed:false,workerStarted:false,publicationEnabled:false};
- let manual,inode,unlock,temp;const controller=new AbortController(),cancel=()=>controller.abort();
+ if(check)return {resumePlan,fullCollectionPlan:fullCollection,adapter:'private-host-v2',offlineCheck:true,releaseCommit:release.commit,mode,publicationMode,mediaProvider,networkChecked:false,sessionRefreshed:false,workerStarted:false,publicationEnabled:false};
+ let manual,inode,unlock,temp,ownerBroker;const controller=new AbortController(),cancel=()=>controller.abort();
  process.on('SIGINT',cancel);process.on('SIGTERM',cancel);
  const runId=randomUUID(),lockPath=join(privateRoot,'manual-run.lock');
  try{
@@ -129,6 +144,13 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   try{unlock=await acquireLock(stateDir,runId);}catch(e){if(e.code==='BUSY')fail('RUN_BUSY');throw e;}
   await privateDirectory(join(stateDir,'website-v2'));
   const output=join(stateDir,'website-v2',runId);await mkdir(output,{mode:0o700});await directory(output);
+  const prepared=fullCollection?prepareFullCollection({runId,plan:fullCollection,timeoutSeconds:config.timeoutSeconds,
+   sourceSha256:config.sourceSha256,releaseCommit:release.commit,manifestSha256:hash(fullManifest),runtimeSha256:hash(configBytes)},fullCollection.expectation.configDigest):undefined;
+  let ownerBudgetAttempt=0;
+  if(prepared)ownerBroker=createFullCollectionOwnerBroker(runId,ownerMetadata,controller.signal,
+   // An attempt write can finish after cancellation. It must never replace the
+   // terminal budget below, even when the local filesystem stalls past cutoff.
+   budget=>saveState(output,`full-collection-owner-budget-attempt-${++ownerBudgetAttempt}-private.json`,budget));
   const env={NOTION_TOKEN:notion.NOTION_TOKEN,NOTION_API_VERSION:notion.NOTION_API_VERSION,
    SYNC_DATABASE_URL:writer.SYNC_DATABASE_URL,DATABASE_TLS:'verify',DATABASE_CA_CERT:writer.DATABASE_CA_CERT,
    SYNC_PUBLICATION_MODE:publicationMode,SYNC_MEDIA_PROVIDER:mediaProvider,
@@ -142,6 +164,8 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
    WEBSITE_COLLECTION_MAX_BYTES:String(config.maxCollectionBytes??16777216),
    WEBSITE_OUTPUT_DIR:output,WEBSITE_TIMEOUT_SECONDS:String(config.timeoutSeconds),WEBSITE_MEDIA_MAX_BYTES:String(config.maxMediaBytes),
    WEBSITE_CAPTURE_COLLECTION:String(config.captureCollection??false),
+   WEBSITE_FULL_COLLECTION_PREPARED:prepared?Buffer.from(JSON.stringify(prepared)).toString('base64url'):undefined,
+   WEBSITE_FULL_COLLECTION_OWNER_NONCE:ownerBroker?.nonce,
    WEBSITE_RESUME_QUALIFICATION:resume?(config.resumeQualification??'original'):undefined,
    WEBSITE_RESUME_RUN_ID:config.resumeRunId,WEBSITE_RESUME_INDEX_SHA256:config.resumeIndexSha256,
    WEBSITE_RESUME_REQUEST_RESERVE:resume?String(config.resumeRequestReserve):undefined,
@@ -155,23 +179,33 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
    WEBSITE_REFRESH_SHA256:config.refreshSha256,WEBSITE_RELEASE_COMMIT:release.commit};
   temp=join(privateRoot,`.website-runtime-env-${randomUUID()}`);const h=await open(temp,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
   try{await h.writeFile(envText(env));await h.sync();}finally{await h.close();}
-  const result=await childRun(project,temp,mode,config.timeoutSeconds,controller.signal,sharedBudget?.bridge);
+  const result=await childRun(project,temp,mode,config.timeoutSeconds,controller.signal,sharedBudget?.bridge,ownerBroker);
+  if(ownerBroker){try{await ownerBroker.close();}catch{result.exitCode=1;}result.ownerMetadata=ownerBroker.statistics();
+   await saveState(output,'full-collection-owner-budget-private.json',result.ownerMetadata);
+   if(result.ownerMetadata.failed||result.ownerMetadata.queryCount!==1)result.exitCode=1;}
   if(budgetAccount){try{result.budgetFailure=budgetAccount.read().failure;}catch{result.budgetFailure='SHARED_BUDGET_UNAVAILABLE';}
    if(result.budgetFailure)result.exitCode=1;}
   let receipt;try{receipt=JSON.parse(await privateText(join(output,'receipt-private.json')));}catch{ /* Missing/truncated receipts cannot prove a publication did not commit. */ }
-  const receiptValid=receipt?.runId===runId&&receipt?.mode===mode&&
+  let receiptValid=receipt?.runId===runId&&receipt?.mode===mode&&
    (publicationMode!=='published'||(receipt.publicationMode===publicationMode&&receipt.mediaProvider===mediaProvider));
+  let fullCollectionBinding;
+  if(prepared){try{fullCollectionBinding=verifyFullCollectionBinding(prepared,receipt?.fullCollectionBinding);
+   if(receipt.resumeQualification!==undefined||JSON.stringify(receipt.fullCollectionQualification)!==JSON.stringify(fullCollectionBinding.qualification))receiptValid=false;
+  }catch{receiptValid=false;}}
+  else if(receipt?.fullCollectionBinding!==undefined||receipt?.fullCollectionQualification!==undefined)receiptValid=false;
   if(result.exitCode===0&&(!receiptValid||(mode==='publish'&&!(receipt.published===true&&receipt.readerVerified===true&&receipt.cloudRunId===runId))))result.exitCode=1;
   const summary={adapter:'private-host-v2',...result,runId,mode,publicationMode,mediaProvider,releaseCommit:release.commit,outcome:receiptValid?receipt.outcome:'receipt-unavailable',
    code:receiptValid&&receiptCodes.has(receipt.code)?receipt.code:undefined,
    published:receiptValid?receipt.published:undefined,readerVerified:receiptValid?receipt.readerVerified:false,
    thumbnailHandoffStatus:receiptValid?receipt.thumbnailHandoffStatus:undefined,thumbnailHandoff:receiptValid?receipt.thumbnailHandoff:undefined,
+   fullCollectionBinding:receiptValid?fullCollectionBinding:undefined,
    publicationMayHaveCommitted:mode==='publish'&&(receiptValid?!!receipt.promoteRequested:true),requiresReceiptCheck:result.exitCode!==0};
   await saveState(join(stateDir,'website-v2'),'latest-run-private.json',summary);
   if(result.exitCode===0&&mode==='publish')await saveState(join(stateDir,'website-v2'),'last-success-private.json',{...summary,sourceSha256:config.sourceSha256});
   return summary;
  }finally{
   process.off('SIGINT',cancel);process.off('SIGTERM',cancel);if(temp)await unlink(temp).catch(()=>{});
+  await ownerBroker?.close().catch(()=>{});
   try{await unlock?.();}
   finally{
    try{await manual?.close();}

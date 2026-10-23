@@ -1,5 +1,7 @@
 # 项目需求
 
+完整新采集host接线（2026-10-23）：用户批准默认关闭的fullCollection源码候选，与resume互斥；父进程固定owner元数据旁路限一次／10秒／4KiB，子进程不持owner凭据，独立回执绑定新批次及完整同批后置。只做离线验证与草稿PR，不安装、读取真实凭据或数据库、修改真实配置或策略、同步、合并或部署。实际owner／TLS、新预算和停止／回退窗口另审，见[本次决定](decisions/2026-10-23-full-collection-host-wiring.md)。
+
 搜索上下文（2026-10-23）：用户选定“来源行”，批准兼容的最小搜索显示字段、provider 投影及虚构样本。两个搜索入口显示当前获准课程编号（缺失时课程名）与有序物理父级，仅作文字；不改匹配、排序或阅读目标。数据库能力独立、默认关闭，真实安装、启用、合并及发布不包含在本项授权，见[决定](decisions/2026-10-23-search-result-context.md)及[实现边界](SEARCH_RESULT_CONTEXT.md)。
 
 生产仓库接续（2026-10-23）：现有 Vercel 项目已接到干净新仓库，用户明确指定代合本次发布 PR 后，已普通合入 main 并晋升同一已验 Production 构建。现有域名、环境配置、数据库、媒体及独立业务运行根保留；生产分支保持 main，日常 develop 不自动部署。用户选择的本次 Vercel 云端完整 check／build 已实际通过，GitHub 私人 CI 仍停用；以后发布仍须逐次授权并明确平台验收，见[本次决定](decisions/2026-10-23-production-repository-rebind.md)和[执行记录](progress/2026-10-23-production-repository-rebind.md)。
