@@ -149,7 +149,7 @@ npm run dev
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.png" />
-  <img src="docs/assets/readme/architecture-light.png" alt="内容流向：在 Notion 里写，同步程序在你的电脑上按公开规则筛选，写进你的 PostgreSQL 和对象存储，网站从这里读取并展示给访客；游戏平台的游玩时长写回 Notion，B 站与小红书作品由作品采集程序单独写入" />
+  <img src="docs/assets/readme/architecture-light.png" alt="内容流向：在 Notion 里写，同步程序在服务器或电脑上定时运行、按公开规则筛选，写进自有的 PostgreSQL 和对象存储，网站从这里读取并展示给访客；游戏平台的游玩时长自动写入 Notion，B 站与小红书作品由作品采集程序单独写入" />
 </picture>
 
 公开与否在同步和读取时就判断好，网站拿到的只有允许公开的内容。缺日期、封面或评分时如实留空，不会编造。

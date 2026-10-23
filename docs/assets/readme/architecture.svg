@@ -28,15 +28,15 @@
 
   <rect class="panel" x="0.5" y="0.5" width="1199" height="579" rx="18"/>
 
-  <text class="head" x="40" y="54">① 你在 Notion 里写</text>
-  <text class="head" x="350" y="54">② 你的电脑定时同步</text>
-  <text class="head" x="690" y="54">③ 存在你自己的地方</text>
-  <text class="head" x="970" y="54">④ 访客看到的网站</text>
+  <text class="head" x="40" y="54">① 在 Notion 里写</text>
+  <text class="head" x="350" y="54">② 服务器或电脑定时同步</text>
+  <text class="head" x="690" y="54">③ 存进自己的数据库</text>
+  <text class="head" x="970" y="54">④ 网站展示给访客</text>
 
   <!-- Notion -->
   <rect class="key" x="40" y="80" width="250" height="220" rx="12"/>
   <text class="title" x="64" y="118">Notion</text>
-  <text class="small" x="64" y="141">照常记录和整理</text>
+  <text class="small" x="64" y="141">照常写作与整理</text>
   <rect class="chip" x="64" y="160" width="52" height="28" rx="14"/><text class="chip-text" x="90" y="179">动态</text>
   <rect class="chip" x="124" y="160" width="80" height="28" rx="14"/><text class="chip-text" x="164" y="179">课程笔记</text>
   <rect class="chip" x="64" y="198" width="52" height="28" rx="14"/><text class="chip-text" x="90" y="217">影视</text>
@@ -48,37 +48,37 @@
   <!-- Game platforms -->
   <rect class="card" x="40" y="340" width="250" height="80" rx="12"/>
   <text class="sub" x="64" y="372">游戏平台</text>
-  <text class="small" x="64" y="398">游玩时长自动写回 Notion</text>
+  <text class="small" x="64" y="398">游玩时长自动写入 Notion</text>
   <path class="arrow" d="M165 340 V304" marker-end="url(#a)"/>
 
   <!-- Social platforms -->
   <rect class="card" x="40" y="450" width="250" height="80" rx="12"/>
   <text class="sub" x="64" y="482">B 站 · 小红书</text>
-  <text class="small" x="64" y="508">你发布的作品</text>
+  <text class="small" x="64" y="508">你发布的视频与笔记</text>
 
   <!-- Sync -->
   <rect class="key" x="350" y="80" width="270" height="220" rx="12"/>
   <text class="title" x="374" y="118">同步程序</text>
-  <text class="small" x="374" y="141">按你设定的间隔运行</text>
-  <circle class="dot" cx="379" cy="176" r="3"/><text x="392" y="181">只读连接，不改动 Notion</text>
+  <text class="small" x="374" y="141">按设定的间隔自动运行</text>
+  <circle class="dot" cx="379" cy="176" r="3"/><text x="392" y="181">只读访问，不修改 Notion</text>
   <circle class="dot" cx="379" cy="206" r="3"/><text x="392" y="211">按公开规则筛选内容</text>
-  <circle class="dot" cx="379" cy="236" r="3"/><text x="392" y="241">父页面公开 ≠ 子页面公开</text>
-  <circle class="dot" cx="379" cy="266" r="3"/><text x="392" y="271">保存图片原件，生成小图</text>
+  <circle class="dot" cx="379" cy="236" r="3"/><text x="392" y="241">子页面不随父页面公开</text>
+  <circle class="dot" cx="379" cy="266" r="3"/><text x="392" y="271">保存原图并生成缩略图</text>
 
   <rect class="card" x="350" y="450" width="270" height="80" rx="12"/>
   <text class="sub" x="374" y="482">作品采集</text>
-  <text class="small" x="374" y="508">播放、点赞与封面</text>
+  <text class="small" x="374" y="508">播放量、点赞数与封面</text>
 
   <path class="arrow" d="M290 190 H346" marker-end="url(#a)"/>
   <path class="arrow" d="M290 490 H346" marker-end="url(#a)"/>
 
   <!-- Storage -->
   <rect class="card" x="690" y="80" width="220" height="450" rx="12"/>
-  <text class="title" x="714" y="118">你的存储</text>
+  <text class="title" x="714" y="118">自有存储</text>
   <rect class="inner" x="710" y="136" width="180" height="170" rx="10"/>
   <text class="sub" x="728" y="172">PostgreSQL</text>
-  <text class="small" x="728" y="198">只存允许公开的内容</text>
-  <text class="small" x="728" y="220">正文、目录、搜索</text>
+  <text class="small" x="728" y="198">只保存已公开的内容</text>
+  <text class="small" x="728" y="220">正文、目录与搜索数据</text>
   <g class="icon">
     <ellipse cx="800" cy="254" rx="20" ry="6"/>
     <path d="M780 254 V284 A20 6 0 0 0 820 284 V254"/>
@@ -86,8 +86,8 @@
   </g>
   <rect class="inner" x="710" y="336" width="180" height="170" rx="10"/>
   <text class="sub" x="728" y="372">对象存储</text>
-  <text class="small" x="728" y="398">图片原件</text>
-  <text class="small" x="728" y="420">400／800 像素小图</text>
+  <text class="small" x="728" y="398">原图</text>
+  <text class="small" x="728" y="420">400／800 像素缩略图</text>
   <g class="icon">
     <rect x="778" y="446" width="44" height="34" rx="5"/>
     <circle cx="791" cy="457" r="4"/>
@@ -99,21 +99,21 @@
 
   <!-- Website -->
   <rect class="key" x="970" y="80" width="190" height="220" rx="12"/>
-  <text class="title" x="994" y="118">你的网站</text>
-  <text class="small" x="994" y="141">自己的域名</text>
+  <text class="title" x="994" y="118">网站</text>
+  <text class="small" x="994" y="141">绑定自己的域名</text>
   <circle class="dot" cx="999" cy="176" r="3"/><text x="1012" y="181">四套主题</text>
   <circle class="dot" cx="999" cy="206" r="3"/><text x="1012" y="211">首页时间线</text>
   <circle class="dot" cx="999" cy="236" r="3"/><text x="1012" y="241">课程目录与笔记</text>
-  <circle class="dot" cx="999" cy="266" r="3"/><text x="1012" y="271">搜索 · RSS</text>
+  <circle class="dot" cx="999" cy="266" r="3"/><text x="1012" y="271">站内搜索与 RSS</text>
 
   <path class="arrow" d="M910 190 H966" marker-end="url(#a)"/>
 
   <!-- Visitors -->
   <rect class="card" x="970" y="360" width="190" height="80" rx="12"/>
   <text class="sub" x="994" y="392">访客</text>
-  <text class="small" x="994" y="418">打开即读，不用等 Notion</text>
+  <text class="small" x="994" y="418">无需等待 Notion 响应</text>
   <path class="arrow" d="M1065 300 V356" marker-end="url(#a)"/>
 
   <rect class="tip" x="970" y="468" width="190" height="40" rx="20"/>
-  <text class="tip-text" x="1065" y="493">只公开你允许的内容</text>
+  <text class="tip-text" x="1065" y="493">只展示你允许公开的内容</text>
 </svg>
