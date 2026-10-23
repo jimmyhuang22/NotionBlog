@@ -1,5 +1,7 @@
 # 项目需求
 
+搜索安装身份与登记核查（2026-10-23）：用户另行批准原连接器的一次固定只读 SELECT，并接受该通道无法强制原客户端连接数、TCP 字节与截止守卫。实际身份与两项 schema owner 符合预期，版本 1–3 登记摘要匹配，当前快照无版本 5；单次调用额度已消费关闭、零重试。此结果仅完成这一范围的元数据核对，结构／底层权限、配置回退和操作窗口继续独立准备，不授权安装、启用、合并、部署或 S13 请求；见[决定](decisions/2026-10-23-search-owner-ledger-read.md)与[执行记录](progress/2026-10-23-search-owner-ledger-read.md)。
+
 搜索目录显式事务核查（2026-10-23）：用户另行批准已列明的新窗口，实际完成 BEGIN READ ONLY、两条 SET LOCAL、一次目录 SELECT 与 ROLLBACK；实际只读状态及限时验证通过，客户端与转发器关闭，额度消费后不重试。迁移登记行仍未读取，目录成功不等于安装、启用或性能验收授权；见[本轮决定](decisions/2026-10-23-search-catalog-readonly-transaction.md)与[执行记录](progress/2026-10-23-search-catalog-readonly-transaction.md)。
 
 搜索目录核查（2026-10-23）：用户另行确认一次有限的真实目录元数据只读读取，不扩大安装、启用、合并、部署或业务操作范围。受限身份不能读取的登记表保持未读；本次已结束且未通过会话只读验证，不重试或续用许可。后续显式只读事务须按新的具体范围处理，见[决定](decisions/2026-10-23-search-catalog-preflight-read.md)与[记录](progress/2026-10-23-search-catalog-preflight-read.md)。
