@@ -34,6 +34,22 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             scripts/game-sync/package-lock.json
+      - name: Prepare an isolated Node executable
+        shell: bash
+        run: |
+          ci_node_source="$(node -p 'require("node:fs").realpathSync(process.execPath)')"
+          node -e 'const fs = require("node:fs"); const stat = fs.statSync(process.execPath); console.log(`Hosted Node mode=${(stat.mode & 0o777).toString(8)} bytes=${stat.size}`);'
+          ci_node_dir="$(mktemp -d "${RUNNER_TEMP}/notionblog-node.XXXXXX")"
+          chmod 0700 "$ci_node_dir"
+          install -m 0755 "$ci_node_source" "$ci_node_dir/node"
+          cmp -s "$ci_node_source" "$ci_node_dir/node"
+          "$ci_node_dir/node" -e '
+            const fs = require("node:fs");
+            const stat = fs.statSync(process.execPath);
+            if (!stat.isFile() || (stat.mode & 0o022)) process.exit(1);
+            console.log(`Isolated Node mode=${(stat.mode & 0o777).toString(8)} bytes=${stat.size}`);
+          '
+          printf '%s\n' "$ci_node_dir" >> "$GITHUB_PATH"
       - name: Install dependencies
         run: |
           npm ci
