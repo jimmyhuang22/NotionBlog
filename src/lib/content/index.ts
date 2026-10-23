@@ -1,4 +1,5 @@
 import { publicRepository } from "../../server/public-cache/runtime.ts";
+import { publicProjectionGeneration } from "../../server/public-cache/read.ts";
 import "server-only";
 import { cache } from "react";
 
@@ -14,7 +15,7 @@ import { measureContentRead, traceContentRead } from "../../server/content-read-
 import { requestCourseMetadata } from "./request-course.ts";
 import { requestStudyRepository } from "./request-study.ts";
 
-const getContentService = cache(() => {
+const requestContentService = cache((_generation: string | undefined) => {
   const provider = getContentProvider();
   const repository = provider === "database" ? getDatabaseRuntime().repository : provider === "notion" ? getNotionRuntime().repository : undefined;
   const studyRepository=repository?requestStudyRepository(repository):undefined;
@@ -23,6 +24,8 @@ const getContentService = cache(() => {
     notionRepository: provider === "notion" ? requestRepository : undefined,
     databaseRepository: provider === "database" ? requestRepository : undefined });
 });
+// A generation retry must also replace settled course/study memos from the same render.
+const getContentService = () => requestContentService(publicProjectionGeneration());
 
 /** Server components and route handlers use this entry point instead of individual adapters. */
 const uncachedRepository: ContentRepository & Required<Pick<ContentRepository, "getContentMetadata" | "getCourseMetadata" | "getStatusYears" | "getLibraryYears" | "getPage" | "getTimeline" | "search">> = {
