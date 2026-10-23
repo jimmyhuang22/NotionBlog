@@ -42,6 +42,8 @@
 
 本轮不读取云端环境、保护配置或凭据，不用代码默认值填入实际运行配置。新增结构查询也不包含配置读取；实际前像的获取方式、有限调用和负责人须另行明确。
 
+配置前像分为项目设置、部署／实例实际状态和直接构造选项，不能互相代填。[Vercel 环境变量说明](https://vercel.com/docs/environment-variables)明确环境变量变更只作用于新部署；读取当前项目设置不能证明旧实例的实际值。[列表接口](https://vercel.com/docs/rest-api/projects/retrieve-the-environment-variables-of-a-project-by-id-or-name)没有按键过滤参数，而[逐项接口](https://vercel.com/docs/rest-api/projects/retrieve-the-decrypted-value-of-an-environment-variable-of-a-project-by-id)需要变量 ID；不能把客户端筛选说成服务端只返回七项，也不把列表缺项当作已证明未设置或不存在继承值。受限项目设置读取草案、结果过滤与拒绝守卫仅离线准备，实际读取窗口尚未批准；见[准备记录](progress/2026-10-23-search-runtime-beforeimage-plan.md)。
+
 未来回退恢复确切前值，原来未设置的字段恢复为未设置；保留原 publication、上下文及缓存选择。使用受检旧模式创建新实例，排空旧实例和在途请求，再验证实际选择的 SQL。仅修改当前 shell 或环境存储不代表已有实例完成回退。
 
 通常保留未使用的可选 SQL。若另行决定卸载，先确认 owner、签名、摘要与依赖，使用 RESTRICT，仅涉及三个新函数与对应版本五登记；未知结果立即停止，不自动重试、CASCADE 或覆盖。安装、登记、reader 验收、应用启用、卸载和 Git 发布各自需要明确范围。
