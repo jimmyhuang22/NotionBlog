@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { UNZOOMED, clampPan, zoomAbout, type Zoom } from "../lib/zoom.ts";
+import { closeOnBackdrop, useModal } from "./use-dismiss";
 
 export interface Photo {
   key: string; src: string; alt: string; caption: string;
@@ -58,9 +59,7 @@ export function LightboxProvider({ className, children }: { className?: string; 
     },
   }), []);
 
-  useEffect(() => {
-    if (view && dialog.current && !dialog.current.open) dialog.current.showModal();
-  }, [view]);
+  useModal(dialog, view !== null);
 
   const many = (view?.order.length ?? 0) > 1;
   const step = (delta: number) => setView(current => current && { ...current, index: (current.index + delta + current.order.length) % current.order.length });
@@ -235,7 +234,7 @@ export function LightboxProvider({ className, children }: { className?: string; 
         className="lightbox"
         aria-label="查看大图"
         onClose={() => { clearing.current = setTimeout(() => setView(null), CLOSE_MS); }}
-        onClick={event => { if (event.target === dialog.current) dialog.current?.close(); }}
+        onClick={closeOnBackdrop}
         onKeyDown={event => {
           if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomBy(1.5); }
           if (event.key === "-") { event.preventDefault(); zoomBy(1 / 1.5); }

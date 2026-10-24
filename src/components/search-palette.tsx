@@ -8,6 +8,7 @@ import type { SearchHit } from "../../contracts/website.ts";
 import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, readableExcerpt, searchHref, searchResultHref, searchResultLabel, stepOption } from "../lib/search.ts";
 import { Marked } from "./search-results";
 import { SearchContextLine } from "./search-context-line";
+import { closeOnBackdrop, useModal } from "./use-dismiss";
 
 const LIMIT = 6;
 const DELAY = 280;
@@ -79,9 +80,7 @@ export function SearchPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    if (open && dialog.current && !dialog.current.open) dialog.current.showModal();
-  }, [open]);
+  useModal(dialog, open);
 
   // Following a result, or any other navigation, puts the palette away.
   useEffect(() => { dialog.current?.close(); }, [pathname]);
@@ -164,7 +163,7 @@ export function SearchPalette() {
       <dialog
         ref={dialog} className="palette" aria-label="搜索"
         onClose={() => { setOpen(false); setText(""); setResults(idle); setPrevious(null); setActive(-1); setComposing(false); }}
-        onClick={event => { if (event.target === dialog.current) close(); }}
+        onClick={closeOnBackdrop}
       >
         {open ? (
           <div className="palette__panel">

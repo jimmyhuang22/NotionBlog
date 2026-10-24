@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isCurrentSection, splitNav, type NavItem } from "../lib/nav.ts";
+import { closeOnLeave, useMenuDismiss } from "./use-dismiss";
 
 export type { NavItem };
 
@@ -54,18 +55,7 @@ export function NavLinks({ items }: { items: NavItem[] }) {
 
   // Following a link closes the menu; so do Escape (focus returns to the button) and a press outside.
   useEffect(() => { setClientPathname(pathname); setGoing(null); setOpen(false); }, [pathname]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      button.current?.focus();
-    };
-    const onDown = (event: PointerEvent) => { if (!group.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
-  }, [open]);
+  useMenuDismiss(open, () => setOpen(false), group, button);
 
   const link = (item: NavItem) => <Link href={item.href} aria-current={isCurrentSection(selected, item.href) ? "page" : undefined}
     onClick={event => { if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0 && !isCurrentSection(pathname, item.href)) setGoing(item.href); }}>{item.label}</Link>;
@@ -77,7 +67,7 @@ export function NavLinks({ items }: { items: NavItem[] }) {
         {items.map(item => <li key={item.href} className={more.includes(item) ? "site-nav__wide" : undefined}>{link(item)}</li>)}
         {more.length ? (
           // Tabbing past the last entry leaves the group, which closes it as well.
-          <li className="site-nav__more" ref={group} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+          <li className="site-nav__more" ref={group} onBlur={closeOnLeave(() => setOpen(false))}>
             <button type="button" ref={button} className={currentMore ? "is-current" : undefined} aria-expanded={open} aria-controls="site-nav-more" onClick={() => setOpen(!open)}>
               更多{currentMore ? <span className="visually-hidden">（当前：{currentMore.label}）</span> : null}
             </button>

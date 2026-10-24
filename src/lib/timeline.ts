@@ -83,15 +83,8 @@ export function feedRuns<T extends { source: string; occurredAt: DateRange | nul
 }
 
 /**
- * The days a run of entries covers, earliest first: one day, or "… 至 …". Entries without a date
- * are left out; a run with none has no span.
- */
-export function daySpan(items: readonly { occurredAt: DateRange | null }[], timeZone: string): string | null {
-  return spanMoment(items, timeZone, null)?.rest ?? null;
-}
-
-/**
- * The same span as it reads today. A run within one day is named like any entry of that day, without
+ * The days a run of entries covers, earliest first, as it reads today: one day, or "… 至 …"; entries without
+ * a date are left out and a run with none has no span. A run within one day is named like any entry of that day, without
  * a time of day because it belongs to one work only; a run over several days stays plain dates.
  */
 export function spanMoment(items: readonly { occurredAt: DateRange | null }[], timeZone: string, today: CalendarDay | null): MomentLabel | null {
