@@ -68,6 +68,8 @@ npm run dev:real -- --env /private/path/notion-reader.env --provider notion --so
 npm run website:capabilities -- http://127.0.0.1:3100
 ```
 
+公开 `/api/health/content` 仅返回 204 空响应和 no-store，不读取内容、不返回 provider 或数据库版本，也不证明数据库／Notion 可用。`website:capabilities` 随后仍请求时间线、分页、错误边界、搜索和 robots；结果中的 `providerIdentityVerified=false` 明示 HTTP 无法证明运行身份，旧的第二个 provider 参数拒绝执行。真实身份与版本由私有启动配置及受限 reader 验证；代表访客验收仍固定私有 database v2 profile、构建摘要及同批内容样本，不用公开存活响应代替这些证明。
+
 数据库 reader 文件设置 `CONTENT_PROVIDER=database`、`DATABASE_CONTENT_VERSION=2`、受限 `DATABASE_READER_URL`、TLS 与原私有对象存储 reader 参数。`CONTENT_FEATURES_JSON` 是公开布尔开关，例如 `{"game":true,"book":true,"movie":true,"album":true,"page":true}`；真实来源与公开资格仍由私有配置及数据库策略决定。博客／项目没有真实来源时继续关闭。
 
 混合图片预览在同一私有 reader 文件设置 `MEDIA_PROVIDER=notion`，提供只读 Notion 连接及匹配的 v2 来源配置，并保留转换图所需的 Storage reader。启动器将该开关传给 Next，拒绝无效值；未设置时保留 Storage 默认行为。worker 的 `SYNC_MEDIA_PROVIDER`、migration／writer 连接不会传给预览进程。启动前仍须完成对应版本的完整发布和定位登记，单独设置开关不能补齐缺失索引。
