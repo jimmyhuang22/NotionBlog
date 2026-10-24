@@ -1,3 +1,4 @@
+import { readStatusFocus } from "../../lib/status-focus.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { RouteVerdict } from "../../lib/route-verdict.ts";
 import type { CacheControlConfig } from "./events.ts";
@@ -10,6 +11,19 @@ function targetPath(value: string): string {
   const url = new URL(value, "https://fixed.invalid");
   if (url.origin !== "https://fixed.invalid") throw Error("ROUTE_CACHE_TARGET");
   return value;
+}
+/** Keep the route verdict's semantic inputs only. Invalid focus stays invalid. */
+export function canonicalRouteTarget(target: string): string {
+  targetPath(target);
+  const url = new URL(target, "https://fixed.invalid");
+  let status = false;
+  try { const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent); status = parts.length === 1 && parts[0] === "status"; } catch {}
+  if (!status || !url.searchParams.has("focus")) return url.pathname;
+  const values = url.searchParams.getAll("focus");
+  // Empty focus is already an invalid request, and is one bounded sentinel for
+  // duplicate/malformed focus values. Never turn duplicate focus into a valid one.
+  const focus = values.length === 1 ? readStatusFocus(values[0]) ?? "" : "";
+  return `${url.pathname}?${new URLSearchParams({ focus })}`;
 }
 function routeSignature(target: string, at: string, config: RouteCacheIdentity) {
   if (!/^[a-f0-9]{64}$/.test(config.secret) || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(config.siteKey)) throw Error("ROUTE_CACHE_CONFIG");
@@ -30,14 +44,14 @@ export async function routeCacheLookupResponse(request: Request, config: RouteCa
         !timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(routeSignature(target, at, config), "hex"))) throw Error();
   } catch { return new Response(null, { status: 401, headers }); }
   try {
-    const url = new URL(target, "https://fixed.invalid"), verdict = await read(url.pathname, url.searchParams);
+    const url = new URL(canonicalRouteTarget(target), "https://fixed.invalid"), verdict = await read(url.pathname, url.searchParams);
     return Response.json({ version: 1, verdict, deploymentId: config.deploymentId ?? null }, { headers });
   } catch { return new Response(null, { status: 503, headers }); }
 }
 
 /** The middleware calls one configured origin/path; request Host can never select a destination. */
 export async function fetchCachedRouteVerdict(target: string, config: RouteCacheConfig, request: typeof fetch = fetch): Promise<Exclude<RouteVerdict, "unknown">> {
-  targetPath(target);
+  target = canonicalRouteTarget(target);
   const origin = new URL(config.origin);
   if ((origin.protocol !== "https:" && !(origin.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname))) ||
       origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) throw Error("ROUTE_CACHE_CONFIG");

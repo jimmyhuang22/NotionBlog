@@ -1,3 +1,4 @@
+import { rewriteStudyLinks } from "./rewrite-study-links.ts";
 import type { ContentDocument, Course, CourseTree, StudyNote } from "../../../contracts/content.ts";
 import type { WebsiteRecord } from "../../../contracts/website-sync.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
@@ -174,17 +175,7 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
   const hrefChanges:StudyDelta["hrefChanges"]=[];
   for(const [id,e] of before){const updated=current.get(id);if(!updated||item(updated).href!==item(e).href||item(updated).title!==item(e).title)hrefChanges.push({previous:item(e).href,current:updated?{href:item(updated).href,title:item(updated).title}:null});}
   const links=new Map(hrefChanges.map(c=>[c.previous,c.current]));
-  const rewrite=(value:unknown):unknown=>{
-    if(Array.isArray(value))return value.map(rewrite);
-    if(!value||typeof value!=="object")return value;
-    const x=value as Record<string,unknown>;
-    if(typeof x.href==="string"&&links.has(x.href)){
-      const target=links.get(x.href);if(!target)return x.kind==="internal"?{kind:"unavailable"}:null;
-      return Object.fromEntries(Object.entries({...x,href:target.href,...("title" in x?{title:target.title}:{})}).map(([k,v])=>[k,rewrite(v)]));
-    }
-    return Object.fromEntries(Object.entries(x).map(([k,v])=>[k,rewrite(v)]));
-  };
-  for(const e of current.values())e.record.detail=rewrite(e.record.detail) as typeof e.record.detail;
+  for(const e of current.values())e.record.detail=rewriteStudyLinks(e.record.detail,links) as typeof e.record.detail;
   const courses=new Set<string>();
   for(const [id,e] of before)if(!current.has(id)||!equal(e,current.get(id)))courses.add(course(e));
   for(const [id,e] of current)if(!before.has(id)||!equal(e,before.get(id)))courses.add(course(e));

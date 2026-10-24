@@ -28,7 +28,13 @@ export async function runNativeHost(args:string[]){
   const [root,origin]=args;
   if(args.length!==2||!root||!isAbsolute(root)||resolve(root)!==root||!validOrigin(origin))throw new SocialSyncError("BRIDGE_ORIGIN_REJECTED");
   process.umask(0o077);
-  return handleBrowserMessage(root,origin,await readNativeMessage(process.stdin));
+  const controller=new AbortController(),cancel=()=>controller.abort();
+  process.on("SIGTERM",cancel);process.on("SIGINT",cancel);
+  try {
+    const message=await readNativeMessage(process.stdin);
+    if(controller.signal.aborted)throw new SocialSyncError("BRIDGE_CANCELLED");
+    return await handleBrowserMessage(root,origin,message,{signal:controller.signal});
+  } finally {process.removeListener("SIGTERM",cancel);process.removeListener("SIGINT",cancel);}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   const respond=(value:unknown)=>process.stdout.write(nativeFrame(value),()=>process.stdin.destroy());

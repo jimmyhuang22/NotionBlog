@@ -440,7 +440,7 @@ export class IncrementalQueue {
   }
   retryPreparation(ticket: QueueTicket, errorCode: string, delayMs: number) {
     code(errorCode); integer(delayMs, 0, 86_400_000);
-    this.transaction(() => { this.active(ticket, "preparing"); this.retry(ticket, errorCode, delayMs); });
+    return this.transaction(() => { this.active(ticket, "preparing"); return this.retry(ticket, errorCode, delayMs); });
   }
   /** Requires definitive server rejection; a timeout or missing lookup is NOT proof. */
   confirmRejected(ticket: QueueTicket, proof: { operationId: string; payloadDigest: string; definitivelyRejected: true; code: string }, delayMs: number,
@@ -457,9 +457,14 @@ export class IncrementalQueue {
   }
   private retry(ticket: QueueTicket, errorCode: string, delayMs: number) {
     this.db.prepare("UPDATE attempts SET state='failed' WHERE id=?").run(ticket.operationId);
-    this.db.prepare("UPDATE jobs SET state='retry',active_attempt=NULL,error_code=?,available_at=? WHERE active_attempt=?")
-      .run(errorCode, this.now() + delayMs, ticket.operationId);
+    const failures = Number(this.db.prepare("SELECT count(*) AS n FROM attempts WHERE source=? AND page=? AND generation=? AND state='failed'")
+      .get(ticket.sourceKey, ticket.pageKey, ticket.generation)!.n);
+    const state = failures >= 5 ? "needs_review" : "retry";
+    const delay = Math.min(86_400_000, delayMs * 2 ** Math.min(20, Math.max(0, failures - 1)));
+    this.db.prepare("UPDATE jobs SET state=?,active_attempt=NULL,error_code=?,available_at=? WHERE active_attempt=?")
+      .run(state, errorCode, this.now() + delay, ticket.operationId);
     this.recordRetirement(ticket.operationId);
+    return state;
   }
   requireReview(ticket: QueueTicket, errorCode: string) {
     code(errorCode);
@@ -473,8 +478,19 @@ export class IncrementalQueue {
   /** Operator action only; fresh preparation still checks publication policy. */
   resume(sourceKey: string, pageKey: string) {
     this.source(sourceKey); key(pageKey);
-    return this.transaction(() => Number(this.db.prepare(`UPDATE jobs SET state='pending',error_code=NULL,available_at=?
+    return this.transaction(() => Number(this.db.prepare(`UPDATE jobs SET state='pending',generation=generation+1,error_code=NULL,available_at=?
       WHERE source=? AND page=? AND state='needs_review'`).run(this.now(), sourceKey, pageKey).changes) === 1);
+  }
+  /** Private operator output; new hints remain visible without silently releasing a hold. */
+  listReview(limit = 100, after?: { sourceKey: string; pageKey: string }) {
+    integer(limit, 1, 1000);
+    if (after) { this.source(after.sourceKey); key(after.pageKey); }
+    return this.db.prepare(`SELECT j.source,j.page,j.generation,j.error_code,
+      coalesce((SELECT max(a.generation) FROM attempts a WHERE a.source=j.source AND a.page=j.page),0) AS reviewed_generation
+      FROM jobs j WHERE j.state='needs_review' AND (j.source,j.page)>(?,?) ORDER BY j.source,j.page LIMIT ?`)
+      .all(after?.sourceKey ?? "", after?.pageKey ?? "", limit).map(row => ({ sourceKey: String(row.source), pageKey: String(row.page),
+        generation: Number(row.generation), errorCode: row.error_code === null ? null : String(row.error_code),
+        newChanges: Number(row.generation) > Number(row.reviewed_generation) }));
   }
   /** Counts only. Safe for a separate atomic Dashboard summary writer. */
   status() {

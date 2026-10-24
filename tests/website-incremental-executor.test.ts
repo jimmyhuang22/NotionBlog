@@ -146,3 +146,22 @@ test("only the owned publication helper's known rejection codes become definitiv
   failure = Object.assign(new Error("malformed commit response"), { name: "PublicationDeltaError", code: "DELTA_UNAVAILABLE" });
   await assert.rejects(port.submit("operation", delta, signal), failure);
 });
+
+test("one failed preparation does not prevent another ready page from publishing", async t => {
+  const s = await setup(t, 2);
+  s.ports.prepare = async ticket => ticket.pageKey === "page-0" ? { outcome: "retry", code: "TEMPORARY" } : { outcome: "prepared", delta };
+  const result = await s.run();
+  assert.equal(result.retried, 1); assert.equal(result.published, 1); assert.equal(result.outcome, "retry");
+  assert.equal(s.q.status().retry, 1); assert.equal(s.q.status().done, 1);
+});
+
+test("permanently rejected media is held without retrying or blocking another page", async t => {
+  const s = await setup(t, 2);
+  s.ports.prepare = async ticket => {
+    if (ticket.pageKey === "page-0") throw Object.assign(new Error("private image diagnostic"), { code: "IMAGE_REJECTED" });
+    return { outcome: "prepared", delta };
+  };
+  const result = await s.run();
+  assert.equal(result.review, 1); assert.equal(result.retried, 0); assert.equal(result.published, 1);
+  assert.equal(s.q.listReview()[0].errorCode, "IMAGE_REJECTED");
+});

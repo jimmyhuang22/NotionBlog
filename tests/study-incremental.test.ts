@@ -160,7 +160,7 @@ test("withdrawn linked pages become unavailable in stored AST without refetching
   s.pages.get(id(30))!.in_trash=true;const delta=await prepareStudyDelta(s.checkpoint,[id(30)],s.source());
   const blocks=delta.upserts.find(e=>e.record.detail.item.id===id(21))!.record.detail.document!.blocks;
   const paragraph=blocks.at(-2)!;assert.equal(paragraph.type,"paragraph");if(paragraph.type==="paragraph")assert.deepEqual(paragraph.text[0].link,{kind:"unavailable"});
-  const link=blocks.at(-1)!;assert.equal(link.type,"child-page");if(link.type==="child-page")assert.equal(link.target,null);
+  const link=blocks.at(-1)!;assert.equal(link.type,"child-page");if(link.type==="child-page"){assert.equal(link.target,null);assert.equal(link.title,"Unavailable page");}
   assert.equal(s.calls.some(c=>c.startsWith("blocks:")),false);
 });
 test("media preparation failure and baseline drift never publish mismatched documents",async()=>{
