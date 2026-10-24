@@ -14,7 +14,7 @@
 
 [`search-context-protocol.json`](../database/search-context-protocol.json) 固定新迁移摘要，由 `tests/search-context.test.ts` 随 `npm run check` 核对（不写进 `scripts/check-website-protocol.ts`：那个脚本属于已审的同步恢复运行文件，须保持逐字节不变）；迁移由 Supabase CLI 创建，既有冻结 SQL 与 schema digest 不变。代码默认 `DATABASE_SEARCH_CONTEXT=off`，未安装迁移的旧 reader 继续原响应。`on` 只允许 database v2；本项没有安装真实库或修改任何云端变量。
 
-支持 qualified／published，各自支持 legacy、scoped on-demand／filtered／precomputed。可选 filtered／precomputed 仍须它们原来的独立安装与显式配置；上下文不会启用搜索优化。Legacy 启用上下文也需要基础 scoped reader 的 `nb_read.assert_pin` 能力，不能只安装本迁移而假定足够。
+支持 qualified／published，各自支持 legacy、scoped on-demand／filtered／precomputed，以及独立候选 [filtered-scope](FILTERED_SEARCH_SCOPE.md)。各可选搜索模式仍须自己的独立安装与显式配置；上下文不会启用搜索优化。Legacy 启用上下文也需要基础 scoped reader 的 `nb_read.assert_pin` 能力，不能只安装本迁移而假定足够。来源行与 filtered-scope 的组合验证见[接续记录](progress/2026-10-23-search-context-scope-integration.md)。
 
 对实际返回的一页学习笔记额外发起一次元数据批量 SQL：最多 50 个不同 ID，响应最多 256 KiB；无笔记结果不请求该批。原搜索读取、匹配和末尾版本复核保留，不新增逐结果正文读取。数据库按同一 run／revision、当前来源资格、课程和祖先撤回复核，显式启用后缺迁移、摘要不匹配、权限失败、混合版本或缺失已请求行都返回错误。合法未知标签可为 null，两者不混用。
 

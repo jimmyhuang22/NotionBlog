@@ -73,10 +73,14 @@ test("early capture still rejects foreign authors and non-shareable notes, and n
   const f=readyFixture();f.page.status="complete";f.page.url="https://example.com/";
   await assert.rejects(captureJob(f.api,f.job,f.options),{message:"SOURCE_BLOCKED"});assert.equal(f.injections.length,0);assert.deepEqual(f.removed,[7]);
 });
-test("a stalled injected read is bounded by the lease and its late result cannot complete the job",async()=>{
-  const f=readyFixture();f.job.expiresAt=new Date(Date.now()+80).toISOString();let resolveRead:(value:any)=>void=()=>{};
-  f.api.scripting.executeScript=()=>new Promise(resolve=>{resolveRead=resolve;});
-  await assert.rejects(captureJob(f.api,f.job,{diagnostics:true}),{message:"BROWSER_LEASE_EXPIRED"});assert.deepEqual(f.removed,[7]);
+test("a stalled injected read is bounded by the lease and its late result cannot complete the job",async t=>{
+  t.mock.timers.enable({apis:["Date","setTimeout"],now:Date.UTC(2026,0,1)});
+  const f=readyFixture();f.job.expiresAt=new Date(Date.now()+80).toISOString();let resolveRead:(value:any)=>void=()=>{},injected:()=>void=()=>{};
+  const started=new Promise<void>(resolve=>{injected=resolve;});
+  f.api.scripting.executeScript=()=>new Promise(resolve=>{resolveRead=resolve;injected();});
+  const expired=assert.rejects(captureJob(f.api,f.job,{diagnostics:true}),{message:"BROWSER_LEASE_EXPIRED"});await started;
+  t.mock.timers.tick(79);await Promise.resolve();assert.deepEqual(f.removed,[]);
+  t.mock.timers.tick(1);await expired;assert.deepEqual(f.removed,[7]);
   resolveRead([{frameId:0,result:{version:1}}]);await Promise.resolve();assert.deepEqual(f.removed,[7]);
   const late=readyFixture();late.api.scripting.executeScript=async()=>{late.clock.value+=20000;return [{frameId:0,result:{version:1}}];};
   await assert.rejects(captureJob(late.api,late.job,late.options),{message:"BROWSER_NOTE_STATE_TIMEOUT"});assert.deepEqual(late.removed,[7]);
