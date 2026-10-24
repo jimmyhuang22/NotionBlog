@@ -38,13 +38,18 @@ export function ListTail({ className, paging, label, status, end }: {
   end?: string;
 }) {
   const { hasMore, pending, problem, held, loadMore, retry } = paging;
-  // Set once a page has been on its way for SLOW_MS; cleared as soon as it arrives, fails or is tried again.
-  const [slow, setSlow] = useState(false);
+  // The wait on show: a round begins each time a page is asked for or arrives, and with each press on
+  // "重新加载" (which keeps the list pending, so the wait must start again by itself); `slow` is set once the
+  // round has taken SLOW_MS. A new round starts unmarked, so a slow page never makes the next one look slow.
+  const [wait, setWait] = useState({ pending, round: 0, slow: false });
+  if (wait.pending !== pending) setWait({ pending, round: wait.round + 1, slow: false });
   useEffect(() => {
-    if (!pending) { setSlow(false); return; }
-    const timer = setTimeout(() => setSlow(true), SLOW_MS);
+    if (!pending) return;
+    const round = wait.round;
+    const timer = setTimeout(() => setWait(current => current.round === round ? { ...current, slow: true } : current), SLOW_MS);
     return () => clearTimeout(timer);
-  }, [pending]);
+  }, [pending, wait.round]);
+  const slow = pending && wait.slow;
   const mark = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   const load = useRef(loadMore);
@@ -71,10 +76,10 @@ export function ListTail({ className, paging, label, status, end }: {
         // Not the disabled attribute: a button that loses it mid-press would drop the keyboard's place in the page.
         ? <button type="button" className={auto ? "list-tail__auto" : "pill-button"} onClick={() => void loadMore()} aria-disabled={pending}>{pending ? "正在加载…" : problem ? "重试加载" : label}</button>
         : end ? <span className="list-tail__end">{end}</span> : null}
-      {pending && slow ? (
+      {slow ? (
         <span className="list-tail__slow" aria-live="polite">
           加载得有点慢
-          <button type="button" className="list-tail__retry" onClick={() => { setSlow(false); (retry ?? (() => void loadMore()))(); }}>重新加载</button>
+          <button type="button" className="list-tail__retry" onClick={() => { setWait(current => ({ ...current, round: current.round + 1, slow: false })); (retry ?? (() => void loadMore()))(); }}>重新加载</button>
         </span>
       ) : null}
       <span role="status">{status}</span>
