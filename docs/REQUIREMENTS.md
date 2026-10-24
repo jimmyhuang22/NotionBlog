@@ -1,5 +1,7 @@
 # 项目需求
 
+直连中央拒绝与图片代理（2026-10-25）：用户批准 B20 完整源码与隔离测试方案。`CONTENT_PROVIDER=notion` 必须具备受限数据库 reader 与独立中央 deny 能力，页面及学习祖先逐操作检查、版本变化即停止输出；单页 `mode: all` 按当前物理来源判断，列表仍完整枚举。直连 m1 图片改为有界服务器代理和输出前复核，缺配置／能力时 503；真实安装、凭据、联网验收、任务恢复及发布不包含在内，见[决定](decisions/2026-10-25-direct-notion-policy.md)及[接入顺序](NOTION_SETUP.md#直连模式的中央拒绝与媒体)。
+
 缺失课程编号（2026-10-25）：用户批准 `Course.code` 使用 `string | null`，只保留来源编号属性的实际非空值，不从标题或页面 ID 推断。两套 provider、数据库校验、项目归类与必要显示兼容同步调整；无编号保留完整课程名，旧字符串快照继续可读。仅实施源码与离线验证，真实运行包更新与发布另行安排，见[决定](decisions/2026-10-25-course-code-null.md)和[实施范围](BACKEND_COURSE_CODE_NULL_PLAN.md)。
 
 缓存提交屏障（2026-10-24）：用户明确批准 B10 的源码与隔离测试方案，包含临时本机原生 PostgreSQL 引擎准备。新增默认关闭的独立扩展，将自动刷新意图在同事务延迟阶段写成原事件和 generation；保留 v1 reader／签名／消费与同步撤回。真实安装、激活、目录审计、凭据、项目流量与任务恢复仍另行授权，见[决定](decisions/2026-10-24-cache-commit-barrier.md)及[实施边界](BACKEND_CACHE_COMMIT_PLAN.md)。

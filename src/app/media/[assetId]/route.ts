@@ -1,5 +1,5 @@
 import { getNotionRuntime } from "../../../server/notion/runtime.ts";
-import { resolveMediaUrl } from "../../../server/notion/media.ts";
+import { directNotionMediaResponse, withDirectMediaBudget } from "../../../server/media/notion-direct.ts";
 import { contentErrorResponse } from "../../../lib/content/http.ts";
 import { getDatabaseRuntime } from "../../../server/database/runtime.ts";
 import { databaseMediaResponse } from "../../../server/database/media.ts";
@@ -17,6 +17,12 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request, context: { params: Promise<{ assetId: string }> }) {
   try {
+    if (process.env.CONTENT_PROVIDER === "notion") return await withDirectMediaBudget(request, async () => {
+      const { assetId } = await context.params;
+      const { repository, client, mediaSecret, withPolicy } = getNotionRuntime();
+      if (!withPolicy) throw new ContentServiceError("MISCONFIGURED", "Direct content requires the central policy capability.");
+      return withPolicy(() => directNotionMediaResponse(assetId, repository, client, mediaSecret));
+    });
     return await withMediaReadBudget(request.signal, async () => {
       const { assetId } = await context.params;
       if (process.env.CONTENT_PROVIDER === "database") {
@@ -38,11 +44,7 @@ export async function GET(request: Request, context: { params: Promise<{ assetId
         }
         return await databaseMediaResponse(assetId, db, storage);
       }
-      if (process.env.CONTENT_PROVIDER !== "notion") return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
-      const { repository, client, mediaSecret } = getNotionRuntime();
-      const url = await resolveMediaUrl(assetId, repository, client, mediaSecret);
-      if (!url) return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
-      return new Response(null, { status: 302, headers: { Location: url, "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
+      return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
     });
   } catch (error) { return contentErrorResponse(error); }
 }

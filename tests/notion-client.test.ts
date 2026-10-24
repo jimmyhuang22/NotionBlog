@@ -351,3 +351,20 @@ test("workspace overload pauses peers beyond the SDK cap and bounded queue deadl
   await peer.getPage(id);
   assert.deepEqual(starts, [0, 90_000]);
 });
+import { withContentReadBudget } from "../src/server/content-read-budget.ts";
+
+test("public read budgets abort transports, isolate callers and avoid uninterruptible SDK retry sleeps", async () => {
+  let calls = 0;
+  const busy = createNotionClient({ token, fetch: async () => { calls++; return new Response(JSON.stringify({object:"error",status:429,code:"rate_limited",message:"private"}), {status:429,headers:{"Retry-After":"60"}}); } });
+  await assert.rejects(withContentReadBudget(AbortSignal.timeout(1000), () => busy.getPage(id)), expectedError("RATE_LIMITED")); assert.equal(calls, 1);
+  const scheduler = new NotionRequestScheduler({ intervalMs: 0 });
+  let started!: () => void; const began = new Promise<void>(ok => { started = ok; }); let aborts = 0;
+  const client = createNotionClient({ token, scheduler, coalesceReads: true, fetch: async (_url, init) => {
+    calls++; started(); const signal = (init as typeof init & {signal: AbortSignal}).signal;
+    return new Promise((_resolve, reject) => signal.addEventListener("abort", () => { aborts++; reject(new DOMException("cancelled", "AbortError")); }, {once:true}));
+  } });
+  const abort = new AbortController();
+  const pending = withContentReadBudget(abort.signal, () => client.getPage(id)); await began; abort.abort();
+  await assert.rejects(pending, expectedError("CONTENT_UNAVAILABLE")); await new Promise(ok => setImmediate(ok)); assert.equal(aborts, 1);
+  const before = calls; await assert.rejects(withContentReadBudget(abort.signal, () => client.getPage(id)), expectedError("CONTENT_UNAVAILABLE")); assert.equal(calls, before);
+});

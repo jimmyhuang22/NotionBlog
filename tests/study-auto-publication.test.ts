@@ -282,3 +282,20 @@ test("database lookup failures propagate and non-course documents never resolve 
   n.client.getDatabase=async()=>assert.fail("Note body must not authorize database directory targets");
   const detail=await repo(n).get("study-note",id(20));assert.equal(detail!.document!.blocks[0].type,"unsupported");
 });
+import { directPolicyRepository } from "../src/server/notion/direct-policy.ts";
+
+test("direct central policy removes automatic-study descendants through course and physical page ancestors", async () => {
+  for (const deniedId of [id(10), id(20), id(30), id(32)]) {
+    const s = setup(); let denied = false;
+    const repository = directPolicyRepository(repo(s), () => async ids => ({ revision: "1:2", denied: ids.map(key => denied && key === deniedId) }));
+    assert.ok(await repository.resolvePublicPage(id(32)));
+    denied = true;
+    assert.equal(await repository.resolvePublicPage(id(32)), null);
+    assert.equal(await repository.resolveMediaOwner!(id(32)), null);
+    assert.equal(await repository.get("study-note", id(32)), null);
+    assert.equal((await repository.list("study-note")).items.some(item => item.id === id(32)), false);
+    assert.equal((await repository.readSearchSnapshot!(["study-note"])).records.some(record => record.item.id === id(32)), false);
+    const tree = await repository.getCourseTree(id(10));
+    assert.equal(tree?.nodes.some(node => JSON.stringify(node).includes(id(32))) ?? false, false);
+  }
+});

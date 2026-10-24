@@ -157,8 +157,10 @@ npm run dev
 | 读取方式 | 什么时候用 |
 | --- | --- |
 | `mock` | 离线演示，默认使用 |
-| `notion` | 本机直接读 Notion，核对字段和公开规则 |
+| `notion` | 直接读 Notion，配合受限数据库 reader 核对中央拒绝与公开规则 |
 | `database` | 正式上线，网站只读你的 PostgreSQL |
+
+直连 `notion` 需要先具备中央拒绝扩展和受限 `DATABASE_READER_URL`，缺失时返回不可用；图片由服务器校验后代取。安装顺序与流量边界见 [直连接入](docs/NOTION_SETUP.md#直连模式的中央拒绝与媒体)。
 
 ## 内容怎样到达页面
 

@@ -1,3 +1,4 @@
+import { directPageDenied, primeDirectDenials } from "./direct-policy.ts";
 import type { BlockObjectResponse, DataSourceObjectResponse, PageObjectResponse } from "@notionhq/client";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { NotionReadClient } from "./types.ts";
@@ -87,7 +88,7 @@ export class AutomaticStudySession {
   }
   async resolve(id: string, source: WebsiteNotionSource, trail: string[] = []): Promise<AutomaticStudyPage | null> {
     const key = normalizeId(id);
-    if (this.denied.has(key)) return null;
+    if (this.denied.has(key) || await directPageDenied(key)) return null;
     if (trail.includes(key) || trail.length >= 24) unavailable();
     const cacheKey = `${source.key}:${key}`;
     if (!this.resolutions.has(cacheKey)) this.resolutions.set(cacheKey, this.resolveFresh(key, source, [...trail, key]));
@@ -107,7 +108,7 @@ export class AutomaticStudySession {
     } else {
       parentId = await this.owner(page.parent); derived = this.derived(source, undefined, page);
     }
-    if (!parentId || this.denied.has(parentId)) return null;
+    if (!parentId || this.denied.has(parentId) || await directPageDenied(parentId)) return null;
     const parent = await this.client.getPage(parentId);
     if (!parent || !active(parent) || normalizeId(parent.id) !== parentId) return null;
     if (parent.parent.type === "data_source_id" && normalizeId(parent.parent.data_source_id) === root.dataSourceId) {
@@ -128,7 +129,7 @@ export class AutomaticStudySession {
   async children(source: WebsiteNotionSource, pageId: string, courseId: string): Promise<{id:string;position:number;updatedAt:string}[]> {
     const result:{id:string;position:number;updatedAt:string}[]=[],seen=new Set<string>();let blocks=0;
     const add=async(id:string)=>{
-      id=normalizeId(id);if(this.denied.has(id))return;
+      id=normalizeId(id);if(this.denied.has(id) || await directPageDenied(id))return;
       if(seen.has(id)||result.length>=20000)unavailable();seen.add(id);
       const resolved=await this.resolve(id,source);
       if(!resolved){const page=await this.client.getPage(id);if(page&&!active(page))return;unavailable();}
@@ -169,8 +170,11 @@ export class AutomaticStudySession {
     if (!this.client.listPages || !this.client.getDatabase) throw new ContentServiceError("MISCONFIGURED", "Automatic study requires owned database discovery.");
     const roots = selectedCourse ? [await this.client.getPage(selectedCourse)] : await this.client.listPages(root.dataSourceId!);
     const result: string[] = [], seenPages = new Set<string>(); let blockCount = 0;
-    const courses = roots.filter((p): p is PageObjectResponse => p !== null && active(p) && !this.denied.has(normalizeId(p.id)))
-      .sort((a, b) => a.id.localeCompare(b.id));
+    const candidates = roots.filter((p): p is PageObjectResponse => p !== null && active(p) && !this.denied.has(normalizeId(p.id)));
+    await primeDirectDenials(candidates.map(page => normalizeId(page.id)));
+    const courses: PageObjectResponse[] = [];
+    for (const page of candidates) if (!await directPageDenied(page.id)) courses.push(page);
+    courses.sort((a, b) => a.id.localeCompare(b.id));
     let coursesCompleted = 0, courseIndex = 0;
     const progress = (phase: StudyDiscoveryProgress["phase"]) => this.onProgress?.({ phase, courseIndex, courseCount: courses.length,
       coursesCompleted, pagesDiscovered: seenPages.size, blocksScanned: blockCount });
@@ -181,7 +185,7 @@ export class AutomaticStudySession {
       const groups = new Map<string, { resolved: AutomaticStudyPage; position: number }[]>();
       let position = 0;
       const add = async (id: string, owner: string, depth: number) => {
-        const canonical = normalizeId(id); if (this.denied.has(canonical)) return;
+        const canonical = normalizeId(id); if (this.denied.has(canonical) || await directPageDenied(canonical)) return;
         if (seenPages.has(canonical) || seenPages.size >= 20000 || depth >= 24) unavailable();
         const resolved = await this.resolve(canonical, source);
         if (!resolved) {

@@ -9,6 +9,8 @@ import { parseWebsiteNotionConfig } from "./website-config.ts";
 import { createWebsiteNotionRepository } from "./website-repository.ts";
 import { createNotionRepository } from "./repository.ts";
 import { getSiteConfig } from "../../lib/site/index.ts";
+import { directPolicyRepository } from "./direct-policy.ts";
+import { directPolicyRuntime } from "./direct-policy-runtime.ts";
 
 export function getNotionRuntime() {
   const token = process.env.NOTION_TOKEN?.trim();
@@ -24,11 +26,13 @@ export function getNotionRuntime() {
   const config = website ? parseWebsiteNotionConfig(input) : parseNotionSourcesConfig(input);
   if (config.schemaVersion === 2) config.sources = config.sources.filter(source => isEnabledContentKind(source.kind));
   else config.sources = config.sources.filter(source => isEnabledContentKind(source.kind));
+  const policy = process.env.CONTENT_PROVIDER === "notion" ? directPolicyRuntime(config.schemaVersion, process.env) : undefined;
   const client = createNotionClient({ token, notionVersion: process.env.NOTION_API_VERSION || "2026-03-11" });
   // A separate key may be configured; otherwise token rotation also rotates media URLs.
   const mediaSecret = process.env.MEDIA_SIGNING_SECRET?.trim() || token;
   const common = { client, timeZone: getSiteConfig().timeZone, registerImage: createMediaSigner(mediaSecret).registerImage };
   // The legacy media resolver only uses owner.page and owner.source.cover.
   const repository = (website ? createWebsiteNotionRepository({ ...common, config: config as ReturnType<typeof parseWebsiteNotionConfig> }) : createNotionRepository({ ...common, config: config as ReturnType<typeof parseNotionSourcesConfig> })) as ReturnType<typeof createNotionRepository>;
-  return { repository, client, config, mediaSecret };
+  return { repository: policy ? directPolicyRepository(repository, policy.factory) : repository,
+    client, config, mediaSecret, withPolicy: policy?.run };
 }

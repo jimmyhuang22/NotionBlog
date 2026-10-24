@@ -38,7 +38,25 @@ npm run notion:check
 
 此命令只读取已启用来源的 schema，检查 Token、读取权限与字段映射，不修改 Notion，不选择公开内容，不打印真实 ID 或原始错误。失败时检查工作区、数据库 Connections 和本地来源映射。schema 成功不等于正文和层级已完成真实验收。
 
-来源检查成功后，将 `CONTENT_PROVIDER` 改为 `notion` 并重启开发服务器。配置错误会返回受控错误，不能自动回退 mock。allowlist 模式的空名单返回空内容；Status 的 all 模式无需逐条填入页面编号。
+来源检查成功后，还须按下节准备受限数据库 reader 与中央拒绝扩展，才能将 `CONTENT_PROVIDER` 改为 `notion`。配置错误会返回受控错误，不能自动回退 mock。allowlist 模式的空名单返回空内容；Status 的 all 模式无需逐条填入页面编号。
+
+## 直连模式的中央拒绝与媒体
+
+自 2026-10-25 的 B20 源码起，`CONTENT_PROVIDER=notion` 的每次公开读取都会查询当前中央 deny。它仍从 Notion 核对来源和物理父链，不要求页面已进入数据库内容快照；策略无法核实、版本变化或超限时返回 503。`notion:check` 仍只检查 Notion schema，不能代替此策略验收。
+
+实际采用新 runtime 前，须另行授权并依次完成：
+
+1. 准备既有 v1／v2 基础 schema 的相同 owner，以及已通过[读取隔离](BACKEND_READER_ISOLATION_PLAN.md)验收的独立网站 LOGIN；该 LOGIN 只属于 `nb_reader`，没有私有表／列、写函数、建库建表或额外角色权限。
+2. 由原 owner 独立安装 `supabase/migrations/20261024230938_notion_direct_deny.sql`；文件和函数体指纹见 `database/notion-direct-deny-protocol.json`。扩展只授予 `nb_reader` 固定只读函数，不创建 LOGIN，不导出拒绝名单。
+3. 在私有环境配置 `DATABASE_READER_URL`，采用 `DATABASE_TLS=verify` 和必要的 `DATABASE_CA_CERT`；不能复用 writer／owner／增量证据连接。先验收实际权限、能力与版本变化拒绝，再采用新网站代码。Git 合并不执行上述安装。
+
+每批最多 256 个页面 ID；每次操作最多 64 次策略 SQL（包括目录检查），累计 256 KiB 逻辑返回。操作内合并相同 ID，操作间不缓存许可；输出前再次核对策略版本。普通数据库 provider 不新增这些策略查询。
+
+直连的 `/media/m1…` 保留签名定位，改为完整缓冲校验图片后返回字节；不再向浏览器返回临时源地址。只允许 HTTPS／443、公网 DNS 全量结果、固定 IP 且验证原域名 TLS，每跳一个地址、最多两次重定向，无地址回退或业务重试。正文上限 20 MiB，校验 MIME／魔数、解码与 100M 像素边界；只支持 JPEG／PNG／GIF／WebP／AVIF。下载后重新核对策略及当前 owner／祖先／图片定位，撤回或换图就拒绝交付。响应使用 `private, no-store`、`nosniff`、`no-referrer`，不转发源响应头。
+
+媒体业务期限为 8 秒，取消会中止上游连接；返回前等待客户端连接关闭，清理另有 1 秒界限。图像原生解码完成后仍须检查期限，不能保证 CPU 解码被取消信号立即打断。有内容总期限的 Notion 读取不进入 SDK 不可取消的重试睡眠；独立批处理保留原有限重试。
+
+该代理会把直连图片流量转移到网站服务器；20 MiB 是单图正文界限，不是账单或并发流量硬上限。真实验收、凭据和安装需单独授权；本项仅完成源码与离线测试，既有数据库／hybrid 媒体交付仍按各自协议运行。
 
 当前本地只读连接已建立，启用来源的 schema、字段映射、学习来源课程父节点和课程目录归属已核对通过，本地 provider 使用 notion。早期只选一门课程的真实联调范围是历史证据；2026-10-12 用户改为全部当前／未来课程与拥有的后代自动公开，工程／扩展与新发布仍须按各自交付状态核对，不能将旧证据解释为所有课程已上线。完整学习层级、代表正文和图片刷新及访问边界已通过真实联调；尚未逐页验收全部正文，完整 UI 与正式部署尚未完成。
 
