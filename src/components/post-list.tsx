@@ -3,27 +3,19 @@
 import Link from "next/link";
 import type { Page, Post } from "../../contracts/content.ts";
 import { dateParts, dayLabel } from "../lib/format.ts";
+import { runsBy } from "../lib/runs.ts";
 import { CoverImage } from "./cover-image";
 import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 
-interface Group { key: string; label: string | null; posts: { post: Post; day: string | null }[] }
-
 /** Posts arrive newest first with undated ones last; year headings follow that order. */
-function groupByYear(posts: Post[], timeZone: string): Group[] {
-  const groups: Group[] = [];
-  for (const post of posts) {
+function groupByYear(posts: Post[], timeZone: string) {
+  const dated = posts.map(post => {
     const parts = post.publishedAt ? dateParts(post.publishedAt.start, post.publishedAt.precision, timeZone) : null;
-    const key = parts ? String(parts.year) : "unknown";
-    let group = groups.at(-1);
-    if (!group || group.key !== key) {
-      group = { key, label: parts ? String(parts.year) : "日期未记录", posts: [] };
-      groups.push(group);
-    }
     // The list shows the day only; the time of day belongs to short status entries, not articles.
-    group.posts.push({ post, day: parts ? dayLabel({ ...parts, time: null }) : null });
-  }
-  return groups;
+    return { post, year: parts?.year ?? null, day: parts ? dayLabel({ ...parts, time: null }) : null };
+  });
+  return runsBy(dated, ({ year }) => year === null ? { key: "unknown", label: "日期未记录" } : { key: String(year), label: String(year) });
 }
 
 export function PostList({ initial, pageSize, tag, timeZone }: { initial: Page<Post>; pageSize: number; tag: string | null; timeZone: string }) {
@@ -34,9 +26,9 @@ export function PostList({ initial, pageSize, tag, timeZone }: { initial: Page<P
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>文章列表有更新，已从头重新加载。</p> : null}
       {groupByYear(items, timeZone).map(group => (
-        <section key={`${group.key}:${group.posts[0]?.post.id}`} className="posts__group">
+        <section key={`${group.key}:${group.items[0]?.post.id}`} className="posts__group">
           <h2 className="section-title posts__year">{group.label}</h2>
-          {group.posts.map(({ post, day }) => (
+          {group.items.map(({ post, day }) => (
             <article key={post.id} className="card post-card">
               <div className="post-card__text">
                 {day ? <time className="post-card__date" dateTime={post.publishedAt?.start}>{day}</time> : null}

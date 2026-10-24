@@ -2,6 +2,7 @@ import type { SocialPlatform } from "../../contracts/social.ts";
 import type { SocialTimelineWork } from "../../contracts/social-timeline.ts";
 import { dateParts, momentLabel, type CalendarDay, type MomentLabel } from "./format.ts";
 import { socialWorkPublishedAt } from "./content/social-works-query.ts";
+import { runsBy } from "./runs.ts";
 import { collectionFigures, collectionKinds, collectionSize, isNoticedActivity, publicationFigures, publicationKinds, type Figure } from "./home-feed.ts";
 
 /** The moment a work is listed under: a collection's latest activity, else the work's own date. Null when neither is known. */
@@ -37,6 +38,8 @@ export interface WorkLine {
   kind: string;
   /** How much is in a collection; null for a single publication or an unknown part count. */
   size: string | null;
+  /** The same as a number, for a cover that shows it beside a sign. */
+  count: number | null;
   /** Views (and likes, except on Bilibili), see `leadingFigures`. Never summed with another line's. */
   figures: Figure[];
   /** When those figures were read; null when there are none to date. */
@@ -58,34 +61,20 @@ export function workLines(work: SocialTimelineWork): WorkLine[] {
   const collection = work.collection;
   if (collection) {
     const figures = leadingFigures(collectionFigures(collection), collection.platform);
-    lines.push({ key: `collection:${collection.id}`, platform: collection.platform, kind: collectionKinds[collection.kind], size: collectionSize(collection), figures,
+    lines.push({ key: `collection:${collection.id}`, platform: collection.platform, kind: collectionKinds[collection.kind], size: collectionSize(collection), count: collection.kind === "season" ? collection.memberCount : collection.partCount, figures,
       observedAt: figures.length ? collection.observedAt : null,
       // A collection opens on its newest episode, whose page lists the whole collection; else on the collection's own list (the owner's choice, 2026-10-18).
       url: collection.latestMemberUrl ?? collection.originalUrl, opensLatest: collection.latestMemberUrl !== null, noticed: isNoticedActivity(collection) });
   }
   for (const publication of work.publications) {
     const figures = leadingFigures(publicationFigures(publication), publication.platform);
-    lines.push({ key: publication.id, platform: publication.platform, kind: publicationKinds[publication.kind], size: null, figures,
+    lines.push({ key: publication.id, platform: publication.platform, kind: publicationKinds[publication.kind], size: null, count: null, figures,
       observedAt: figures.length ? publication.observedAt : null, url: publication.originalUrl, opensLatest: false, noticed: false });
   }
   return lines;
 }
 
 export interface WorkYear { key: string; label: string }
-
-/** The year a work is grouped under in the site's time zone; works without a date share one group at the end. */
-export function workYear(work: SocialTimelineWork, timeZone: string): WorkYear {
-  const moment = workMoment(work);
-  const parts = moment ? dateParts(moment, "datetime", timeZone) : null;
-  return parts ? { key: String(parts.year), label: `${parts.year}` } : { key: "undated", label: "日期未记录" };
-}
-
-/** Month and day within its year group, or nothing when the date is unknown. */
-export function workDay(work: SocialTimelineWork, timeZone: string): string | null {
-  const moment = workMoment(work);
-  const parts = moment ? dateParts(moment, "datetime", timeZone) : null;
-  return parts ? `${parts.month} 月 ${parts.day} 日` : null;
-}
 
 /**
  * The same day as it reads today, by the rule of the status entries: "今天", "昨天 · 10 月 13 日",
@@ -95,18 +84,6 @@ export function workDayMoment(work: SocialTimelineWork, timeZone: string, today:
   const moment = workMoment(work);
   const parts = moment ? dateParts(moment, "datetime", timeZone) : null;
   return parts ? momentLabel({ ...parts, time: null }, today) : null;
-}
-
-/** Consecutive works of the same year, in the order they arrive. The list is already sorted; nothing is re-sorted here. */
-export function groupWorksByYear<T extends SocialTimelineWork>(works: T[], timeZone: string): { year: WorkYear; works: T[] }[] {
-  const groups: { year: WorkYear; works: T[] }[] = [];
-  for (const work of works) {
-    const year = workYear(work, timeZone);
-    const last = groups.at(-1);
-    if (last && last.year.key === year.key) last.works.push(work);
-    else groups.push({ year, works: [work] });
-  }
-  return groups;
 }
 
 /** The works page's sections: one per platform, Bilibili first and the default (the owner's choice, 2026-10-18). */
@@ -137,16 +114,14 @@ export function worksDay(work: SocialTimelineWork, timeZone: string, today: Cale
   return withYear && !moment.relative && parts.year !== today?.year ? { ...moment, rest: `${parts.year} 年 ${moment.rest}` } : moment;
 }
 
-/** Works-page year groups, by that same date; works without one share a group at the end. */
+/**
+ * Works-page year groups, by that same date in the site's time zone; works without one share a group at the end.
+ * Consecutive works only: the list is already sorted, and a later page continues the last group.
+ */
 export function groupWorksByPublishedYear<T extends SocialTimelineWork>(works: T[], timeZone: string): { year: WorkYear; works: T[] }[] {
-  const groups: { year: WorkYear; works: T[] }[] = [];
-  for (const work of works) {
+  return runsBy(works, (work): WorkYear => {
     const at = socialWorkPublishedAt(work);
     const parts = at ? dateParts(at, "datetime", timeZone) : null;
-    const year: WorkYear = parts ? { key: String(parts.year), label: `${parts.year}` } : { key: "undated", label: "日期未记录" };
-    const last = groups.at(-1);
-    if (last && last.year.key === year.key) last.works.push(work);
-    else groups.push({ year, works: [work] });
-  }
-  return groups;
+    return parts ? { key: String(parts.year), label: `${parts.year}` } : { key: "undated", label: "日期未记录" };
+  }).map(({ key, label, items }) => ({ year: { key, label }, works: items }));
 }

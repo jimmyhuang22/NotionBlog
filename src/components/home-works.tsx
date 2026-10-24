@@ -3,13 +3,10 @@ import { platformNames } from "../lib/home-feed.ts";
 import { calendarDay, type CalendarDay } from "../lib/format.ts";
 import { workDayMoment, workLines, workMoment } from "../lib/works.ts";
 import { EntryMoment } from "./entry-moment";
-import { socialIconPaths } from "./social-icon-paths";
+import { PlatformExitNote, PlatformMark } from "./platform-signs";
 import { BiliCard, isBiliCard } from "./bili-card";
 import { SocialWorkCard } from "./social-work-card";
 import { WorkStrip } from "./work-strip";
-
-// A word mark fills only a band of its square box; cropped to that band it reads at the same height as the glyphs.
-const WORD_MARKS: ReadonlySet<string> = new Set(["xiaohongshu"]);
 
 /**
  * Works that follow one another on the home timeline. With covers they are a strip of small cards moved
@@ -42,7 +39,7 @@ export function HomeWorks({ works, timeZone, today = null }: { works: SocialTime
             <span className="home-works__arrow" aria-hidden="true">{line.url ? "↗" : null}</span>
             <span className="home-works__meta">
               {index === 0 ? null : <span className="visually-hidden">{work.title}，</span>}
-              <svg aria-hidden="true" width={WORD_MARKS.has(line.platform) ? 24 : 16} height="16" viewBox={WORD_MARKS.has(line.platform) ? "0 6 24 12" : "0 0 24 24"} fill="currentColor"><path d={socialIconPaths[line.platform]} /></svg>
+              <PlatformMark platform={line.platform} />
               <span>{name}</span><span className="home-works__part">{line.kind}</span>
               {line.size ? <span className="home-works__part">{line.size}</span> : null}
               {index === 0 && day ? <span className="home-works__part"><EntryMoment moment={day} /></span> : null}
@@ -54,7 +51,7 @@ export function HomeWorks({ works, timeZone, today = null }: { works: SocialTime
                 ? line.figures.map(figure => <span key={figure.metric}><span className="home-works__label">{figure.label}</span> {figure.value}</span>)
                 : <span className="home-works__label">数据未记录</span>}
             </span>
-            {line.url ? <span className="visually-hidden">，在{name}打开，原平台可能要求登录</span> : null}
+            {line.url ? <PlatformExitNote name={name} /> : null}
           </>
         );
         // Only a checked address is a link; the address is used exactly as given.

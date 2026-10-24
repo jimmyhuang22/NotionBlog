@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { TimelineEvent } from "../contracts/website.ts";
-import { calendarDay, dateParts, momentLabel, momentText, relativeDay } from "../src/lib/format.ts";
-import { daySpan, entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../src/lib/timeline.ts";
+import { calendarDay, dateParts, momentLabel, relativeDay } from "../src/lib/format.ts";
+import { momentText } from "./helpers/moment-text.ts";
+import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../src/lib/timeline.ts";
+
+/** The span as it reads before the visitor's day is known: plain dates. */
+const spanText = (items: Parameters<typeof spanMoment>[0], timeZone: string) => spanMoment(items, timeZone, null)?.rest ?? null;
 
 const work = (type: WorkEvent["type"], extra: Partial<WorkEvent> = {}): WorkEvent => ({
   id: `x:${type}`, type, occurredAt: null, title: "t", summary: null, cover: null, href: null, externalUrl: null, rating: null, progressPercent: null, detail: null, ...extra,
@@ -70,13 +74,13 @@ test("works that follow one another are one run; anything between them, or a new
 
 test("a run says which days it covers, earliest first", () => {
   const run = [dated("social", "2026-07-25T08:00:00.000Z"), dated("social", "2026-07-22T02:00:00.000Z"), dated("social", "2026-07-20T04:00:00.000Z")];
-  assert.equal(daySpan(run, "UTC"), "7 月 20 日至 7 月 25 日");
-  assert.equal(daySpan([run[0]!, dated("social", "2026-07-25T20:00:00.000Z")], "UTC"), "7 月 25 日");
+  assert.equal(spanText(run, "UTC"), "7 月 20 日至 7 月 25 日");
+  assert.equal(spanText([run[0]!, dated("social", "2026-07-25T20:00:00.000Z")], "UTC"), "7 月 25 日");
   // In Melbourne the second of those is already the 26th.
-  assert.equal(daySpan([run[0]!, dated("social", "2026-07-25T20:00:00.000Z")], "Australia/Melbourne"), "7 月 25 日至 7 月 26 日");
+  assert.equal(spanText([run[0]!, dated("social", "2026-07-25T20:00:00.000Z")], "Australia/Melbourne"), "7 月 25 日至 7 月 26 日");
   // An undated work takes no part; a run with no dates has no span.
-  assert.equal(daySpan([run[0]!, dated("social", null)], "UTC"), "7 月 25 日");
-  assert.equal(daySpan([dated("social", null), dated("social", null)], "UTC"), null);
+  assert.equal(spanText([run[0]!, dated("social", null)], "UTC"), "7 月 25 日");
+  assert.equal(spanText([dated("social", null), dated("social", null)], "UTC"), null);
 });
 
 const ZONE = "Australia/Melbourne";
@@ -148,5 +152,5 @@ test("a run of works within one day is named like that day; over several days it
   assert.deepEqual(spanMoment([dated("2026-07-20T02:00:00.000Z"), dated("2026-07-25T20:00:00.000Z")], "UTC", today), { relative: null, rest: "7 月 20 日至 7 月 25 日" });
   assert.equal(spanMoment([{ occurredAt: null }], "UTC", today), null);
   // The plain span is unchanged.
-  assert.equal(daySpan([dated("2026-07-25T02:00:00.000Z"), dated("2026-07-25T20:00:00.000Z")], "UTC"), "7 月 25 日");
+  assert.equal(spanText([dated("2026-07-25T02:00:00.000Z"), dated("2026-07-25T20:00:00.000Z")], "UTC"), "7 月 25 日");
 });

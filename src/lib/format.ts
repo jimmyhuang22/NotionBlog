@@ -66,13 +66,6 @@ export function momentLabel(parts: DateParts, today: CalendarDay | null): Moment
   return { relative, rest: relative === "今天" ? parts.time : dayLabel(parts) };
 }
 
-/** The same line as one string, for a title or a test: "昨天 · 10 月 13 日 22:52", "今天 09:12", "10 月 5 日". */
-export function momentText(moment: MomentLabel): string {
-  if (!moment.relative) return moment.rest ?? "";
-  if (!moment.rest) return moment.relative;
-  return moment.relative === "今天" ? `${moment.relative} ${moment.rest}` : `${moment.relative} · ${moment.rest}`;
-}
-
 export function rangeLabel(range: DateRange | null, timeZone: string): string | null {
   if (!range) return null;
   const start = dateParts(range.start, range.precision, timeZone);

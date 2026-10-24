@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { spreadRadius } from "../lib/spread.ts";
 import { DEFAULT_SKIN, isScheme, isSkin, rootAttributes, schemeFor, skinAfter, skinOf, skins, type Scheme, type SkinId, type Transition, currentSkin } from "../lib/skins.ts";
+import { closeOnLeave, useMenuDismiss } from "./use-dismiss";
 
 
 /** Width of the soft edge behind the spreading ink front, as a share of the shorter viewport side. */
@@ -146,18 +147,7 @@ export function ThemeControls() {
   useEffect(() => () => window.clearTimeout(hintTimer.current), []);
 
   // Escape closes and returns focus; so does a press outside.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      menuButton.current?.focus();
-    };
-    const onDown = (event: PointerEvent) => { if (!group.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
-  }, [open]);
+  useMenuDismiss(open, () => setOpen(false), group, menuButton);
 
   const current = skinOf(skin);
   const shown = schemeFor(skin, theme, system);
@@ -201,7 +191,7 @@ export function ThemeControls() {
   const schemeLabel = fixed ? `${current.label}只有${schemeLabels[current.schemes[0]!]}` : `换成${schemeLabels[shown === "dark" ? "light" : "dark"]}`;
   return (
     <>
-      <div className="theme-menu" ref={group} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+      <div className="theme-menu" ref={group} onBlur={closeOnLeave(() => setOpen(false))}>
         <button type="button" ref={menuButton} className="icon-button" aria-label="主题" title="主题" aria-haspopup="true" aria-expanded={open} aria-controls="theme-menu-panel" onClick={() => setOpen(!open)}>
           {paletteIcon}
         </button>
