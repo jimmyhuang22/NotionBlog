@@ -123,11 +123,11 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
-        ? "e2e085608893f8e1387a03994581a6b7ce7c8f0169fe3b0177c7f2bafb55b483"
+        ? "d9da424912bd96a9879ddb898952d722314a4b10a3922621befb2abad4837039"
       : pair.path === "src/server/database/runtime.ts"
         ? "6c5c4d5b90fc2d51d47705a40ee21a0fa5df8b6b87c133cd8b42d1ec999bb579"
       : pair.path === "src/server/media/thumbnail.ts"
-        ? "d8daa3226e30451f36dee6637537141b8a5d3632583a90400e77a1a7fc6dab54"
+        ? "3d7a448f5f1603ef1a66aab74975c043f06a78be83ef390cad603b128a3d44eb"
         : null;
     if(expected) {
       assert.equal(current,expected,pair.path);

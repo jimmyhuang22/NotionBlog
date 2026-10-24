@@ -6,6 +6,8 @@ import { hybridMediaResponse } from "../src/server/media/hybrid.ts";
 import { createHash } from "node:crypto";
 import { mediaIdentity } from "../src/server/database/validation.ts";
 import type { ThumbnailProjection } from "../src/server/database/thumbnail-index.ts";
+import { publicHttpResponse } from "../src/server/public-cache/http.ts";
+import { TransientStorageReadError } from "../src/server/database/storage.ts";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const bytes = Buffer.from([82,73,70,70,4,0,0,0,87,69,66,80]);
 const owner = "0".repeat(31)+"1", sha256 = hash(bytes), assetId = mediaIdentity(owner,"cover",sha256);
@@ -36,6 +38,43 @@ test("qualified original bytes cache for v2; dynamic redirects stay no-store",as
 test("cache policy preserves security headers and never mutates no-store error defaults",()=>{
  const base={"Cache-Control":"private, no-store","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"};
  const cache=cacheableMediaHeaders(base);assert.equal(base["Cache-Control"],"private, no-store");assert.equal(cache["Referrer-Policy"],"no-referrer");assert.equal(cache["X-Content-Type-Options"],"nosniff");
+});
+
+test("public cache preserves live-source qualification, including database-thumbnail fallback", async t => {
+ const previous={...process.env};
+ Object.assign(process.env,{VERCEL:"",PUBLIC_CONTENT_CACHE:"tagged-v1",CONTENT_PROVIDER:"database",DATABASE_CONTENT_VERSION:"2",DATABASE_PUBLICATION_MODE:"qualified",PUBLIC_CACHE_SITE_KEY:"fixture",CACHE_PURGE_SECRET:"a".repeat(64),PUBLIC_CACHE_ORIGIN:"https://example.test"});
+ delete process.env.PUBLIC_CACHE_PURGE_SECRET;
+ try {
+  const source={media,binding:{...binding,delivery:"storage" as const}};
+  const original=()=>hybridMediaResponse(assetId,{version:"v2",read:async()=>source,resolve:async()=>({url:"https://example.test/original.webp",sourceFingerprint:binding.sourceFingerprint}),storage:()=>({read:async()=>bytes,put:async()=>{}})});
+  const ports={read:async()=>projection,resolve:async()=>({url:"https://example.test/original.webp",sourceFingerprint:binding.sourceFingerprint}),storage:()=>({read:async()=>bytes,put:async()=>{}}),original};
+  const request=new Request(`https://example.test/media/v2/${assetId}?thumbnail=800`,{headers:{"If-None-Match":"*"}});
+  async function privateOnly(response:Response){
+   const result=await publicHttpResponse(request,response,"media");
+   assert.equal(result.status,304);
+   assert.equal(result.headers.get("Cache-Control"),"private, no-cache, must-revalidate");
+   assert.equal(result.headers.get("CDN-Cache-Control"),"no-store");
+   assert.equal(result.headers.get("Vercel-CDN-Cache-Control"),"no-store");
+   assert.equal(result.headers.get("Vercel-Cache-Tag"),null);
+   assert.equal(hasSafeMediaCachePolicy(result,request.url),true);
+   const full=await publicHttpResponse(new Request(request.url),await original(),"media");
+   assert.equal(full.status,200);assert.equal(full.headers.get("Vercel-CDN-Cache-Control"),"no-store");
+   assert.deepEqual(Buffer.from(await full.arrayBuffer()),bytes);
+  }
+  await t.test("live original bytes cannot be upgraded to shared CDN caching",async()=>privateOnly(await original()));
+  await t.test("explicit and default live thumbnail qualification both stay private",async()=>{
+   for(const qualification of [undefined,"live-notion"] as const)await privateOnly(await thumbnailMediaResponse(assetId,800,{...ports,qualification}));
+  });
+  await t.test("a database-qualified thumbnail still uses the approved public cache",async()=>{
+   const result=await publicHttpResponse(request,await thumbnailMediaResponse(assetId,800,{...ports,qualification:"database"}),"media");
+   assert.equal(result.status,304);assert.match(result.headers.get("Vercel-CDN-Cache-Control")!,/max-age=/);
+   assert.equal(result.headers.get("X-Content-Cache-Policy"),"nb-public-cache-v1");
+  });
+  await t.test("missing and transient variants preserve the live original's exclusion",async()=>{
+   await privateOnly(await thumbnailMediaResponse(assetId,800,{...ports,qualification:"database",read:async()=>({...projection,thumbnail:null})}));
+   await privateOnly(await thumbnailMediaResponse(assetId,800,{...ports,qualification:"database",storage:()=>({read:async()=>{throw new TransientStorageReadError();},put:async()=>{}})}));
+  });
+ }finally{for(const key of Object.keys(process.env))if(!(key in previous))delete process.env[key];Object.assign(process.env,previous);}
 });
 
 
