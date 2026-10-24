@@ -32,7 +32,7 @@ test("external video transition accepts only its exact producer, mapper pair and
       // The older video-only transition must reject both the newer mapper and privacy converter.
       assert.equal(actual, pair.path === "src/server/notion/blocks.ts"
         ? "b4a8d0bab7412aee6ef5923591cf239ea99705d86fde0acd88f351b94a994e26"
-        : "77f88b8cbacef49c9e6577fe6c4477e423a221218bfd51c4a93f66320b7d6797");
+        : "b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51");
       const newerMapper = structuredClone(consumer);
       newerMapper.files.find(file => file.path === pair.path)!.sha256 = actual;
       assert.throws(() => checkCaptureReleaseCompatibility(producer, newerMapper), { code: "RELEASE_INVALID" });

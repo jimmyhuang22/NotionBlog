@@ -8,7 +8,23 @@ import { laterRecoveryRuntime } from "./helpers/recovery-runtime-sources.ts";
 import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
 
+const directNotionSources: Record<string, string> = {
+  'src/server/notion/client.ts': '784f927df86fc0a48fb2eec2f7b27b8a5395eb6d3448e58b8044a75b097b0647',
+  'src/server/notion/runtime.ts': '1e85c7dc9b44f6bee3637243afe594d0dd50614ae5259048b7092164c0439a93',
+  'src/server/notion/media.ts': '2c449ec24e117c49ac8097e9fe5960f715b1f69b26c517132ddc63cf10c4824e',
+  'src/server/notion/repository.ts': 'd49598f05cb3836e75049bb92b6b4a32e1921cbd7c217d4aa9193fc69f1a8d08',
+  'src/server/notion/website-repository.ts': 'b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51',
+  'src/server/notion/automatic-study.ts': '443c7c17f3e5568b218644bb5a4ba878200b6cfae76392df51ede2ecedfbc822',
+  'src/app/media/[assetId]/route.ts': '06015cf3d024d940fd773cedec714380528ac89ebcaaada1b9dc4b303fcbb0a5',
+};
+
 function laterPublicationRepair(path:string,current:string,prior:string,producer:Parameters<typeof checkCaptureReleaseCompatibility>[0],consumer:Parameters<typeof checkCaptureReleaseCompatibility>[1]):boolean {
+  if (directNotionSources[path] && current !== prior) {
+    assert.equal(current, directNotionSources[path], path);
+    const changed = structuredClone(consumer); changed.files.find(file => file.path === path)!.sha256 = current;
+    assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });
+    return true;
+  }
   if (syncDiagnosticSources[path] && current !== prior) {
     assert.equal(current, syncDiagnosticSources[path], path);
     const changed = structuredClone(consumer);
@@ -83,7 +99,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // New mapper/website reader releases (including reader-only filtering) stay
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
-        ? "77f88b8cbacef49c9e6577fe6c4477e423a221218bfd51c4a93f66320b7d6797"
+        ? "b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51"
         : "abfe7e22581d86af28898d827833545bac79679a34983b29d1817136746704e0";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;

@@ -5,6 +5,7 @@ import { normalizeId } from "./config.ts";
 import { NotionRequestScheduler, RequestCooldownError, sharedNotionScheduler } from "./request-scheduler.ts";
 import type { NotionReadClient } from "./types.ts";
 import { inflightNotionRead } from "./inflight-reads.ts";
+import { checkContentReadBudget, contentReadBudgetIdentity } from "../content-read-budget.ts";
 
 type SdkOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
 export interface NotionClientOptions {
@@ -63,37 +64,51 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
     throw new ContentServiceError("MISCONFIGURED", "The Notion request budget is invalid.");
   }
   const transport: NonNullable<SdkOptions["fetch"]> = options.fetch ?? ((url, init) => fetch(url, init));
+  const budgetedFetch: NonNullable<SdkOptions["fetch"]> = (url, init) => {
+    checkContentReadBudget();
+    const budget = contentReadBudgetIdentity();
+    // The SDK's portable fetch type omits AbortSignal, while native fetch accepts it.
+    const current = init as typeof init & { signal?: AbortSignal };
+    const next = { ...init, ...(budget ? { signal: AbortSignal.any([budget.signal, ...(current?.signal ? [current.signal] : [])]) } : {}) };
+    return transport(url, next);
+  };
   // Offline fetch injection stays immediate unless a scheduler is supplied.
   // Production instances for the same connection share request timing only.
   const scheduler = options.scheduler ?? (options.fetch ? undefined : sharedNotionScheduler(options.token));
   const scheduledFetch: NonNullable<SdkOptions["fetch"]> = scheduler ? (url, init) => scheduler.run(async signal => {
-    const result = options.fetch ? await transport(url, init) : await fetch(url, { ...init, signal });
+    const current = init as typeof init & { signal?: AbortSignal };
+    const next = { ...init, signal: AbortSignal.any([signal, ...(current?.signal ? [current.signal] : [])]) };
+    const result = await budgetedFetch(url, next);
     if (result.status === 429 || result.status === 529) {
       const headers = result.headers as { get?: (name: string) => unknown } | null;
       const retryAfter = typeof headers?.get === "function" ? headers.get("retry-after") : null;
       scheduler.defer(typeof retryAfter === "string" ? retryAfter : "1");
     }
     return result;
-  }) : transport;
-  const sdk = new Client({
+  }, { ...(contentReadBudgetIdentity() ? { signal: contentReadBudgetIdentity()!.signal,
+    timeoutMs: Math.max(1, Math.min(9000, contentReadBudgetIdentity()!.deadline - contentReadBudgetIdentity()!.now())) } : {}) }) : budgetedFetch;
+  const sdkOptions = {
     auth: options.token,
     notionVersion: options.notionVersion ?? "2026-03-11",
     timeoutMs: options.requestTimeoutMs ?? 10_000,
     // The SDK caps Retry-After. The shared scheduler independently preserves
     // the complete cooldown, including workspace limits longer than this cap.
-    retry: { maxRetries: 2, initialRetryDelayMs: 250, maxRetryDelayMs: 60_000 },
     logLevel: LogLevel.ERROR,
     // SDK error logging can include the original request and upstream error text.
     logger: () => {},
     fetch: scheduledFetch,
-  });
-  const read = <T>(operation: string, id: string, load: () => Promise<T>) => (options.coalesceReads ?? !options.fetch)
+  };
+  const batchSdk = new Client({ ...sdkOptions, retry: { maxRetries: 2, initialRetryDelayMs: 250, maxRetryDelayMs: 60_000 } });
+  // SDK retry sleeps are not abortable. Public operations already own their complete deadline.
+  const boundedSdk = new Client({ ...sdkOptions, retry: false });
+  const sdk = () => contentReadBudgetIdentity() ? boundedSdk : batchSdk;
+  const read = <T>(operation: string, id: string, load: () => Promise<T>) => !contentReadBudgetIdentity() && (options.coalesceReads ?? !options.fetch)
     ? inflightNotionRead(options.token, options.notionVersion ?? "2026-03-11", operation, id, load) : load();
   return {
     async getPage(id) {
       const pageId = normalizeId(id);
       try {
-        const page = await read("page", pageId, () => sdk.pages.retrieve({ page_id: pageId }));
+        const page = await read("page", pageId, () => sdk().pages.retrieve({ page_id: pageId }));
         if (!isFullPage(page)) throw unavailable();
         return page;
       } catch (error) {
@@ -104,7 +119,7 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
     async getDataSource(id) {
       const dataSourceId = normalizeId(id);
       try {
-        const source = await read("data-source", dataSourceId, () => sdk.dataSources.retrieve({ data_source_id: dataSourceId }));
+        const source = await read("data-source", dataSourceId, () => sdk().dataSources.retrieve({ data_source_id: dataSourceId }));
         if (!isFullDataSource(source)) throw unavailable();
         return source;
       } catch (error) { throw translateError(error); }
@@ -112,7 +127,7 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
     async getDatabase(id) {
       try {
         const databaseId = normalizeId(id);
-        const database = await read("database", databaseId, () => sdk.databases.retrieve({ database_id: databaseId }));
+        const database = await read("database", databaseId, () => sdk().databases.retrieve({ database_id: databaseId }));
         if (!isFullDatabase(database)) throw unavailable();
         return database;
       } catch (error) { throw translateError(error); }
@@ -120,7 +135,7 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
     async getBlock(id) {
       const blockId = normalizeId(id);
       try {
-        const block = await read("block", blockId, () => sdk.blocks.retrieve({ block_id: blockId }));
+        const block = await read("block", blockId, () => sdk().blocks.retrieve({ block_id: blockId }));
         if (!isFullBlock(block)) throw unavailable();
         return block;
       } catch (error) {
@@ -137,7 +152,7 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
       try {
         // An incomplete pagination result must never masquerade as a complete body.
         for (let pageNumber = 0; pageNumber < 1_000; pageNumber += 1) {
-          const result = await sdk.blocks.children.list({ block_id: blockId, page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+          const result = await sdk().blocks.children.list({ block_id: blockId, page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
           for (const block of result.results) {
             if (!isFullBlock(block)) throw unavailable();
             const identity = normalizeId(block.id);
@@ -162,7 +177,7 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
       let cursor: string | undefined;
       try {
         for (let pageNumber = 0; pageNumber < 1_000; pageNumber += 1) {
-          const result = await sdk.dataSources.query({
+          const result = await sdk().dataSources.query({
             // Some live data sources reject SDK-typed query selectors. Validate
             // page type, direct source scope and active state in the response.
             data_source_id: dataSourceId, page_size: 100,

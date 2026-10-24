@@ -1,0 +1,11 @@
+{
+  "capability": "notion-direct-deny-v1",
+  "migration": {
+    "file": "20261024230938_notion_direct_deny.sql",
+    "sha256": "e8399493dfe1ebe8d3ace3930c7f788922888f6ffd97de82cc9476bc2e86b7cb"
+  },
+  "function": {
+    "sourceSHA256": "9c01a008537738c76f966508b98bbc33efe4a940d81ac67bca15c094aca6f3ba",
+    "identity": "nb_policy_api.check_denied(integer,text[])"
+  }
+}

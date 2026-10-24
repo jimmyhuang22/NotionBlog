@@ -165,7 +165,7 @@ test("whole-source Status media qualifies only its direct source without reading
   assert.deepEqual(scenario.reads.schemas, [ids.extraStatuses]);
 });
 
-test("media-only whole-source optimization leaves generic qualification and listing queries unchanged", async () => {
+test("exact whole-source qualification avoids enumeration while lists still query the source", async () => {
   const scenario = statuses();
   scenario.config.sources = [scenario.config.sources[0]];
   scenario.config.sources[0].publication = { mode: "all", allowlistPageIds: [] };
@@ -178,9 +178,9 @@ test("media-only whole-source optimization leaves generic qualification and list
   assert.ok(await scenario.repository.resolveMediaOwner!(ids.old));
   assert.equal(queries, 0);
   assert.ok(await scenario.repository.resolvePublicPage(ids.old));
-  assert.equal(queries, 1);
+  assert.equal(queries, 0);
   assert.equal((await scenario.repository.list("status")).items.length, 4);
-  assert.equal(queries, 2);
+  assert.equal(queries, 1);
 });
 
 test("direct Status media owners reject foreign sources, moved pages and inactive or mismatched identities", async () => {
@@ -476,7 +476,7 @@ test("all Status source includes new entries on the next operation without readi
   assert.deepEqual(scenario.reads.pages, []);
   assert.deepEqual(scenario.reads.bodies, [ids.newest]);
   assert.equal(await scenario.repository.get("status", ids.middle), null);
-  assert.deepEqual(scenario.reads.pages, []);
+  assert.deepEqual(scenario.reads.pages, [ids.middle]);
   scenario.pages.set(ids.private, page(ids.private, "New status", parentSource(ids.statuses), {
     Recorded: { id: "recorded", type: "date", date: { start: "2026-10-04", end: null, time_zone: null } },
   }));
@@ -688,4 +688,26 @@ test("Notion Status list derives bounded rich text only after current visibility
   assert.ok(!Object.hasOwn((await scenario.repository.get("status", ids.newest))!.item, "previewBody"));
   scenario.pages.get(ids.newest)!.in_trash = true;
   assert.ok(!(await scenario.repository.list("status")).items.some(x => x.id === ids.newest));
+});
+import { directPolicyRepository } from "../src/server/notion/direct-policy.ts";
+
+test("v1 central policy gates current pages, learning ancestors, metadata, lists and media per operation", async () => {
+  for (const scenario of [statuses(), learning()]) {
+    const denied = new Set<string>();
+    const repo = directPolicyRepository(scenario.repository, () => async ids => ({ revision: "1:2", denied: ids.map(id => denied.has(id)) }));
+    const pageId = scenario.pages.has(ids.child) ? ids.child : ids.old;
+    assert.ok(await repo.resolvePublicPage(pageId));
+    denied.add(pageId);
+    assert.equal(await repo.resolvePublicPage(pageId), null);
+    assert.equal(await repo.resolveMediaOwner!(pageId), null);
+    if (pageId === ids.child) {
+      denied.clear(); denied.add(ids.course);
+      assert.equal(await repo.resolvePublicPage(ids.child), null);
+      assert.equal(await repo.get("study-note", ids.child), null);
+      assert.equal(await repo.getCourseMetadata(ids.course), null);
+      assert.equal(await repo.getCourseTree(ids.course), null);
+    } else {
+      assert.equal((await repo.list("status")).items.some(item => item.id === ids.old), false);
+    }
+  }
 });
