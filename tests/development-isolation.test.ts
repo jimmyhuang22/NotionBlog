@@ -12,15 +12,27 @@ test('Preview and CI retain neither production credentials nor external browser 
   {VERCEL:'1',VERCEL_ENV:'production',VERCEL_TARGET_ENV:'staging'},
   {VERCEL:'1',VERCEL_ENV:'production',GITHUB_ACTIONS:'true'},
   {VERCEL:'1',VERCEL_ENV:'production'},
+  {VERCEL:'1',VERCEL_ENV:'production',VERCEL_TARGET_ENV:'production'},
  ]){
   const script=`for(const key of ['VERCEL','VERCEL_ENV','VERCEL_TARGET_ENV','GITHUB_ACTIONS','NOTIONBLOG_DEVELOPMENT_MODE'])delete process.env[key];Object.assign(process.env,${JSON.stringify(target)},{CONTENT_PROVIDER:'database',DATABASE_READER_URL:'synthetic-private'});const {default:config}=await import(${JSON.stringify(nextConfig)});const result=config('phase-production-build');console.log(JSON.stringify({provider:process.env.CONTENT_PROVIDER,reader:!!process.env.DATABASE_READER_URL,headers:result.headers?await result.headers():[],compiledProvider:result.env?.CONTENT_PROVIDER??null}));`;
   const result=JSON.parse((await execute(process.execPath,['--input-type=module','-e',script])).stdout.trim());
-  const production=target.VERCEL_ENV==='production'&&!target.VERCEL_TARGET_ENV&&!target.GITHUB_ACTIONS;
+  const production=target.VERCEL_ENV==='production'&&(!target.VERCEL_TARGET_ENV||target.VERCEL_TARGET_ENV==='production')&&!target.GITHUB_ACTIONS;
   assert.equal(result.provider,production?'database':'mock');assert.equal(result.reader,production);
   assert.equal(result.compiledProvider,production?null:'mock');
-  if(production)assert.deepEqual(result.headers,[]);
-  else {
-   const policy=result.headers[0].headers.find((header:{key:string})=>header.key==='Content-Security-Policy').value;
+  const base=result.headers.find((rule:{source:string})=>rule.source==='/:path*');
+  const headers=new Headers(base.headers.map((header:{key:string,value:string})=>[header.key,header.value]));
+  assert.equal(headers.get('X-Content-Type-Options'),'nosniff');
+  assert.equal(headers.get('Referrer-Policy'),'strict-origin-when-cross-origin');
+  assert.equal(headers.get('X-Frame-Options'),'SAMEORIGIN');
+  const media=result.headers.find((rule:{source:string})=>rule.source==='/media/:path*');
+  assert.equal(media.headers.find((header:{key:string})=>header.key==='Referrer-Policy').value,'no-referrer');
+  assert.ok(result.headers.indexOf(media)>result.headers.indexOf(base),'media policy must override the general policy');
+  const policy=headers.get('Content-Security-Policy')!;
+  if(production){
+   assert.equal(policy,"frame-ancestors 'self'");
+   assert.equal(headers.get('X-Robots-Tag'),null);
+  }else {
+   assert.equal(headers.get('X-Robots-Tag'),'noindex, nofollow');
    assert.match(policy,/img-src 'self' data: blob:/);assert.match(policy,/connect-src 'self' ws:\/\/127/);assert.doesNotMatch(policy,/https:\/\/|\*\.supabase/);
   }
  }

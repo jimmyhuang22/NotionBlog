@@ -1,5 +1,7 @@
 # 项目需求
 
+基础安全响应头（2026-10-24）：用户批准在独立本地分支补齐 `nosniff`、`strict-origin-when-cross-origin`、`frame-ancestors 'self'` 与 `SAMEORIGIN`，限制其他网站嵌入本站；开发／Preview 保留既有隔离 CSP，媒体继续采用更严格的 `no-referrer`。本项当前仅准备源码与离线验证，不推送、合并、部署或恢复任务；正式生效另按发布规则执行，见[决定](decisions/2026-10-24-security-response-headers.md)。
+
 源码公开与 CI（2026-10-23）：用户明确要求公开干净新仓库并把 CI 转到 GitHub。新仓库已公开，旧归档保持私人；PR 与手动检查采用标准 GitHub 托管 Ubuntu、Node 24、双锁文件、完整 check／build 和只读 Token，保持离线 fixtures。启用 main／develop 分支保护、外部贡献者工作流审批与私密漏洞报告。此决定取代下方此前“暂不公开”和“平台检查另行约定”的当前状态；私人 CI 历史结果仍如实保留，develop 本机验证合并规则、发布期间暂停及 main 逐次发布授权继续有效，见[决定](decisions/2026-10-23-public-github-hosted-ci.md)与[执行记录](progress/2026-10-23-public-github-hosted-ci.md)。
 
 搜索上下文（2026-10-23）：用户选定“来源行”，批准兼容的最小搜索显示字段、provider 投影及虚构样本。两个搜索入口显示当前获准课程编号（缺失时课程名）与有序物理父级，仅作文字；不改匹配、排序或阅读目标。数据库能力独立、默认关闭，真实安装、启用、合并及发布不包含在本项授权，见[决定](decisions/2026-10-23-search-result-context.md)及[实现边界](SEARCH_RESULT_CONTEXT.md)。
