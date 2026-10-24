@@ -22,14 +22,14 @@ async function saveState(state,name,data){
  const temp=join(state,'.tmp-'+randomUUID()),h=await open(temp,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
  try{try{await h.writeFile(JSON.stringify(data)+'\n');await h.sync();}finally{await h.close();}await rename(temp,join(state,name));}finally{await unlink(temp).catch(()=>{});}
 }
-async function childRun(project,temp,mode,seconds,signal,budgetBridge){
+async function childRun(project,environment,mode,seconds,signal,budgetBridge){
  return new Promise((done,reject)=>{
   if(signal.aborted)return reject(Object.assign(new Error(),{code:'RUN_CANCELLED'}));
-  const args=['--env-file='+temp,...(budgetBridge?['--import',join(project,'scripts/website-sync/shared-budget-preload.ts')]:[]),join(project,'scripts/website-sync/run.ts'),'--mode',mode];
+  const args=[...(budgetBridge?['--import',join(project,'scripts/website-sync/shared-budget-preload.ts')]:[]),join(project,'scripts/website-sync/run.ts'),'--mode',mode];
   const budgetEnv=budgetBridge?{WEBSITE_SHARED_BUDGET_DIRECTORY:budgetBridge.directory,WEBSITE_SHARED_BUDGET_DIGEST:budgetBridge.planDigest,
    WEBSITE_SHARED_BUDGET_NONCE:budgetBridge.nonce,WEBSITE_SHARED_BUDGET_RUNTIME_SHA256:budgetBridge.runtimeSha256}:{};
   const child=spawn(process.execPath,args,{
-   cwd:project,shell:false,stdio:'inherit',env:{PATH:'/usr/bin:/bin',NEXT_TELEMETRY_DISABLED:'1',...budgetEnv},
+   cwd:project,shell:false,stdio:'inherit',env:{...environment,PATH:'/usr/bin:/bin',NEXT_TELEMETRY_DISABLED:'1',...budgetEnv},
   });
   let forced;const cancel=()=>{child.kill('SIGTERM');forced??=setTimeout(()=>child.kill('SIGKILL'),60000);};
   signal.addEventListener('abort',cancel,{once:true});const deadline=setTimeout(cancel,(seconds+30)*1000);
@@ -119,7 +119,7 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   resumePlan={...collectionResumePlan(recovery?saved.pages.filter(p=>p.record.detail.item.kind!=='course'):saved.pages),courseProjectionRefresh:recovery?{forcedCoursePages:saved.pages.filter(p=>p.record.detail.item.kind==='course').length,originalCaptureUnchanged:true}:undefined,qualification:config.resumeQualification??'original',compatibility,requestReserve:config.resumeRequestReserve,postSeconds:config.resumePostSeconds};
  }
  if(check)return {resumePlan,adapter:'private-host-v2',offlineCheck:true,releaseCommit:release.commit,mode,publicationMode,mediaProvider,networkChecked:false,sessionRefreshed:false,workerStarted:false,publicationEnabled:false};
- let manual,inode,unlock,temp;const controller=new AbortController(),cancel=()=>controller.abort();
+ let manual,inode,unlock;const controller=new AbortController(),cancel=()=>controller.abort();
  process.on('SIGINT',cancel);process.on('SIGTERM',cancel);
  const runId=randomUUID(),lockPath=join(privateRoot,'manual-run.lock');
  try{
@@ -153,9 +153,9 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
    WEBSITE_COLLECTION_CONCURRENCY:String(config.collectionConcurrency??1),
    WEBSITE_NOTION_INTERVAL_MS:String(config.notionIntervalMs??700),
    WEBSITE_REFRESH_SHA256:config.refreshSha256,WEBSITE_RELEASE_COMMIT:release.commit};
-  temp=join(privateRoot,`.website-runtime-env-${randomUUID()}`);const h=await open(temp,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
-  try{await h.writeFile(envText(env));await h.sync();}finally{await h.close();}
-  const result=await childRun(project,temp,mode,config.timeoutSeconds,controller.signal,sharedBudget?.bridge);
+  // Keep the existing dotenv validation/decoding without persisting another credential copy.
+  const environment=parseEnv(envText(env));
+  const result=await childRun(project,environment,mode,config.timeoutSeconds,controller.signal,sharedBudget?.bridge);
   if(budgetAccount){try{result.budgetFailure=budgetAccount.read().failure;}catch{result.budgetFailure='SHARED_BUDGET_UNAVAILABLE';}
    if(result.budgetFailure)result.exitCode=1;}
   let receipt;try{receipt=JSON.parse(await privateText(join(output,'receipt-private.json')));}catch{ /* Missing/truncated receipts cannot prove a publication did not commit. */ }
@@ -171,7 +171,7 @@ export async function runPrivateWebsiteWorker({configFile,mode='dry-run',check=f
   if(result.exitCode===0&&mode==='publish')await saveState(join(stateDir,'website-v2'),'last-success-private.json',{...summary,sourceSha256:config.sourceSha256});
   return summary;
  }finally{
-  process.off('SIGINT',cancel);process.off('SIGTERM',cancel);if(temp)await unlink(temp).catch(()=>{});
+  process.off('SIGINT',cancel);process.off('SIGTERM',cancel);
   try{await unlock?.();}
   finally{
    try{await manual?.close();}
