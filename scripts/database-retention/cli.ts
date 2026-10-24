@@ -5,6 +5,7 @@ import {databasePoolConfig} from "../../src/server/database/connection.ts";
 import {createArchiveStore, verifyOfflineRestore} from "./archive.ts";
 import {dailyRetention, sha256, type RetentionPort} from "./daily.ts";
 import {retentionRunLimit} from "./limits.ts";
+import {verifyRetentionHealth} from "./health.ts";
 import {RetentionResponseBudget} from "./response-budget.ts";
 
 interface Window {
@@ -38,6 +39,10 @@ async function main(){
   for(const proof of window.programFiles){const s=await lstat(proof.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(proof.path,"utf8"))!==proof.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  }
  await assertWindow();
+ // Reject liveness-only deployments before opening a database or deleting anything.
+ // The legacy readiness proof must also remain valid after maintenance.
+ const health=async()=>{await assertWindow();await verifyRetentionHealth(window.healthURL);await assertWindow();};
+ await health();
  const budget=new RetentionResponseBudget();
  const pool=new Pool({...databasePoolConfig(process.env.RETENTION_DATABASE_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT),
   max:1,statement_timeout:30000,query_timeout:35000,application_name:"notionblog-retention"});
@@ -65,14 +70,7 @@ async function main(){
   const expected=await db.plan();if(expected.state.current_run!==window.runId)throw Error("RETENTION_PUBLISHED_RUN_CHANGED");
   const store=await createArchiveStore(window.archiveDirectory);
   await store.save(`windows/${sha256(initial.raw)}`,window);
-  const result=await dailyRetention({db,store,maximumRuns,now:Date.now,assertWindow,restore:verifyOfflineRestore,health:async()=>{
-   await assertWindow();const url=new URL(window.healthURL);if(url.protocol!=="https:"||url.pathname!=="/api/health/content"||url.search||url.hash||url.username||url.password)throw Error("RETENTION_HEALTH_URL_INVALID");
-   const response=await fetch(url,{signal:AbortSignal.timeout(10_000),redirect:"error"});
-   const reader=response.body?.getReader();if(!reader)throw Error("RETENTION_HEALTH_FAILED");let bytes=0;
-   try{for(;;){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;if(bytes>4096)throw Error("RETENTION_HEALTH_TOO_LARGE");}}
-   finally{await reader.cancel();}
-   if(response.status!==200)throw Error("RETENTION_HEALTH_FAILED");
-  }});
+  const result=await dailyRetention({db,store,maximumRuns,now:Date.now,assertWindow,restore:verifyOfflineRestore,health});
   console.log(JSON.stringify(result));
  }finally{await pool.end();process.removeListener("SIGTERM",cancel);process.removeListener("SIGINT",cancel);}
 }

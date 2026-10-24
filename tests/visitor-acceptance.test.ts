@@ -1,3 +1,4 @@
+import { GET as healthResponse } from "../src/app/api/health/content/route.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
@@ -45,7 +46,7 @@ async function network(f: Awaited<ReturnType<typeof hostFixture>>, p: ReturnType
   const fetcher: typeof fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input), path = url.pathname.split("/");
     let response: Response;
-    if (url.pathname === "/api/health/content") { await repository.getTimeline!({ limit: 1 }); response = Response.json({ data: { provider: "database", databaseVersion: "2" } }, { headers: { "Cache-Control": "private, no-store" } }); }
+    if (url.pathname === "/api/health/content") response = healthResponse();
     else if (url.pathname === "/api/status/years") response = await statusYearsResponse(new Request(url), repository, features);
     else if (url.pathname.startsWith("/api/content/")) response = path.length === 5 ? await contentDetailResponse(new Request(url), path[3], path[4], repository, features) : await contentListResponse(new Request(url), path[3], repository, features);
     else if (url.pathname.startsWith("/api/study/")) response = await courseTreeResponse(new Request(url), path[3], repository, features);
@@ -155,12 +156,12 @@ test("oversized and late bodies/SQL rows are charged before cancellation; callba
 });
 test("SQL write/target mismatch are blocked before driver; compiled DTO drift and cached/redirected responses fail", async (t) => {
   const f = await hostFixture(); try {
-    for (const variant of ["mock", "cache", "dto", "redirect"] as const) await t.test(variant, async () => {
+    for (const variant of ["old-identity", "cache", "generic-ok", "redirect"] as const) await t.test(variant, async () => {
       const p = plan(f), b = await ledger(f, p), n = await network(f, p, async (url, response) => {
         if (url.pathname !== "/api/health/content") return response;
         if (variant === "cache") { response.headers.set("cache-control", "public, max-age=60"); return response; }
         if (variant === "redirect") return new Response("login", { status: 302, headers: { location: "https://example.test" } });
-        return Response.json({ data: { provider: variant === "mock" ? "mock" : "database", databaseVersion: "2", ...(variant === "dto" ? { private: "must fail" } : {}) } }, { headers: response.headers });
+        return Response.json(variant === "old-identity" ? { data: { provider: "database", databaseVersion: "2" } } : { data: { status: "ok" } }, { headers: response.headers });
       });
       const guard = installVisitorTransports({ budget: b, plan: p, readerUrl: f.options.database.readerUrl, role: "supervisor", localOrigin, fetch: n.fetcher, sqlPorts: [n.reader], checkConnections: false });
       try { await assert.rejects(checkVisitorResponses(p, guard.fetch, localOrigin, b.bridge.nonce)); assert.equal(b.read().counters.httpRequests, 1); } finally { guard.restore(); }
