@@ -5,13 +5,14 @@ import {randomUUID} from "node:crypto";
 import {spawn} from "node:child_process";
 import {sha256} from "./daily.ts";
 import {retentionRunLimit} from "./limits.ts";
+import {rollingLedgerPath,validateRollingLedger,rollingAdmission,reserveRolling,settleRolling,type RollingLedger,type Usage} from "./rolling-ledger.ts";
 
 export interface ScheduledConfig {
- format:"retention-daily-config-v2";maximumRuns:number;directory:string;archiveDirectory:string;syncState:string;websitePause:string;
+ format:"retention-daily-config-v2"|"retention-after-sync-config-v3";maximumRuns:number;directory:string;archiveDirectory:string;syncState:string;websitePause:string;
  lockFiles:string[];absentLocks:string[];envFile:string;healthURL:string;cli:string;
  tailCatalog:string;tailRunsDirectory:string;programFiles:{path:string;sha256:string}[];
 }
-interface LastAttempt {status:"PASS"|"STOPPED"|"RUNNING";finishedAt?:number;startedAt?:number;operation?:string}
+interface LastAttempt {status:"PASS"|"STOPPED"|"RUNNING";finishedAt?:number;startedAt?:number;operation?:string;runId?:string}
 export function dailyDecision(last:LastAttempt|null,sync:{status:string},at:number){
  if(last&&last.status!=="PASS")return "REQUIRES_REVIEW";
  if(last?.finishedAt!==undefined&&at<last.finishedAt+24*60*60*1000)return "NOT_DUE";
@@ -24,6 +25,20 @@ async function privateText(path:string){
  }finally{await file.close();}
 }
 async function exists(path:string){try{await lstat(path);return true;}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return false;throw e;}}
+async function readRolling(config:ScheduledConfig,at:number){
+ for(const path of [config.directory,config.archiveDirectory]){const s=await lstat(path);if(!s.isDirectory()||s.isSymbolicLink()||(s.mode&0o077))throw Error("RETENTION_DIRECTORY_INVALID");}
+ const path=rollingLedgerPath(config.archiveDirectory);
+ if(!await exists(path))throw Error("RETENTION_ROLLING_LEDGER_REQUIRED");
+ const raw=await privateText(path),ledger=validateRollingLedger(JSON.parse(raw),config.directory,config.archiveDirectory,at);
+ return {raw,ledger};
+}
+async function admission(config:ScheduledConfig,last:LastAttempt|null,sync:{status:string;runId?:string},at:number){
+ if(config.format==="retention-daily-config-v2")return dailyDecision(last,sync,at);
+ if(!last||last.status!=="PASS")return "REQUIRES_REVIEW";
+ if(sync.status!=="PASS")return "WAITING_FOR_SYNC";
+ const {ledger}=await readRolling(config,at);
+ return rollingAdmission(ledger,sync.runId!,at,config.maximumRuns).status;
+}
 /** A successful pipeline may explicitly preserve a cache-header failure and bind its
  * same-plan continuation. Both immutable receipts remain window proofs. */
 export async function verifyVisitorAcceptance(operation:string,runId:string,pipeline:Record<string,unknown>,proof:(path:string)=>Promise<Record<string,unknown>>){
@@ -50,12 +65,12 @@ export async function verifyVisitorAcceptance(operation:string,runId:string,pipe
 }
 /** Read-only operator inspection. No locks, credential access, child process or database calls. */
 export async function inspectScheduledReadiness(config:ScheduledConfig){
- if(config.format!=="retention-daily-config-v2")throw Error("RETENTION_CONFIG_INVALID");
+ if(!["retention-daily-config-v2","retention-after-sync-config-v3"].includes(config.format))throw Error("RETENTION_CONFIG_INVALID");
  retentionRunLimit(config.maximumRuns);
- for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
+ for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  const stateFile=join(config.directory,"STATE_PRIVATE.json"),last=await exists(stateFile)?JSON.parse(await privateText(stateFile)):null;
  const sync=JSON.parse(await privateText(config.syncState));
- let status:string=dailyDecision(last,sync,Date.now());
+ let status:string=await admission(config,last,sync,Date.now());
  if(await exists(join(config.directory,"PAUSED_PRIVATE.json")))status="MANUALLY_PAUSED";
  else if(await exists(config.websitePause))status="WEBSITE_PAUSED";
  return {status,syncStatus:sync.status,sql:0,writes:0,credentialsRead:false,childProcesses:0};
@@ -85,7 +100,7 @@ export async function acquireRetentionLocks(paths:readonly string[],nonce:string
 }
 /** Separate scheduler: a failed cleanup never changes website sync state or its suspend flag. */
 export async function scheduledTick(config:ScheduledConfig){
- if(config.format!=="retention-daily-config-v2"||config.lockFiles.length!==4||new Set(config.lockFiles).size!==4||
+ if(!["retention-daily-config-v2","retention-after-sync-config-v3"].includes(config.format)||config.lockFiles.length!==4||new Set(config.lockFiles).size!==4||
   !config.absentLocks.length||!config.programFiles.length)throw Error("RETENTION_CONFIG_INVALID");
  const maximumRuns=retentionRunLimit(config.maximumRuns);
  for(const p of [config.directory,config.archiveDirectory,config.syncState,config.websitePause,...config.lockFiles,...config.absentLocks,config.envFile,config.cli,config.tailCatalog,config.tailRunsDirectory])
@@ -95,14 +110,15 @@ export async function scheduledTick(config:ScheduledConfig){
  const stateFile=join(config.directory,"STATE_PRIVATE.json");
  if(await exists(join(config.directory,"PAUSED_PRIVATE.json")))return {status:"MANUALLY_PAUSED"};
  let last:LastAttempt|null=null;if(await exists(stateFile))last=JSON.parse(await privateText(stateFile));
- const syncRaw=await privateText(config.syncState),sync=JSON.parse(syncRaw),decision=dailyDecision(last,sync,Date.now());
+ const syncRaw=await privateText(config.syncState),sync=JSON.parse(syncRaw),decision=await admission(config,last,sync,Date.now());
  if(decision!=="READY")return {status:decision};
  if(await exists(config.websitePause))return {status:"WEBSITE_PAUSED"};
  if([...config.lockFiles,...config.absentLocks].some(p=>!p.startsWith("/")))throw Error("RETENTION_LOCK_PATH_INVALID");
  for(const p of config.absentLocks)if(await exists(p))return {status:"WRITER_BUSY"};
  const operation=randomUUID(),locks=await acquireRetentionLocks(config.lockFiles,operation);if(!locks)return {status:"WRITER_BUSY"};
  let result:{status:string;operation?:string;finishedAt?:number;reason?:string}={status:"STOPPED",operation};
- let stateWritten=false;
+ let stateWritten=false,completionPath:string|undefined;
+ let rollingState:RollingLedger|undefined,rollingRaw:string|undefined,settlement:Usage|undefined;
  const save=async(path:string,value:unknown)=>{
   const tmp=path+"."+randomUUID();const f=await open(tmp,"wx",0o600);
   try{await f.writeFile(JSON.stringify(value,null,2)+"\n");await f.sync();}finally{await f.close();}
@@ -111,6 +127,8 @@ export async function scheduledTick(config:ScheduledConfig){
  try{
   // Close the gap between reading PASS and acquiring the shared admission lock.
   if(await privateText(config.syncState)!==syncRaw)throw Error("RETENTION_SKIP_SYNC_CHANGED");
+  const lockedLast=await exists(stateFile)?JSON.parse(await privateText(stateFile)):null;
+  if(JSON.stringify(lockedLast)!==JSON.stringify(last))throw Error("RETENTION_SKIP_SYNC_CHANGED");
   if(await exists(config.websitePause))throw Error("RETENTION_SKIP_WEBSITE_PAUSED");
   for(const p of config.absentLocks)if(await exists(p))throw Error("RETENTION_SKIP_WRITER_BUSY");
   const proofs:{path:string;sha256:string}[]=[];
@@ -122,6 +140,10 @@ export async function scheduledTick(config:ScheduledConfig){
    "acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json",
   ]){const r=await proof(join(sync.operation,path));if(r.status!=="PASS"||r.runId!==sync.runId)throw Error("RETENTION_SAME_BATCH_PROOF_MISSING");}
   await verifyVisitorAcceptance(sync.operation,sync.runId,pipeline,proof);
+  if(config.format==="retention-after-sync-config-v3"){
+   const directory=await proof(join(sync.operation,"acceptance-operation-private/COURSE_DIRECTORY_PRIVATE.json"));
+   if(directory.format!=="published-course-directory-v1"||directory.runId!==sync.runId)throw Error("RETENTION_COURSE_DIRECTORY_NOT_VERIFIED");
+  }
   const catalogRaw=await privateText(config.tailCatalog),catalogSHA=sha256(catalogRaw);
   proofs.push({path:config.tailCatalog,sha256:catalogSHA});
   let tail;
@@ -130,12 +152,21 @@ export async function scheduledTick(config:ScheduledConfig){
   if(["PENDING","RUNNING"].includes(tail.status)||(tail.status==="PASS"&&(!tail.connectionsClosed||!tail.ownLocksReleased)))throw Error("RETENTION_SKIP_WAITING_FOR_TAIL");
   if(tail.status!=="PASS"||tail.runId!==sync.runId||tail.catalogSHA256!==catalogSHA||!tail.connectionsClosed||!tail.ownLocksReleased||
    [tail.inFlight,tail.unknownWriteGroup,tail.acknowledgedUnverifiedGroup].some(value=>value!==null&&value!==undefined))throw Error("RETENTION_TAIL_NOT_VERIFIED");
-  for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
+  for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
   await privateText(config.envFile); // Check permissions without logging or copying values.
-  const folder=join(config.directory,operation);await mkdir(folder,{mode:0o700});
+  const folder=join(config.directory,operation);await mkdir(folder,{mode:0o700});completionPath=join(folder,"COMPLETION_PRIVATE.json");
   const windowPath=join(folder,"WINDOW_PRIVATE.json"),deadline=Date.now()+30*60*1000;
-  await save(windowPath,{format:"retention-daily-window-v2",maximumRuns,runId:sync.runId,deadline,syncState:config.syncState,operation:sync.operation,
-   locks:locks.owned,absentLocks:config.absentLocks,proofs,archiveDirectory:config.archiveDirectory,healthURL:config.healthURL,programFiles:config.programFiles});
+  let rolling;
+  if(config.format==="retention-after-sync-config-v3"){
+   const current=await readRolling(config,Date.now());
+   rollingState=reserveRolling(current.ledger,sync.runId,operation,Date.now(),maximumRuns);
+   await save(rollingLedgerPath(config.archiveDirectory),rollingState);
+   rollingRaw=await privateText(rollingLedgerPath(config.archiveDirectory));
+   proofs.push({path:rollingLedgerPath(config.archiveDirectory),sha256:sha256(rollingRaw)});
+   rolling={reservationId:operation,stateDirectory:config.directory,limits:rollingState.entries.find(e=>e.id===operation)!.reserved};
+  }
+  await save(windowPath,{format:rolling?"retention-after-sync-window-v3":"retention-daily-window-v2",maximumRuns:rolling?.limits.runs??maximumRuns,runId:sync.runId,deadline,syncState:config.syncState,operation:sync.operation,
+   locks:locks.owned,absentLocks:config.absentLocks,proofs,archiveDirectory:config.archiveDirectory,healthURL:config.healthURL,programFiles:config.programFiles,...(rolling?{rolling}:{})});
   await save(stateFile,{status:"RUNNING",operation,startedAt:Date.now(),runId:sync.runId});stateWritten=true;
   const log=await open(join(folder,"PROCESS_PRIVATE.log"),"wx",0o600);
   let code:number|null=null;
@@ -152,13 +183,27 @@ export async function scheduledTick(config:ScheduledConfig){
    });
   }finally{await log.close();}
   result={status:code===0?"PASS":"STOPPED",operation,finishedAt:Date.now()};
-  await save(join(folder,"COMPLETION_PRIVATE.json"),{...result,runId:sync.runId,automaticRetry:false});
+  if(rollingState&&code===0){
+   const usage=JSON.parse(await privateText(join(folder,"USAGE_PRIVATE.json")));
+   if(usage.status!=="PASS"||usage.reservationId!==operation||usage.runId!==sync.runId||usage.windowSHA256!==sha256(await privateText(windowPath))||usage.connectionsClosed!==true)
+    throw Error("RETENTION_ROLLING_USAGE_INVALID");
+   settlement={runs:usage.runs,returnedBytes:usage.returnedBytes,deleteCalls:usage.deleteCalls,deletedRows:usage.deletedRows};
+   settleRolling(rollingState,operation,settlement,Date.now()); // Validate before releasing any reservation.
+   if(await privateText(rollingLedgerPath(config.archiveDirectory))!==rollingRaw)throw Error("RETENTION_ROLLING_LEDGER_CHANGED");
+  }
  }catch(error){
   if(!stateWritten&&error instanceof Error&&error.message.startsWith("RETENTION_SKIP_"))result={status:error.message.slice("RETENTION_SKIP_".length)};
   else{result={status:"STOPPED",operation,finishedAt:Date.now(),reason:error instanceof Error&&/^RETENTION_[A-Z_]+$/.test(error.message)?error.message:"RETENTION_REQUIRES_REVIEW"};stateWritten=true;}
  }finally{
   if(!await locks.release()){result={status:"STOPPED",operation,finishedAt:Date.now(),reason:"RETENTION_LOCK_RELEASE_REQUIRES_REVIEW"};stateWritten=true;}
-  if(stateWritten)await save(stateFile,result);
+  if(rollingState&&result.status==="PASS"&&settlement){
+   try{
+    if(await privateText(rollingLedgerPath(config.archiveDirectory))!==rollingRaw)throw Error("RETENTION_ROLLING_LEDGER_CHANGED");
+    await save(rollingLedgerPath(config.archiveDirectory),settleRolling(rollingState,operation,settlement,Date.now()));
+   }catch{result={status:"STOPPED",operation,finishedAt:Date.now(),reason:"RETENTION_ROLLING_SETTLEMENT_REQUIRES_REVIEW"};}
+  }
+  if(completionPath)await save(completionPath,{...result,runId:sync.runId,automaticRetry:false});
+  if(stateWritten)await save(stateFile,{...result,...(config.format==="retention-after-sync-config-v3"?{runId:sync.runId}:{})});
  }
  return result;
 }

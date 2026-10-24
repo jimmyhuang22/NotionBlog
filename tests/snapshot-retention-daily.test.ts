@@ -184,3 +184,78 @@ test("catalog review admits only the pinned observer delta and never changes the
   assert.throws(()=>reviewRetentionCatalog(disabled,{...expected,afterSHA256:disabled.actualCatalogSHA256}),/DELTA_MISMATCH/);
  }finally{await db.close();}
 });
+
+
+test("rolling row allowance rejects the full archive set before download, restore or delete",async()=>{
+ const {db,port}=await fixture(),{store}=memoryStore();let downloads=0,deletes=0,restores=0;
+ try{
+  await assert.rejects(dailyRetention({maximumRuns:2,maximumDeletedRows:5,db:{...port,
+   payload:async()=>{downloads++;return [];},deleteChunk:async()=>{deletes++;throw Error("unexpected write");}},store,now:()=>0,assertWindow:async()=>{},
+   restore:async()=>{restores++;},health:async()=>{}}),/RETENTION_ROW_BUDGET/);
+  assert.deepEqual([downloads,restores,deletes],[0,0,0]);
+  assert.equal((await db.query("SELECT * FROM nb_v2.records")).rows.length,5);
+ }finally{await db.close();}
+});
+
+
+test("actual rolling CLI closes its SQL adapter and accounts identity plus extra plan, with row admission before writes",async()=>{
+ const {mkdtemp,mkdir,writeFile,readFile,lstat,rm,readdir}=await import("node:fs/promises");
+ const {tmpdir}=await import("node:os");const {join,dirname,resolve}=await import("node:path");const {pathToFileURL}=await import("node:url");
+ const {initialRollingLedger,reserveRolling,settleRolling,rollingLedgerPath}=await import("../scripts/database-retention/rolling-ledger.ts");
+ const key=Symbol.for("notionblog.test.retention-pool");
+ const host=globalThis as typeof globalThis&{[key]:{db:PGlite;closed:boolean;rowsBeforeClose?:number}};
+ for(const maximumRows of [6,5]){
+  const {db}=await fixture(),dir=await mkdtemp(join(tmpdir(),"retention-real-cli-"));
+  const originalArgv=process.argv,originalFetch=globalThis.fetch;
+  const oldEnv={url:process.env.RETENTION_DATABASE_URL,tls:process.env.DATABASE_TLS};
+  host[key]={db,closed:false};
+  try{
+   await db.exec("SET ROLE nb_retention_executor");
+   const state=join(dir,"state"),archive=join(dir,"archive"),reservationId=id(105),folder=join(state,reservationId);
+   await mkdir(folder,{recursive:true,mode:0o700});await mkdir(archive,{mode:0o700});
+   const shim=join(dir,"pg-fixture.mjs");
+   await writeFile(shim,`export class Pool{constructor(){this.host=globalThis[Symbol.for('notionblog.test.retention-pool')];}
+    on(){} async query(text,values){if(!values&&text.includes(';')){await this.host.db.exec(text);return {rows:[]};}return this.host.db.query(text,values);}
+    async connect(){return {query:this.query.bind(this),release(){}};}
+    async end(){await this.host.db.exec('RESET ROLE');this.host.rowsBeforeClose=(await this.host.db.query('SELECT count(*)::integer n FROM nb_v2.records')).rows[0].n;await this.host.db.close();this.host.closed=true;}}`,{mode:0o600});
+   const sourcePath=resolve("scripts/database-retention/cli.ts"),source=await readFile(sourcePath,"utf8");
+   const originalMain=source.slice(0,source.indexOf('\nmain().catch'));
+   assert.ok(originalMain.length>1000);
+   const bound=originalMain.replace(/from "([^"\n]+)"/g,(match,specifier:string)=>specifier==='pg'?`from ${JSON.stringify(pathToFileURL(shim).href)}`:
+    specifier.startsWith('.')?`from ${JSON.stringify(pathToFileURL(resolve(dirname(sourcePath),specifier)).href)}`:match);
+   const entry=join(dir,"cli-under-test.mts");await writeFile(entry,bound+'\nexport {main};\n',{mode:0o600});
+   let ledger=reserveRolling(initialRollingLedger(state,archive,0),id(9),id(109),0,2);
+   ledger=settleRolling(ledger,id(109),{runs:1,returnedBytes:0,deleteCalls:0,deletedRows:250_000-maximumRows},Date.now());
+   ledger=reserveRolling(ledger,id(5),reservationId,Date.now(),2);
+   const rawLedger=JSON.stringify(ledger),ledgerPath=rollingLedgerPath(archive);await writeFile(ledgerPath,rawLedger,{mode:0o600});
+   const sync=join(dir,"sync.json"),operation=join(dir,"source");await writeFile(sync,JSON.stringify({status:"PASS",runId:id(5),operation}),{mode:0o600});
+   const proofs=[{path:ledgerPath,sha256:sha256(rawLedger)}];
+   for(let n=0;n<4;n++){const path=join(dir,`proof${n}.json`);await writeFile(path,"{}",{mode:0o600});proofs.push({path,sha256:sha256("{}")});}
+   const locks=[];
+   for(let n=0;n<4;n++){const path=join(dir,`lock${n}`);await writeFile(path,"owned",{mode:0o600});const st=await lstat(path);locks.push({path,ino:st.ino,dev:st.dev,sha256:sha256("owned")});}
+   const binary=join(dir,"dependency.wasm"),binaryBytes=Buffer.from([0xff,0x00,0x61]);await writeFile(binary,binaryBytes,{mode:0o600});
+   const windowPath=join(folder,"WINDOW_PRIVATE.json"),window={format:"retention-after-sync-window-v3",maximumRuns:2,runId:id(5),deadline:Date.now()+300_000,syncState:sync,operation,
+    locks,absentLocks:[join(dir,"absent")],proofs,archiveDirectory:archive,healthURL:"https://example.org/api/health/content",programFiles:[{path:entry,sha256:sha256(await readFile(entry,"utf8"))},{path:binary,sha256:sha256(binaryBytes)}],
+    rolling:{reservationId,stateDirectory:state,limits:ledger.entries.at(-1)!.reserved}};
+   const rawWindow=JSON.stringify(window);await writeFile(windowPath,rawWindow,{mode:0o600});
+   process.env.RETENTION_DATABASE_URL="postgresql://fixture:fixture@127.0.0.1:1/fixture";process.env.DATABASE_TLS="disable";
+   globalThis.fetch=(async(input)=>{assert.equal(String(input),window.healthURL);return new Response("{}",{status:200});}) as typeof fetch;
+   process.argv=[process.execPath,entry,"--window",windowPath];const cli=await import(pathToFileURL(entry).href);
+   if(maximumRows===6){
+    await cli.main();assert.equal(host[key].closed,true);assert.equal(host[key].rowsBeforeClose,3);
+    const actual=JSON.parse(await readFile(join(folder,"USAGE_PRIVATE.json"),"utf8"));assert.equal(actual.deletedRows,6);assert.equal(actual.runs,2);assert.equal(actual.connectionsClosed,true);
+    assert.equal(actual.windowSHA256,sha256(rawWindow));
+    const operation=(await readdir(archive)).find(name=>/^[a-f0-9-]{36}$/.test(name));assert.ok(operation);
+    const core=JSON.parse(await readFile(join(archive,operation,"completion.json"),"utf8"));assert.ok(actual.returnedBytes>core.returnedBytes,"entry role and extra plan are also charged");
+   }else{
+    await assert.rejects(cli.main(),/RETENTION_ROW_BUDGET/);assert.equal(host[key].closed,true);assert.equal(host[key].rowsBeforeClose,5);
+    await assert.rejects(lstat(join(folder,"USAGE_PRIVATE.json")),{code:"ENOENT"});
+   }
+  }finally{
+   process.argv=originalArgv;globalThis.fetch=originalFetch;
+   if(oldEnv.url===undefined)delete process.env.RETENTION_DATABASE_URL;else process.env.RETENTION_DATABASE_URL=oldEnv.url;
+   if(oldEnv.tls===undefined)delete process.env.DATABASE_TLS;else process.env.DATABASE_TLS=oldEnv.tls;
+   if(!host[key].closed)await db.close();delete (host as unknown as Record<symbol,unknown>)[key];await rm(dir,{recursive:true,force:true});
+  }
+ }
+});
