@@ -91,8 +91,45 @@ test("Notion mapping carries configured public scores separately from legacy val
   const missing = (await repo.get("movie", id(2)))!.item;
   assert.equal(missing.publicRating, null); assert.equal(missing.ratingSource, null);
   assert.equal(movieRatingFact(missing), null);
-  (f.pages[0]!.properties.Score as { number: number }).number = 11;
-  await assert.rejects(repo.list("movie"), { code: "CONTENT_UNAVAILABLE" });
+});
+
+test("invalid source movie scores become explicit unknowns without blocking other records or leaking diagnostics", async t => {
+  const f = fixture(), repo = createWebsiteNotionRepository({ client: f.client, config: f.config });
+  const warnings = t.mock.method(console, "warn", () => {});
+  for (const score of [85, 10.01, -1, Number.NaN, Number.POSITIVE_INFINITY, null, 0, 10]) {
+    (f.pages[0]!.properties.Score as { number: number | null }).number = score;
+    const expected = score !== null && Number.isFinite(score) && score >= 0 && score <= 10 ? score : null;
+    const listed = await repo.list("movie");
+    assert.equal(listed.total, 3);
+    const item = listed.items.find(row => row.id === id(2))!;
+    assert.equal(item.publicRating, expected);
+    assert.equal(item.ratingSource, expected === null ? null : "douban");
+    assert.equal(item.doubanRating, 9.1, "keep the separately mapped legacy value");
+    assert.equal(item.rating?.value, 4);
+    if (expected === null) assert.equal(movieRatingFact(item), null, "do not fall back to the legacy score");
+    assert.equal(listed.items.find(row => row.id === id(3))!.publicRating, 8.2);
+    assert.equal(listed.items.find(row => row.id === id(4))!.publicRating, 0);
+  }
+  assert.equal(warnings.mock.callCount(), 2, "only the two newly rejected upper-bound values warn");
+  (f.pages[0]!.properties.Score as { number: number }).number = 85;
+  assert.equal((await repo.getLibraryYears!("movie")).undatedCount, 3);
+  assert.equal((await repo.getContentMetadata!("movie", id(2)))!.publicRating, null);
+  assert.equal((await repo.get("movie", id(2)))!.item.publicRating, null);
+  const collected = await repo.collectRecords();
+  assert.equal(collected.length, 3);
+  for (const record of collected) validateWebsiteRecord(record);
+  const single = await repo.collectRecord(id(2), { kind: "movie", ordinal: 0 });
+  assert.equal((single!.detail.item as Movie).publicRating, null);
+  validateWebsiteRecord(single!);
+  const legacy = fixture(true);
+  (legacy.pages[0]!.properties.Legacy as { number: number }).number = 85;
+  const old = (await createWebsiteNotionRepository({ client: legacy.client, config: legacy.config }).get("movie", id(2)))!.item;
+  assert.equal(old.publicRating, null); assert.equal(old.ratingSource, null);
+  assert.equal(old.doubanRating, 85); assert.equal(movieRatingFact(old), null);
+  assert.ok(warnings.mock.callCount() > 0);
+  for (const call of warnings.mock.calls) assert.deepEqual(call.arguments, ["NOTION_MOVIE_PUBLIC_RATING_INVALID"]);
+  f.client.listPages = async () => { throw new Error("synthetic upstream failure"); };
+  await assert.rejects(repo.list("movie"), /synthetic upstream failure/);
 });
 
 test("optional rating fields reject malformed payloads while old movie records remain valid", () => {
@@ -133,6 +170,19 @@ test("real restricted SQL preserves score sources through publication, list, det
   }
   const response = await contentListResponse(new Request("https://example.test/api/content/movie"), "movie", reader, features);
   assert.equal((await response.json()).data.items.length, 3);
+  const warnings = t.mock.method(console, "warn", () => {});
+  (f.pages[0]!.properties.Score as { number: number }).number = 85;
+  await runWebsiteSync({ client: f.client, config: f.config, writer, storage, mode: "publish" });
+  const invalid = (await reader.get("movie", id(2)))!.item;
+  assert.equal(invalid.publicRating, null); assert.equal(invalid.ratingSource, null);
+  assert.equal(invalid.doubanRating, 9.1); assert.equal(movieRatingFact(invalid), null);
+  assert.equal((await reader.list("movie")).total, 3);
+  assert.equal((await reader.getLibraryYears!("movie")).undatedCount, 3);
+  assert.equal((await reader.get("movie", id(3)))!.item.publicRating, 8.2);
+  const invalidResponse = await contentDetailResponse(new Request("https://example.test/detail"), "movie", id(2), reader, features);
+  assert.equal(invalidResponse.status, 200);
+  assert.equal((await invalidResponse.json()).data.item.publicRating, null);
+  assert.ok(warnings.mock.callCount() > 0);
   const rows = await createWebsiteNotionRepository({ client: f.client, config: f.config }).collectRecords();
   for (const row of rows) { delete (row.detail.item as Movie).publicRating; delete (row.detail.item as Movie).ratingSource; }
   const lease = await writer.begin(randomUUID(), policy.configDigest);
