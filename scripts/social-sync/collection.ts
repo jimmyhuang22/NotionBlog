@@ -1,7 +1,7 @@
 import type { SocialCollectionCard } from "../../contracts/social-collections.ts";
 import { count, hash, identity, metricNames, object, SocialSyncError, text, timestamp, videoUrl } from "./model.ts";
 import type { Metrics, Target } from "./model.ts";
-import { fetchCollectionPage, collectionPageState } from "./bilibili.ts";
+import { fetchCollectionPage, collectionPageState, requirePublicApiVideo } from "./bilibili.ts";
 
 export const MAX_COLLECTION_MEMBERS = 1000;
 export const MAX_COLLECTION_PARTS = 2000;
@@ -11,7 +11,7 @@ export interface CollectionTarget {
 }
 export interface CollectionMember { id: string; publishedAt: string | null; parts: string[]; partsComplete: boolean }
 export interface CollectionSnapshot {
-  version: 1; source: "bilibili-collection-ssr"; target: CollectionTarget; title: string;
+  version: 1; source: "bilibili-collection-ssr" | "bilibili-collection-api-json"; target: CollectionTarget; title: string;
   observedAt: string; firstPublishedAt: string | null; membershipComplete: true;
   members: CollectionMember[]; metrics: Metrics; responseSha256: string; websitePublicationApproved: false;
 }
@@ -64,7 +64,7 @@ function seconds(value: unknown, at: string): string | null {
 /** Strict narrow input. Unknown dates remain null; unknown part completeness is explicit. */
 export function validateCollectionSnapshot(value: unknown): CollectionSnapshot {
   const s = shape(value, ["version", "source", "target", "title", "observedAt", "firstPublishedAt", "membershipComplete", "members", "metrics", "responseSha256", "websitePublicationApproved"]);
-  if (s.version !== 1 || s.source !== "bilibili-collection-ssr" || s.membershipComplete !== true || s.websitePublicationApproved !== false ||
+  if (s.version !== 1 || !["bilibili-collection-ssr", "bilibili-collection-api-json"].includes(String(s.source)) || s.membershipComplete !== true || s.websitePublicationApproved !== false ||
       typeof s.observedAt !== "string" || typeof s.responseSha256 !== "string" || !/^[a-f0-9]{64}$/.test(s.responseSha256)) throw new SocialSyncError("COLLECTION_INVALID");
   const target = collectionTarget(s.target), at = timestamp(s.observedAt);
   if (!Array.isArray(s.members) || s.members.length < 1 || s.members.length > MAX_COLLECTION_MEMBERS) throw new SocialSyncError("COLLECTION_INCOMPLETE");
@@ -82,7 +82,7 @@ export function validateCollectionSnapshot(value: unknown): CollectionSnapshot {
   }
   const metric = shape(s.metrics, [...metricNames]), metrics = {} as Metrics;
   for (const name of metricNames) metrics[name] = count(metric[name]);
-  const result: CollectionSnapshot = { version: 1, source: "bilibili-collection-ssr", target, title: text(s.title), observedAt: at,
+  const result: CollectionSnapshot = { version: 1, source: s.source as CollectionSnapshot["source"], target, title: text(s.title), observedAt: at,
     firstPublishedAt: nullableTime(s.firstPublishedAt, at), membershipComplete: true, members, metrics,
     responseSha256: s.responseSha256, websitePublicationApproved: false };
   if (target.kind === "season" && result.firstPublishedAt !== null) throw new SocialSyncError("COLLECTION_INVALID");
@@ -97,7 +97,12 @@ function pages(value: unknown): string[] {
 }
 /** Season metrics come only from season.stat; multi-part metrics count the BV once. */
 export function collectionFromPage(html: string, expected: CollectionTarget, observedAt: string): CollectionSnapshot {
-  const target = collectionTarget(expected), at = timestamp(observedAt), v = object(collectionPageState(html).videoData), owner = object(v.owner);
+  return collectionFromVideoData(collectionPageState(html).videoData, expected, observedAt, "bilibili-collection-ssr", hash(html));
+}
+/** The same complete-roster checks apply to each inert response representation. */
+export function collectionFromVideoData(value: unknown, expected: CollectionTarget, observedAt: string, source: CollectionSnapshot["source"], responseSha256: string): CollectionSnapshot {
+  const target = collectionTarget(expected), at = timestamp(observedAt), v = object(value), owner = object(v.owner);
+  if(source==="bilibili-collection-api-json")requirePublicApiVideo(v);
   const representative = videoUrl(target.representativeUrl).publicationId;
   if (v.bvid !== representative || identity(owner.mid) !== target.accountId) throw new SocialSyncError("IDENTITY_MISMATCH");
   if (v.state !== 0 || v.is_upower_exclusive || v.is_upower_preview || v.is_pay_season) throw new SocialSyncError("SOURCE_BLOCKED");
@@ -140,8 +145,8 @@ export function collectionFromPage(html: string, expected: CollectionTarget, obs
   const metrics = {} as Metrics;
   const names = { views: "view", likes: "like", comments: "reply", shares: "share", collections: target.kind === "season" ? "fav" : "favorite", coins: "coin", danmaku: "danmaku" };
   for (const name of metricNames) metrics[name] = count(rawMetrics[names[name]]);
-  return validateCollectionSnapshot({ version: 1, source: "bilibili-collection-ssr", target, title, observedAt: at, firstPublishedAt,
-    membershipComplete: true, members, metrics, responseSha256: hash(html), websitePublicationApproved: false });
+  return validateCollectionSnapshot({ version: 1, source, target, title, observedAt: at, firstPublishedAt,
+    membershipComplete: true, members, metrics, responseSha256, websitePublicationApproved: false });
 }
 export async function collectCollection(target: CollectionTarget, signal?: AbortSignal, request: typeof fetch = fetch, captured?: (html:string,snapshot:CollectionSnapshot)=>Promise<void>) {
   const t = collectionTarget(target), url = videoUrl(t.representativeUrl);

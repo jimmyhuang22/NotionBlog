@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "enabled": false,
+  "baseScopeDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "stateDirectories": {
+    "publications": "/absolute/private/bilibili-api/publications",
+    "collections": "/absolute/private/bilibili-api/collections"
+  }
+}

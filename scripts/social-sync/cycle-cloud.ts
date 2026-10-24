@@ -67,14 +67,19 @@ export class CycleCloudSession {
   private readonly ports: CycleCloudPorts;
   private readonly httpNotes: boolean;
   private readonly xhsAccount?:XhsAccountTransport;
-  constructor(signal?: AbortSignal, ports: CycleCloudPorts = { connect: openConnection }, options: { httpNotes?: boolean;xhsAccount?:XhsAccountTransport } = {}) {
+  private readonly bilibiliApi: boolean;
+  constructor(signal?: AbortSignal, ports: CycleCloudPorts = { connect: openConnection }, options: { httpNotes?: boolean;xhsAccount?:XhsAccountTransport;bilibiliApi?:boolean } = {}) {
     this.signal = signal; this.ports = ports;
     this.httpNotes = options.httpNotes === true;
     this.xhsAccount=options.xhsAccount;
+    this.bilibiliApi=options.bilibiliApi===true;
+    if(this.bilibiliApi&&(this.httpNotes||this.xhsAccount))throw new SocialSyncError("LOCAL_DATA_INVALID");
     this.now = ports.now ?? (() => performance.now());
   }
   get closed() { return this.stopped; }
   get httpNotesPrepared() { return this.httpNotes && this.publication !== null && !this.failed && !this.stopped && !this.closing; }
+  get bilibiliApiPrepared() { return this.bilibiliApi && this.publication !== null && this.collection !== null && !this.failed && !this.stopped && !this.closing; }
+  hasPreparedBilibiliApi(raw: string, scope: string, accountMode?: boolean) { return this.bilibiliApiPrepared && this.binding?.credentials === hash(raw) && this.binding.scope === scope && (accountMode===undefined||this.accountMode===accountMode); }
   private check(signal?: AbortSignal) {
     if (this.signal?.aborted || signal?.aborted) throw new SocialSyncError("CANCELLED");
     if (this.stopped || this.closing) throw new SocialSyncError("CLOUD_SESSION_CLOSED");
@@ -106,6 +111,7 @@ export class CycleCloudSession {
   }
   /** Check the additive capability before collecting HTTP notes or changing their local store. */
   async preparePublications(raw: string, scope: string, signal?: AbortSignal) {
+    if(this.bilibiliApi)throw new SocialSyncError("LOCAL_DATA_INVALID");
     return this.send(async () => {
       await this.ready(raw, scope, signal);
       if (this.accountMode !== null && this.accountMode !== false) throw new SocialSyncError("CLOUD_SESSION_INPUT_CHANGED");
@@ -117,6 +123,23 @@ export class CycleCloudSession {
       }
     });
   }
+  /** Both additive capabilities are checked before the first new-source GET. */
+  async prepareBilibiliApi(raw: string, scope: string, accountMode: boolean, signal?: AbortSignal) {
+    if(!this.bilibiliApi)throw new SocialSyncError("BILIBILI_API_PROTOCOL_REQUIRED");
+    return this.send(async()=>{
+      await this.ready(raw,scope,signal);
+      if(this.accountMode!==null&&this.accountMode!==accountMode)throw new SocialSyncError("CLOUD_SESSION_INPUT_CHANGED");this.accountMode=accountMode;
+      if(!this.publication){this.cost.handshakeAttempts++;this.publication=await this.measured("handshakeMs",()=>createCloudTransport(this.connection!.sql,this.signal,accountMode,false,undefined,true));this.cost.publicationHandshakes++;}
+      if(!this.collection){this.cost.handshakeAttempts++;this.collection=await this.measured("handshakeMs",()=>createCollectionTransport(this.connection!.sql,this.signal,accountMode,true));this.cost.collectionHandshakes++;}
+    });
+  }
+  /** The account-discovery writer has validated and durably registered a new local scope.
+   * Only an unused, same-credential account session may adopt it, before any ingest. */
+  adoptDiscoveredBilibiliScope(raw: string, previousScope: string, nextScope: string) {
+    this.check();
+    if(!this.hasPreparedBilibiliApi(raw,previousScope)||this.accountMode!==true||this.active||this.cost.ingestAttempts!==0||!/^[a-f0-9]{64}$/.test(nextScope))throw new SocialSyncError("CLOUD_SESSION_INPUT_CHANGED");
+    this.binding={credentials:hash(raw),scope:nextScope};
+  }
   async sendPublication(raw: string, scope: string, item: Pending, signal: AbortSignal | undefined, checkScope: () => Promise<void>, accountMode = false) {
     return this.send(async () => {
       await this.ready(raw, scope, signal);
@@ -124,7 +147,7 @@ export class CycleCloudSession {
       this.accountMode = accountMode;
       if (!this.publication) {
         this.cost.handshakeAttempts++;
-        this.publication = await this.measured("handshakeMs", () => createCloudTransport(this.connection!.sql, this.signal, accountMode, this.httpNotes,this.xhsAccount));
+        this.publication = await this.measured("handshakeMs", () => createCloudTransport(this.connection!.sql, this.signal, accountMode, this.httpNotes,this.xhsAccount,this.bilibiliApi));
         this.cost.publicationHandshakes++;
       }
       await checkScope(); this.check(signal); this.cost.ingestAttempts++;
@@ -140,7 +163,7 @@ export class CycleCloudSession {
       this.accountMode = accountMode;
       if (!this.collection) {
         this.cost.handshakeAttempts++;
-        this.collection = await this.measured("handshakeMs", () => createCollectionTransport(this.connection!.sql, this.signal, accountMode));
+        this.collection = await this.measured("handshakeMs", () => createCollectionTransport(this.connection!.sql, this.signal, accountMode,this.bilibiliApi));
         this.cost.collectionHandshakes++;
       }
       await checkScope(); this.check(signal); this.cost.ingestAttempts++;
@@ -162,7 +185,7 @@ export class CycleCloudSession {
   async bindSeasonLink(raw:string,scope:string,proof:{key:string;url:string;checkedAt:string},checkScope:()=>Promise<void>){
     return this.send(async()=>{
       await this.ready(raw,scope);this.check();
-      if(!this.collection){this.cost.handshakeAttempts++;this.collection=await this.measured("handshakeMs",()=>createCollectionTransport(this.connection!.sql,this.signal,true));this.cost.collectionHandshakes++;}
+      if(!this.collection){this.cost.handshakeAttempts++;this.collection=await this.measured("handshakeMs",()=>createCollectionTransport(this.connection!.sql,this.signal,true,this.bilibiliApi));this.cost.collectionHandshakes++;}
       await checkScope();this.cost.ingestAttempts++;
       const r=await this.measured("ingestMs",()=>this.connection!.sql.query<{accepted:boolean}>("SELECT social_sync.bind_bilibili_season_link($1,$2,$3) accepted",[proof.key,proof.url,proof.checkedAt]));
       this.check();if(r.rows.length!==1||r.rows[0]!.accepted!==true)throw new SocialSyncError("ACK_MISMATCH");this.cost.receipts++;return {key:proof.key,accepted:true};

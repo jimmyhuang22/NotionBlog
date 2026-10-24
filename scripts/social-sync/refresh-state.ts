@@ -10,11 +10,13 @@ import { planRefresh } from "./refresh.ts";
 import { readRefreshScope } from "./refresh-scope.ts";
 import type { RefreshConfig } from "./refresh.ts";
 import { reviewCandidate } from "./refresh-executor.ts";
+import { readBilibiliMetadataRoot } from "./bilibili-api-policy.ts";
 
 /** Consistent read-only work selection, under the same source locks as the executor. */
 export async function inspectRefresh(root:string,platform:"bilibili"|"xiaohongshu",at=new Date().toISOString(),scopeProvider?:()=>Promise<RefreshConfig>){
   await privateDirectory(root);
   const readScope=scopeProvider??(()=>readRefreshScope(root,platform)),scope=await readScope();
+  const metadataRoot=platform==="bilibili"?await readBilibiliMetadataRoot(root):root;
   const dirs=[root,...(scope.publications.length?[scope.stateDirectories.publications]:[]),...(scope.collections.length?[scope.stateDirectories.collections]:[])];
   const releases:(()=>Promise<void>)[]=[];
   let pubs:Awaited<ReturnType<typeof openStore>>=null,cols:Awaited<ReturnType<typeof openCollectionStore>>=null;
@@ -26,7 +28,9 @@ export async function inspectRefresh(root:string,platform:"bilibili"|"xiaohongsh
     const pending=new Set<string>(),held=new Set<string>();
     for(const entry of plan.entries.filter(e=>e.platform===platform)){
       try{
-        const record=JSON.parse(await readPrivateFile(join(root,`review-${entry.type}-${entry.key}.json`),600*1024));
+        const reviewFile=`review-${entry.type}-${entry.key}.json`;let raw:string;
+        try{raw=await readPrivateFile(join(metadataRoot,reviewFile),600*1024);}catch(error){if(metadataRoot===root||(error as NodeJS.ErrnoException).code!=="ENOENT")throw error;raw=await readPrivateFile(join(root,reviewFile),600*1024);}
+        const record=JSON.parse(raw);
         if(record.version!==1||record.candidate?.key!==entry.key||record.candidate?.type!==entry.type)throw new SocialSyncError("LOCAL_DATA_INVALID");
         if(!reviewCandidate(scope,record.candidate).allowed)held.add(entry.key);
       }catch(e){if((e as NodeJS.ErrnoException).code!=="ENOENT")throw e;}

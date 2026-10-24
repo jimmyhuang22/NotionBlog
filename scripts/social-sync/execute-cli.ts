@@ -15,6 +15,8 @@ import { MAX_REFRESH_CONFIG_BYTES,planRefresh,refreshConfig } from "./refresh.ts
 import { readRefreshScope } from "./refresh-scope.ts";
 import { readAccountPolicy } from "./bilibili-account-scope.ts";
 import { collectAccountCollection, collectAccountPublication } from "./bilibili-discovery.ts";
+import { collectApiPublication, collectApiCollection } from "./bilibili-api-collect.ts";
+import { readBilibiliApiPolicy } from "./bilibili-api-policy.ts";
 import type { CollectionTarget } from "./collection.ts";
 import type { Target } from "./model.ts";
 import { refreshRequest } from "./refresh-executor.ts";
@@ -34,11 +36,13 @@ export interface RootExecutionOptions {
   keys?:string[];captures?:Observation[];request?:typeof fetch;signal?:AbortSignal;
   scopeDigest?:string;expectedSnapshots?:Record<string,string|null>;observe?:RefreshObserver;cloudSession?:CycleCloudSession;
   scopeProvider?:()=>Promise<RefreshConfig>;collectHttpNote?:(target:Target,signal?:AbortSignal)=>Promise<Observation>;
+  bilibiliApi?:boolean;
 }
 export async function executeAtRoot(root:string,options:RootExecutionOptions){
   const {platform,limit,prepare}=options;
   if(!root||!isAbsolute(root)||resolve(root)!==root||!Number.isInteger(limit)||limit<1||limit>MAX_REFRESH_TARGETS)throw new SocialSyncError("USAGE");
   if(options.cloudSession&&platform!=="bilibili"&&!options.collectHttpNote)throw new SocialSyncError("USAGE");
+  if(options.bilibiliApi&&platform!=="bilibili")throw new SocialSyncError("USAGE");
   if(options.collectHttpNote&&(platform!=="xiaohongshu"||!options.scopeProvider||!options.cloudSession||prepare||(options.captures?.length??0)>0))throw new SocialSyncError("USAGE");
   if(options.collectHttpNote&&!options.cloudSession!.httpNotesPrepared)throw new SocialSyncError("XHS_HTTP_PROTOCOL_REQUIRED");
   process.umask(0o077);await privateDirectory(root);
@@ -54,7 +58,12 @@ export async function executeAtRoot(root:string,options:RootExecutionOptions){
     for(const dir of [...new Set([root,...sourceDirs])].sort())releases.push(await acquireLock(dir,runId));
     const checkScope=async()=>{if(hash(JSON.stringify(await readScope()))!==digest)throw new SocialSyncError("REFRESH_SCOPE_CHANGED");};
     await checkScope();if(options.scopeDigest&&options.scopeDigest!==digest)throw new SocialSyncError("REFRESH_SCOPE_CHANGED");
-    const accountPolicy=platform==="bilibili"?await readAccountPolicy(root,refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES)))):null;
+    const base=platform==="bilibili"?refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))):null;
+    const accountPolicy=base?await readAccountPolicy(root,base):null;
+    const apiPolicy=base?await readBilibiliApiPolicy(root,base):null,apiMode=apiPolicy?.enabled===true;
+    const metadataRoot=apiMode?apiPolicy.stateDirectories.publications:root;
+    if(apiMode!==Boolean(options.bilibiliApi))throw new SocialSyncError("BILIBILI_API_PROTOCOL_REQUIRED");
+    if(apiMode&&(scope.stateDirectories.publications!==apiPolicy.stateDirectories.publications||scope.stateDirectories.collections!==apiPolicy.stateDirectories.collections))throw new SocialSyncError("BILIBILI_API_STATE_OVERLAP");
     const accountMode=accountPolicy?.enabled===true;
     const request=accountMode?refreshRequest(options.request):options.request;
     // Preflight existing versions read-only: execution never creates or migrates a source database.
@@ -62,7 +71,8 @@ export async function executeAtRoot(root:string,options:RootExecutionOptions){
     if(scope.collections.length){collections=await openCollectionStore(scope.stateDirectories.collections,true);if(!collections)throw new SocialSyncError("REFRESH_STATE_MISSING");if(collections.status().pending===null)throw new SocialSyncError("REFRESH_STATE_UPGRADE_REQUIRED");}
     const held:RefreshCandidate[]=[];
     for(const entry of [...scope.publications.map(p=>({key:publicationKey(p.target),type:"publication"})),...scope.collections.map(c=>({key:collectionKey(c.target),type:"collection"}))]){
-      const raw=await optionalFile(join(root,`review-${entry.type}-${entry.key}.json`),600*1024);
+      const reviewFile=`review-${entry.type}-${entry.key}.json`;
+      const raw=(await optionalFile(join(metadataRoot,reviewFile),600*1024))??(metadataRoot!==root?await optionalFile(join(root,reviewFile),600*1024):null);
       if(raw!==null){const r=JSON.parse(raw);if(r.version!==1||r.candidate?.key!==entry.key||r.candidate?.type!==entry.type)throw new SocialSyncError("LOCAL_DATA_INVALID");
         reviewCandidate(scope,r.candidate);held.push(r.candidate);}
     }
@@ -80,6 +90,7 @@ export async function executeAtRoot(root:string,options:RootExecutionOptions){
       return {prepared:targets.length,captured:0,reviewRequired:blocked.size,executed:false};
     }
     const cloudRaw=await readPrivateFile(join(root,"cloud.env"),65536);cloudConfig(cloudRaw);
+    if(apiMode&&!options.cloudSession?.hasPreparedBilibiliApi(cloudRaw,digest,accountMode))throw new SocialSyncError("BILIBILI_API_PROTOCOL_REQUIRED");
     const rawCaptures=platform==="xiaohongshu"&&!options.collectHttpNote&&!options.uploadOnly&&options.captures===undefined?await optionalFile(join(root,"xiaohongshu-snapshot.json"),MAX_SNAPSHOT_BYTES):null;
     const captures=options.captures??(rawCaptures===null?[]:snapshotBatch(rawCaptures,scope.publications.map(p=>p.target)));
     if(captures.length>limit)throw new SocialSyncError("REFRESH_LIMIT_INVALID");
@@ -92,12 +103,14 @@ export async function executeAtRoot(root:string,options:RootExecutionOptions){
         pubCloud??=await connectCloud(cloudRaw,controller.signal,accountMode);await checkScope();return pubCloud.send(item);},
       sendCollection:async item=>{if(options.cloudSession)return options.cloudSession.sendCollection(cloudRaw,digest,item,controller.signal,checkScope,accountMode);
         colCloud??=await connectCollectionCloud(cloudRaw,controller.signal,accountMode);await checkScope();return colCloud.send(item);},
-      saveReview:async(candidate,code)=>{await checkScope();await writeJson(join(root,`review-${candidate.type}-${candidate.key}.json`),{version:1,scopeDigest:digest,recordedAt:new Date().toISOString(),code,candidate});},
-      progress:async r=>{timestamp(r.startedAt);await writeJson(join(root,"latest-execution.json"),{runId,...r});
-        if(r.finishedAt&&!r.failed&&!r.paused&&!r.cancelled&&!r.waitingBrowser&&!r.reviewRequired&&r.selected>0)await writeJson(join(root,"last-successful-batch.json"),{runId,...r});}
+      saveReview:async(candidate,code)=>{await checkScope();await writeJson(join(metadataRoot,`review-${candidate.type}-${candidate.key}.json`),{version:1,scopeDigest:digest,recordedAt:new Date().toISOString(),code,candidate});},
+      progress:async r=>{timestamp(r.startedAt);await writeJson(join(metadataRoot,"latest-execution.json"),{runId,...r});
+        if(r.finishedAt&&!r.failed&&!r.paused&&!r.cancelled&&!r.waitingBrowser&&!r.reviewRequired&&r.selected>0)await writeJson(join(metadataRoot,"last-successful-batch.json"),{runId,...r});}
     },{platform:platform as "bilibili"|"xiaohongshu",limit,signal:controller.signal,captures,held,uploadOnly:options.uploadOnly,keys:options.keys,request,observe:options.observe,
       ...(options.collectHttpNote?{collectHttpNote:options.collectHttpNote}:{}),
-      ...(accountMode?{collectPublication:(target:Target,signal?:AbortSignal)=>collectAccountPublication(root,hash(JSON.stringify(accountPolicy)),target,signal,request,media.stageCollection),
+      ...(apiMode?{stopOnCaptureFailure:true,
+        collectPublication:(target:Target,signal?:AbortSignal)=>collectApiPublication(apiPolicy!.stateDirectories.publications,accountMode?hash(JSON.stringify(accountPolicy)):null,target,signal,request,media.stageApiCollection),
+        collectCollection:(target:CollectionTarget,signal?:AbortSignal)=>collectApiCollection(apiPolicy!.stateDirectories.publications,accountMode?hash(JSON.stringify(accountPolicy)):null,target,scope.publications.map(p=>p.target),signal,request,media.stageApiCollection)}:accountMode?{collectPublication:(target:Target,signal?:AbortSignal)=>collectAccountPublication(root,hash(JSON.stringify(accountPolicy)),target,signal,request,media.stageCollection),
         collectCollection:(target:CollectionTarget,signal?:AbortSignal)=>collectAccountCollection(root,hash(JSON.stringify(accountPolicy)),target,scope.publications.map(p=>p.target),signal,request,media.stageCollection)}:
         {collectCollection:(target:CollectionTarget,signal?:AbortSignal)=>collectCollection(target,signal,request,media.stageCollection)})});
     return report;

@@ -92,7 +92,7 @@ export function automaticBilibiliRecovery(old: BilibiliHealth | null, previous: 
 }
 /** Recovery is Bilibili-only and requires the exact paused cycle and unchanged reviewed scope. */
 export async function runBilibiliCycle(command: "run" | "resume", previous: PreviousCycle | null, old: BilibiliHealth | null,
-  ports: BilibiliCyclePorts, options: { now?: () => string; signal?: AbortSignal } = {}): Promise<BilibiliHealth> {
+  ports: BilibiliCyclePorts, options: { now?: () => string; signal?: AbortSignal; manualOnFailure?:boolean } = {}): Promise<BilibiliHealth> {
   const now = options.now ?? (() => new Date().toISOString()), start = performance.now(), checkedAt = now();
   const health: BilibiliHealth = { version: 1, platform: "bilibili", checkedAt, state: "error", scopeDigest: old?.scopeDigest ?? null,
     lastCheckAt: old?.lastCheckAt ?? null, lastCollectedAt: old?.lastCollectedAt ?? null, lastUploadedAt: old?.lastUploadedAt ?? null,
@@ -111,6 +111,9 @@ export async function runBilibiliCycle(command: "run" | "resume", previous: Prev
     health.state = "manual-required"; health.recovery = { failures: Math.min(health.recovery.failures, 4), code, retryAt: null, manualRequired: true };
   };
   try {
+    if(command==="run"&&(old?.recovery.manualRequired||previous&&["paused","cancelled"].includes(previous.status)&&(!old||!old.recovery.retryAt))){
+      health.lastCheckAt=checkedAt;manual(old?.recovery.code??"BILIBILI_MANUAL_RESUME_REQUIRED");return health;
+    }
     const before = performance.now(), state = await ports.inspect(); health.cost.checkMs += performance.now() - before; inspected = true;
     health.scopeDigest = state.scopeDigest; health.lastCheckAt = checkedAt; health.plan = inspectBilibiliStatus(state, checkedAt);
     health.lastCollectedAt = state.entries.reduce((at, e) => later(at, e.observedAt), health.lastCollectedAt);
@@ -135,7 +138,7 @@ export async function runBilibiliCycle(command: "run" | "resume", previous: Prev
       failed: cycle.failed, remaining: cycle.remaining.length, batches: cycle.batches };
     if (cycle.status === "paused") {
       const failures = health.recovery.failures + 1;
-      if (failedCodes.length && failedCodes.every(code => transient.has(code)) && failures <= retryDelays.length && !options.signal?.aborted) {
+      if (!options.manualOnFailure && failedCodes.length && failedCodes.every(code => transient.has(code)) && failures <= retryDelays.length && !options.signal?.aborted) {
         const baseRetry = new Date(Date.parse(now()) + retryDelays[failures - 1]! * 60000).toISOString();
         const sourceRetry = failedCodes.includes("RATE_LIMITED") ? ports.retryNotBefore?.() ?? null : null;
         health.state = "retry-wait"; health.recovery = { failures, code: failedCodes.at(-1)!,

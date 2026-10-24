@@ -1,7 +1,8 @@
 import { coverUrl, noteCoverUrl, publicationKey, validateObservation, timestamp, hash, SocialSyncError, object, identity } from "../social-sync/model.ts";
 import type { Observation } from "../social-sync/model.ts";
-import { collectionKey, collectionFromPage, type CollectionTarget } from "../social-sync/collection.ts";
+import { collectionKey, collectionFromPage, collectionFromVideoData, type CollectionTarget } from "../social-sync/collection.ts";
 import { collectionPageState } from "../social-sync/bilibili.ts";
+import { apiVideoData } from "../social-sync/bilibili-api.ts";
 import type { CoverKind } from "../../src/server/social/covers.ts";
 
 export interface CoverSource { kind: CoverKind; key: string; platform: "bilibili" | "xiaohongshu"; url: string | null; observedAt: string }
@@ -29,6 +30,15 @@ export function collectionCoverSource(html: string, target: CollectionTarget, ob
   if(snapshotSha!==undefined&&hash(JSON.stringify(snapshot))!==snapshotSha)throw new SocialSyncError("COVER_COLLECTION_SOURCE_MISMATCH");
   const video = object(collectionPageState(html).videoData);
   if (identity(object(video.owner).mid) !== target.accountId) throw new SocialSyncError("IDENTITY_MISMATCH");
+  const own = target.kind === "multi-part" ? video.pic : object(video.ugc_season).cover;
+  return { kind: "collection", key: collectionKey(target), platform: "bilibili", url: collectionImageUrl(own), observedAt: timestamp(observedAt) };
+}
+/** JSON metadata must prove the same snapshot and raw response as the statistics ACK. */
+export function collectionApiCoverSource(raw: string, target: CollectionTarget, observedAt: string, snapshotSha: string): CoverSource {
+  const id = target.representativeUrl.split("/")[4], video = apiVideoData(raw, { platform: "bilibili", accountId: target.accountId,
+    workId: `bc_${collectionKey(target).slice(0,40)}`, publicationId: id, url: target.representativeUrl });
+  const snapshot = collectionFromVideoData(video, target, observedAt, "bilibili-collection-api-json", hash(raw));
+  if (hash(JSON.stringify(snapshot)) !== snapshotSha) throw new SocialSyncError("COVER_COLLECTION_SOURCE_MISMATCH");
   const own = target.kind === "multi-part" ? video.pic : object(video.ugc_season).cover;
   return { kind: "collection", key: collectionKey(target), platform: "bilibili", url: collectionImageUrl(own), observedAt: timestamp(observedAt) };
 }

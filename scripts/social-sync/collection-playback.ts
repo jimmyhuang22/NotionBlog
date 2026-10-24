@@ -7,7 +7,10 @@ import { acquireLock, privateDirectory, readPrivateFile } from "../notion-sync/s
 import { writeJson } from "../game-sync/private.ts";
 import { cloudConfig } from "./cloud.ts";
 import { fetchCollectionPage } from "./bilibili.ts";
-import { collectionFromPage, collectionKey, collectionTarget } from "./collection.ts";
+import { collectionFromPage, collectionFromVideoData, collectionKey, collectionTarget } from "./collection.ts";
+import { fetchApiVideo } from "./bilibili-api.ts";
+import { readBilibiliApiPolicy } from "./bilibili-api-policy.ts";
+import { MAX_REFRESH_CONFIG_BYTES, refreshConfig } from "./refresh.ts";
 import { refreshRequest, MAX_REFRESH_SOURCE_BYTES, MAX_REFRESH_RUN_MS } from "./refresh-executor.ts";
 import { readRefreshScope } from "./refresh-scope.ts";
 import { SocialSyncError, timestamp, hash } from "./model.ts";
@@ -18,17 +21,19 @@ const unavailable = () => new SocialSyncError("PLAYBACK_PROTOCOL_REQUIRED");
 
 /** Independent post-sync verifier. It cannot publish cards or update statistics. */
 async function verifyCollectionPlaybacksCore(sql: SqlExecutor, keys: string[], mode: "trial" | "retained", options: {
-  request?: typeof fetch; signal?: AbortSignal; checkScope?: () => Promise<void>;
+  request?: typeof fetch; signal?: AbortSignal; checkScope?: () => Promise<void>; bilibiliApi?:boolean;
 } = {}, maximumKeys = 20) {
   if (keys.length > maximumKeys || new Set(keys).size !== keys.length || keys.some(k => !/^[a-f0-9]{64}$/.test(k)) || !["trial","retained"].includes(mode)) throw new SocialSyncError("PLAYBACK_SCOPE_INVALID");
   const signal = AbortSignal.any([AbortSignal.timeout(MAX_REFRESH_RUN_MS), ...(options.signal ? [options.signal] : [])]);
   if(signal.aborted)throw new SocialSyncError("CANCELLED");
   await options.checkScope?.();
-  const handshake = (await sql.query<{ role: string; login: string; ready: boolean; elevated: boolean }>(`SELECT current_user::text role,session_user::text login,
+  const handshake = (await sql.query<{ role: string; login: string; ready: boolean; elevated: boolean; bilibili_api_version?:number }>(`SELECT current_user::text role,session_user::text login,
+    ${options.bilibiliApi?"(SELECT bilibili_api_version FROM social_sync.collection_meta WHERE singleton) bilibili_api_version,":""}
     to_regprocedure('social_sync.pending_collection_playbacks(jsonb,text)') IS NOT NULL AS ready,
     (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid)) AS elevated
     FROM pg_roles WHERE rolname=current_user`)).rows;
   if (handshake.length !== 1 || handshake[0].role !== "nb_social_worker" || handshake[0].login !== "nb_social_worker" || !handshake[0].ready || handshake[0].elevated) throw unavailable();
+  if(options.bilibiliApi&&handshake[0].bilibili_api_version!==1)throw new SocialSyncError("BILIBILI_API_PROTOCOL_REQUIRED");
   const rows: { candidate: Candidate }[] = [];
   for (let offset = 0; offset < keys.length; offset += 20) {
     signal.throwIfAborted(); await options.checkScope?.();
@@ -57,9 +62,10 @@ async function verifyCollectionPlaybacksCore(sql: SqlExecutor, keys: string[], m
     try {
       signal.throwIfAborted();
       await options.checkScope?.();
-      const { html, observedAt } = await fetchCollectionPage({ platform: "bilibili", accountId: c.accountId, publicationId: c.publicationId,
-        workId: `bc_${c.key.slice(0,40)}`, url: target.representativeUrl }, signal, request);
-      const snapshot = collectionFromPage(html, target, observedAt);
+      const probe={ platform: "bilibili" as const, accountId: c.accountId, publicationId: c.publicationId,workId:`bc_${c.key.slice(0,40)}`,url:target.representativeUrl };
+      let snapshot,observedAt:string;
+      if(options.bilibiliApi){const response=await fetchApiVideo(probe,signal,request);observedAt=response.observedAt;snapshot=collectionFromVideoData(response.videoData,target,observedAt,"bilibili-collection-api-json",hash(response.raw));}
+      else {const response=await fetchCollectionPage(probe,signal,request);observedAt=response.observedAt;snapshot=collectionFromPage(response.html,target,observedAt);}
       const dates = (members: { id: string; publishedAt: string | null }[]) => members.map(m => [m.id,m.publishedAt]).sort((a,b) => String(a[0]).localeCompare(String(b[0])));
       if (JSON.stringify(dates(snapshot.members)) !== JSON.stringify(dates(c.members))) throw new SocialSyncError("PLAYBACK_SOURCE_CHANGED");
       signal.throwIfAborted(); await options.checkScope?.();
@@ -105,12 +111,13 @@ export async function runCollectionPlaybackCli(args: string[]) {
   try {
     release=await acquireLock(root,randomUUID());
     const scope = await readRefreshScope(root,"bilibili"), digest=hash(JSON.stringify(scope)), keys = scope.collections.filter(c=>c.target.kind==="season").map(c=>collectionKey(c.target));
+    const base=refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))),apiMode=(await readBilibiliApiPolicy(root,base))?.enabled===true;
     const checkScope=async()=>{if(hash(JSON.stringify(await readRefreshScope(root,"bilibili")))!==digest)throw new SocialSyncError("REFRESH_SCOPE_CHANGED");};
     const raw = await readPrivateFile(join(root,"cloud.env"),65536);
     pool = new Pool(cloudConfig(raw)); pool.on("error",()=>{});
     const client = await pool.connect();
     try {
-      const report = await verifyCollectionPlaybackScope(client,keys,mode as "trial"|"retained",{checkScope,signal:controller.signal});
+      const report = await verifyCollectionPlaybackScope(client,keys,mode as "trial"|"retained",{checkScope,signal:controller.signal,bilibiliApi:apiMode});
       await writeJson(join(root,"collection-playback-latest.json"),{at:new Date().toISOString(),...report});
       console.log(JSON.stringify(report)); if(report.failed)process.exitCode=1;
     } finally { client.release(true); }

@@ -5,7 +5,7 @@ import { hash, SocialSyncError } from "../social-sync/model.ts";
 import type { Pending } from "../social-sync/store.ts";
 import { collectionKey, validateCollectionSnapshot, type CollectionSnapshot } from "../social-sync/collection.ts";
 import type { CollectionPending } from "../social-sync/collection-store.ts";
-import { collectionCoverSource, publicationCoverSource } from "./sources.ts";
+import { collectionCoverSource, collectionApiCoverSource, publicationCoverSource } from "./sources.ts";
 import { openCoverQueue, type CoverQueue } from "./queue.ts";
 import type { CoverMode } from "../../src/server/social/covers.ts";
 
@@ -41,6 +41,12 @@ export function createCoverHandoff(root: string) {
       const sha=hash(JSON.stringify(snapshot));
       const source = collectionCoverSource(html, snapshot.target, snapshot.observedAt,sha);
       queue.stage(source, sha);
+    }),
+    stageApiCollection: (raw: string, snapshot: CollectionSnapshot) => safe(queue => {
+      validateCollectionSnapshot(snapshot);
+      if (snapshot.source !== "bilibili-collection-api-json") throw new SocialSyncError("COVER_COLLECTION_SOURCE_MISMATCH");
+      const sha = hash(JSON.stringify(snapshot));
+      queue.stage(collectionApiCoverSource(raw, snapshot.target, snapshot.observedAt, sha), sha);
     }),
     acknowledged: (item: Pending | CollectionPending) => safe((queue, mode) => {
       const payload = "observation" in item ? item.observation : item.snapshot;

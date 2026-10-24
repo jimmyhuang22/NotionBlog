@@ -16,8 +16,10 @@ import { openCollectionStore } from "./collection-store.ts";
 import { executeAtRoot } from "./execute-cli.ts";
 import type { RefreshReport } from "./refresh-executor.ts";
 import { CycleCloudSession } from "./cycle-cloud.ts";
+import { readBilibiliApiPolicy, bilibiliMetadataRoot, requireApiMetadataTransfer } from "./bilibili-api-policy.ts";
+import { captureApiDiscoveredVideo } from "./bilibili-api-collect.ts";
 import { refreshRequest } from "./refresh-executor.ts";
-import { trackedBilibiliRequest } from "./bilibili-cycle.ts";
+import { trackedBilibiliRequest, parseBilibiliHealth } from "./bilibili-cycle.ts";
 import type { RefreshConfig } from "./refresh.ts";
 function classificationTargets(scope:RefreshConfig,accountId:string){
   const pubs=scope.publications.filter(p=>p.target.platform==="bilibili"&&p.target.accountId===accountId).map(p=>p.target);
@@ -41,7 +43,7 @@ async function optional(path: string) {
 }
 /** Invoked only after the native host has checked the fixed extension origin. */
 export async function handleBilibiliDiscovery(root: string, message: unknown, ports: {
-  now?: () => string; capture?: typeof captureDiscoveredVideo; execute?: typeof executeAtRoot;
+  now?: () => string; capture?: typeof captureDiscoveredVideo; execute?: typeof executeAtRoot; cloud?: (signal?:AbortSignal)=>CycleCloudSession;
 } = {}) {
   const base = refreshConfig(JSON.parse(await readPrivateFile(join(root, "refresh-config.json"), MAX_REFRESH_CONFIG_BYTES))), policy = await readAccountPolicy(root, base);
   const msg = object(message), op = msg.op;
@@ -49,7 +51,11 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
   if (typeof op !== "string" || !shapes[op] || Object.keys(msg).sort().join() !== [...shapes[op]!].sort().join() ||
       op === "bilibili-start" && typeof msg.manual !== "boolean") throw new SocialSyncError("BRIDGE_REQUEST_INVALID");
   if (!policy?.enabled) return { status: "disabled", remaining: 0, uploaded: 0 };
-  const digest = hash(JSON.stringify(policy)), dir = join(root, "discovery-bilibili"), now = ports.now ?? (() => new Date().toISOString());
+  const apiPolicy=await readBilibiliApiPolicy(root,base),apiMode=apiPolicy?.enabled===true,stateDirectories=apiMode?apiPolicy.stateDirectories:base.stateDirectories,metadataRoot=bilibiliMetadataRoot(root,apiPolicy);
+  await requireApiMetadataTransfer(root,metadataRoot,"discovery-bilibili","state.json");
+  await requireApiMetadataTransfer(root,metadataRoot,"cycle-bilibili","health.json");
+  await requireApiMetadataTransfer(root,metadataRoot,"cycle-bilibili","latest-cycle.json");
+  const digest = hash(JSON.stringify(policy)), dir = join(metadataRoot, "discovery-bilibili"), now = ports.now ?? (() => new Date().toISOString());
   await privateDirectory(dir); const release = await acquireLock(dir, randomUUID()), file = join(dir, "state.json");
   let s: State | null = null;
   const save = async () => writeJson(file, s);
@@ -71,11 +77,11 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
       });
       if(new Set(proofs.map(p=>p.job.id)).size!==proofs.length)throw new SocialSyncError("BRIDGE_LINKS_INVALID");
       const locks:(()=>Promise<void>)[]=[];
-      try{for(const path of [join(root,"cycle-bilibili"),root])locks.push(await acquireLock(path,randomUUID()));}
+      try{for(const path of [join(metadataRoot,"cycle-bilibili"),root])locks.push(await acquireLock(path,randomUUID()));}
       catch(e){for(const lock of locks.reverse())await lock();if((e as {code?:string}).code==="BUSY")return {...summary(s),deferred:true};throw e;}
       let session:CycleCloudSession|undefined,timer:NodeJS.Timeout|undefined;
       try{
-        const scope=await readRefreshScope(root,"bilibili"),scopeDigest=hash(JSON.stringify(scope)),controller=new AbortController();session=new CycleCloudSession(controller.signal);
+        const scope=await readRefreshScope(root,"bilibili"),scopeDigest=hash(JSON.stringify(scope)),controller=new AbortController();session=ports.cloud?.(controller.signal)??new CycleCloudSession(controller.signal);
         timer=setTimeout(()=>controller.abort(),60000);timer.unref();
         const checkScope=async()=>{if(hash(JSON.stringify(await readRefreshScope(root,"bilibili")))!==scopeDigest)throw new SocialSyncError("REFRESH_SCOPE_CHANGED");};
         const raw=await readPrivateFile(join(root,"cloud.env"),65536);
@@ -97,7 +103,7 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
       if (s?.status === "complete" && s.checkedAt && Date.parse(now()) < Date.parse(timestamp(s.checkedAt)) + 6 * 3600000) {
         const current=await readRefreshScope(root,"bilibili"),known=new Set(current.collections.map(c=>collectionKey(c.target))),changed:string[]=[];
         for(const target of classificationTargets(current,policy.accountId)){
-          const c=await readClassification(root,target,digest,now());if(c?.type==="collection"&&!known.has(collectionKey(c.value.target)))changed.push(target.publicationId);
+          const c=await readClassification(metadataRoot,target,digest,now());if(c?.type==="collection"&&!known.has(collectionKey(c.value.target)))changed.push(target.publicationId);
         }
         if(!changed.length)return { ...summary(s), due: false };
         s.remaining=changed;s.status="processing";await save();return summary(s);
@@ -128,14 +134,16 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
       s.budgetStartedAt = now(); s.budgetRequests = 0; s.budgetBytes = 0; await save();
     }
     let cycleRelease: (() => Promise<void>) | undefined;
-    try { cycleRelease = await acquireLock(join(root, "cycle-bilibili"), randomUUID()); }
+    try { cycleRelease = await acquireLock(join(metadataRoot, "cycle-bilibili"), randomUUID()); }
     catch (e) { if ((e as { code?: string }).code === "BUSY") return { ...summary(s), deferred: true }; throw e; }
     const controller = new AbortController(), cancel=()=>controller.abort(), timer = setTimeout(cancel, 90000); timer.unref();
     process.once("SIGTERM",cancel);process.once("SIGINT",cancel);
-    const session = new CycleCloudSession(controller.signal);
+    const session = ports.cloud?.(controller.signal)??new CycleCloudSession(controller.signal,undefined,{bilibiliApi:apiMode});
     const tracked=trackedBilibiliRequest();
     try {
-      const previous = await optional(join(root, "cycle-bilibili", "latest-cycle.json"));
+      const apiHealth=apiMode?await optional(join(metadataRoot,"cycle-bilibili","health.json")):null;
+      if(apiHealth!==null&&parseBilibiliHealth(apiHealth).recovery.manualRequired)return {...summary(s),deferred:true};
+      const previous = await optional(join(metadataRoot, "cycle-bilibili", "latest-cycle.json"));
       if (previous && !["complete", "review-required"].includes(previous.status)) return { ...summary(s), deferred: true };
       const before = await readRefreshScope(root, "bilibili"), beforeDigest = hash(JSON.stringify(before));
       const extra = await readDiscoveredScope(root, base, policy);
@@ -144,20 +152,22 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
       const changed=new Set<string>();
       const probeTargets=classificationTargets(before,policy.accountId);
       for(const target of probeTargets){
-        const c=await readClassification(root,target,digest,now());if(c?.type==="collection"&&!before.collections.some(v=>collectionKey(v.target)===collectionKey(c.value.target)))changed.add(target.publicationId);
+        const c=await readClassification(metadataRoot,target,digest,now());if(c?.type==="collection"&&!before.collections.some(v=>collectionKey(v.target)===collectionKey(c.value.target)))changed.add(target.publicationId);
       }
       const known = new Set([...before.publications.filter(p => p.target.platform === "bilibili"&&!changed.has(p.target.publicationId)).map(p => p.target.publicationId),
         ...before.collections.map(c => c.target.representativeUrl.split("/")[4]!).filter(id=>!changed.has(id)) ]);
       // The UI can choose a different member as its season's visible cover card.
       // It is still known: consult the verified roster, not only our HTTP representative.
-      const rosterRelease=await acquireLock(base.stateDirectories.collections,randomUUID());
+      const rosterRelease=await acquireLock(stateDirectories.collections,randomUUID());
       let roster:Awaited<ReturnType<typeof openCollectionStore>>=null;
-      try{roster=await openCollectionStore(base.stateDirectories.collections,true);if(!roster)throw new SocialSyncError("REFRESH_STATE_MISSING");
+      try{roster=await openCollectionStore(stateDirectories.collections,true);if(!roster)throw new SocialSyncError("REFRESH_STATE_MISSING");
         for(const c of before.collections)for(const m of roster.latest(c.target)?.snapshot.members??[])if(!changed.has(m.id))known.add(m.id);
       }finally{roster?.close();await rosterRelease();}
       s.remaining = s.remaining.filter(id => !known.has(id));
       if (!s.remaining.length) { s.status = "complete"; s.checkedAt = s.directory!.observedAt; await save(); return summary(s); }
       const ids = s.remaining.slice(0, Math.min(3, 20 - s.budgetRequests)), request = refreshRequest(tracked.request, { requests: ids.length, bytes: Math.min(24 * 1024 * 1024,128*1024*1024-s.budgetBytes) });
+      const cloudRaw=apiMode?await readPrivateFile(join(root,"cloud.env"),65536):null;
+      if(cloudRaw!==null)await session.prepareBilibiliApi(cloudRaw,beforeDigest,true,controller.signal);
       const captures = [];
       let packet:Record<string,unknown>|null=null;
       try{packet=object(JSON.parse(await readPrivateFile(join(dir,"captured.json"),2*1024*1024)));}catch(e){if((e as NodeJS.ErrnoException).code!=="ENOENT")throw e;}
@@ -171,9 +181,9 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
       }
       for (const id of packet?[]:ids) {
         const knownTarget=probeTargets.find(p=>p.publicationId===id);
-        const cached=knownTarget?await readClassification(root,knownTarget,digest,now()):null;
+        const cached=knownTarget?await readClassification(metadataRoot,knownTarget,digest,now()):null;
         if(cached){captures.push(cached);continue;}
-        s.budgetRequests++; await save(); captures.push(await (ports.capture ?? captureDiscoveredVideo)(policy.accountId, id, controller.signal, request,knownTarget,createCoverHandoff(root).stageCollection));
+        s.budgetRequests++; await save(); captures.push(await (ports.capture ?? (apiMode?captureApiDiscoveredVideo:captureDiscoveredVideo))(policy.accountId, id, controller.signal, request,knownTarget,apiMode?createCoverHandoff(root).stageApiCollection:createCoverHandoff(root).stageCollection));
       }
       if(!packet)await writeJson(join(dir,"captured.json"),{version:1,policyDigest:digest,scopeDigest:beforeDigest,ids,captures,sha256:hash(JSON.stringify(captures))});
       const locks: (() => Promise<void>)[] = [];
@@ -194,13 +204,13 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
       }
       discoveredScope(extra, base, policy);
       try {
-        for (const path of [...new Set([root, base.stateDirectories.publications, base.stateDirectories.collections])].sort()) locks.push(await acquireLock(path, randomUUID()));
+        for (const path of [...new Set([root, stateDirectories.publications, stateDirectories.collections])].sort()) locks.push(await acquireLock(path, randomUUID()));
         if (hash(JSON.stringify(await readRefreshScope(root, "bilibili"))) !== beforeDigest ||
             hash(JSON.stringify(await readAccountPolicy(root, base))) !== digest) throw new SocialSyncError("REFRESH_SCOPE_CHANGED");
-        const checkPubs = await openStore(base.stateDirectories.publications, true), checkCols = await openCollectionStore(base.stateDirectories.collections, true);
+        const checkPubs = await openStore(stateDirectories.publications, true), checkCols = await openCollectionStore(stateDirectories.collections, true);
         if (!checkPubs || !checkCols) { checkPubs?.close(); checkCols?.close(); throw new SocialSyncError("REFRESH_STATE_MISSING"); }
         checkPubs.close(); checkCols.close();
-        pubs = await openStore(base.stateDirectories.publications); cols = await openCollectionStore(base.stateDirectories.collections);
+        pubs = await openStore(stateDirectories.publications); cols = await openCollectionStore(stateDirectories.collections);
         if (!pubs || !cols) throw new SocialSyncError("REFRESH_STATE_MISSING");
         // Register durable local scope before writing outboxes; an interrupted ingest is
         // still visible to the normal refresh cycle, and cannot strand an unknown target.
@@ -214,8 +224,10 @@ export async function handleBilibiliDiscovery(root: string, message: unknown, po
         await unlink(join(dir,"captured.json"));
       } finally { pubs?.close(); cols?.close(); for (const lock of locks.reverse()) await lock(); }
       if (keys.length) {
-        const scope = await readRefreshScope(root, "bilibili"), report = await (ports.execute ?? executeAtRoot)(root, {
-          platform: "bilibili", limit: 3, keys: [...new Set(keys)], scopeDigest: hash(JSON.stringify(scope)), uploadOnly: true, signal: controller.signal, cloudSession: session,
+        const scope = await readRefreshScope(root, "bilibili"),scopeDigest=hash(JSON.stringify(scope));
+        if(cloudRaw!==null)session.adoptDiscoveredBilibiliScope(cloudRaw,beforeDigest,scopeDigest);
+        const report = await (ports.execute ?? executeAtRoot)(root, {
+          platform: "bilibili", limit: 3, keys: [...new Set(keys)], scopeDigest, uploadOnly: true, signal: controller.signal, cloudSession: session,bilibiliApi:apiMode,
         }) as RefreshReport;
         if (report.failed || report.paused || report.cancelled || report.superseded || report.uploaded !== new Set(keys).size) throw new SocialSyncError("BILIBILI_AUTO_UPLOAD_FAILED");
         s.uploaded += report.uploaded;
