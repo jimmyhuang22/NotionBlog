@@ -1,5 +1,7 @@
 # 项目需求
 
+仓库密钥保护（2026-10-24）：用户明确批准启用 GitHub secret scanning 与 push protection，两项已更新并独立回读为 enabled。本机隐私检查、逐提交历史扫描和私有来源 blocklist 继续保留；设置变更不授权业务运行或正式发布，见[决定](decisions/2026-10-24-secret-protection.md)。
+
 基础安全响应头（2026-10-24）：用户批准在独立本地分支补齐 `nosniff`、`strict-origin-when-cross-origin`、`frame-ancestors 'self'` 与 `SAMEORIGIN`，限制其他网站嵌入本站；开发／Preview 保留既有隔离 CSP，媒体继续采用更严格的 `no-referrer`。本项当前仅准备源码与离线验证，不推送、合并、部署或恢复任务；正式生效另按发布规则执行，见[决定](decisions/2026-10-24-security-response-headers.md)。
 
 源码公开与 CI（2026-10-23）：用户明确要求公开干净新仓库并把 CI 转到 GitHub。新仓库已公开，旧归档保持私人；PR 与手动检查采用标准 GitHub 托管 Ubuntu、Node 24、双锁文件、完整 check／build 和只读 Token，保持离线 fixtures。启用 main／develop 分支保护、外部贡献者工作流审批与私密漏洞报告。此决定取代下方此前“暂不公开”和“平台检查另行约定”的当前状态；私人 CI 历史结果仍如实保留，develop 本机验证合并规则、发布期间暂停及 main 逐次发布授权继续有效，见[决定](decisions/2026-10-23-public-github-hosted-ci.md)与[执行记录](progress/2026-10-23-public-github-hosted-ci.md)。

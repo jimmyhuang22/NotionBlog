@@ -84,7 +84,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
         ? "035363383d2dd8d8e01e7412d58bcef26989bd3a6e759bd3c4b1c89170688147"
-        : "4845eb9d686cdfa604a3923e50b52f843249a57ede08ace6f0ea99bc7ae956b4";
+        : "abfe7e22581d86af28898d827833545bac79679a34983b29d1817136746704e0";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});

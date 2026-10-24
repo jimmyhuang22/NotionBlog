@@ -134,7 +134,7 @@ test("review holds cannot be bypassed by new events, but can be explicitly resum
   q.requireReview(ticket, "SOURCE_SCOPE_UNKNOWN"); q.enqueue([event("event-2", "page-1", "policy", 3000)]);
   assert.deepEqual(q.claim(), []); assert.equal(q.status().needs_review, 1);
   assert.equal(q.resume("notes", "page-1"), true); assert.equal(q.resume("notes", "page-1"), false);
-  assert.equal(q.claim()[0].generation, 2);
+  assert.equal(q.claim()[0].generation, 3);
 });
 
 test("scope drift and unknown sources fail closed without dropping existing work", async t => {
@@ -173,4 +173,25 @@ test("opening an unrelated SQLite database does not install queue tables", async
   const read = new Constructor(path, { readOnly: true });
   try { assert.equal(read.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='scope'").get()!.n, 0); }
   finally { read.close(); }
+});
+
+test("repeated preparation failures back off, require review and expose new hints until explicit resume", async t => {
+  const s = await setup(t), q = await s.open(); q.enqueue([event()]);
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const [ticket] = q.claim(1); assert.ok(ticket);
+    assert.equal(q.retryPreparation(ticket, "IMAGE_UNAVAILABLE", 1000), attempt === 5 ? "needs_review" : "retry");
+    if (attempt < 5) {
+      assert.deepEqual(q.claim(), []);
+      s.time.now += 1000 * 2 ** (attempt - 1) - 1; assert.deepEqual(q.claim(), []);
+      s.time.now++; assert.equal(q.status().retry, 1);
+    }
+  }
+  assert.equal(q.status().needs_review, 1); assert.deepEqual(q.claim(), []);
+  assert.equal(q.listReview()[0].newChanges, false);
+  q.enqueue([event("edit-after-hold", "page-1", "removed", 999999)]);
+  assert.equal(q.listReview()[0].newChanges, true); assert.equal(q.status().events, 2);
+  assert.deepEqual(q.claim(), []);
+  assert.equal(q.resume("notes", "page-1"), true);
+  const [next] = q.claim(); assert.equal(next.generation, 3);
+  assert.equal(q.retryPreparation(next, "TEMPORARY", 1000), "retry");
 });

@@ -1,3 +1,4 @@
+import { rewriteStudyLinks } from "../../src/server/notion/rewrite-study-links.ts";
 import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import { join } from "node:path";
@@ -233,20 +234,10 @@ export class ContentCacheStore {
       for (const href of targets.keys()) for (const row of this.db.prepare("SELECT l.owner FROM links l JOIN records r ON r.id=l.owner WHERE l.href=? AND r.kind NOT IN ('course','study-note') LIMIT 101").all(href)) {
         ids.add(String(row.owner)); if (ids.size > 100) fail("CONTENT_CACHE_BUDGET_REACHED");
       }
-      const rewrite = (value: unknown): unknown => {
-        if (Array.isArray(value)) return value.map(rewrite);
-        if (!value || typeof value !== "object") return value;
-        const o = value as Record<string, unknown>;
-        if (typeof o.href === "string" && targets.has(o.href)) {
-          const target = targets.get(o.href); if (!target) return o.kind === "internal" ? { kind: "unavailable" } : null;
-          return Object.fromEntries(Object.entries({ ...o, href: target.href, ...("title" in o ? { title: target.title } : {}) }).map(([k, v]) => [k, rewrite(v)]));
-        }
-        return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, rewrite(v)]));
-      };
       const records: WebsiteRecord[] = [];
       for (const id of [...ids].sort()) {
         const before = this.record(this.db.prepare("SELECT * FROM records WHERE id=?").get(id) as Row);
-        const next = { ...before, detail: rewrite(before.detail) as WebsiteRecord["detail"] }; validateWebsiteRecord(next);
+        const next = { ...before, detail: rewriteStudyLinks(before.detail, targets) as WebsiteRecord["detail"] }; validateWebsiteRecord(next);
         if (canonicalJson(before) !== canonicalJson(next)) records.push(next);
       }
       return { records, publicationRevision: state.publicationRevision, configDigest: state.configDigest, verified: true };

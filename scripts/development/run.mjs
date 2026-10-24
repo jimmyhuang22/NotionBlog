@@ -9,8 +9,8 @@ const node = process.execPath;
 const script = name => [node, [name]];
 const tests = ['test','check'].includes(task) ? readdirSync('tests').filter(name => name.endsWith('.test.ts')).sort().map(name => `tests/${name}`) : [];
 const typecheck = script('node_modules/typescript/bin/tsc'); typecheck[1].push('--noEmit');
-const check = [typecheck, script('scripts/check-database-protocol.ts'), script('scripts/check-website-protocol.ts'),
-  [node, ['scripts/media-thumbnails/cli.ts', 'verify']], [node, ['--test', '--test-concurrency=2', ...tests]], script('scripts/check-privacy.mjs')];
+const check = [script('scripts/check-privacy.mjs'), typecheck, script('scripts/check-database-protocol.ts'), script('scripts/check-website-protocol.ts'),
+  [node, ['scripts/media-thumbnails/cli.ts', 'verify']], [node, ['--test', '--test-concurrency=2', ...tests]]];
 const tasks = {
   test: [[node, ['--test', '--test-concurrency=2', ...args, ...tests]]],
   check,
