@@ -1,3 +1,4 @@
+import { reviewIncrementalQueue } from "./review.ts";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readPrivateFile } from "../notion-sync/state.ts";
@@ -11,8 +12,8 @@ import { createRuntimeStorage } from "./runtime-storage.ts";
 
 export function parseIncrementalArguments(args: readonly string[]) {
   const [command, ...rest] = args;
-  if (!["initialize", "recover", "run", "status"].includes(command ?? "") || rest.length % 2) hostFail("HOST_INPUT_INVALID");
-  const allowed = ["config", "lock-dir", "runtime-dir", "artifact", "max-tasks", "max-sources", "duration-ms", "source-requests", "source-bytes", "media-bytes"];
+  if (!["initialize", "recover", "run", "status", "list-review", "resume"].includes(command ?? "") || rest.length % 2) hostFail("HOST_INPUT_INVALID");
+  const allowed = ["config", "lock-dir", "runtime-dir", "artifact", "max-tasks", "max-sources", "duration-ms", "source-requests", "source-bytes", "media-bytes", "source", "page"];
   const values = new Map<string, string>();
   for (let i = 0; i < rest.length; i += 2) {
     const name = rest[i].startsWith("--") ? rest[i].slice(2) : "", value = rest[i + 1];
@@ -29,6 +30,13 @@ export function parseIncrementalArguments(args: readonly string[]) {
     if (values.size !== 1) hostFail("HOST_INPUT_INVALID");
     return { command: "status" as const, runtimeDirectory };
   }
+  if (command === "list-review" || command === "resume") {
+    if ([...values.keys()].some(key => !["config", "lock-dir", "runtime-dir", "source", "page"].includes(key)) ||
+      values.has("source") !== values.has("page") || command === "resume" && !values.has("source")) hostFail("HOST_INPUT_INVALID");
+    const review = { runtimeDirectory, configPath: path("config")!, lockDirectory: path("lock-dir")!, sourceKey: values.get("source"), pageKey: values.get("page") };
+    return command === "list-review" ? { ...review, command: "list-review" as const } : { ...review, command: "resume" as const };
+  }
+  if (values.has("source") || values.has("page")) hostFail("HOST_INPUT_INVALID");
   if (command !== "initialize" && values.has("artifact")) hostFail("HOST_INPUT_INVALID");
   return { command: command as IncrementalHostOptions["command"], runtimeDirectory, configPath: path("config")!, lockDirectory: path("lock-dir")!,
     artifactPath: path("artifact", command === "initialize"), maxTasks: number("max-tasks"), maxSources: number("max-sources"),
@@ -37,14 +45,17 @@ export function parseIncrementalArguments(args: readonly string[]) {
 
 export async function incrementalMain(args: readonly string[], env: NodeJS.ProcessEnv = process.env) {
   if (args.length === 1 && args[0] === "--help") {
-    console.log("node scripts/website-incremental-sync/cli.ts initialize|recover|run --config ABSOLUTE_PRIVATE_JSON --lock-dir CANONICAL_STATE_DIR --runtime-dir PRIVATE_RUNTIME_DIR [--artifact ACCEPTED_BASELINE_JSON]\nnode scripts/website-incremental-sync/cli.ts status --runtime-dir PRIVATE_RUNTIME_DIR"); return 0;
+    console.log("node scripts/website-incremental-sync/cli.ts initialize|recover|run --config ABSOLUTE_PRIVATE_JSON --lock-dir CANONICAL_STATE_DIR --runtime-dir PRIVATE_RUNTIME_DIR [--artifact ACCEPTED_BASELINE_JSON]\nnode scripts/website-incremental-sync/cli.ts status --runtime-dir PRIVATE_RUNTIME_DIR\nnode scripts/website-incremental-sync/cli.ts list-review|resume --config ABSOLUTE_PRIVATE_JSON --lock-dir CANONICAL_STATE_DIR --runtime-dir PRIVATE_RUNTIME_DIR [--source KEY --page KEY]"); return 0;
   }
   const parsed = parseIncrementalArguments(args);
   if (parsed.command === "status") { const report = await readHostJson(parsed.runtimeDirectory, "incremental-latest.json");
     console.log(JSON.stringify(report === null ? { outcome: "uninitialized" } : validateHostReport(report))); return 0; }
+  if (parsed.command === "list-review" || parsed.command === "resume") {
+    console.log(JSON.stringify(await reviewIncrementalQueue(parsed))); return 0;
+  }
   if (env.SYNC_PUBLICATION_MODE !== "published" || env.SYNC_MEDIA_PROVIDER !== "storage" || !env.SYNC_READER_DATABASE_URL || !env.SYNC_DATABASE_URL) hostFail("HOST_INPUT_INVALID");
   const config = JSON.parse(await readPrivateFile(parsed.configPath)), controller = new AbortController();
-  const abort = () => controller.abort(); process.once("SIGINT", abort); process.once("SIGTERM", abort);
+  const abort = () => controller.abort(); process.on("SIGINT", abort); process.on("SIGTERM", abort);
   try {
     const report = await runIncrementalHost({ ...parsed, config, signal: controller.signal,
       database: { readerUrl: env.SYNC_READER_DATABASE_URL, writerUrl: env.SYNC_DATABASE_URL, tls: env.DATABASE_TLS, ca: env.DATABASE_CA_CERT } }, {
