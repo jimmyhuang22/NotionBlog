@@ -7,7 +7,7 @@ type Phase = "service" | "database-runtime" | "database-pool" | "database-acquir
   | "home-content" | "home-social" | "home-compose" | "home-hydrate"
   | "social-reader-check" | "social-collection-check" | "social-snapshot" | "social-covers" | "social-pagination";
 export interface ContentReadTiming {
-  operation: "detail" | "metadata" | "catalogue" | "search" | "home-feed" | "social-snapshot" | "works";
+  operation: "detail" | "metadata" | "catalogue" | "search" | "home-feed" | "social-snapshot" | "works" | "status-page" | "content-version";
   kind: ContentKind | "unknown";
   outcome: "ok" | "error";
   totalMs: number;

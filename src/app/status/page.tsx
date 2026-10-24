@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { traceContentRead } from "../../server/content-read-timing.ts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LinkPending } from "@/components/link-pending";
@@ -27,7 +28,11 @@ async function readYears(): Promise<StatusYears | null> {
   }
 }
 
-export default async function StatusPage({ searchParams }: Props) {
+export default async function StatusPage(props: Props) {
+  return traceContentRead("status-page", "status", () => readStatusPage(props));
+}
+
+async function readStatusPage({ searchParams }: Props) {
   const params = await searchParams;
   const focus = params.focus === undefined ? null : readStatusFocus(params.focus);
   if (params.focus !== undefined && !focus) notFound();
