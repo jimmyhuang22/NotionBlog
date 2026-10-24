@@ -1,3 +1,4 @@
+import { installMediaRouteCheckout } from "./media-route-pool.ts";
 import assert from "node:assert/strict";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,6 +12,7 @@ const s = await thumbnailDatabase(), f = await thumbnailSample(s);
 const directory = await realpath(await mkdtemp(join(tmpdir(), "published-thumbnail-routes-")));
 const url = new URL("postgres://localhost/fixture"); url.username = "fixture-reader"; url.password = "fixture-password";
 const originalQuery = Pool.prototype.query, originalFetch = globalThis.fetch; let queries = 0, fetches = 0;
+const restoreCheckout = installMediaRouteCheckout();
 try {
   const storage = createLocalMediaStorage(directory, url.href, "writer");
   await storage.put(f.media, f.bytes.get(f.media.objectKey)!);
@@ -38,4 +40,4 @@ try {
   assert.equal(content.status, 200); assert.equal((await content.json()).data.total, 1);
   assert.equal(fetches, 0);
   console.log(JSON.stringify({imageRoutes: 5, contentRoutes: 1, sourceRequests: fetches, independentVariants: 2, original: true}));
-} finally {Pool.prototype.query = originalQuery; globalThis.fetch = originalFetch; await s.db.close(); await rm(directory, {recursive: true, force: true});}
+} finally {restoreCheckout(); Pool.prototype.query = originalQuery; globalThis.fetch = originalFetch; await s.db.close(); await rm(directory, {recursive: true, force: true});}

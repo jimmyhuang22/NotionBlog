@@ -4,6 +4,14 @@ import { cacheRouteDeployment } from "./deployment.ts";
 
 export const PUBLIC_CACHE_VERSION = "nb-public-cache-v1";
 export const PUBLIC_CACHE_DAY_MS = 86_400_000;
+// Request-local response provenance, never a client-supplied header. Live source
+// qualification must not be bypassed by upgrading this response to shared caching.
+const excludedResponses = new WeakSet<Response>();
+export function excludeFromSharedCache(response: Response): Response {
+  excludedResponses.add(response);
+  return response;
+}
+export const isSharedCacheExcluded = (response: Response): boolean => excludedResponses.has(response);
 export type PublicCacheScope = "content" | "social" | "home" | "media";
 export const publicCacheTag = (scope: PublicCacheScope) => `nb:public:v1:${scope}`;
 export const publicCacheTags = (scope: PublicCacheScope): string[] => scope === "home"

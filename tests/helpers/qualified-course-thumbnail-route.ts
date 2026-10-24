@@ -1,3 +1,4 @@
+import { installMediaRouteCheckout } from "./media-route-pool.ts";
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {Pool} from 'pg';
@@ -14,6 +15,7 @@ const thumbnail={assetId:mediaIdentity(owner,'thumbnail:1600:'+asset,hash(bytes)
 const projection={thumbnailCapability:'notionblog-thumbnail-index-v1',schemaDigest:WEBSITE_SCHEMA_DIGEST,version:'v2',runId:'11111111-1111-4111-8111-111111111111',source:{media,binding:{assetId:asset,ownerPageId:owner,sha256:media.sha256,locator,delivery:'notion',sourceFingerprint:'a'.repeat(64)}},thumbnail};
 let sourceRequests=0,objectRequests=0,queries=0,denied=false,withdrawDuringRead=false;
 const query=Pool.prototype.query,fetcher=globalThis.fetch;
+const restoreCheckout = installMediaRouteCheckout();
 try{
  Object.assign(process.env,{CONTENT_PROVIDER:'database',DATABASE_CONTENT_VERSION:'2',DATABASE_PUBLICATION_MODE:'qualified',DATABASE_READER_URL:'postgres://fixture:fixture@localhost/db',DATABASE_TLS:'disable',MEDIA_PROVIDER:'notion',MEDIA_THUMBNAILS:'enabled',MEDIA_THUMBNAIL_QUALIFICATION:'database',THUMBNAIL_STORAGE_PROVIDER:'cos',STORAGE_PROVIDER:'supabase',COS_BUCKET:'fiction-media-1250000000',COS_REGION:'ap-shanghai',COS_PREFIX:'notionblog',COS_SECRET_ID:'fixtureSecretId123',COS_SECRET_KEY:'fixtureSecretKeyForCos123',NOTION_TOKEN:'offline-source-token',NOTION_SOURCES_JSON:JSON.stringify({schemaVersion:2,sources:[{key:'statuses',kind:'status',enabled:true,dataSourceId:owner,fields:{title:'Name',recordedAt:'Date'},publication:{mode:'all',allowlistPageIds:[]}}]})});
  for(const key of ['NOTION_TOKEN','NOTION_SOURCES_JSON','NOTION_SOURCES_CONFIG','DATABASE_MEDIA_DIRECTORY','COS_READ_TRANSPORT','COS_SECURITY_TOKEN','COS_CREDENTIALS_EXPIRES_AT'])delete process.env[key];
@@ -27,4 +29,4 @@ try{
  bytes=Buffer.concat([bytes,Buffer.from([0])]);Object.assign(thumbnail,{sha256:hash(bytes),objectKey:'sha256/'+hash(bytes),byteSize:bytes.length,assetId:mediaIdentity(owner,'thumbnail:1600:'+asset,hash(bytes))});
  denied=false;withdrawDuringRead=true;assert.equal((await call()).status,404);assert.equal(objectRequests,2);assert.equal(sourceRequests,0);
  console.log(JSON.stringify({sourceRequests,objectRequests,cacheHitQualified:true,centralWithdrawalBlocked:true,postReadWithdrawalBlocked:true}));
-}finally{Pool.prototype.query=query;globalThis.fetch=fetcher;}
+}finally{restoreCheckout(); Pool.prototype.query=query;globalThis.fetch=fetcher;}

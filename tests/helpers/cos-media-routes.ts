@@ -1,3 +1,4 @@
+import { installMediaRouteCheckout } from "./media-route-pool.ts";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { thumbnailDatabase, thumbnailSample } from "./published-thumbnails.ts";
@@ -5,6 +6,7 @@ import { thumbnailDatabase, thumbnailSample } from "./published-thumbnails.ts";
 const s = await thumbnailDatabase(), f = await thumbnailSample(s);
 const originalQuery = Pool.prototype.query, originalFetch = globalThis.fetch;
 let queries = 0, objects = 0, sourceRequests = 0;
+const restoreCheckout = installMediaRouteCheckout();
 try {
   Pool.prototype.query = (async (sql: string, values?: unknown[]) => {queries++; return s.reader.query(sql, values);}) as typeof Pool.prototype.query;
   globalThis.fetch = async (input, init) => {
@@ -43,4 +45,4 @@ try {
   }
   assert.equal(objects, before); assert.equal(objects, 3); assert.equal(sourceRequests, 0);
   console.log(JSON.stringify({imageRoutes: 5, contentRoutes: 1, sourceRequests, objectReads: objects, independentVariants: 2, withdrawalBlocked: true}));
-} finally {Pool.prototype.query = originalQuery; globalThis.fetch = originalFetch; await s.db.close();}
+} finally {restoreCheckout(); Pool.prototype.query = originalQuery; globalThis.fetch = originalFetch; await s.db.close();}
