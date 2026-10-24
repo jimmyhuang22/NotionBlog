@@ -31,11 +31,19 @@ export default function nextConfig(phase: string): NextConfig {
       CONTENT_PROVIDER: 'mock', SOCIAL_PROVIDER: 'mock', SOCIAL_MEDIA_ENABLED: 'false',
       CONTENT_FEATURES_JSON: '{}', SITE_INDEXING_ENABLED: 'false', SITE_CONFIG_JSON: '{}',
     } : {},
+  }),
     async headers() {
-      return [{ source: '/:path*', headers: [
-        { key: 'Content-Security-Policy', value: isolatedBrowserPolicy },
-        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
-      ] }];
+      return [
+        { source: '/:path*', headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: mode === 'production' ? "frame-ancestors 'self'" : isolatedBrowserPolicy },
+          ...(mode === 'production' ? [] : [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]),
+        ] },
+        // Keep every media response, including redirects and errors, at its existing stricter policy.
+        { source: '/media/:path*', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },
+      ];
     },
-  }) };
+  };
 }
