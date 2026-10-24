@@ -28,12 +28,19 @@ export function ReadingOutline({ toc }: { toc: TableOfContentsEntry[] }) {
         setActive((passed.at(-1) ?? visible[0])?.id ?? "");
       });
     };
-    // Observe headings rather than updating React state on every scroll tick.
-    const observer = new IntersectionObserver(update, { rootMargin: "-80px 0px -65% 0px" });
-    headings.forEach(heading => observer.observe(heading));
+    // Read once a frame while scrolling, against the one line above: an observer's fixed margin cannot follow a header
+    // that is pinned on some skins and widths and scrolls away on others, and left the mark a chapter behind.
+    // Setting the same id again does not render anything.
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
     window.addEventListener("hashchange", update);
     update();
-    return () => { observer.disconnect(); window.removeEventListener("hashchange", update); cancelAnimationFrame(frame); };
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("hashchange", update);
+      cancelAnimationFrame(frame);
+    };
   }, [toc]);
 
   // The current chapter's mark slides along the outline instead of jumping (2026-10-20); placed without motion the first time.

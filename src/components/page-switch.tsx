@@ -116,13 +116,28 @@ function headerBottom(): number {
   return Math.max(0, header ? header.getBoundingClientRect().bottom : 0);
 }
 
+/** Takes a switch away at once, with no rise: another one that covers a different area replaces it. */
+function drop(entry: Switch) {
+  cancelAnimationFrame(entry.frame);
+  clearTimeout(entry.slowTimer);
+  entry.overlay.remove();
+  entry.bar.remove();
+  if (current === entry) current = null;
+}
+
 function start(from: string, target: string) {
   if (current) {
-    // Another link while waiting: only the last page is faded to, and the bar begins again.
-    current.target = target;
-    current.started = performance.now();
-    if (current.slow) grow(current.bar);
-    return;
+    // Another link while waiting: only the last page is faded to, and the bar begins again. A note within its
+    // course covers only its column; a move on to another page must cover the whole page area, so it starts over.
+    // Back to the page still shown keeps the copy that is up: whatever is loading beneath it stays covered.
+    const column = areaFor(from, target)?.id !== "main";
+    if (target === from || column === current.column) {
+      current.target = target;
+      current.started = performance.now();
+      if (current.slow) grow(current.bar);
+      return;
+    }
+    drop(current);
   }
   const area = areaFor(from, target);
   if (!area) return;
@@ -225,7 +240,10 @@ function finish(entry: Switch) {
   if (left > 0) window.setTimeout(rise, left); else rise();
 }
 
-/** The link a click is following inside the site, once Next has taken it over; null for anything else. */
+/**
+ * The link a click is following inside the site, once Next has taken it over; null for anything else. While a
+ * page is on its way the address bar still shows the page left, so a link back to it is a move too (to it).
+ */
 function followed(event: MouseEvent): string | null {
   if (!event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
   const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
@@ -233,8 +251,8 @@ function followed(event: MouseEvent): string | null {
   // A link that opens something in place (the about card on the avatar) is not leaving the page, though it keeps an address for a new tab (M-11).
   if (link.hasAttribute("aria-haspopup")) return null;
   const url = new URL(link.href, location.href);
-  // The same address with other filters, sorts or a fragment is not another page.
-  if (url.origin !== location.origin || url.pathname === location.pathname) return null;
+  // The same address with other filters, sorts or a fragment is not another page, unless another page is on its way.
+  if (url.origin !== location.origin || (url.pathname === location.pathname && !current)) return null;
   return url.pathname;
 }
 

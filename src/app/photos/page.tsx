@@ -6,8 +6,6 @@ import { getSiteConfig } from "@/lib/site";
 import { isEnabledContentKind } from "../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
 
-// Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
-export const revalidate = 86399;
 export const metadata: Metadata = { title: "相册" };
 
 /** The first page of albums comes with the page; the list loads on past it (U18). */

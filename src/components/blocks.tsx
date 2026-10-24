@@ -157,12 +157,11 @@ function Block({ block, toc, shift, extensions, imagePreviewWidth }: { block: Co
     case "bookmark":
       return <BookmarkLink url={block.url} title={block.title} description={block.description} />;
     case "embed":
+      // Always a link, whatever `display` says: the sources only produce "link", and a framed page from an
+      // arbitrary address with scripts and same-origin rights is not worth keeping a dormant path for.
       return (
         <figure className="embed">
-          {block.display === "iframe"
-            ? <iframe src={block.url} title={block.title || "嵌入内容"} loading="lazy" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation" allowFullScreen />
-            : null}
-          {block.display === "link" ? <BookmarkLink url={block.url} title={block.title} className="embed__link" /> : <figcaption><a className="rt-link" href={block.url} target="_blank" rel="noopener noreferrer">{block.title || block.url}</a></figcaption>}
+          <BookmarkLink url={block.url} title={block.title} className="embed__link" />
         </figure>
       );
     case "child-page":
