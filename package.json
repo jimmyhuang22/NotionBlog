@@ -11,6 +11,7 @@
     "build": "node scripts/development/run.mjs build",
     "start": "node scripts/development/run.mjs start",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "test": "node scripts/development/run.mjs test",
     "privacy:check": "node scripts/check-privacy.mjs",
     "notion:check": "node scripts/check-notion.ts",
@@ -45,11 +46,15 @@
     "shiki": "4.5.0"
   },
   "devDependencies": {
+    "@babel/core": "8.0.9",
+    "@babel/eslint-parser": "8.0.7",
     "@electric-sql/pglite": "0.5.8",
     "@types/node": "26.6.5",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "typescript": "7.0.2"
   }
 }
