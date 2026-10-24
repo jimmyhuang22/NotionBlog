@@ -124,14 +124,17 @@ export function worksHref(platform: SocialPlatform, order: "views" | "likes" | n
 /**
  * The day a works-page card shows, by the same date the list is ordered by; a recent one named as status entries name it.
  * Ordered by views or likes there are no year headings, so a day of another year carries its year (F41, as on the home
- * page): "2025 年 6 月 19 日", while this year's stays "6 月 19 日" and the relative names are unchanged.
+ * page): "2025 年 6 月 19 日", while this year's stays "6 月 19 日" and the relative names are unchanged. Before the
+ * visitor's day is known every such day carries its year.
  */
 export function worksDay(work: SocialTimelineWork, timeZone: string, today: CalendarDay | null, withYear = false): MomentLabel | null {
   const at = socialWorkPublishedAt(work);
   const parts = at ? dateParts(at, "datetime", timeZone) : null;
   if (!parts) return null;
   const moment = momentLabel({ ...parts, time: null }, today);
-  return withYear && !moment.relative && today && parts.year !== today.year ? { ...moment, rest: `${parts.year} 年 ${moment.rest}` } : moment;
+  // Unknown while the page is drawn from cached markup: the year is written out then, so a work of an earlier year
+  // never reads as this year's (as sampleTime does on the home page).
+  return withYear && !moment.relative && parts.year !== today?.year ? { ...moment, rest: `${parts.year} 年 ${moment.rest}` } : moment;
 }
 
 /** Works-page year groups, by that same date; works without one share a group at the end. */
