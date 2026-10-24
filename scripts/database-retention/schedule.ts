@@ -4,11 +4,13 @@ import {dirname, join, resolve} from "node:path";
 import {randomUUID} from "node:crypto";
 import {spawn} from "node:child_process";
 import {sha256} from "./daily.ts";
+import {retentionReadinessURL} from "./readiness.ts";
+import {validReadinessSample,type ReadinessSample} from "../../src/server/content-readiness/protocol.ts";
 import {retentionRunLimit} from "./limits.ts";
 
 export interface ScheduledConfig {
- format:"retention-daily-config-v2";maximumRuns:number;directory:string;archiveDirectory:string;syncState:string;websitePause:string;
- lockFiles:string[];absentLocks:string[];envFile:string;healthURL:string;cli:string;
+ format:"retention-daily-config-v3";maximumRuns:number;directory:string;archiveDirectory:string;syncState:string;websitePause:string;
+ lockFiles:string[];absentLocks:string[];envFile:string;readinessURL:string;readinessSample:ReadinessSample;cli:string;
  tailCatalog:string;tailRunsDirectory:string;programFiles:{path:string;sha256:string}[];
 }
 interface LastAttempt {status:"PASS"|"STOPPED"|"RUNNING";finishedAt?:number;startedAt?:number;operation?:string}
@@ -50,8 +52,9 @@ export async function verifyVisitorAcceptance(operation:string,runId:string,pipe
 }
 /** Read-only operator inspection. No locks, credential access, child process or database calls. */
 export async function inspectScheduledReadiness(config:ScheduledConfig){
- if(config.format!=="retention-daily-config-v2")throw Error("RETENTION_CONFIG_INVALID");
+ if(config.format!=="retention-daily-config-v3")throw Error("RETENTION_CONFIG_INVALID");
  retentionRunLimit(config.maximumRuns);
+ retentionReadinessURL(config.readinessURL);if(!validReadinessSample(config.readinessSample))throw Error("RETENTION_READINESS_INPUT_INVALID");
  for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  const stateFile=join(config.directory,"STATE_PRIVATE.json"),last=await exists(stateFile)?JSON.parse(await privateText(stateFile)):null;
  const sync=JSON.parse(await privateText(config.syncState));
@@ -85,9 +88,10 @@ export async function acquireRetentionLocks(paths:readonly string[],nonce:string
 }
 /** Separate scheduler: a failed cleanup never changes website sync state or its suspend flag. */
 export async function scheduledTick(config:ScheduledConfig){
- if(config.format!=="retention-daily-config-v2"||config.lockFiles.length!==4||new Set(config.lockFiles).size!==4||
+ if(config.format!=="retention-daily-config-v3"||config.lockFiles.length!==4||new Set(config.lockFiles).size!==4||
   !config.absentLocks.length||!config.programFiles.length)throw Error("RETENTION_CONFIG_INVALID");
  const maximumRuns=retentionRunLimit(config.maximumRuns);
+ retentionReadinessURL(config.readinessURL);if(!validReadinessSample(config.readinessSample))throw Error("RETENTION_READINESS_INPUT_INVALID");
  for(const p of [config.directory,config.archiveDirectory,config.syncState,config.websitePause,...config.lockFiles,...config.absentLocks,config.envFile,config.cli,config.tailCatalog,config.tailRunsDirectory])
   if(!p.startsWith("/")||resolve(p)!==p)throw Error("RETENTION_CONFIG_PATH_INVALID");
  await mkdir(config.directory,{mode:0o700,recursive:true});const dir=await lstat(config.directory);
@@ -134,8 +138,8 @@ export async function scheduledTick(config:ScheduledConfig){
   await privateText(config.envFile); // Check permissions without logging or copying values.
   const folder=join(config.directory,operation);await mkdir(folder,{mode:0o700});
   const windowPath=join(folder,"WINDOW_PRIVATE.json"),deadline=Date.now()+30*60*1000;
-  await save(windowPath,{format:"retention-daily-window-v2",maximumRuns,runId:sync.runId,deadline,syncState:config.syncState,operation:sync.operation,
-   locks:locks.owned,absentLocks:config.absentLocks,proofs,archiveDirectory:config.archiveDirectory,healthURL:config.healthURL,programFiles:config.programFiles});
+  await save(windowPath,{format:"retention-daily-window-v3",maximumRuns,runId:sync.runId,deadline,syncState:config.syncState,operation:sync.operation,
+   locks:locks.owned,absentLocks:config.absentLocks,proofs,archiveDirectory:config.archiveDirectory,readinessURL:config.readinessURL,readinessSample:config.readinessSample,programFiles:config.programFiles});
   await save(stateFile,{status:"RUNNING",operation,startedAt:Date.now(),runId:sync.runId});stateWritten=true;
   const log=await open(join(folder,"PROCESS_PRIVATE.log"),"wx",0o600);
   let code:number|null=null;
