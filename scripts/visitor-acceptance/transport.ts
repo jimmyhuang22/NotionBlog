@@ -5,6 +5,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { lstatSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalJson } from "../../src/server/database/website-validation.ts";
+import { WEBSITE_READER_ISOLATION_SQL } from "../../src/server/database/website-reader-isolation.ts";
 import { INCREMENTAL_LOGIN_SQL } from "../../src/server/database/incremental-connection.ts";
 import { WEBSITE_SNAPSHOT_SQL, WEBSITE_CONTENT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "../../src/server/database/website-projection.ts";
 import { STUDY_DIRECTORY_SQL, STUDY_NOTE_ELIGIBILITY_SQL, STUDY_NOTE_DETAIL_SQL } from "../../src/server/database/study-reads.ts";
@@ -111,7 +112,7 @@ export function installVisitorTransports(input: { budget: SharedBudget; plan: Vi
   for (const { port, query } of originals) port.query = function (...args: any[]) {
     guard(); const text = typeof args[0] === "string" ? args[0] : args[0]?.text, values = typeof args[0] === "string" ? Array.isArray(args[1]) ? args[1] : [] : args[0]?.values ?? [];
     if (typeof text !== "string" || !Array.isArray(values) || args.length > 3 || typeof args[0] !== "string" && Object.keys(args[0]).some(k => !["text", "values"].includes(k)) ||
-      text !== INCREMENTAL_LOGIN_SQL && !projections.has(text) && !/^SELECT nb_(?:publication|delta)_api\.(?:check_capability|check_reader|read_state|check_thumbnail_capability|read_thumbnail|read_content|read_snapshot|read_media)\((?:(?:\$[0-9]+(?:::(?:text\[\]|jsonb|uuid|bigint|integer))?|NULL|'\{\}'::jsonb)(?:,(?:\$[0-9]+(?:::(?:text\[\]|jsonb|uuid|bigint|integer))?|NULL|'\{\}'::jsonb))*)?\) AS result$/.test(text)) return perform(() => fail("VISITOR_SQL_FORBIDDEN"));
+      text !== INCREMENTAL_LOGIN_SQL && text !== WEBSITE_READER_ISOLATION_SQL && !projections.has(text) && !/^SELECT nb_(?:publication|delta)_api\.(?:check_capability|check_reader|read_state|check_thumbnail_capability|read_thumbnail|read_content|read_snapshot|read_media)\((?:(?:\$[0-9]+(?:::(?:text\[\]|jsonb|uuid|bigint|integer))?|NULL|'\{\}'::jsonb)(?:,(?:\$[0-9]+(?:::(?:text\[\]|jsonb|uuid|bigint|integer))?|NULL|'\{\}'::jsonb))*)?\) AS result$/.test(text)) return perform(() => fail("VISITOR_SQL_FORBIDDEN"));
     perform(() => budget.charge({ sqlRequests: 1, sqlRequestBytes: Buffer.byteLength(JSON.stringify({ text, values })) }));
     function receive(result: any) {
       perform(() => budget.observe({ sqlResponseBytes: Buffer.byteLength(JSON.stringify(result?.rows ?? null)) }));

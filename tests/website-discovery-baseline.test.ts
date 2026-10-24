@@ -159,7 +159,7 @@ test("v3 upgrade adds seed receipt while preserving unknown submissions", async 
   f.queue.enqueue([{ eventId: "prior", sourceKey: "status", pageKey: demoId(1000), reason: "content", observedAt: 1 }]);
   const [ticket] = f.queue.claim(); f.queue.markSubmitting(ticket, { payloadDigest: "d".repeat(64), expectedRevision: f.state.publicationRevision });
   f.queue.close(); const db = new DatabaseSync(join(f.dir, "incremental.sqlite"));
-  db.exec("DROP TABLE directory_baseline; PRAGMA user_version=3;"); db.close();
+  db.exec("DROP INDEX attempt_history; DROP TABLE directory_baseline; PRAGMA user_version=3;"); db.close();
   await f.reopen(true);
   assert.equal(f.queue.pendingVerifications()[0].ticket.operationId, ticket.operationId);
   f.init(capture);

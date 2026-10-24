@@ -28,7 +28,7 @@ try {
     const before = queries, response = await GET(new Request(`http://localhost/media/v2/${f.media.assetId}?thumbnail=${width}`), context);
     assert.equal(response.status, 200); assert.equal(response.headers.get("Content-Type"), "image/webp");
     assert.equal(response.headers.has("Location"), false);
-    assert.deepEqual(Buffer.from(await response.arrayBuffer()), f.bytes.get(f.variants.get(width)!.objectKey)); assert.equal(queries - before, 2);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), f.bytes.get(f.variants.get(width)!.objectKey)); assert.equal(queries - before, width === 400 ? 3 : 2);
   }
   const original = await GET(new Request(`http://localhost/media/v2/${f.media.assetId}`), context);
   assert.equal(original.status, 200); assert.deepEqual(Buffer.from(await original.arrayBuffer()), f.bytes.get(f.media.objectKey));

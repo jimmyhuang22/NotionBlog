@@ -6,7 +6,7 @@
 
 `initialize`、`recover`、`run` 都要求显式 `--config`、`--lock-dir`、`--runtime-dir` 绝对路径。来源 JSON 必须为当前有效的私有 600 文件；运行目录为私有 700 目录，存储 queue、study、content 三个独立 SQLite 及两份私有状态。`--lock-dir` 必须填写旧发布器实际共用的 canonical 状态目录，不能为新程序另取一个锁目录。程序使用现有 `worker.lock`，不抢锁、不自动解锁旧队列租约。`status --runtime-dir ...` 仅查看经过结构校验的聚合回执；`--help` 不建立连接。
 
-必需环境为 `SYNC_PUBLICATION_MODE=published`、`SYNC_MEDIA_PROVIDER=storage`、`SYNC_READER_DATABASE_URL`、`SYNC_DATABASE_URL`。连接必须是分别继承受限 `nb_reader`／`nb_writer` 的实际 LOGIN，目标／租户／scope 一致，TLS 沿用显式验证配置；没有网站 URI、admin 或缺省凭据回退。适用配置必须包含自动课程和笔记来源，旧逐页试读配置不会被自动扩大。
+必需环境为 `SYNC_PUBLICATION_MODE=published`、`SYNC_MEDIA_PROVIDER=storage`、`SYNC_READER_DATABASE_URL`、`SYNC_DATABASE_URL`。连接必须是分别继承受限 `nb_delta_reader`／`nb_writer` 的实际 LOGIN，目标／租户／scope 一致，TLS 沿用显式验证配置；没有网站 URI、admin 或缺省凭据回退。适用配置必须包含自动课程和笔记来源，旧逐页试读配置不会被自动扩大。
 
 仅 `run` 在恢复成功后需要 `NOTION_TOKEN` 和独立 storage 配置。现有 Supabase 适配仍要求专用 Storage writer JWT；本机适配仅允许 loopback 数据库。可继续显式配置现有图片 cache／originals 和 HEIC converter。COS 接入、实际原件和小图覆盖、CDN／浏览器缓存仍单独验收，本入口没有代替这些步骤。
 

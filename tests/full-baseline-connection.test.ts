@@ -22,7 +22,7 @@ test("the first full binding needs installed restricted capabilities without an 
 test("full startup checks full-only grants, login isolation and cleanup before allocating any sources", async t => {
   const f = await hostFixture(); t.after(() => f.close());
   const cases = [
-    ["missing full reader", "REVOKE EXECUTE ON FUNCTION nb_publication_api.read_snapshot(text[],boolean) FROM nb_reader", "GRANT EXECUTE ON FUNCTION nb_publication_api.read_snapshot(text[],boolean) TO nb_reader"],
+    ["missing full reader", "REVOKE EXECUTE ON FUNCTION nb_publication_api.read_snapshot(text[],boolean) FROM nb_delta_reader", "GRANT EXECUTE ON FUNCTION nb_publication_api.read_snapshot(text[],boolean) TO nb_delta_reader"],
     ["missing full writer", "REVOKE EXECUTE ON FUNCTION nb_publication_api.promote_run(uuid,bigint,integer,integer,boolean,integer) FROM nb_writer", "GRANT EXECUTE ON FUNCTION nb_publication_api.promote_run(uuid,bigint,integer,integer,boolean,integer) TO nb_writer"],
     ["crossed login", "GRANT nb_writer TO fixture_reader", "REVOKE nb_writer FROM fixture_reader"],
   ];

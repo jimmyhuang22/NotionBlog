@@ -125,7 +125,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
         ? "e2e085608893f8e1387a03994581a6b7ce7c8f0169fe3b0177c7f2bafb55b483"
       : pair.path === "src/server/database/runtime.ts"
-        ? "5e099af3def60ef5f66e6c0937f07918ba4d2acedfc2736832d4cea11a52bc99"
+        ? "6c5c4d5b90fc2d51d47705a40ee21a0fa5df8b6b87c133cd8b42d1ec999bb579"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "d8daa3226e30451f36dee6637537141b8a5d3632583a90400e77a1a7fc6dab54"
         : null;

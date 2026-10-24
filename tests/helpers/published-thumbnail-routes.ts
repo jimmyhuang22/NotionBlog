@@ -25,7 +25,7 @@ try {
   for (const width of [400, 800]) {
     const before = queries, response = await GET(new Request(`http://localhost/media/v2/${f.media.assetId}?thumbnail=${width}`), context);
     assert.equal(response.status, 200); assert.equal(response.headers.get("Content-Type"), "image/webp");
-    assert.deepEqual(Buffer.from(await response.arrayBuffer()), f.bytes.get(f.variants.get(width)!.objectKey)); assert.equal(queries - before, 2);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), f.bytes.get(f.variants.get(width)!.objectKey)); assert.equal(queries - before, width === 400 ? 3 : 2);
   }
   const original = await GET(new Request(`http://localhost/media/v2/${f.media.assetId}`), context);
   assert.equal(original.status, 200); assert.equal(original.headers.get("Content-Type"), "image/png");

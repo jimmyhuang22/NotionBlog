@@ -14,6 +14,7 @@ import { openIncrementalDatabase, type IncrementalDatabaseOptions, type Incremen
 import { verifyIncrementalDatabase } from "../scripts/verify-incremental-database.ts";
 import { installPublication } from "../scripts/website-sync/publication-migration.ts";
 import { installIncrementalPublication } from "../scripts/website-sync/incremental-migration.ts";
+import { installIncrementalReaderIsolation } from "../scripts/website-sync/incremental-reader-isolation.ts";
 import { installIncrementalReader } from "../scripts/website-sync/incremental-reader-migration.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 
@@ -27,10 +28,10 @@ async function setup() {
     if (sql.startsWith("--")) {await db.exec(sql); return {rows: [] as T[]};}
     return db.query<T>(sql, values);
   }};
-  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner);
+  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await installIncrementalReaderIsolation(owner);
   await db.exec(`CREATE ROLE fixture_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
     CREATE ROLE fixture_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
-    GRANT nb_reader TO fixture_reader; GRANT nb_writer TO fixture_writer;`);
+    GRANT nb_delta_reader TO fixture_reader; GRANT nb_writer TO fixture_writer;`);
   const config = parseWebsiteNotionConfig({schemaVersion: 2, sources: [{key: "status", kind: "status", enabled: true,
     dataSourceId: "00000000000000000000000000000050", fields: {title: "Name"}, cover: {strategy: "none"}, publication: {mode: "all", allowlistPageIds: []}}]});
   const digest = configDigest(config), sources = [{key: "status", kind: "status", mode: "all", dataSourceId: config.sources[0].dataSourceId, databaseParentId: null, pageId: null}];
@@ -85,8 +86,8 @@ test("permissions are inspected from the real role graph and reject escalated ac
       ["writer private reader grant", "GRANT EXECUTE ON FUNCTION nb_delta_api.read_page(text,text,text) TO fixture_writer", "REVOKE EXECUTE ON FUNCTION nb_delta_api.read_page(text,text,text) FROM fixture_writer"],
       ["policy mutation granted to the group", "GRANT EXECUTE ON FUNCTION nb_v2_api.set_denied(text,boolean) TO nb_writer", "REVOKE EXECUTE ON FUNCTION nb_v2_api.set_denied(text,boolean) FROM nb_writer"],
       ["schema ownership without CREATE", "ALTER SCHEMA nb_delta OWNER TO fixture_writer; REVOKE CREATE ON SCHEMA nb_delta FROM fixture_writer", "ALTER SCHEMA nb_delta OWNER TO postgres"],
-      ["missing required reader API", "REVOKE EXECUTE ON FUNCTION nb_delta_api.verify_operation(uuid,text,text) FROM nb_reader", "GRANT EXECUTE ON FUNCTION nb_delta_api.verify_operation(uuid,text,text) TO nb_reader"],
-      ["membership admin option", "GRANT nb_reader TO fixture_reader WITH ADMIN OPTION", "REVOKE ADMIN OPTION FOR nb_reader FROM fixture_reader"],
+      ["missing required reader API", "REVOKE EXECUTE ON FUNCTION nb_delta_api.verify_operation(uuid,text,text) FROM nb_delta_reader", "GRANT EXECUTE ON FUNCTION nb_delta_api.verify_operation(uuid,text,text) TO nb_delta_reader"],
+      ["membership admin option", "GRANT nb_delta_reader TO fixture_reader WITH ADMIN OPTION", "REVOKE ADMIN OPTION FOR nb_delta_reader FROM fixture_reader"],
       ["unexpected PUBLIC function", "CREATE FUNCTION nb_delta_api.fixture_leak() RETURNS integer LANGUAGE sql AS 'SELECT 1'; GRANT EXECUTE ON FUNCTION nb_delta_api.fixture_leak() TO PUBLIC", "DROP FUNCTION nb_delta_api.fixture_leak()"],
     ];
     for (const [name, grant, revoke] of cases) await t.test(name, async () => {

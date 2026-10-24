@@ -17,6 +17,7 @@ import { readPublicationState } from "../../src/server/database/incremental-publ
 import { openIncrementalDatabase, type IncrementalDatabasePool } from "../../src/server/database/incremental-connection.ts";
 import { installPublication } from "../../scripts/website-sync/publication-migration.ts";
 import { installIncrementalPublication } from "../../scripts/website-sync/incremental-migration.ts";
+import { installIncrementalReaderIsolation } from "../../scripts/website-sync/incremental-reader-isolation.ts";
 import { installIncrementalReader } from "../../scripts/website-sync/incremental-reader-migration.ts";
 import { createRuntimeSources } from "../../scripts/website-incremental-sync/runtime-sources.ts";
 import { NotionRequestScheduler } from "../../src/server/notion/request-scheduler.ts";
@@ -48,8 +49,8 @@ export async function hostFixture(timeZone?: string) {
   await db.exec(await readFile(new URL("../../database/website-study-migrations/001_automatic_study.sql", import.meta.url), "utf8"));
   await db.query("UPDATE nb_v2.migrations SET digest=$1 WHERE version=$2", [studyProtocol.migration.sha256, studyProtocol.migration.version]);
   const owner: SqlExecutor = { query: async <T>(sql: string, values?: unknown[]) => { if (sql.startsWith("--")) { await db.exec(sql); return { rows: [] as T[] }; } return db.query<T>(sql, values); } };
-  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner);
-  await db.exec("CREATE ROLE fixture_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT; CREATE ROLE fixture_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT; GRANT nb_reader TO fixture_reader; GRANT nb_writer TO fixture_writer;");
+  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await installIncrementalReaderIsolation(owner);
+  await db.exec("CREATE ROLE fixture_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT; CREATE ROLE fixture_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT; GRANT nb_delta_reader TO fixture_reader; GRANT nb_writer TO fixture_writer;");
   await db.query("SELECT nb_v2_api.configure_policy($1,600,$2::jsonb,'[]')", [digest, JSON.stringify(config.sources.map(s => ({ key: s.key, kind: s.kind,
     mode: s.publication.mode, dataSourceId: s.dataSourceId, databaseParentId: null, pageId: s.pageId })))]);
   const fullRunId = randomUUID(), writer = publicationWriter(owner, "published"), lease = await writer.begin(fullRunId, digest);
