@@ -5,13 +5,14 @@ import {databasePoolConfig} from "../../src/server/database/connection.ts";
 import {createArchiveStore, verifyOfflineRestore} from "./archive.ts";
 import {dailyRetention, sha256, type RetentionPort} from "./daily.ts";
 import {retentionRunLimit} from "./limits.ts";
-import {verifyRetentionHealth} from "./health.ts";
+import {verifyRetentionReadiness} from "./readiness.ts";
+import type {ReadinessSample} from "../../src/server/content-readiness/protocol.ts";
 import {RetentionResponseBudget} from "./response-budget.ts";
 
 interface Window {
- format:"retention-daily-window-v2";maximumRuns:number;runId:string;deadline:number;syncState:string;operation:string;
+ format:"retention-daily-window-v3";maximumRuns:number;runId:string;deadline:number;syncState:string;operation:string;
  locks:{path:string;ino:number;dev:number;sha256:string}[];absentLocks:string[];
- proofs:{path:string;sha256:string}[];archiveDirectory:string;healthURL:string;
+ proofs:{path:string;sha256:string}[];archiveDirectory:string;readinessURL:string;readinessSample:ReadinessSample;
  programFiles:{path:string;sha256:string}[];
 }
 async function privateFile(path:string,maximum=2*1024*1024){
@@ -24,10 +25,11 @@ async function main(){
  const [flag,path,...extra]=process.argv.slice(2);if(flag!=="--window"||!path||extra.length)throw Error("RETENTION_EXPLICIT_WINDOW_REQUIRED");
  const initial=await privateFile(path),window=JSON.parse(initial.raw) as Window;
  const maximumRuns=retentionRunLimit(window.maximumRuns);
- if(window.format!=="retention-daily-window-v2"||window.locks.length!==4||window.proofs.length<5||window.absentLocks.length<1||
+ if(window.format!=="retention-daily-window-v3"||window.locks.length!==4||window.proofs.length<5||window.absentLocks.length<1||
   !window.programFiles?.length||!Number.isFinite(window.deadline)||window.deadline>Date.now()+30*60*1000||window.deadline<Date.now()+60_000)throw Error("RETENTION_WINDOW_INVALID");
+ const stop=new AbortController();
  let cancelled=false;
- const cancel=()=>{cancelled=true;};process.once("SIGTERM",cancel);process.once("SIGINT",cancel);
+ const cancel=()=>{cancelled=true;stop.abort();};process.once("SIGTERM",cancel);process.once("SIGINT",cancel);
  async function assertWindow(){
   if(cancelled||Date.now()+35_000>=window.deadline)throw Error("RETENTION_WINDOW_STOPPED");
   if((await privateFile(path)).raw!==initial.raw)throw Error("RETENTION_WINDOW_CHANGED");
@@ -39,9 +41,8 @@ async function main(){
   for(const proof of window.programFiles){const s=await lstat(proof.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(proof.path,"utf8"))!==proof.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  }
  await assertWindow();
- // Reject liveness-only deployments before opening a database or deleting anything.
- // The legacy readiness proof must also remain valid after maintenance.
- const health=async()=>{await assertWindow();await verifyRetentionHealth(window.healthURL);await assertWindow();};
+ // Both private proofs bind this exact published run and public Status sample.
+ const health=async()=>{await assertWindow();await verifyRetentionReadiness(window.readinessURL,process.env.RETENTION_READINESS_SECRET,window.runId,window.readinessSample,fetch,stop.signal);await assertWindow();};
  await health();
  const budget=new RetentionResponseBudget();
  const pool=new Pool({...databasePoolConfig(process.env.RETENTION_DATABASE_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT),
