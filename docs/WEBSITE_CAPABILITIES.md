@@ -74,7 +74,9 @@ npm run website:capabilities -- http://127.0.0.1:3100
 
 仅隔离的 loopback 数据库可以配置 `DATABASE_MEDIA_DIRECTORY`，用于 owner-only 私有本机媒体；其 reader 无写入能力。云端继续使用既有私有对象存储，不可把本机目录配置用于远程数据库。
 
-v2 运维入口是 `npm run website:sync -- <migrate|policy|dry-run|stage|publish|deny|allow>`，使用独立私有 `--env-file` 调用 Node；`policy` 必须明确设置 `SYNC_FRESHNESS_SECONDS`。`migrate/policy/deny/allow` 用 migration owner，`stage/publish` 用 `nb_writer`；这些命令只操作 v2。政策变化使旧批次失效，中央 deny 即刻影响新读取；允许列表缺页、权限失败、遍历截断或图片失败时不会发布不完整批次。`stage` 会释放 lease 并保留待查数据，不让网站读到该批次。
+v2 同步入口是 `npm run website:sync -- --config /absolute/private/runtime.json --mode <dry-run|stage|publish> [--check]`，使用[固定主机](WEBSITE_SYNC_RUNTIME.md)的已审 release、原业务双锁、明确预算和强制 TLS 校验。旧位置参数及直接 CLI 同步分支已关闭，不能只载入 shell 凭据就绕过主机运行；仅 `--check` 为离线检查，实际 dry-run 仍读取来源和图片。
+
+管理命令使用 `npm run website:admin -- <migrate|migrate-media|migrate-publication|migrate-incremental|migrate-incremental-reader|policy|deny|allow>`，或用独立私有 `--env-file` 调用 `scripts/website-sync/cli.ts`；`policy` 必须明确设置 `SYNC_FRESHNESS_SECONDS`。管理操作使用 migration owner，保留单独维护窗口与授权，不继承同步主机的锁／超时保证；同步 stage/publish 通过主机使用受限 writer。这些命令只操作 v2。政策变化使旧批次失效，中央 deny 即刻影响新读取；允许列表缺页、权限失败、遍历截断或图片失败时不会发布不完整批次。`stage` 会释放 lease 并保留待查数据，不让网站读到该批次。
 
 私有预览样本与全量发布配置必须分开；代表样本可以验收字段、正文、图片和网站连接，不能替代全来源发布、同步时效、备份恢复或中国内地／海外网络验收。正式发布、域名、云端迁移与 provider 切换仍按用户的独立指令执行。
 
