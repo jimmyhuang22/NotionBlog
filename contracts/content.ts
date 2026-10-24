@@ -153,7 +153,8 @@ export interface Game extends ContentBase {
 }
 export interface Course extends ContentBase {
   kind: "course";
-  code: string;
+  /** Only an explicit source property supplies the code; absent or blank stays null. */
+  code: string | null;
   semester: string | null;
   ratings: {
     experience: Rating | null;

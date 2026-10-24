@@ -16,6 +16,7 @@ test("a bracketed marker before the code stays in place", () => {
 });
 
 test("titles that are not code plus name are left as they are", () => {
+  assert.equal(courseName({ code: null, title: "ABC1234 A course without a code property" }), "ABC1234 A course without a code property");
   assert.equal(courseName({ code: "ABC1234", title: "ABC1234" }), "ABC1234");
   assert.equal(courseName({ code: "ABC1234", title: "ABC12345 Another course" }), "ABC12345 Another course");
   assert.equal(courseName({ code: "ABC123", title: "ABC1234 Another course" }), "ABC1234 Another course");

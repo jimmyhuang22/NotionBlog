@@ -101,8 +101,8 @@ function plainStars(label: string): string {
  * before the code (the demo set's "[演示]") stays. A title that does not start with the code, or is
  * nothing but the code, is returned as it is.
  */
-export function courseName(course: { code: string; title: string }): string {
-  const code = course.code.trim();
+export function courseName(course: { code: string | null; title: string }): string {
+  const code = course.code?.trim();
   if (!code) return course.title;
   const marker = /^\[[^\]]*\]\s*/u.exec(course.title)?.[0] ?? "";
   const rest = course.title.slice(marker.length);

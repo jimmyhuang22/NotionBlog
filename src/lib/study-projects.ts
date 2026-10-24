@@ -27,8 +27,8 @@ export function studyProjects(courses: Course[], definitions?: StudyProjectDefin
   const assigned = new Set<string>();
   return rules.map(p => {
     const members = courses.filter(course => {
-      const code = course.code.toUpperCase();
-      return !assigned.has(course.id) && (p.courseCodes === null ? !explicit.has(code) : p.courseCodes.includes(code));
+      const code = course.code?.toUpperCase() ?? null;
+      return !assigned.has(course.id) && (p.courseCodes === null ? code === null || !explicit.has(code) : code !== null && p.courseCodes.includes(code));
     });
     members.forEach(course => assigned.add(course.id));
     return { slug: p.slug, title: p.title, code: p.code, category: p.category, layout: p.layout,

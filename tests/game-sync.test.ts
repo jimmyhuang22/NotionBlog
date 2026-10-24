@@ -208,6 +208,40 @@ async function planned(f: ReturnType<typeof fake>, rows = [row], cfg = config) {
   await syncNotion("test", cfg, rows, false, f.client, { onPlan: async p => { plan = p; } });
   return plan;
 }
+test("missing ownership creates an empty property and is unchanged on the next plan", async () => {
+  const f = fake();
+  const plan = await planned(f);
+  assert.deepEqual(plan.actions[0].properties.Ownership, { rich_text: [] });
+  const report = await syncNotion("test", config, [row], true, f.client, { expectedPlan: plan });
+  assert.equal(report.verified, 1);
+  assert.deepEqual(f.records[0].properties.Ownership.rich_text, []);
+  const repeat = await planned(f);
+  assert.equal(repeat.counts.unchanged, 1);
+  assert.equal(repeat.actions.length, 0);
+});
+test("ownership transitions clear old placeholders, preserve known values and remain idempotent", async () => {
+  for (const [before, after] of [["unknown", null], ["In library", null], [null, "In library"]] as const) {
+    const f = fake([existing({ ...row, ownership: before }, [gameId])]);
+    const next = { ...row, ownership: after };
+    const plan = await planned(f, [next]);
+    assert.deepEqual(Object.keys(plan.actions[0].properties).sort(), ["Ownership", "Synced At"]);
+    const report = await syncNotion("test", config, [next], true, f.client, { expectedPlan: plan });
+    assert.equal(report.verified, 1);
+    assert.equal(f.records[0].properties.Ownership.rich_text.map((t: any) => t.plain_text).join(""), after ?? "");
+    assert.equal(f.records[0].properties.Name.title[0].plain_text, "User title");
+    assert.equal(f.records[0].properties["Review Notes"].rich_text[0].annotations.bold, true);
+    assert.equal(f.records[0].properties.Game.relation[0].id, gameId);
+    assert.equal((await planned(f, [next])).counts.unchanged, 1);
+    assert.equal(f.writes.length, 1);
+  }
+});
+test("readback cannot acknowledge a missing ownership value still stored as unknown", async () => {
+  const f = fake([existing({ ...row, ownership: "unknown" })]);
+  f.hooks.afterWrite = () => { f.records[0].properties.Ownership = apiProperties(properties({ ...row, ownership: "unknown" })).Ownership; };
+  const plan = await planned(f);
+  await assert.rejects(syncNotion("test", config, [row], true, f.client, { expectedPlan: plan }), { code: "READBACK_FAILED" });
+  assert.equal(f.writes.length, 1);
+});
 test("identical account data and timestamp-only refreshes make zero writes", async () => {
   for (const change of [{}, { syncedAt: "2026-01-02T00:00:00Z", sourceUpdated: "2026-01-02T00:00:00Z" }]) {
     const f = fake([existing(row, [gameId])]);

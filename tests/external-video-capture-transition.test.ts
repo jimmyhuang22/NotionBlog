@@ -30,7 +30,7 @@ test("external video transition accepts only its exact producer, mapper pair and
     const actual = createHash("sha256").update(await readFile(new URL("../" + pair.path, import.meta.url))).digest("hex");
     if (pair.path === "src/server/notion/website-repository.ts") {
       // The older video-only transition must reject the newer archive, rating and search-display mapper.
-      assert.equal(actual, "05a715df156fbc3a54bf6a2afe2b45245cd265c098c6648face5002ed4e24288");
+      assert.equal(actual, "77f88b8cbacef49c9e6577fe6c4477e423a221218bfd51c4a93f66320b7d6797");
       const newerMapper = structuredClone(consumer);
       newerMapper.files.find(file => file.path === pair.path)!.sha256 = actual;
       assert.throws(() => checkCaptureReleaseCompatibility(producer, newerMapper), { code: "RELEASE_INVALID" });

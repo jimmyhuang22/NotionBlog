@@ -66,6 +66,27 @@ test("PostgreSQL migration, roles and publication lifecycle",async t=>{
     }
     const deny=(id:string)=>db.query("SELECT nb_api.set_denied($1,true)",[id]);
 
+    await t.test("nullable course codes publish and read back while legacy strings remain valid", async () => {
+      for (const code of ["LEGACY123", null, "course-a"]) {
+        await reset();
+        const batch = records(), course = batch[2].detail.item;
+        assert.equal(course.kind, "course");
+        if (course.kind !== "course") throw Error("Course fixture missing");
+        course.code = code;
+        validateSyncRecord(batch[2]);
+        for (const invalid of [undefined, 1, {}, []]) {
+          const bad = structuredClone(batch[2]);
+          Object.assign(bad.detail.item, { code: invalid });
+          assert.throws(() => validateSyncRecord(bad), controlled("CONTENT_UNAVAILABLE"));
+        }
+        const lease = await writer.begin(randomUUID(), digest);
+        await writer.stage(lease, batch, [media]); await writer.promote(lease, { records: 5, media: 1, complete: true });
+        assert.equal((await repo.get("course", course.slug))!.item.code, code);
+        assert.equal((await repo.list("course")).items[0].code, code);
+        assert.equal((await repo.getCourseMetadata!(course.slug))!.code, code);
+      }
+    });
+
     await t.test("additive Status reader preserves worker handshake and confines SQL privileges",async()=>{
       await reset();await publish();
       for(const name of ["nb_writer","anon","authenticated","service_role"]) {
