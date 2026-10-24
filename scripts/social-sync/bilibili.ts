@@ -70,6 +70,7 @@ async function fetchBoundedPage(target: Target, maxBytes: number, signal?: Abort
     if (response.status >= 300 && response.status < 400) return await reject("SOURCE_REDIRECT");
     if ([401, 403, 412].includes(response.status)) return await reject("SOURCE_BLOCKED");
     if (response.status === 429) return await reject("RATE_LIMITED");
+    if (response.status >= 500 && response.status <= 599) return await reject("SOURCE_TEMPORARY_ERROR");
     if (response.status !== 200) return await reject("SOURCE_HTTP_ERROR");
     if (!response.headers.get("content-type")?.toLowerCase().startsWith("text/html")) return await reject("PAGE_TYPE_INVALID");
     if (Number(response.headers.get("content-length")) > maxBytes) return await reject("PAGE_TOO_LARGE");

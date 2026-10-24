@@ -69,7 +69,7 @@ test("Bilibili missing, executable, duplicate and oversized state cannot be eval
   assert.throws(() => pageState("x".repeat(MAX_PAGE_BYTES+1)), error("PAGE_TOO_LARGE"));
 });
 test("Bilibili HTTP keeps redirects and blocked responses as explicit failures", async () => {
-  for (const [status, code] of [[302,"SOURCE_REDIRECT"],[403,"SOURCE_BLOCKED"],[412,"SOURCE_BLOCKED"],[429,"RATE_LIMITED"],[503,"SOURCE_HTTP_ERROR"]] as const) {
+  for (const [status, code] of [[302,"SOURCE_REDIRECT"],[403,"SOURCE_BLOCKED"],[412,"SOURCE_BLOCKED"],[429,"RATE_LIMITED"],[503,"SOURCE_TEMPORARY_ERROR"]] as const) {
     const request = (async () => new Response("", { status })) as typeof fetch;
     await assert.rejects(collectVideo(target, undefined, request), error(code));
   }

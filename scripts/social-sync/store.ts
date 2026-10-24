@@ -68,9 +68,16 @@ export class SocialStore {
     if (hash(payload) !== sha) throw new SocialSyncError("LOCAL_DATA_INVALID");
     const row = JSON.parse(payload) as Observation; validateObservation(row); return row;
   }
-  pending(): Pending[] {
-    return this.db.prepare("SELECT key,payload,sha256 FROM outbox WHERE status='pending' ORDER BY key LIMIT 100").all().map(row =>
+  pending(allowedKeys?: ReadonlySet<string>): Pending[] {
+    const keys = allowedKeys === undefined ? null : JSON.stringify([...allowedKeys]);
+    return this.db.prepare(`SELECT key,payload,sha256 FROM outbox WHERE status='pending'
+      AND (? IS NULL OR key IN (SELECT value FROM json_each(?))) ORDER BY key LIMIT 100`).all(keys, keys).map(row =>
       ({ key: String(row.key), sha256: String(row.sha256), observation: this.decode(String(row.payload), String(row.sha256)) }));
+  }
+  /** Count excluded rows without loading their private payloads or spending a batch slot. */
+  pendingOutside(allowedKeys: ReadonlySet<string>): number {
+    return Number(this.db.prepare(`SELECT count(*) AS n FROM outbox WHERE status='pending'
+      AND key NOT IN (SELECT value FROM json_each(?))`).get(JSON.stringify([...allowedKeys]))!.n);
   }
   /** Select one fixed target, so an unrelated or larger outbox cannot hide its retry. */
   pendingFor(target: Target): Pending | null {
@@ -118,7 +125,9 @@ export async function flushOutbox(store: SocialStore, send: (item: Pending) => P
   allowedKeys?: ReadonlySet<string>; signal?: AbortSignal;
 } = {}) {
   const report = { acknowledged: 0, failed: 0, superseded: 0, skipped: 0, cancelled: false };
-  for (const item of store.pending()) {
+  if (options.signal?.aborted) { report.cancelled = true; return report; }
+  if (options.allowedKeys) report.skipped = store.pendingOutside(options.allowedKeys);
+  for (const item of store.pending(options.allowedKeys)) {
     if (options.signal?.aborted) { report.cancelled = true; break; }
     if (options.allowedKeys && !options.allowedKeys.has(item.key)) { report.skipped++; continue; }
     try {

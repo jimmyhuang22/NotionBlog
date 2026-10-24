@@ -86,10 +86,12 @@ export class CollectionStore {
     }
     return plans;
   }
-  pending(): CollectionPending[] {
+  pending(allowedKeys?: ReadonlySet<string>): CollectionPending[] {
     if (!this.hasOutbox) throw new SocialSyncError("LOCAL_SCHEMA_UPGRADE_REQUIRED");
+    const keys = allowedKeys === undefined ? null : JSON.stringify([...allowedKeys]);
     const result: CollectionPending[]=[]; let bytes=0;
-    for (const row of this.db.prepare("SELECT key,sha256,payload FROM collection_outbox ORDER BY key LIMIT 101").iterate()) {
+    for (const row of this.db.prepare(`SELECT key,sha256,payload FROM collection_outbox
+      WHERE ? IS NULL OR key IN (SELECT value FROM json_each(?)) ORDER BY key LIMIT 101`).iterate(keys, keys)) {
       if (result.length===100 || typeof row.payload!=="string" || (bytes+=Buffer.byteLength(row.payload))>8*1024*1024) throw new SocialSyncError("COLLECTION_EXPORT_TOO_LARGE");
       if (typeof row.key!=="string" || typeof row.sha256!=="string" || hash(row.payload)!==row.sha256) throw new SocialSyncError("LOCAL_DATA_INVALID");
       let snapshot: CollectionSnapshot;
@@ -98,6 +100,12 @@ export class CollectionStore {
       result.push({key:row.key,sha256:row.sha256,snapshot});
     }
     return result;
+  }
+  /** Excluded historical targets remain pending, without affecting the selected payload budget. */
+  pendingOutside(allowedKeys: ReadonlySet<string>): number {
+    if (!this.hasOutbox) throw new SocialSyncError("LOCAL_SCHEMA_UPGRADE_REQUIRED");
+    return Number(this.db.prepare(`SELECT count(*) AS n FROM collection_outbox
+      WHERE key NOT IN (SELECT value FROM json_each(?))`).get(JSON.stringify([...allowedKeys]))!.n);
   }
   pendingFor(target: CollectionTarget): CollectionPending | null {
     if (!this.hasOutbox) throw new SocialSyncError("LOCAL_SCHEMA_UPGRADE_REQUIRED");
@@ -118,7 +126,9 @@ export class CollectionStore {
 export interface CollectionPending {key:string;sha256:string;snapshot:CollectionSnapshot}
 export async function flushCollectionOutbox(store: CollectionStore, send: (item:CollectionPending)=>Promise<{key:string;sha256:string}>, options: {allowedKeys:Set<string>;signal?:AbortSignal}) {
   const report={acknowledged:0,failed:0,superseded:0,skipped:0,cancelled:false};
-  for (const item of store.pending()) {
+  if (options.signal?.aborted) {report.cancelled=true;return report;}
+  report.skipped=store.pendingOutside(options.allowedKeys);
+  for (const item of store.pending(options.allowedKeys)) {
     if (options.signal?.aborted) {report.cancelled=true;break;}
     if (!options.allowedKeys.has(item.key)) {report.skipped++;continue;}
     try {
