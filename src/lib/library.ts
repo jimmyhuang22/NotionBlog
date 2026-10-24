@@ -126,6 +126,16 @@ export function platformChip(platform: string): PlatformChip {
   return { label: name, tone: "other" };
 }
 
+/** A game's platforms as chips, each label once: a PlayStation 4 and 5 game is one "PlayStation", not two. */
+export function platformChips(platforms: string[]): PlatformChip[] {
+  const chips = new Map<string, PlatformChip>();
+  for (const platform of platforms) {
+    const chip = platformChip(platform);
+    if (chip.label && !chips.has(chip.label)) chips.set(chip.label, chip);
+  }
+  return [...chips.values()];
+}
+
 /**
  * Time played as a game card writes it: whole hours from a hundred on, one decimal below, nothing for
  * none at all (a game bought and not played) or an unknown time. Minutes as they are. A time that
@@ -140,7 +150,7 @@ export function cardTimeLabel(amount: TimeAmount | null): string | null {
 
 /** A game card's second line: its platforms, time played and rating; an unknown one is left out, not written as missing. */
 export function gameCard(item: Game): { platforms: PlatformChip[]; time: string | null; rating: string | null } {
-  return { platforms: item.platforms.map(platformChip), time: cardTimeLabel(item.playedTime), rating: item.rating ? ratingLabel(item.rating) : null };
+  return { platforms: platformChips(item.platforms), time: cardTimeLabel(item.playedTime), rating: item.rating ? ratingLabel(item.rating) : null };
 }
 
 /** The facts of the quiet line under the title, one piece each. Unknown values are omitted here and stated on the detail page. */

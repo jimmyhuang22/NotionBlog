@@ -97,8 +97,11 @@ test("the line under a title is made of whole facts, so it can wrap between them
 });
 
 test("a game card names its platforms short in their makers' colours, writes time played plainly and marks platinum", async () => {
-  const { cardTimeLabel, coverBadge, gameCard, platformChip } = await import("../src/lib/library.ts");
+  const { cardTimeLabel, coverBadge, gameCard, platformChip, platformChips } = await import("../src/lib/library.ts");
   assert.deepEqual(platformChip("Nintendo Switch"), { label: "Switch", tone: "nintendo" });
+  // Platforms that share a short name are one chip, in the order first named.
+  assert.deepEqual(platformChips(["PlayStation 4", "Nintendo 3DS", "PlayStation 5", "New Nintendo 3DS", " "]),
+    [{ label: "PlayStation", tone: "playstation" }, { label: "3DS", tone: "nintendo" }]);
   assert.deepEqual(platformChip("Nintendo 3DS"), { label: "3DS", tone: "nintendo" });
   assert.deepEqual(platformChip("PlayStation"), { label: "PlayStation", tone: "playstation" });
   assert.deepEqual(platformChip("Personal Computer"), { label: "PC", tone: "pc" });

@@ -26,6 +26,21 @@ export function ContentImage({ image, caption = "", previewWidth }: { image: Ima
     return lightbox.register({ key, src, alt, caption, preview, large, width, height });
   }, [lightbox, failed, key, src, alt, caption, preview, large, width, height]);
 
+  // A picture can fail before the page is interactive, when no error event reaches here (as in cover-image.tsx):
+  // without this, the browser's broken-image mark would stay, with no original tried and no notice shown.
+  useEffect(() => {
+    const img = fade.current;
+    if (!img?.complete || img.naturalWidth > 0) return;
+    // A drawing without a size of its own also reads as zero wide; decoding tells it apart from a broken file.
+    let live = true;
+    img.decode().catch(() => {
+      if (!live) return;
+      if (img.getAttribute("src") === src) setFailed(true);
+      else setOriginal(true);
+    });
+    return () => { live = false; };
+  }, [fade, src]);
+
   if (failed) return <div className="figure__failed" role="img" aria-label={alt || "图片"}>图片暂时无法显示</div>;
   const img = <img ref={fade} src={displaySrc} alt={alt} width={width ?? undefined} height={height ?? undefined} loading="lazy" decoding="async" onError={() => (displaySrc === src ? setFailed(true) : setOriginal(true))} />;
   if (!lightbox) return img;

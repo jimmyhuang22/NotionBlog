@@ -66,6 +66,8 @@ const THEME: ThemeRegistrationRaw = {
   ],
 };
 const MAX_LENGTH = 40_000;
+const MAX_LINE_LENGTH = 1_000;
+const LINE_TIME_LIMIT_MS = 200;
 
 let highlighter: Promise<HighlighterCore> | undefined;
 
@@ -89,7 +91,9 @@ export async function highlightCode(code: string, languageName: string): Promise
   try {
     const instance = await getHighlighter();
     if (!instance.getLoadedLanguages().includes(language)) await instance.loadLanguage((await loaders[language]!()).default);
-    return instance.codeToHtml(code, { lang: language, theme: "site", structure: "inline" });
+    // One very long line can keep the regex engine busy for half a minute (a 40,000-character JavaScript line took
+    // 32 s here); such a line stays plain, and no line may take longer than the time limit.
+    return instance.codeToHtml(code, { lang: language, theme: "site", structure: "inline", tokenizeMaxLineLength: MAX_LINE_LENGTH, tokenizeTimeLimit: LINE_TIME_LIMIT_MS });
   } catch {
     return null;
   }

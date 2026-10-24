@@ -336,6 +336,8 @@
 .palette__panel { display: flex; flex-direction: column; max-height: inherit; }
 .palette__field { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 12px 0 20px; color: var(--muted); }
 .palette__input { flex: 1 1 auto; min-width: 0; height: 44px; border: 0; background: none; font: inherit; font-family: var(--font-hand); font-size: var(--text-lg); color: var(--ink); outline: none; }
+/* The field has no frame of its own, so a keyboard visit keeps the site's ring around it (globals.css). */
+.palette__input:focus-visible { outline: 2px solid var(--accent); }
 .palette__input::placeholder { color: var(--muted); opacity: 1; }
 .palette__input::-webkit-search-cancel-button { display: none; }
 .palette__close { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer; }
