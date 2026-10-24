@@ -1,3 +1,4 @@
+import { rollbackFault } from "./helpers/rollback-fault.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, mkdtemp, rm, chmod, symlink, writeFile, stat, lstat, realpath, truncate } from "node:fs/promises";
@@ -110,6 +111,7 @@ test("website restore rejects version mismatches, populated targets and rolls ba
         bad.tables.media[0].owner_page_id = "missing-owner";
         (bad.tables.media[0].descriptor as Record<string, unknown>).ownerPageId = "missing-owner";
         validateWebsiteArchive(bad); await assert.rejects(restoreWebsiteArchive(db, bad), /foreign key/);
+        await assert.rejects(restoreWebsiteArchive(rollbackFault(db), bad), /foreign key/);
         assert.deepEqual(await exportWebsiteArchive(db), before);
       } finally { await db.close(); }
     });

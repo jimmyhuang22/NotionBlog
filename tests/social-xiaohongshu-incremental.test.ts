@@ -185,3 +185,23 @@ test("accepted browser evidence survives shared-root contention without creating
     assert.equal(prepares,2);
   }finally{CycleCloudSession.prototype.preparePublications=prepare;await release();}
 });
+
+test("browser upload preserves its failure and pause when configuration disappears and closing also fails",async t=>{
+ const f=await fixture(t);
+ await holdNoteLink(f.root,publicationKey(f.targets[0]!),httpUrl(2));
+ const leased=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false}) as {job:{id:string}};
+ const n=httpState(2).note.noteDetailMap[httpTarget(2).publicationId]!.note;
+ const snapshot={version:1,source:"browser-note-state",observedAt:now(),pageUrl:httpTarget(2).url,note:{noteId:n.noteId,userId:n.user.userId,type:n.type,title:n.title,time:n.time,lastUpdateTime:null,coverUrl:null,interactInfo:n.interactInfo}};
+ await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-submit",jobId:leased.job.id,snapshots:[snapshot]});
+ const original=new SocialSyncError("CLOUD_UPLOAD_FAILED");let closed=0;
+ t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{
+  await rm(join(f.root,"refresh-config.json"));throw original;
+ });
+ t.mock.method(CycleCloudSession.prototype,"close",async()=>{closed++;throw Error("private close failure");});
+ await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-upload"}),error=>error===original);
+ assert.equal(closed,1);
+ const health=parseHttpHealth(JSON.parse(await readFile(join(f.root,"cycle-xiaohongshu-http/health.json"),"utf8")));
+ assert.equal(health.recovery.code,"CLOUD_UPLOAD_FAILED");assert.equal(health.recovery.stage,"upload");
+ for(const lock of ["cycle-xiaohongshu-http/worker.lock","xiaohongshu-browser-notes/worker.lock"])
+  await assert.rejects(readFile(join(f.root,lock)),{code:"ENOENT"});
+});

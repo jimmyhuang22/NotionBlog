@@ -199,7 +199,7 @@ export async function restorePublicationArchive(db: SqlExecutor, archive: Public
     await db.query("UPDATE nb_v2.state SET current_run=NULL,lease_run=NULL,lease_until=NULL,revision=revision+1,epoch=epoch+1,fence=fence+1");
     await db.query("UPDATE nb_v2.runs SET valid_until=statement_timestamp()-interval '1 second',status=CASE WHEN status='staging' THEN 'failed' ELSE status END");
     await db.query("COMMIT");
-  } catch (error) { await db.query("ROLLBACK"); throw error; }
+  } catch (error) { try { await db.query("ROLLBACK"); } catch { /* Preserve the restore failure; the caller must discard this connection. */ } throw error; }
 }
 export function createPublicationArchiveStore(privateRoot = resolve(".local")) {
   return createPrivateWebsiteArchiveStore<PublicationArchive>(privateRoot, {validate: validatePublicationArchive, objects: archivedPublicationObjects});

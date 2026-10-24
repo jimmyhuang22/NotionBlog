@@ -12,10 +12,10 @@ import { collectionKey } from "../scripts/social-sync/collection.ts";
 import { collectionMemberShas } from "../scripts/social-sync/refresh.ts";
 import { executeRefresh,refreshRequest,MAX_REFRESH_SOURCE_BYTES } from "../scripts/social-sync/refresh-executor.ts";
 import type { RefreshCandidate,RefreshPorts } from "../scripts/social-sync/refresh-executor.ts";
-import { openStore } from "../scripts/social-sync/store.ts";
-import { openCollectionStore } from "../scripts/social-sync/collection-store.ts";
+import { openStore, SocialStore } from "../scripts/social-sync/store.ts";
+import { openCollectionStore, CollectionStore } from "../scripts/social-sync/collection-store.ts";
 import { browserCaptureScript,snapshotObservation } from "../scripts/social-sync/xiaohongshu.ts";
-import { runExecuteCli } from "../scripts/social-sync/execute-cli.ts";
+import { runExecuteCli, executeAtRoot } from "../scripts/social-sync/execute-cli.ts";
 import { exampleCollectionSnapshot } from "./helpers/social-collection-samples.ts";
 
 const at="2026-01-02T00:00:00.000Z",now="2026-01-03T00:00:00.000Z";
@@ -127,4 +127,32 @@ test("CLI rechecks the actual scope file after a source request and releases its
  t.mock.method(globalThis,"fetch",async()=>{await writeFile(join(f.root,"refresh-config.json"),JSON.stringify({...f.scope,reviewedAt:new Date().toISOString()}),{mode:0o600});return new Response(html(),{headers:{"Content-Type":"text/html"}});});t.mock.method(console,"log",()=>{});
  const previous=process.exitCode;try{await runExecuteCli(["run",f.root,"bilibili","1"]);}finally{process.exitCode=previous;}
  assert.equal(f.publications.status().samples,0);const report=JSON.parse(await readFile(join(f.root,"latest-execution.json"),"utf8"));assert.equal(report.entries[0].code,"REFRESH_SCOPE_CHANGED");await assert.rejects(stat(join(f.root,"worker.lock")),{code:"ENOENT"});
+});
+
+for (const primaryFailure of [false, true]) test(`root executor releases every lock after a store close failure (primary=${primaryFailure})`, async t => {
+ const f=await fixture(t,[target()],true);
+ await writeFile(join(f.root,"refresh-config.json"),JSON.stringify(f.scope),{mode:0o600});
+ const close=SocialStore.prototype.close,collectionClose=CollectionStore.prototype.close;
+ let collectionsClosed=0;
+ const pubMock=t.mock.method(SocialStore.prototype,"close",function(this:SocialStore){close.call(this);throw Error("private close failure");});
+ const colMock=t.mock.method(CollectionStore.prototype,"close",function(this:CollectionStore){collectionsClosed++;collectionClose.call(this);});
+ try{
+  await assert.rejects(executeAtRoot(f.root,{platform:"bilibili",limit:1,prepare:true,
+   ...(primaryFailure?{expectedSnapshots:{missing:"a".repeat(64)}}:{})}),{code:primaryFailure?"REFRESH_SOURCE_CHANGED":"REFRESH_CLOSE_FAILED"});
+  assert.equal(collectionsClosed,1);
+  await assert.rejects(stat(join(f.root,"worker.lock")),{code:"ENOENT"});
+ }finally{pubMock.mock.restore();colMock.mock.restore();}
+});
+
+test("a failed social report survives a later cleanup failure with its original entry code",async t=>{
+ const f=await fixture(t);
+ await writeFile(join(f.root,"refresh-config.json"),JSON.stringify(f.scope),{mode:0o600});
+ await writeFile(join(f.root,"cloud.env"),"SOCIAL_DATABASE_URL=postgresql://nb_social_worker:example@localhost/example\nDATABASE_TLS=disable\n",{mode:0o600});
+ const close=SocialStore.prototype.close;let closes=0;
+ const mocked=t.mock.method(SocialStore.prototype,"close",function(this:SocialStore){close.call(this);if(++closes===2)throw Error("close failure");});
+ try{
+  const report=await executeAtRoot(f.root,{platform:"bilibili",limit:1,request:async()=>{throw new SocialSyncError("SOURCE_BLOCKED");}});
+  assert("entries" in report);assert.equal(report.failed,1);assert.equal(report.entries.find(e=>e.status==="failed")?.code,"SOURCE_BLOCKED");
+  assert.equal(closes,2);await assert.rejects(stat(join(f.root,"worker.lock")),{code:"ENOENT"});
+ }finally{mocked.mock.restore();}
 });

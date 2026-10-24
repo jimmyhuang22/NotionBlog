@@ -1,3 +1,4 @@
+import { rollbackFault } from "./helpers/rollback-fault.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
@@ -146,6 +147,7 @@ test("strict extensions, empty targets and late failures cannot produce partial 
         await target.db.exec(`CREATE FUNCTION reject_ledger() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'SYNTHETIC_LEDGER_FAILURE'; END $$;
           CREATE CONSTRAINT TRIGGER reject_ledger AFTER INSERT ON nb_delta.operations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_ledger();`);
         await assert.rejects(restorePublicationArchive(target.owner, archive), /SYNTHETIC_LEDGER_FAILURE/);
+        await assert.rejects(restorePublicationArchive(rollbackFault(target.owner), archive), /SYNTHETIC_LEDGER_FAILURE/);
         assert.deepEqual(await exportPublicationArchive(target.owner), before);
       } finally {await target.db.close();}
     });

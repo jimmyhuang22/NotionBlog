@@ -183,7 +183,7 @@ export async function restoreWebsiteArchive(db: SqlExecutor, archive: WebsiteDat
     await db.query("UPDATE nb_v2.runs SET valid_until=statement_timestamp()-interval '1 second',status=CASE WHEN status='staging' THEN 'failed' ELSE status END");
     await db.query("COMMIT");
   } catch (cause) {
-    await db.query("ROLLBACK");
+    try { await db.query("ROLLBACK"); } catch { /* Preserve the restore failure; the caller must discard this connection. */ }
     throw cause;
   }
 }

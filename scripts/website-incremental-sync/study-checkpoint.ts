@@ -64,7 +64,7 @@ export class StudyCheckpointStore {
   close(){this.db.close();}
   private transaction<T>(fn:()=>T):T{
     try{this.db.exec("BEGIN IMMEDIATE");}catch(e){safe(e);}
-    try{const result=fn();this.db.exec("COMMIT");return result;}catch(e){this.db.exec("ROLLBACK");safe(e);}
+    try{const result=fn();this.db.exec("COMMIT");return result;}catch(e){try { this.db.exec("ROLLBACK"); } catch { /* Preserve the transaction failure. */ }safe(e);}
   }
   private current():StudyCheckpoint{
     const row=this.db.prepare("SELECT value,digest FROM checkpoint WHERE singleton=1").get();

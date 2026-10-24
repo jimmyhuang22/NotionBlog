@@ -13,7 +13,7 @@ export const recoveryRuntimeSources = [
   },
   {
     "path": "scripts/website-sync/run.ts",
-    "sha256": "f896668b5d7a9241ac53caebf8dc3f699ae98c53dd7e29c7908218f047132370"
+    "sha256": "c236f72b4e7080568998ce95d6d9719f3ff491fdf7ff564c1d6c3cc5193dadd5"
   },
   {
     "path": "scripts/check-website-protocol.ts",

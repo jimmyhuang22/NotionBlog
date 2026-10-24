@@ -117,7 +117,7 @@ export class ContentCacheStore {
   private transaction<T>(fn: () => T): T {
     try { this.db.exec("BEGIN IMMEDIATE"); } catch (e) { safe(e); }
     try { const result = fn(); this.db.exec("COMMIT"); return result; }
-    catch (e) { this.db.exec("ROLLBACK"); safe(e); }
+    catch (e) { try { this.db.exec("ROLLBACK"); } catch { /* Preserve the transaction failure. */ } safe(e); }
   }
   private record(row: Row): WebsiteRecord {
     const value = JSON.parse(String(row.value)) as WebsiteRecord;

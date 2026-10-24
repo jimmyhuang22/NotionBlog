@@ -124,7 +124,7 @@ export class IncrementalQueue {
   private transaction<T>(fn: () => T): T {
     try { this.db.exec("BEGIN IMMEDIATE"); } catch (error) { safeError(error); }
     try { const result = fn(); this.db.exec("COMMIT"); return result; }
-    catch (error) { this.db.exec("ROLLBACK"); safeError(error); }
+    catch (error) { try { this.db.exec("ROLLBACK"); } catch { /* Preserve the transaction failure. */ } safeError(error); }
   }
   private validateHints(events: readonly ChangeHint[]) {
     if (!Array.isArray(events) || events.length > MAX_BATCH) fail();

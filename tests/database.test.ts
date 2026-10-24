@@ -1,3 +1,4 @@
+import { rollbackFault } from "./helpers/rollback-fault.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -292,6 +293,7 @@ test("PostgreSQL migration, roles and publication lifecycle",async t=>{
       const before=await exportDatabaseArchive(db);
       const corrupt={...archive,tables:{...archive.tables,runs:[...archive.tables.runs,archive.tables.runs[0]]}};
       await assert.rejects(restoreDatabaseArchive(db,corrupt));
+      await assert.rejects(restoreDatabaseArchive(rollbackFault(db),corrupt), /duplicate key/);
       assert.deepEqual(await exportDatabaseArchive(db),before);
     });
   } finally {await db.close();}
