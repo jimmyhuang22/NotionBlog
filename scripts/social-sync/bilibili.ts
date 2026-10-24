@@ -3,6 +3,11 @@ import type { BilibiliObservation, Target } from "./model.ts";
 
 export const MAX_PAGE_BYTES = 2 * 1024 * 1024;
 export const MAX_COLLECTION_PAGE_BYTES = 8 * 1024 * 1024;
+export function requirePublicApiVideo(value: unknown): void {
+  const video = object(value), rights = video.rights == null ? null : object(video.rights), season = video.ugc_season == null ? null : object(video.ugc_season);
+  if(video.state!==0||video.is_upower_exclusive||video.is_upower_preview||video.is_pay_season||video.is_only_self||
+    rights?.pay||rights?.ugc_pay||rights?.ugc_pay_preview||season?.is_pay_season)throw new SocialSyncError("SOURCE_BLOCKED");
+}
 /** Read inert JSON only. Never evaluate a page script or choose another video's entry. */
 export function pageState(html: string): Record<string, unknown> {
   return boundedPageState(html, MAX_PAGE_BYTES);
@@ -32,8 +37,14 @@ function boundedPageState(html: string, maxBytes: number): Record<string, unknow
   catch { throw new SocialSyncError("PAGE_STATE_INVALID"); }
 }
 export function observation(html: string, target: Target, observedAt: string, collectionEnvelope = false): BilibiliObservation {
+  const state = collectionEnvelope ? collectionPageState(html) : pageState(html);
+  return observationFromVideoData(state.videoData, target, observedAt, "public-video-page-ssr", hash(html));
+}
+/** Share field validation, without changing the transport's actual provenance. */
+export function observationFromVideoData(value: unknown, target: Target, observedAt: string, source: BilibiliObservation["source"], responseSha256: string): BilibiliObservation {
   if (target.platform !== "bilibili") throw new SocialSyncError("IDENTITY_MISMATCH");
-  const state = collectionEnvelope ? collectionPageState(html) : pageState(html), video = object(state.videoData), owner = object(video.owner), stat = object(video.stat);
+  const video = object(value), owner = object(video.owner), stat = object(video.stat);
+  if (source === "public-video-api-json") requirePublicApiVideo(video);
   if (video.bvid !== target.publicationId || identity(owner.mid) !== target.accountId) throw new SocialSyncError("IDENTITY_MISMATCH");
   if (stat.aid !== undefined && video.aid !== undefined && identity(stat.aid) !== identity(video.aid)) throw new SocialSyncError("SCOPE_MISMATCH");
   const season = video.ugc_season === undefined || video.ugc_season === null ? null : object(video.ugc_season);
@@ -46,7 +57,7 @@ export function observation(html: string, target: Target, observedAt: string, co
     metricsScope: "individual-video", metrics: { views: count(stat.view), likes: count(stat.like), comments: count(stat.reply),
       shares: count(stat.share), collections: count(stat.favorite), coins: count(stat.coin), danmaku: count(stat.danmaku) },
     collection: season ? { id: identity(season.id), title: text(season.title), episodeCount: count(season.ep_count) } : null,
-    source: "public-video-page-ssr", responseSha256: hash(html), websitePublicationApproved: false,
+    source, responseSha256, websitePublicationApproved: false,
   };
   validateObservation(row); return row;
 }

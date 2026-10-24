@@ -12,6 +12,9 @@ import { automaticBilibiliRecovery,inspectBilibiliStatus,parseBilibiliHealth,run
 import type { PreviousCycle } from "./bilibili-cycle.ts";
 import { SocialSyncError } from "./model.ts";
 import { CycleCloudSession } from "./cycle-cloud.ts";
+import { readBilibiliMetadataRoot, requireApiMetadataTransfer } from "./bilibili-api-policy.ts";
+import { MAX_REFRESH_CONFIG_BYTES, refreshConfig } from "./refresh.ts";
+import { readAccountPolicy } from "./bilibili-account-scope.ts";
 
 export const usage="node scripts/social-sync/cycle-cli.ts <plan|status|run|resume> <absolute-private-directory> bilibili";
 async function optional(path:string){
@@ -28,7 +31,9 @@ export async function runCycleCli(args:string[]){
   const [command,root,platform]=args;
   if(args.length!==3||!["plan","status","run","resume"].includes(command)||platform!=="bilibili"||!isAbsolute(root)||resolve(root)!==root)throw new SocialSyncError("USAGE");
   process.umask(0o077);if(command==="status")await lstat(root);await privateDirectory(root);
-  const dir=join(root,"cycle-bilibili");
+  const metadataRoot=await readBilibiliMetadataRoot(root),apiMode=metadataRoot!==root,dir=join(metadataRoot,"cycle-bilibili");
+  await requireApiMetadataTransfer(root,metadataRoot,"cycle-bilibili","health.json");
+  await requireApiMetadataTransfer(root,metadataRoot,"cycle-bilibili","latest-cycle.json");
   if(command==="status"){
     const raw=await optional(join(dir,"health.json")),health=raw===null?null:parseBilibiliHealth(raw),previous=previousCycle(await optional(join(dir,"latest-cycle.json")));
     const state=await inspectRefresh(root,"bilibili"),inspectedAt=new Date().toISOString(),scopeMatches=health===null?null:health.scopeDigest===state.scopeDigest;
@@ -42,7 +47,7 @@ export async function runCycleCli(args:string[]){
   }
   const release=await acquireLock(dir,randomUUID());
   const controller=new AbortController(),cancel=()=>controller.abort(),timer=setTimeout(cancel,BILIBILI_CYCLE.durationMs);timer.unref();process.once("SIGTERM",cancel);process.once("SIGINT",cancel);
-  const cloudSession=new CycleCloudSession(controller.signal);
+  const cloudSession=new CycleCloudSession(controller.signal,undefined,{bilibiliApi:apiMode});
   try{
     const previous=previousCycle(await optional(join(dir,"latest-cycle.json"))),rawHealth=await optional(join(dir,"health.json")),old=rawHealth===null?null:parseBilibiliHealth(rawHealth);
     if(command==="plan"){
@@ -53,7 +58,9 @@ export async function runCycleCli(args:string[]){
     const report=await runBilibiliCycle(command as "run"|"resume",previous,old,{
       inspect:()=>inspectRefresh(root,"bilibili"),
       execute:async(keys,scopeDigest,observe)=>{
-        const result=await executeAtRoot(root,{platform:"bilibili",limit:20,keys,scopeDigest,request,signal:controller.signal,observe,cloudSession});
+        if(apiMode){const base=refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))),accountMode=(await readAccountPolicy(root,base))?.enabled===true;
+          await cloudSession.prepareBilibiliApi(await readPrivateFile(join(root,"cloud.env"),65536),scopeDigest,accountMode,controller.signal);}
+        const result=await executeAtRoot(root,{platform:"bilibili",limit:20,keys,scopeDigest,request,signal:controller.signal,observe,cloudSession,bilibiliApi:apiMode});
         if(!("entries" in result))throw new SocialSyncError("REFRESH_CYCLE_RECEIPT_INVALID");return result;
       },
       saveCycle:async cycle=>{await writeJson(join(dir,"latest-cycle.json"),cycle);if(cycle.finishedAt&&cycle.status==="complete")await writeJson(join(dir,"last-successful-cycle.json"),cycle);},
@@ -62,7 +69,7 @@ export async function runCycleCli(args:string[]){
       finishUpload:()=>cloudSession.close(),
       uploadCost:()=>({...cloudSession.cost}),
       measure:()=>{const cpu=process.cpuUsage(cpuStart);return {...tracked.cost,cpuUserMs:cpu.user/1000,cpuSystemMs:cpu.system/1000,peakRssBytes:process.resourceUsage().maxRSS*1024};}
-    },{signal:controller.signal});
+    },{signal:controller.signal,manualOnFailure:apiMode});
     console.log(JSON.stringify({status:report.state,uploaded:report.cycle?.uploaded??0,remaining:report.cycle?.remaining??0,reviewRequired:report.plan?.reviewRequired??0,
       nextDueAt:report.plan?.nextDueAt??null,retryAt:report.recovery.retryAt,resumeRequired:report.recovery.manualRequired,cost:report.cost,uploadCost:report.uploadCost??null}));
     if(report.recovery.manualRequired||report.state==="error"||report.state==="budget"||report.state==="review-required"||

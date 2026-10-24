@@ -1,5 +1,5 @@
-import { collectionPageState, fetchCollectionPage, observation } from "./bilibili.ts";
-import { collectionFromPage, collectionKey } from "./collection.ts";
+import { collectionPageState, fetchCollectionPage, observation, observationFromVideoData } from "./bilibili.ts";
+import { collectionFromPage, collectionFromVideoData, collectionKey } from "./collection.ts";
 import type { CollectionSnapshot, CollectionTarget } from "./collection.ts";
 import { count, hash, identity, object, publicationKey, SocialSyncError, timestamp, videoUrl } from "./model.ts";
 import type { BilibiliObservation, Target } from "./model.ts";
@@ -48,19 +48,23 @@ export function automaticVideoTarget(accountId: string, id: string): Target {
 export type DiscoveredVideo = { type: "publication"; value: BilibiliObservation } | { type: "collection"; value: CollectionSnapshot };
 /** Use one actual public video response to choose the card and verify all relevant ownership. */
 export function classifyDiscoveredVideo(html: string, target: Target, at: string): DiscoveredVideo {
-  const v = object(collectionPageState(html).videoData), owner = object(v.owner);
+  return classifyVideoData(collectionPageState(html).videoData, target, at, "public-video-page-ssr", hash(html));
+}
+export function classifyVideoData(value: unknown, target: Target, at: string, source: BilibiliObservation["source"], responseSha256: string): DiscoveredVideo {
+  const v = object(value), owner = object(v.owner);
   if (target.platform !== "bilibili" || v.bvid !== target.publicationId || identity(owner.mid) !== target.accountId) throw new SocialSyncError("IDENTITY_MISMATCH");
   if (v.state !== 0 || v.is_upower_exclusive || v.is_upower_preview || v.is_pay_season) throw new SocialSyncError("SOURCE_BLOCKED");
   if (!Array.isArray(v.pages) || v.pages.length < 1 || count(v.videos) !== v.pages.length) throw new SocialSyncError("COLLECTION_INCOMPLETE");
   const season = v.ugc_season === null || v.ugc_season === undefined ? null : object(v.ugc_season);
   if (season || v.pages.length > 1) {
-    const value = collectionFromPage(html, { platform: "bilibili", accountId: target.accountId, kind: season ? "season" : "multi-part",
-      collectionId: season ? identity(season.id) : target.publicationId, representativeUrl: target.url }, at);
+    const value = collectionFromVideoData(v, { platform: "bilibili", accountId: target.accountId, kind: season ? "season" : "multi-part",
+      collectionId: season ? identity(season.id) : target.publicationId, representativeUrl: target.url }, at,
+      source === "public-video-api-json" ? "bilibili-collection-api-json" : "bilibili-collection-ssr", responseSha256);
     return { type: "collection", value };
   }
-  const value = observation(html, target, at);
-  if (value.publishedAt && value.publishedAt > new Date(Date.parse(timestamp(at)) + 30000).toISOString()) throw new SocialSyncError("INVALID_TIME");
-  return { type: "publication", value };
+  const row = observationFromVideoData(v, target, at, source, responseSha256);
+  if (row.publishedAt && row.publishedAt > new Date(Date.parse(timestamp(at)) + 30000).toISOString()) throw new SocialSyncError("INVALID_TIME");
+  return { type: "publication", value: row };
 }
 export async function captureDiscoveredVideo(accountId: string, id: string, signal?: AbortSignal, request?: typeof fetch, knownTarget?: Target, captured?: (html:string,snapshot:CollectionSnapshot)=>Promise<void>) {
   const target = knownTarget ?? automaticVideoTarget(accountId, id);

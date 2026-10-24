@@ -61,6 +61,7 @@ export async function executeRefresh(value:unknown,ports:RefreshPorts,options:{
   captures?:Observation[];held?:RefreshCandidate[];uploadOnly?:boolean;keys?:string[];request?:typeof fetch;observe?:RefreshObserver;
   collectPublication?:(target:Target,signal?:AbortSignal)=>Promise<Observation>;
   collectHttpNote?:(target:Target,signal?:AbortSignal)=>Promise<Observation>;
+  stopOnCaptureFailure?:boolean;
   collectCollection?:(target:CollectionTarget,signal?:AbortSignal)=>Promise<CollectionSnapshot>;
 }) {
   if(!Number.isInteger(options.limit)||options.limit<1||options.limit>MAX_REFRESH_TARGETS||!["bilibili","xiaohongshu"].includes(options.platform))throw new SocialSyncError("REFRESH_LIMIT_INVALID");
@@ -165,7 +166,7 @@ export async function executeRefresh(value:unknown,ports:RefreshPorts,options:{
       else if(job.type==="publication")ports.publications!.recordAttempt(job.target,now(),code);else ports.collections!.recordAttempt(job.target,now(),code);
       report.entries.push({key:job.key,type:job.type,status:"failed",code,observedAt:at,sha256:sha});
       if(options.signal?.aborted)report.cancelled=true;
-      if(options.collectHttpNote||pausing.has(code)||item!==null||++consecutiveFailures>=3)report.paused=true;
+      if(options.stopOnCaptureFailure||options.collectHttpNote||pausing.has(code)||item!==null||++consecutiveFailures>=3)report.paused=true;
     }
     await ports.progress(report);if(report.paused||report.cancelled)break;
   }

@@ -16,7 +16,7 @@ interface ObservationBase {
 export interface BilibiliObservation extends ObservationBase {
   version: 1; platform: "bilibili"; kind: "video"; metricsScope: "individual-video";
   collection: { id: string; title: string; episodeCount: number | null } | null;
-  source: "public-video-page-ssr";
+  source: "public-video-page-ssr" | "public-video-api-json";
 }
 export const noteMetricNames = ["likes", "comments", "shares", "collections"] as const;
 export interface XiaohongshuObservation extends ObservationBase {
@@ -114,7 +114,7 @@ export function validateObservation(value: Observation): void {
   if (xhs) fields.push("updatedAt", "metricDisplay");
   if (Object.keys(v).length !== fields.length || Object.keys(v).some(k => !fields.includes(k))) throw new SocialSyncError("INVALID_DATA");
   const canonical = xhs ? noteUrl(v.originalUrl) : videoUrl(v.originalUrl);
-  if ((!xhs && (v.version !== 1 || v.platform !== "bilibili" || v.kind !== "video" || v.source !== "public-video-page-ssr" || v.metricsScope !== "individual-video")) ||
+  if ((!xhs && (v.version !== 1 || v.platform !== "bilibili" || v.kind !== "video" || !["public-video-page-ssr", "public-video-api-json"].includes(String(v.source)) || v.metricsScope !== "individual-video")) ||
       (xhs && (v.version !== 2 || !["video", "image-note"].includes(String(v.kind)) || !["browser-note-state", "public-note-page-ssr"].includes(String(v.source)) || v.metricsScope !== "individual-note" || v.collection !== null || v.description !== null)) ||
       v.websitePublicationApproved !== false ||
       !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(text(v.workId, 64)) || (xhs ? noteIdentity(v.accountId) : identity(v.accountId)) !== v.accountId ||

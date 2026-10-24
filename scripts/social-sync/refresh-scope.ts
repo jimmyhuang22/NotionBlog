@@ -5,6 +5,7 @@ import { hash, object, SocialSyncError } from "./model.ts";
 import { MAX_REFRESH_CONFIG_BYTES, refreshConfig } from "./refresh.ts";
 import type { RefreshConfig } from "./refresh.ts";
 import { appendAccountScope } from "./bilibili-account-scope.ts";
+import { apiRefreshScope } from "./bilibili-api-policy.ts";
 
 /** Keep the shared configuration byte-compatible with the installed Xiaohongshu bridge. */
 export async function readRefreshScope(root: string, platform: "bilibili" | "xiaohongshu"): Promise<RefreshConfig> {
@@ -12,7 +13,7 @@ export async function readRefreshScope(root: string, platform: "bilibili" | "xia
   if (platform === "xiaohongshu") return base;
   let raw: string;
   try { raw = await readPrivateFile(join(root, "bilibili-follow.json"), 64 * 1024); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return appendAccountScope(root, base, base); throw error; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return apiRefreshScope(root, base, await appendAccountScope(root, base, base)); throw error; }
   const policy = object(JSON.parse(raw));
   if (Object.keys(policy).length !== 3 || policy.version !== 1 || typeof policy.baseScopeDigest !== "string" ||
       !/^[a-f0-9]{64}$/.test(policy.baseScopeDigest) || !Array.isArray(policy.collectionKeys) || policy.collectionKeys.length < 1 ||
@@ -24,5 +25,5 @@ export async function readRefreshScope(root: string, platform: "bilibili" | "xia
   const keys = new Set(policy.collectionKeys as string[]), configured = new Set(base.collections.map(c => collectionKey(c.target)));
   if ([...keys].some(key => !configured.has(key))) throw new SocialSyncError("REFRESH_CONFIG_INVALID");
   const follows = refreshConfig({ ...base, collections: base.collections.map(c => keys.has(collectionKey(c.target)) ? { ...c, membershipMode: "follow-public" } : c) });
-  return appendAccountScope(root, base, follows);
+  return apiRefreshScope(root, base, await appendAccountScope(root, base, follows));
 }
