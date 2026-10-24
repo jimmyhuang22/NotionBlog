@@ -27,6 +27,13 @@ import { exportPublicationHandoff } from "./publication-handoff.ts";
 import { prepareHostCaptureRecovery } from "./capture-recovery-compatibility.ts";
 import { PublicationRevalidationError, type PublicationRevalidationProgress } from "./publication-revalidation.ts";
 
+/** Release-admission errors are already fixed codes; never echo arbitrary provider codes. */
+function runtimeErrorCode(error: unknown): string {
+  const code = error instanceof Error && "code" in error ? error.code : undefined;
+  return typeof code === "string" && ["RELEASE_INVALID", "PRIVATE_INPUT_INVALID", "PRIVATE_DIRECTORY_INVALID"].includes(code)
+    ? code : errorCode(error);
+}
+
 /** Internal child: the host entry verifies the frozen release and holds BOTH host locks. */
 async function main() {
   const env = process.env, args = process.argv.slice(2), mode = args[1];
@@ -40,30 +47,8 @@ async function main() {
       !Number.isSafeInteger(maxMediaBytes) || maxMediaBytes < 1 || maxMediaBytes > 2147483648 ||
       state !== join(root, "state") || output !== join(state, "website-v2", runId)) throw new WorkerError("MISCONFIGURED");
   for (const path of [root, state, output]) await privateDirectory(path);
-  for (const path of [join(root, "manual-run.lock"), join(state, "worker.lock")]) {
-    const lock = JSON.parse(await readPrivateFile(path));
-    if (lock.pid !== process.ppid || lock.runId !== runId || String(process.ppid) !== env.WEBSITE_PARENT_PID) throw new WorkerError("BUSY");
-  }
-  const sourceBytes = await readPrivateFile(env.NOTION_SOURCES_CONFIG ?? "");
-  if (createHash("sha256").update(sourceBytes).digest("hex") !== env.WEBSITE_SOURCE_SHA256) throw new WorkerError("MISCONFIGURED");
-  const config = JSON.parse(sourceBytes); parseWebsiteNotionConfig(config);
-  if ((env.WEBSITE_RESUME_SOURCE_FILE === undefined) !== (env.WEBSITE_RESUME_SOURCE_SHA256 === undefined)) throw new WorkerError("MISCONFIGURED");
-  if ((env.WEBSITE_RESUME_SOURCE_FILE !== undefined || env.WEBSITE_RESUME_SOURCE_SHA256 !== undefined || env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 !== undefined) &&
-      !env.WEBSITE_RESUME_RECOVERY_ID) throw new WorkerError("MISCONFIGURED");
-  if (env.WEBSITE_RESUME_RECOVERY_ID !== undefined && (!env.WEBSITE_RESUME_RUN_ID ||
-      env.WEBSITE_RESUME_QUALIFICATION !== "fresh" || !env.WEBSITE_RESUME_PRODUCER_PROJECT)) throw new WorkerError("MISCONFIGURED");
-  const recovery = env.WEBSITE_RESUME_RECOVERY_ID === undefined ? undefined : await prepareHostCaptureRecovery({
-    transitionId: env.WEBSITE_RESUME_RECOVERY_ID,
-    producerProject: env.WEBSITE_RESUME_PRODUCER_PROJECT!, producerManifest: env.WEBSITE_RESUME_PRODUCER_MANIFEST ?? "",
-    producerManifestSha256: env.WEBSITE_RESUME_PRODUCER_MANIFEST_SHA256 ?? "", consumerProject: process.cwd(),
-    consumerManifest: env.WEBSITE_CONSUMER_MANIFEST ?? "", consumerManifestSha256: env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 ?? "", currentSourceText: sourceBytes,
-    previousSource: env.WEBSITE_RESUME_SOURCE_FILE === undefined ? undefined : {
-      file: env.WEBSITE_RESUME_SOURCE_FILE, sha256: env.WEBSITE_RESUME_SOURCE_SHA256 ?? "" },
-  });
-  if (recovery && recovery.admission.consumerReleaseCommit !== env.WEBSITE_RELEASE_COMMIT) throw new WorkerError("CHECKPOINT_FAILED");
   const controller = new AbortController(), signal = controller.signal, started = Date.now(); let timedOut = false;
-  const notion = createRuntimeNotionReader({ token: env.NOTION_TOKEN ?? "", notionVersion: env.NOTION_API_VERSION }, signal,
-    { intervalMs: env.WEBSITE_NOTION_INTERVAL_MS === undefined ? undefined : Number(env.WEBSITE_NOTION_INTERVAL_MS) });
+  let notion: ReturnType<typeof createRuntimeNotionReader> | undefined;
   const cancel = () => controller.abort(), timeout = setTimeout(() => { timedOut = true; cancel(); }, seconds * 1000);
   process.on("SIGINT", cancel); process.on("SIGTERM", cancel);
   const guard = () => { if (Date.now() - started >= seconds * 1000) { timedOut = true; cancel(); } checkSignal(signal); };
@@ -81,6 +66,30 @@ async function main() {
   let closeImageTransport: (() => void) | undefined;
   let runtimeSql: ReturnType<typeof createRuntimeWriterSql> | undefined;
   try {
+    guard();
+    for (const path of [join(root, "manual-run.lock"), join(state, "worker.lock")]) {
+      const lock = JSON.parse(await readPrivateFile(path));
+      if (lock.pid !== process.ppid || lock.runId !== runId || String(process.ppid) !== env.WEBSITE_PARENT_PID) throw new WorkerError("BUSY");
+    }
+    const sourceBytes = await readPrivateFile(env.NOTION_SOURCES_CONFIG ?? "");
+    if (createHash("sha256").update(sourceBytes).digest("hex") !== env.WEBSITE_SOURCE_SHA256) throw new WorkerError("MISCONFIGURED");
+    const config = JSON.parse(sourceBytes); parseWebsiteNotionConfig(config);
+    if ((env.WEBSITE_RESUME_SOURCE_FILE === undefined) !== (env.WEBSITE_RESUME_SOURCE_SHA256 === undefined)) throw new WorkerError("MISCONFIGURED");
+    if ((env.WEBSITE_RESUME_SOURCE_FILE !== undefined || env.WEBSITE_RESUME_SOURCE_SHA256 !== undefined || env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 !== undefined) &&
+        !env.WEBSITE_RESUME_RECOVERY_ID) throw new WorkerError("MISCONFIGURED");
+    if (env.WEBSITE_RESUME_RECOVERY_ID !== undefined && (!env.WEBSITE_RESUME_RUN_ID ||
+        env.WEBSITE_RESUME_QUALIFICATION !== "fresh" || !env.WEBSITE_RESUME_PRODUCER_PROJECT)) throw new WorkerError("MISCONFIGURED");
+    const recovery = env.WEBSITE_RESUME_RECOVERY_ID === undefined ? undefined : await prepareHostCaptureRecovery({
+      transitionId: env.WEBSITE_RESUME_RECOVERY_ID,
+      producerProject: env.WEBSITE_RESUME_PRODUCER_PROJECT!, producerManifest: env.WEBSITE_RESUME_PRODUCER_MANIFEST ?? "",
+      producerManifestSha256: env.WEBSITE_RESUME_PRODUCER_MANIFEST_SHA256 ?? "", consumerProject: process.cwd(),
+      consumerManifest: env.WEBSITE_CONSUMER_MANIFEST ?? "", consumerManifestSha256: env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 ?? "", currentSourceText: sourceBytes,
+      previousSource: env.WEBSITE_RESUME_SOURCE_FILE === undefined ? undefined : {
+        file: env.WEBSITE_RESUME_SOURCE_FILE, sha256: env.WEBSITE_RESUME_SOURCE_SHA256 ?? "" },
+    });
+    if (recovery && recovery.admission.consumerReleaseCommit !== env.WEBSITE_RELEASE_COMMIT) throw new WorkerError("CHECKPOINT_FAILED");
+    notion = createRuntimeNotionReader({ token: env.NOTION_TOKEN ?? "", notionVersion: env.NOTION_API_VERSION }, signal,
+      { intervalMs: env.WEBSITE_NOTION_INTERVAL_MS === undefined ? undefined : Number(env.WEBSITE_NOTION_INTERVAL_MS) });
     guard();
     if (env.WEBSITE_CAPTURE_COLLECTION !== undefined && !["true", "false"].includes(env.WEBSITE_CAPTURE_COLLECTION)) throw new WorkerError("MISCONFIGURED");
     if (env.WEBSITE_CAPTURE_COLLECTION === "true") capture = await createCollectionCapture(join(output, "collection-private"), {
@@ -155,7 +164,7 @@ async function main() {
     }
     progress = setInterval(() => {
       if (pendingSave) return;
-      pendingSave = save("progress-private.json", { runId, seconds: Math.round((Date.now() - started) / 1000), studyDiscovery: report.studyDiscovery, collection: report.collection, resume:report.resume, notion: notion.statistics(), images: download.statistics() })
+      pendingSave = save("progress-private.json", { runId, seconds: Math.round((Date.now() - started) / 1000), studyDiscovery: report.studyDiscovery, collection: report.collection, resume:report.resume, notion: notion?.statistics(), images: download.statistics() })
         .catch(() => { controller.abort(); }).finally(() => { pendingSave = undefined; });
     }, 30000);
     let resumeCollection: Awaited<ReturnType<typeof prepareCollectionResume>> | undefined;
@@ -212,7 +221,7 @@ async function main() {
       onStudyDiscoveryProgress: value => {
         guard(); report.studyDiscovery = value;
         if (value.phase !== "scanning") {
-          const entry = JSON.stringify({ at: new Date().toISOString(), ...value, notion: notion.statistics() }) + "\n";
+          const entry = JSON.stringify({ at: new Date().toISOString(), ...value, notion: notion?.statistics() }) + "\n";
           discoverySave = discoverySave.then(() => appendFile(join(output, "discovery-progress-private.jsonl"), entry, { mode: 0o600 }))
             .catch(() => { report.discoveryProgressWriteFailed = true; });
         }
@@ -246,28 +255,34 @@ async function main() {
     terminalImageFailure = websiteImageFailure(error);
     report.outcome = report.published ? "published-unverified" : "failed";
     report.publicationMayHaveCommitted = report.promoteRequested;
-    report.code = timedOut ? "RUN_BUDGET_EXCEEDED" : errorCode(error); process.exitCode = 1;
+    report.code = timedOut ? "RUN_BUDGET_EXCEEDED" : runtimeErrorCode(error); process.exitCode = 1;
     // Keep diagnostic context private. A diagnostic write must not replace the
     // publication outcome or prevent the normal receipt and connection cleanup.
     try {
       const detail = error instanceof Error ? error : undefined;
-      await save("failure-private.json", { runId, name: detail?.name, code: report.code, notion: notion.failure(), database: runtimeSql?.failure(),
+      await save("failure-private.json", { runId, name: detail?.name, code: report.code, notion: notion?.failure(), database: runtimeSql?.failure(),
         publicationChange: error instanceof PublicationRevalidationError ? error.publicationChange : undefined,
         message: detail?.message.slice(0, 4096), stack: detail?.stack?.slice(0, 8192) });
       report.failurePath = "failure-private.json";
     } catch { report.diagnosticWriteFailed = true; }
   } finally {
     clearTimeout(timeout); clearInterval(progress); process.off("SIGINT", cancel); process.off("SIGTERM", cancel); await pendingSave; await discoverySave;
-    Object.assign(report, { collectionCapture: capture?.statistics(), seconds: Math.round((Date.now() - started) / 1000), notion: notion.statistics(), database: runtimeSql?.statistics(), imageTransfer: imageStatistics?.(), finishedAt: new Date().toISOString() });
-    const cleaned = await finalizeWebsiteRun({ report, save,
-      imageFailure: terminalImageFailure ?? imageFailure?.(), closeImageTransport,
-      closeWriter: pool ? () => pool!.end() : undefined,
-      closeReader: readerPool ? () => readerPool!.end() : undefined });
-    if (!cleaned) process.exitCode = 1;
+    Object.assign(report, { collectionCapture: capture?.statistics(), seconds: Math.round((Date.now() - started) / 1000), notion: notion?.statistics(), database: runtimeSql?.statistics(), imageTransfer: imageStatistics?.(), finishedAt: new Date().toISOString() });
+    try {
+      const cleaned = await finalizeWebsiteRun({ report, save,
+        imageFailure: terminalImageFailure ?? imageFailure?.(), closeImageTransport,
+        closeWriter: pool ? () => pool!.end() : undefined,
+        closeReader: readerPool ? () => readerPool!.end() : undefined });
+      if (!cleaned) process.exitCode = 1;
+    } catch (error) {
+      report.receiptWriteFailed = true;
+      report.code ??= runtimeErrorCode(error);
+      process.exitCode = 1;
+    }
   }
   console.log(JSON.stringify({ adapter: report.adapter, outcome: report.outcome, published: report.published, readerVerified: report.readerVerified,
-    thumbnailHandoffStatus: report.thumbnailHandoffStatus, seconds: report.seconds, code: report.code }));
+    thumbnailHandoffStatus: report.thumbnailHandoffStatus, seconds: report.seconds, code: report.code, receiptWriteFailed: report.receiptWriteFailed }));
 }
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
-  main().catch(() => { console.error(JSON.stringify({ adapter: "private-host-v2", outcome: "preparation-failed", code: "MISCONFIGURED" })); process.exitCode = 1; });
+  main().catch(error => { console.error(JSON.stringify({ adapter: "private-host-v2", outcome: "preparation-failed", code: runtimeErrorCode(error) })); process.exitCode = 1; });
 }

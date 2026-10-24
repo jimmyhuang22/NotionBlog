@@ -1,3 +1,4 @@
+import { closeOwnerPool } from "./cleanup.ts";
 import { createDatabasePool } from "../src/server/database/connection.ts";
 import { exportPublicationArchive, restorePublicationArchive, createPublicationArchiveStore, validatePublicationArchive, archivedPublicationObjects } from "../src/server/database/publication-archive.ts";
 import { createWebsiteArchiveMediaReader } from "../src/server/database/website-archive-media.ts";
@@ -15,6 +16,7 @@ async function main() {
   if (command === "verify") { console.log(JSON.stringify({verified: true, mediaIncluded: bundle!.mediaIncluded, mediaFiles: bundle!.mediaFiles})); return; }
   const url = process.env.DATABASE_MIGRATION_URL, pool = createDatabasePool(url, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
   let client;
+  let failed = false;
   try {
     client = await pool.connect();
     if (command === "restore") {
@@ -37,6 +39,7 @@ async function main() {
       verifyMediaBytes(media, data); return data;
     }};
     console.log(JSON.stringify({exported: true, operationHistoryIncluded: true, ...await files.save(path, archive, bytes)}));
-  } finally {client?.release(); await pool.end();}
+  } catch (error) { failed = true; throw error; }
+  finally { await closeOwnerPool(pool, client, failed); }
 }
 main().catch(() => {console.error("Publication backup failed. Check private files, complete migrations and an empty owner-only target; provider details are withheld."); process.exitCode = 1;});

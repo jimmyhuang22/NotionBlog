@@ -47,7 +47,7 @@ export async function restoreDatabaseArchive(db: SqlExecutor,archive: DatabaseAr
     await db.query("UPDATE nb.state SET current_run=NULL,lease_run=NULL,lease_until=NULL,revision=revision+1,epoch=epoch+1,fence=fence+1");
     await db.query("UPDATE nb.runs SET valid_until=statement_timestamp()-interval '1 second',status=CASE WHEN status='staging' THEN 'failed' ELSE status END");
     await db.query("COMMIT");
-  } catch(cause){await db.query("ROLLBACK");throw cause;}
+  } catch(cause){try { await db.query("ROLLBACK"); } catch { /* Preserve the restore failure; the caller must discard this connection. */ }throw cause;}
 }
 /** Export object bytes separately through ObjectStorage.read; SQL does not contain them. */
 export function archivedObjects(archive: DatabaseArchive): StoredMedia[] {

@@ -1,3 +1,4 @@
+import { contentErrorResponse } from "../../../../../lib/content/http-error.ts";
 import { contentFeatures } from "../../../../../../config/features.ts";
 import { contentRepository } from "../../../../../lib/content/index.ts";
 import { getStudyProjects } from "../../../../../lib/content/study.ts";
@@ -10,13 +11,15 @@ import { cacheRouteDeployment } from "../../../../../server/public-cache/deploym
 export const runtime = "nodejs";
 export const maxDuration = 10;
 export async function GET(request: Request) {
-  if (!publicCacheEnabled()) return new Response(null, { status: 404, headers: { "Cache-Control": "private, no-store" } });
-  return routeCacheLookupResponse(request, { ...cacheRouteDeployment(), siteKey: process.env.PUBLIC_CACHE_SITE_KEY ?? "", secret: publicCacheSecret() ?? "" },
-    (path, params) => withContentReadBudget(AbortSignal.any([request.signal, AbortSignal.timeout(5000)]), () =>
-      publicProjection("content", "route-verdict", [path, [...params]], async () => {
-        const verdict = await routeVerdict(path, contentFeatures, contentRepository, params,
-          { studyProject: async slug => (await getStudyProjects()).some(project => project.slug === slug) });
-        if (verdict === "unknown") throw Error("ROUTE_UNAVAILABLE");
-        return verdict;
-      }), { timeoutMs: 5000 }));
+  try {
+    if (!publicCacheEnabled()) return new Response(null, { status: 404, headers: { "Cache-Control": "private, no-store" } });
+    return await routeCacheLookupResponse(request, { ...cacheRouteDeployment(), siteKey: process.env.PUBLIC_CACHE_SITE_KEY ?? "", secret: publicCacheSecret() ?? "" },
+      (path, params) => withContentReadBudget(AbortSignal.any([request.signal, AbortSignal.timeout(5000)]), () =>
+        publicProjection("content", "route-verdict", [path, [...params]], async () => {
+          const verdict = await routeVerdict(path, contentFeatures, contentRepository, params,
+            { studyProject: async slug => (await getStudyProjects()).some(project => project.slug === slug) });
+          if (verdict === "unknown") throw Error("ROUTE_UNAVAILABLE");
+          return verdict;
+        }), { timeoutMs: 5000 }));
+  } catch (cause) { return contentErrorResponse(cause); }
 }

@@ -1,3 +1,4 @@
+import { cleanupAll } from "../cleanup.ts";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { unlink } from "node:fs/promises";
@@ -184,16 +185,24 @@ async function uploadBrowserNotes(root:string,keys:string[],digest:string){
   const {runXhsDiscovery}=await import("./xiaohongshu-discovery-worker.ts"),{CycleCloudSession}=await import("./cycle-cloud.ts"),{executeAtRoot}=await import("./execute-cli.ts");
   await privateDirectory(join(root,"cycle-xiaohongshu-http"));const release=await acquireLock(join(root,"cycle-xiaohongshu-http"),randomUUID());
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);timer.unref();let cloud:InstanceType<typeof CycleCloudSession>|undefined;
+  let scopeDigest:string|undefined,failed=false;
+  const pause=async(code:string,stage:"upload"|"close")=>{
+    if(scopeDigest)await recordExternalHttpPause(root,scopeDigest,code,stage);
+  };
   try{
     const recovery=await readBrowserRecovery(root,digest);if(recovery&&recovery.status!=="captured")return {status:"paused",code:"BROWSER_RECOVERY_SPENT",pending:0};
     const enrolled=recovery?{state:"complete",uploaded:0,pending:0}:await runXhsDiscovery(root,controller.signal),current=await readHttpNoteScope(root),targets=current.scope.publications.filter(p=>keys.includes(publicationKey(p.target))).map(p=>p.target),captures:XiaohongshuObservation[]=[];
+    scopeDigest=hash(JSON.stringify(current.scope));
     if(recovery&&(targets.length!==1||targets[0].publicationId!==recovery.publicationId))throw new SocialSyncError("XHS_BROWSER_RECOVERY_INVALID");
-    const sourceRelease=await acquireLock(current.policy.stateDirectory,randomUUID());let store:Awaited<ReturnType<typeof openStore>>=null;
+    const sourceRelease=await acquireLock(current.policy.stateDirectory,randomUUID());let store:Awaited<ReturnType<typeof openStore>>=null,readFailed=false;
     try{store=await openStore(current.policy.stateDirectory,true);if(!store)throw new SocialSyncError("REFRESH_STATE_MISSING");
       for(const target of targets){const captured=await readBrowserNoteCapture(root,target,digest);if(!captured)continue;const latest=store.latest(target);if(!latest||captured.observedAt>latest.observedAt)captures.push(captured);}
-    }finally{store?.close();await sourceRelease();}
+    }catch(e){readFailed=true;throw e;}finally{
+      const complete=await cleanupAll([()=>store?.close(),sourceRelease]);
+      if(!complete&&!readFailed)throw new SocialSyncError("XHS_BROWSER_CLOSE_FAILED");
+    }
     if(!captures.length)return recovery?{...await acceptRecoveryUpload(root,recovery,digest),uploaded:0,pending:0}:{status:enrolled.state,uploaded:enrolled.uploaded,pending:enrolled.pending};
-    const base=refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))),policy=(await readXhsAccountPolicy(root,base))!,directory=await readXhsDiscoveryState(root,digest),scopeDigest=hash(JSON.stringify(current.scope)),raw=await readPrivateFile(join(root,"cloud.env"),65536);
+    const base=refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))),policy=(await readXhsAccountPolicy(root,base))!,directory=await readXhsDiscoveryState(root,digest),raw=await readPrivateFile(join(root,"cloud.env"),65536);
     cloud=new CycleCloudSession(controller.signal,undefined,{httpNotes:true,xhsAccount:{accountId:policy.accountId,link:item=>{const l=directory?.links.find(l0=>l0.publicationId===item.observation.publicationId);return l?{url:candidateNoteShareUrl(l.url,automaticNoteTarget(policy.accountId,l.publicationId)),checkedAt:item.observation.observedAt}:null;}}});
     await cloud.preparePublications(raw,scopeDigest,controller.signal);
     await ingestAcceptedBrowserNotes(root,captures.map(publicationKey),digest);
@@ -203,8 +212,18 @@ async function uploadBrowserNotes(root:string,keys:string[],digest:string){
     if(recovery)return {...await acceptRecoveryUpload(root,recovery,digest),uploaded:report.uploaded,pending:0};
     return {status:"complete",uploaded:enrolled.uploaded+report.uploaded,pending:enrolled.pending,code:null};
   }catch(e){
+    failed=true;
     const code=e instanceof SocialSyncError?e.code:"XHS_BROWSER_UPLOAD_FAILED";
-    if((e as {code?:string})?.code!=="BUSY")await recordExternalHttpPause(root,hash(JSON.stringify((await readHttpNoteScope(root)).scope)),code,"upload");
+    if((e as {code?:string})?.code!=="BUSY")try{await pause(code,"upload");}catch{/* Preserve the upload failure. */}
     throw e;
-  }finally{clearTimeout(timer);try{await cloud?.close();}catch(e){await recordExternalHttpPause(root,hash(JSON.stringify((await readHttpNoteScope(root)).scope)),e instanceof SocialSyncError?e.code:"XHS_BROWSER_CLOSE_FAILED","close");throw e;}finally{await release();}}
+  }finally{
+    clearTimeout(timer);
+    const complete=await cleanupAll([async()=>{
+      try{await cloud?.close();}catch(e){
+        try{if(!failed)await pause(e instanceof SocialSyncError?e.code:"XHS_BROWSER_CLOSE_FAILED","close");}catch{/* Release the lock even if the pause receipt cannot be written. */}
+        throw e;
+      }
+    },release]);
+    if(!complete&&!failed)throw new SocialSyncError("XHS_BROWSER_CLOSE_FAILED");
+  }
 }

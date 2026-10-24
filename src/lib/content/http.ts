@@ -6,34 +6,17 @@ import {
 } from "../../../config/features.ts";
 import {
   ContentServiceError,
-  type ContentErrorCode,
   type ContentRepository,
 } from "../../../contracts/repository.ts";
 import { parseListQuery, parseLibraryYearsQuery } from "./query.ts";
 import { isLibraryKind } from "./years.ts";
 
+import { contentErrorResponse, error } from "./http-error.ts";
+export { contentErrorResponse } from "./http-error.ts";
+
 const headers = { "Cache-Control": "no-store" };
-const errorStatus: Record<ContentErrorCode, number> = {
-  INVALID_QUERY: 400,
-  CONTENT_UNAVAILABLE: 503,
-  RATE_LIMITED: 503,
-  MISCONFIGURED: 503,
-};
-
-function error(code: ContentErrorCode | "NOT_FOUND", message: string, status: number): Response {
-  return Response.json({ error: { code, message } }, { status, headers });
-}
-
 function unavailableKind(): Response {
   return error("NOT_FOUND", "Content kind is not available.", 404);
-}
-
-export function contentErrorResponse(cause: unknown): Response {
-  if (cause instanceof ContentServiceError) {
-    return error(cause.code, cause.message, errorStatus[cause.code]);
-  }
-  // Provider and SDK exception details can contain source IDs or credentials.
-  return error("CONTENT_UNAVAILABLE", "Content is temporarily unavailable.", 503);
 }
 
 export async function contentListResponse(

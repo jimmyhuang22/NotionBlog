@@ -1,3 +1,4 @@
+import { closeOwnerPool } from "./cleanup.ts";
 import { readFile,writeFile,mkdir } from "node:fs/promises";
 import { resolve,sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -23,8 +24,10 @@ async function main() {
   const [command,input]=process.argv.slice(2);
   if(!["migrate","migrate-reader","migrate-media","policy","deny","allow","verify","export","restore"].includes(command??""))throw new Error("Unsupported database command.");
   const pool=createDatabasePool(process.env.DATABASE_MIGRATION_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
-  const client=await pool.connect();
+  let client;
+  let failed = false;
   try {
+    client = await pool.connect();
     await client.query("SELECT pg_advisory_lock(172904,1)");
     if(command==="migrate") {
       for(const migration of protocol.migrations) {
@@ -95,6 +98,13 @@ async function main() {
       const reader=(await client.query("SELECT to_regprocedure('nb_api.read_status(text,jsonb,integer,integer,uuid,bigint)') IS NOT NULL AND to_regprocedure('nb_api.status_years(text)') IS NOT NULL AS available")).rows[0].available;
       console.log(JSON.stringify({protocol:protocol.protocol,schemaMatches:true,hasSnapshot:result.rows[0].has_snapshot,statusReaderAvailable:reader}));
     }
-  } finally {await client.query("SELECT pg_advisory_unlock(172904,1)").catch(()=>{});client.release();await pool.end();}
+  } catch (error) { failed = true; throw error; }
+  finally {
+    let unlockFailed = false;
+    try { if (client) await client.query("SELECT pg_advisory_unlock(172904,1)"); }
+    catch { unlockFailed = true; }
+    await closeOwnerPool(pool, client, failed || unlockFailed);
+    if (unlockFailed && !failed) throw Error("DATABASE_CLOSE_FAILED");
+  }
 }
 main().catch(()=>{console.error("Database operation failed. Check private configuration, migration version and operator permissions; provider exceptions are withheld.");process.exitCode=1;});
