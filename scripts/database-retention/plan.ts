@@ -29,7 +29,8 @@ roots(id) AS (
  UNION SELECT id FROM nb_v2.runs WHERE status='staging'
  UNION SELECT id FROM nb_v2.runs WHERE valid_until>statement_timestamp()
  UNION SELECT id FROM nb_v2.runs WHERE finished_at>statement_timestamp()-interval '24 hours'
- UNION SELECT id FROM (SELECT id FROM nb_v2.runs WHERE status='published' ORDER BY finished_at DESC,id DESC LIMIT 3) latest
+ UNION SELECT id FROM nb_v2.runs WHERE status='published' AND finished_at IS NULL
+ UNION SELECT id FROM (SELECT id FROM nb_v2.runs WHERE status='published' ORDER BY finished_at DESC NULLS LAST,id DESC LIMIT 3) latest
  UNION SELECT run_id FROM nb_revalidation.bindings
  UNION SELECT previous_run FROM nb_revalidation.bindings
  UNION SELECT operation_id FROM nb_delta.operations
