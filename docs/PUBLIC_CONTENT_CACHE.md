@@ -62,6 +62,8 @@ node --env-file=/absolute/.local/operator.env scripts/public-cache/withdraw-cli.
 
 也可从私有 env 载入后使用 `npm run content:withdraw -- ...`。接受本站页面 URL、动态锚点／focus URL，或 Notion 页面链接；只解析身份，不访问 Notion。计划文件是 0600、本机忽略目录，绑定站点、连接摘要、当前批次／版本、子树和全部历史媒体关系。
 
+历史媒体查询的可选 owner 索引、共享旧地址检查和四万个不同资源的容量边界见[撤回索引说明](PUBLIC_CACHE_WITHDRAWAL_INDEX.md)。不要把历史范围直接缩为当前批次；超过计划上限时本次撤回尚未执行，不能当作已完成。
+
 执行前按私有 `PUBLIC_CACHE_SYNC_LOCK_PATHS_JSON` 明确列出的六个**原锁文件**和原顺序，非等待取得现有业务锁；保留维护、手动运行、writer session 与 worker 各自实际文件名，不统一改成 worker.lock。有他人的锁则退出，不偷锁或停调度。数据库再次锁定并核对计划，发现 staging 租约、版本变化或共享 owner 地址则拒绝，不能调用会打断他人暂存的旧下架入口。
 
 原锁的父目录可以位于既有私有配置根，不要求在 `.local` 内；必须全部已经存在、由当前用户拥有、只允许本人访问，并且是无符号链接的绝对规范目录。先验证全部输入，再独占创建原锁文件；缺父目录时停止，不创建替代目录。释放时核对 inode、设备及持锁内容，变化的原路径保留并报告，同时回收其他本项锁。缓存回执和消费者状态仍保留原 `.local` 路径限制。旧 `PUBLIC_CACHE_SYNC_LOCK_DIRECTORIES_JSON` 仅兼容确实全部叫 worker.lock 的工程场景，不能与原文件配置同时设置；实际安装采用文件配置。
