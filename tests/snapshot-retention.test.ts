@@ -52,6 +52,20 @@ test("retention also protects valid qualification and the last day of completion
     assert.ok(p.protected.includes(id(1))&&p.protected.includes(id(3)));
   } finally {await db.close();}
 });
+test("unknown completion times cannot displace three completed versions or lose their donor dependencies",async()=>{
+  const db=await fixture();
+  try {
+    for(const n of [13,14,15,16]) await db.query(`INSERT INTO nb_v2.runs VALUES($1,'published',now()-interval '5 days',NULL,now()-interval '1 day')`,[id(n)]);
+    await db.query("INSERT INTO nb_v2.media VALUES($1,'a','owner','{\"sha256\":\"aa\"}'),($2,'a','owner','{\"sha256\":\"aa\"}')",[id(13),id(4)]);
+    await db.query("INSERT INTO nb_thumbnails.media VALUES('v2',$1,'a','aa',800,'{}')",[id(4)]);
+    // Equal completion times still use the existing deterministic ID tie-break.
+    await db.query("UPDATE nb_v2.runs SET finished_at=now()-interval '2 days' WHERE id=ANY($1)",[[7,8,9,10,11].map(id)]);
+    const p=(await db.query<{plan:{protected:string[];candidates:{id:string}[]}}>(retentionPlanSQL([]))).rows[0].plan;
+    for(const n of [4,9,10,11,13,14,15,16]) assert.ok(p.protected.includes(id(n)),`run ${n} must remain protected`);
+    assert.ok(p.candidates.some(row=>row.id===id(8)),"older tied run is not mistaken for a top-three completion");
+    assert.equal(p.candidates.some(row=>[9,10,11,13,14,15,16].map(id).includes(row.id)),false);
+  }finally{await db.close();}
+});
 test("archive fetches shared payload once and restores exact data to both original runs",async()=>{
   const db=await fixture();
   try {
