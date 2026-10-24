@@ -92,6 +92,8 @@ qualified v2 小图可独立选择受限 COS reader，转换原图保留既有�
 
 影视公共评分来源（2026-10-22）：用户批准Movie新增可选 `publicRating` 与 `ratingSource`，保留旧 `doubanRating` 兼容；详情原排版显示实际来源，来源未知使用通用标签，0与缺失区分，新字段明确为空不恢复旧值。真实来源配置、运行包安装、任务状态、合并与部署独立处理，见[决定](decisions/2026-10-22-movie-rating-source.md)和[接入说明](MOVIE_PUBLIC_RATING.md)。
 
+影视运行映射源码（2026-10-23）：用户批准严格两键新增校验、显式独占owner策略事务及精确回退的离线候选，保留旧成功批次与公开范围；未来采用完整新采集，不复用旧正文捕获。本轮仅源码、离线验证与草稿PR，不新增迁移、不安装、不改真实配置或策略、不触发同步、不合并或部署，见[本次决定](decisions/2026-10-23-movie-rating-policy-transition.md)。
+
 ## 产品目标
 
 作品库维护集成（2026-10-23）：用户明确允许本次游戏稳定归年与影视评分来源候选合入develop，以已完成的本机组合check／build为依据；私人CI的SKIPPED保持跳过，不记为平台通过。此授权仅用于这两项开发集成，不扩大为main发布、部署、真实来源配置、运行安装或任务状态变更，见[本次集成决定](decisions/2026-10-23-library-maintenance-develop-integration.md)。
