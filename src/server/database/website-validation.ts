@@ -124,7 +124,7 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
   const time=(v:unknown)=>{if(v===null)return;const t=object(v);keys(t,["value","unit"]);if(typeof t.value!=="number"||!num(t.value)||!["minute","hour"].includes(String(t.unit)))bad();};
   switch(i.kind){
     case "status":date(i.recordedAt);runs(i.text);break;
-    case "course":if(!text(i.code))bad();nullable(i.semester);{const rs=object(i.ratings);keys(rs,["experience","usefulness","recommendation","difficulty"]);for(const k of ["experience","usefulness","recommendation","difficulty"])rating(rs[k]);}break;
+    case "course":nullable(i.code);nullable(i.semester);{const rs=object(i.ratings);keys(rs,["experience","usefulness","recommendation","difficulty"]);for(const k of ["experience","usefulness","recommendation","difficulty"])rating(rs[k]);}break;
     case "study-note":if(!identity(i.courseId)||!(i.parentId===null||identity(i.parentId))||!["course","assignment","summary","note","quiz","test","textbook","tool","unknown"].includes(String(i.noteType))||!Array.isArray(i.breadcrumbs))bad();date(i.date);i.breadcrumbs.forEach(link);break;
     case "post":date(i.publishedAt);break;
     case "album":date(i.date);if(!num(i.photoCount)||(typeof i.photoCount==="number"&&!Number.isInteger(i.photoCount)))bad();break;

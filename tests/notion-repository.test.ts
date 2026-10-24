@@ -122,6 +122,23 @@ function statuses() {
 }
 const serviceError = (code: string) => (error: unknown) => error instanceof ContentServiceError && error.code === code;
 
+test("course codes come only from the mapped property, never a title prefix or page identity", async () => {
+  for (const value of [undefined, "", "   ", "EXPLICIT42"]) {
+    const scenario = learning();
+    scenario.config.sources[0] = { ...scenario.config.sources[0], fields: { ...scenario.config.sources[0].fields, code: "Code" } };
+    scenario.schemas.get(ids.courses)!.properties.Code = { id: "code", name: "Code", description: null, type: "rich_text", rich_text: {} };
+    if (value !== undefined) scenario.pages.get(ids.course)!.properties.Code = { id: "code", type: "rich_text", rich_text: [richText(value)] };
+    const expected = value?.trim() || null;
+    const detail = await scenario.repository.get("course", ids.course);
+    assert.equal(detail!.item.code, expected);
+    assert.equal(detail!.item.title, "DEMO101 Foundations");
+    assert.equal(detail!.item.href, `/study/${ids.course}`);
+    assert.equal((await scenario.repository.list("course")).items.find(item => item.id === ids.course)!.code, expected);
+    assert.equal((await scenario.repository.getCourseMetadata!(ids.course))!.code, expected);
+  }
+  assert.equal((await learning().repository.get("course", ids.course))!.item.code, null);
+});
+
 test("whole-source Status media qualification reads only its fresh exact page and schema", async () => {
   const scenario = statuses();
   scenario.config.sources = [scenario.config.sources[0]];

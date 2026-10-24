@@ -1,5 +1,7 @@
 # 项目需求
 
+缺失课程编号（2026-10-25）：用户批准 `Course.code` 使用 `string | null`，只保留来源编号属性的实际非空值，不从标题或页面 ID 推断。两套 provider、数据库校验、项目归类与必要显示兼容同步调整；无编号保留完整课程名，旧字符串快照继续可读。仅实施源码与离线验证，真实运行包更新与发布另行安排，见[决定](decisions/2026-10-25-course-code-null.md)和[实施范围](BACKEND_COURSE_CODE_NULL_PLAN.md)。
+
 缓存提交屏障（2026-10-24）：用户明确批准 B10 的源码与隔离测试方案，包含临时本机原生 PostgreSQL 引擎准备。新增默认关闭的独立扩展，将自动刷新意图在同事务延迟阶段写成原事件和 generation；保留 v1 reader／签名／消费与同步撤回。真实安装、激活、目录审计、凭据、项目流量与任务恢复仍另行授权，见[决定](decisions/2026-10-24-cache-commit-barrier.md)及[实施边界](BACKEND_CACHE_COMMIT_PLAN.md)。
 
 私有内容就绪（2026-10-24）：用户同意补齐 B23 后续的维护私有证明和升级顺序。入口采用独立密钥、同批 Status 样本、发布版本前后核对与每次随机挑战；维护 v3 在清理前后分别检查，失败即停止。实际密钥配置、安装、业务恢复和发布仍需另行授权，见[决定](decisions/2026-10-24-private-content-readiness.md)与[升级方案](PRIVATE_CONTENT_READINESS.md)。

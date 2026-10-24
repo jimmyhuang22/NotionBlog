@@ -27,7 +27,8 @@ export function properties(row: Observation, gameId?: string) {
     "First Played": { date: row.firstPlayed ? { start: row.firstPlayed } : null },
     "Last Played": { date: row.lastPlayed ? { start: row.lastPlayed } : null },
     "Source Updated At": { date: row.sourceUpdated ? { start: row.sourceUpdated } : null },
-    "Synced At": { date: { start: row.syncedAt } }, Ownership: text(row.ownership ?? "unknown"),
+    "Synced At": { date: { start: row.syncedAt } },
+    Ownership: row.ownership === null ? { rich_text: [] } : text(row.ownership),
   };
   if (gameId) p.Game = { relation: [{ id: gameId }] };
   for (const [field, value] of [["Trophy Progress", row.trophyProgress], ["Earned Trophies", row.earnedTrophies],

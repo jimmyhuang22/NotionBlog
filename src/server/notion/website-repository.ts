@@ -310,7 +310,7 @@ class ReadSession {
     const base = { id, kind: source.kind, slug: source.kind === "page" ? "about" : id, href, title, summary: getSelect(page, source.fields.summary), tags: getTags(page, source.fields.tags), cover: cover ? await this.cover(resolved) : null, updatedAt: normalizeDateTime(page.last_edited_time) };
     if (source.kind === "status") return { ...base, kind: "status", recordedAt: getDate(page, source.fields.recordedAt), text: [] };
     if (source.kind === "course") return {
-      ...base, kind: "course", code: getSelect(page, source.fields.code) ?? title.match(/^([A-Z]{2,}\d{2,})\b/)?.[1] ?? id,
+      ...base, kind: "course", code: getSelect(page, source.fields.code)?.trim() || null,
       semester: getSelect(page, source.fields.semester),
       ratings: {
         experience: getRating(page, source.fields.experience ?? source.fields.experienceRating),

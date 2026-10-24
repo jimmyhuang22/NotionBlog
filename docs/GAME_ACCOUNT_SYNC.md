@@ -17,7 +17,7 @@ Game 保留标题、版本、封面、个人评分、状态、日期、笔记和
 | 平台记录 | `Game`／`Sync Status` | 已关联 Current、待确认 Needs review、排除 Excluded |
 | 平台记录 | `Total Playtime Minutes`／`Playtime Hours`／`Playtime Precision` | 原始分钟、派生小时、Second／Minute／Approximate；未知为空，零为 0 |
 | 平台记录 | `First Played`／`Last Played`／`Source Updated At`／`Synced At` | 平台实际首末日期、最近一次资料变更写入所用的源更新时间及采集时间，未知不推断；每次采集时刻另存私有快照及回执 |
-| 平台记录 | `Record Scope`／`Ownership` | Library／Played／Trophies 与平台原始库状态；有游玩记录不等于已购买 |
+| 平台记录 | `Record Scope`／`Ownership` | Library／Played／Trophies 与平台原始库状态；有游玩记录不等于已购买。未知拥有方式写空富文本，不填 `unknown`；旧占位文字在下次获准同步该记录时按当前快照更新 |
 | 平台记录 | 奖杯组、完成率、获得数、总数与白金数 | 独立奖杯统计；不改个人通关状态，也不当剧情进度 |
 | 平台记录 | `Recent Playtime Minutes`／`Product Type`／`Product URL`／`Platform Release Date` | Steam 最近两周分钟、游戏／试玩／模组／测试分类及平台资料 |
 

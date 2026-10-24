@@ -104,7 +104,7 @@ export function validateSyncRecord(record: SyncRecord): void {
   if(i.href!==expected)bad();
   if(i.cover!==null)image(i.cover);
   if(i.kind==="status"){date(i.recordedAt);runs(i.text);}
-  else if(i.kind==="course"){if(!text(i.code)||!(i.semester===null||text(i.semester)))bad();const rs=object(i.ratings);keys(rs,["experience","usefulness","recommendation","difficulty"]);for(const k of ["experience","usefulness","recommendation","difficulty"])rating(rs[k]);}
+  else if(i.kind==="course"){if(!(i.code===null||text(i.code))||!(i.semester===null||text(i.semester)))bad();const rs=object(i.ratings);keys(rs,["experience","usefulness","recommendation","difficulty"]);for(const k of ["experience","usefulness","recommendation","difficulty"])rating(rs[k]);}
   else {if(!identity(i.courseId)||!(i.parentId===null||identity(i.parentId))||!["course","assignment","summary","note","quiz","test","textbook","tool","unknown"].includes(i.noteType as string)||!Array.isArray(i.breadcrumbs))bad();date(i.date);i.breadcrumbs.forEach(link);}
   keys(e,["sourceKey","dataSourceId","databaseParentId","courseId","parentId","ordinal"]);
   if(!text(e.sourceKey)||e.sourceKey.length<1||e.sourceKey.length>128||/[\u0000-\u001f\u007f]/.test(e.sourceKey)||!Number.isInteger(e.ordinal)||(e.ordinal as number)<0)bad();
