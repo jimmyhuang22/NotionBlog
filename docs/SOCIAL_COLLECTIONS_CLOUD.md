@@ -47,3 +47,7 @@ v2 每个 work 增加 collection，单作品为 null；合集时 publications �
 首页仍使用 v1，Claude 后续接入已有卡片；原平台合集标准链接已实际访问核验，本机 JSON 浏览器打开被 Chrome 拦截，native HTTP 请求验证通过。代码、私有库、凭据和验收均在外置 SSD，没有安装新常驻服务、自动采集或部署。真实展示资格、长期新增成员政策、全量目录／详情、封面与无人值守平台登录仍待完成。
 
 依据：[Supabase invoker 视图](https://supabase.com/docs/guides/database/views)、[RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)。
+
+## 固定配置上传的历史待办筛选
+
+`upload-collections` 先用当前 `collection-config.json` 的获准键筛选待办，再执行原有最多 100 条／累计 8MiB 的负载检查。历史移出配置的项只统计为 skipped、保持 pending，不占名额或负载预算，也不因其数量超过 100 阻止当前目标上传。配置仍最多 20 个合集；真实上传、周期任务和公开资格均不由源码更新自动启用。无筛选的导出保留原上限，超限仍明确失败。
