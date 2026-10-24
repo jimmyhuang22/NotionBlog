@@ -331,8 +331,10 @@ class ReadSession {
         personalRating: getRating(page, f.personalRating), doubanRating: getNumber(page, f.doubanRating), externalUrl: getPublicUrl(page, f.externalUrl) };
     }
     if (source.kind === "movie") {
-      const publicRating = getNumber(page, f.publicRating ?? f.doubanRating);
-      if (!isMoviePublicRating(publicRating)) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid public movie rating.");
+      const mappedRating = getNumber(page, f.publicRating ?? f.doubanRating);
+      const publicRating = isMoviePublicRating(mappedRating) ? mappedRating : null;
+      // One invalid source field must not reject the whole collection. Never log page data.
+      if (!isMoviePublicRating(mappedRating)) console.warn("NOTION_MOVIE_PUBLIC_RATING_INVALID");
       return { ...base, kind: "movie", originalTitle: getSelect(page, f.originalTitle), mediaType: getSelect(page, f.mediaType), status: state(["watched", "wishlist"]) as ContentByKind["movie"]["status"], watchedDate: getDate(page, f.watchedDate), releaseDate: getDate(page, f.releaseDate), director: getSelect(page, f.director), actors: getValues(page, f.actors), rating: getRating(page, f.rating), doubanRating: getNumber(page, f.doubanRating), publicRating,
         ratingSource: publicRating === null ? null : normalizeMovieRatingSource(getSelect(page, f.ratingSource)) };
     }
