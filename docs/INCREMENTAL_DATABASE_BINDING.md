@@ -23,7 +23,7 @@ try {
 
 ## 权限核验
 
-项目的 `nb_reader`、`nb_writer` 是 **NOLOGIN 权限角色**；实际连接使用仅继承相应角色的独立 LOGIN。启动时通过 PostgreSQL 目录核对实际登录身份，不能仅相信 URL 用户名：
+同步使用的 `nb_delta_reader`、`nb_writer` 是 **NOLOGIN 权限角色**；实际连接使用仅继承相应角色的独立 LOGIN。启动时通过 PostgreSQL 目录核对实际登录身份，不能仅相信 URL 用户名：
 
 - 实际 LOGIN 与 session 身份一致，无 superuser、BYPASSRLS、建库、建角色或 replication 权限。
 - 成员图仅含对应 NOLOGIN 角色，无另一组、其他继承组或成员管理权限。

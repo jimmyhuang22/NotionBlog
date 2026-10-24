@@ -63,7 +63,7 @@ test("v2 upgrade recovers a closure lost before its callback without altering th
   const s = await setup(t), [ticket] = s.q.claim(); s.q.retryPreparation(ticket, "PREPARATION_UNAVAILABLE", 0);
   s.q.close();
   const Constructor = (sqlite as unknown as { Database?: typeof sqlite.DatabaseSync }).Database ?? sqlite.DatabaseSync;
-  const db = new Constructor(join(s.directory, "incremental.sqlite")); db.exec("DROP TABLE directory_baseline; DROP TABLE retirements; PRAGMA user_version=2;"); db.close();
+  const db = new Constructor(join(s.directory, "incremental.sqlite")); db.exec("DROP INDEX attempt_history; DROP TABLE directory_baseline; DROP TABLE retirements; PRAGMA user_version=2;"); db.close();
   await s.reopen(true);
   assert.equal(s.q.pendingRetirements()[0].ticket.operationId, ticket.operationId);
   assert.equal(s.q.status().retry, 1); assert.equal(s.q.status().events, 1);

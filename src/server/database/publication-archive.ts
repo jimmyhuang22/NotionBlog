@@ -6,6 +6,8 @@ import coreProtocol from "../../../database/website-protocol.json" with {type: "
 import studyProtocol from "../../../database/website-study-protocol.json" with {type: "json"};
 import publicationProtocol from "../../../database/publication-protocol.json" with {type: "json"};
 import deltaProtocol from "../../../database/incremental-publication-protocol.json" with {type: "json"};
+import readerIsolation from "../../../database/incremental-reader-isolation.json" with {type: "json"};
+import withdrawalRecovery from "../../../database/incremental-withdrawal-recovery.json" with {type: "json"};
 import readerProtocol from "../../../database/incremental-reader-protocol.json" with {type: "json"};
 import mediaProtocol from "../../../database/website-media-protocol.json" with {type: "json"};
 import thumbnailProtocol from "../../../database/thumbnail-protocol.json" with {type: "json"};
@@ -33,6 +35,7 @@ export interface PublicationArchive {
 const coreTables = Object.keys(websiteArchiveColumns) as (keyof typeof websiteArchiveColumns)[];
 const pubKeys = ["singleton", "version", "migration_digest", "run_id", "published_at"];
 const deltaKeys = ["singleton", "version", "migration_digest", "reader_digest"];
+const deltaExtensions: Record<string, string> = { reader_isolation_digest: readerIsolation.migration.sha256, withdrawal_recovery_digest: withdrawalRecovery.migration.sha256 };
 const operationKeys = ["operation_id", "payload_digest", "expected_revision", "config_digest", "records", "media", "withdrawals", "receipt", "committed_at"];
 const thumbnailKeys = ["version", "run_id", "parent_asset_id", "parent_sha", "source_fingerprint", "width_cap", "descriptor"];
 const hash = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
@@ -60,10 +63,12 @@ export function validatePublicationArchive(value: unknown): asserts value is Pub
       !Array.isArray(value.incremental.operations)) fail();
   validateWebsiteArchive(value.core);
   const a = value as unknown as PublicationArchive, p = a.publication[0], d = a.incremental.state[0];
+  const extensions = object(d) ? Object.keys(deltaExtensions).filter(key => Object.hasOwn(d, key)) : [];
   if (!exact(p, pubKeys) || p.singleton !== true || p.version !== 1 || p.migration_digest !== publicationProtocol.migration.sha256 ||
       !(p.run_id === null || uuid(p.run_id)) || !(p.published_at === null || timestamp(p.published_at)) ||
-      (p.run_id === null) !== (p.published_at === null) || !exact(d, deltaKeys) || d.singleton !== true || d.version !== 1 ||
-      d.migration_digest !== deltaProtocol.migration.sha256 || d.reader_digest !== readerProtocol.migration.sha256) fail();
+      (p.run_id === null) !== (p.published_at === null) || !exact(d, [...deltaKeys, ...extensions]) || d.singleton !== true || d.version !== 1 ||
+      d.migration_digest !== deltaProtocol.migration.sha256 || d.reader_digest !== readerProtocol.migration.sha256 ||
+      extensions.some(key => d[key] !== deltaExtensions[key])) fail();
   if (p.run_id !== null && !a.core.tables.runs.some(r => r.id === p.run_id && r.status === "published")) fail();
   if (!a.migrations.some(m => m.version === studyProtocol.migration.version) &&
       a.core.tables.sources.some(s => s.mode === "course-descendants" || s.kind === "course" && s.mode === "all")) fail();
@@ -176,6 +181,7 @@ export async function restorePublicationArchive(db: SqlExecutor, archive: Public
         target.thumbnails?.course1600MigrationDigest !== archive.thumbnails?.course1600MigrationDigest ||
         target.thumbnails?.body1600MigrationDigest !== archive.thumbnails?.body1600MigrationDigest ||
         target.publication[0].run_id !== null || target.publication[0].published_at !== null ||
+        Object.keys(deltaExtensions).some(key => target.incremental.state[0][key] !== archive.incremental.state[0][key]) ||
         target.incremental.operations.length || (target.thumbnails?.media.length ?? 0) ||
         (target.core.format === "notionblog-website-archive-2" && target.core.mediaSources.sources.length) ||
         coreTables.some(t => t !== "state" && target.core.tables[t].length)) fail();

@@ -35,12 +35,15 @@ export class NotionRequestScheduler {
     if (!Number.isFinite(this.intervalMs) || this.intervalMs < 0) throw new Error("Invalid request interval.");
   }
 
-  /** Integer Retry-After is seconds. Long cooldowns are checked in bounded timer chunks. */
+  /** Retain the full upstream deadline, including HTTP dates; never retry early. */
   defer(retryAfter: string | null): void {
-    if (!retryAfter || !/^\d+$/u.test(retryAfter.trim())) return;
-    const seconds = Number(retryAfter.trim());
-    if (!Number.isFinite(seconds)) return;
-    this.blockedUntil = Math.max(this.blockedUntil, this.clock.now() + Math.min(seconds * 1_000, Number.MAX_SAFE_INTEGER));
+    const value = retryAfter?.trim();
+    if (!value) return;
+    const now = this.clock.now();
+    const milliseconds = /^\d+$/u.test(value) ? Number(value) * 1000 :
+      /^[A-Za-z]+[ ,]/u.test(value) ? Date.parse(value) - now : NaN;
+    if (Number.isNaN(milliseconds) || milliseconds < 0) return;
+    this.blockedUntil = Math.max(this.blockedUntil, Math.min(Number.MAX_SAFE_INTEGER, now + milliseconds));
     this.pump();
   }
 
@@ -48,6 +51,9 @@ export class NotionRequestScheduler {
     const timeoutMs = options.timeoutMs ?? 9_000;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.reject(new Error("Invalid request timeout."));
     if (options.signal?.aborted) return Promise.reject(new DOMException("The request was cancelled.", "AbortError"));
+    // A long cooldown consumes no queue timer or caller deadline. Keep the
+    // upstream deadline so later calls cannot turn fast failure into early retry.
+    if (this.blockedUntil - this.clock.now() > 120_000) return Promise.reject(new RequestCooldownError());
     return new Promise<T>((resolve, reject) => {
       const controller = new AbortController();
       let started = false;
@@ -103,6 +109,10 @@ export class NotionRequestScheduler {
       this.timer = undefined;
     }
     if (!this.queue.length) return;
+    if (this.blockedUntil - this.clock.now() > 120_000) {
+      for (const entry of this.queue.splice(0)) entry.cancel(new RequestCooldownError());
+      return;
+    }
     const wait = Math.max(this.lastStartAt + this.intervalMs, this.blockedUntil) - this.clock.now();
     if (wait > 0) {
       this.timer = this.clock.setTimeout(() => { this.timer = undefined; this.pump(); }, Math.min(wait, 60_000));

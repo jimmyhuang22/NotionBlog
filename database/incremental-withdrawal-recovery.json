@@ -1,0 +1,6 @@
+{
+  "migration": {
+    "file": "20261024073522_incremental_withdrawal_recovery.sql",
+    "sha256": "53a7982405958c14f33bfde88f7687d418dbf86ef22a1a0aa6b05d20f367b413"
+  }
+}

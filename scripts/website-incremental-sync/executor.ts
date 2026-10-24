@@ -176,6 +176,7 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
   } finally {
     clearTimeout(timer); options.signal?.removeEventListener("abort", cancel);
   }
+  queue.compactHistory();
   const status = queue.status();
   const outcome = stats.cancelled ? "cancelled" : status.awaiting_verification || (ports.retire && status.retirement_pending) ? "blocked" : stats.retried ? "retry" : status.needs_review ? "needs_review" : status.pending + status.leased + status.retry ? "partial" : stats.published + stats.recovered ? "updated" : "unchanged";
   return { outcome, ...stats, queue: status };

@@ -67,9 +67,9 @@ function openPool(config: PoolConfig): IncrementalDatabasePool {
   const pool = new Pool(config); pool.on("error", () => {});
   return {query: async <T>(sql: string, values?: unknown[]) => ({rows: (await pool.query(sql, values)).rows as T[]}), close: () => pool.end()};
 }
-async function inspect(db: SqlExecutor, role: "nb_reader" | "nb_writer", expected: ReturnType<typeof endpoint>, full = false): Promise<string> {
-  const required = role === "nb_reader" ? readerFunctions : writerFunctions;
-  const extra = !full ? [] : role === "nb_reader" ? ["nb_publication_api.read_snapshot(text[],boolean)"] : [
+async function inspect(db: SqlExecutor, role: "nb_delta_reader" | "nb_writer", expected: ReturnType<typeof endpoint>, full = false): Promise<string> {
+  const required = role === "nb_delta_reader" ? readerFunctions : writerFunctions;
+  const extra = !full ? [] : role === "nb_delta_reader" ? ["nb_publication_api.read_snapshot(text[],boolean)"] : [
     "nb_study_api.check_capability(text)", "nb_v2_api.begin_run(uuid,text,text,text,integer)",
     "nb_v2_api.renew_run(uuid,bigint,integer)", "nb_v2_api.stage_batch(uuid,bigint,jsonb,jsonb,jsonb)",
     "nb_v2_api.fail_run(uuid,bigint)", "nb_publication_api.promote_run(uuid,bigint,integer,integer,boolean,integer)",
@@ -110,7 +110,7 @@ async function openRestrictedDatabase(options: IncrementalDatabaseOptions, depen
     } catch {fail("DATABASE_BINDING_CONFIG_INVALID");}
     const open = dependencies.open ?? openPool;
     reader = open(readerConfig); writer = open(writerConfig);
-    const readerTenant = await inspect(reader, "nb_reader", readerEndpoint, full); guard(signal);
+    const readerTenant = await inspect(reader, "nb_delta_reader", readerEndpoint, full); guard(signal);
     const writerTenant = await inspect(writer, "nb_writer", writerEndpoint, full); guard(signal);
     if (readerTenant !== writerTenant) fail("DATABASE_BINDING_CONFIG_INVALID");
     await verifyIncrementalReader(reader, signal);
