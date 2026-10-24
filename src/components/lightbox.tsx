@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { UNZOOMED, clampPan, zoomAbout, type Zoom } from "../lib/zoom.ts";
+import { nearestShown } from "../lib/photo-order.ts";
 import { closeOnBackdrop, useModal } from "./use-dismiss";
 
 export interface Photo {
@@ -36,34 +37,51 @@ const CLOSE_MS = 240;
  * on its way) a spinner stands in the middle of it, so a slow photo never looks like an empty screen.
  */
 export function LightboxProvider({ className, children }: { className?: string; children: ReactNode }) {
-  const photos = useRef(new Map<string, Photo>());
+  // The page's photos. Rendering reads the state, so a photo that leaves the page leaves the viewer too;
+  // the same registry is kept in a ref for `open`, which looks it up at the moment of the press.
+  const registry = useRef(new Map<string, Photo>());
+  const [photos, setPhotos] = useState<ReadonlyMap<string, Photo>>(() => new Map());
   const root = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
-  const [view, setView] = useState<{ order: string[]; index: number } | null>(null);
+  // The photos in reading order when the viewer opened, and the one on show (by key, not position, so it stays put when another one goes).
+  const [view, setView] = useState<{ order: string[]; key: string } | null>(null);
   // Closing fades the dialog out; the picture stays in place until that has finished.
   const clearing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const api = useMemo<LightboxApi>(() => ({
     register(photo) {
-      photos.current.set(photo.key, photo);
-      return () => { photos.current.delete(photo.key); };
+      registry.current.set(photo.key, photo);
+      setPhotos(new Map(registry.current));
+      return () => {
+        registry.current.delete(photo.key);
+        setPhotos(new Map(registry.current));
+      };
     },
     open(key) {
       // Reading order comes from the page itself, so columns and nested blocks stay in sequence.
       const order = [...(root.current?.querySelectorAll<HTMLElement>("[data-photo]") ?? [])]
-        .map(element => element.dataset.photo ?? "").filter(candidate => photos.current.has(candidate));
-      const index = order.indexOf(key);
-      if (index < 0) return;
+        .map(element => element.dataset.photo ?? "").filter(candidate => registry.current.has(candidate));
+      if (!order.includes(key)) return;
       clearTimeout(clearing.current);
-      setView({ order, index });
+      setView({ order, key });
     },
   }), []);
 
   useModal(dialog, view !== null);
 
-  const many = (view?.order.length ?? 0) > 1;
-  const step = (delta: number) => setView(current => current && { ...current, index: (current.index + delta + current.order.length) % current.order.length });
-  const photo = view ? photos.current.get(view.order[view.index] ?? "") : undefined;
+  // Only photos still on the page can be shown. One that left while on show (a picture that failed to load
+  // gives up its place) hands over to the next one still there, else the one before; with none left the viewer closes.
+  const live = view ? view.order.filter(key => photos.has(key)) : [];
+  const shownKey = view ? nearestShown(view.order, view.key, key => photos.has(key)) : undefined;
+  const photo = shownKey ? photos.get(shownKey) : undefined;
+  const gone = view !== null && !photo;
+  useEffect(() => { if (gone) dialog.current?.close(); }, [gone]);
+  const many = live.length > 1;
+  const step = (delta: number) => {
+    if (!view || !shownKey) return;
+    const at = live.indexOf(shownKey);
+    setView({ ...view, key: live[(at + delta + live.length) % live.length]! });
+  };
 
   // How far the photo on show has got: its 1600 version and its original are each loaded or lost; "whole"
   // means what is on screen already is the full picture. Nothing yet means the viewer is still waiting.
@@ -248,7 +266,7 @@ export function LightboxProvider({ className, children }: { className?: string; 
           <div className="lightbox__frame">
             <div className="lightbox__bar">
               <span className="lightbox__info">
-                <span className="lightbox__count" aria-live="polite">{many ? `${view.index + 1} / ${view.order.length}` : ""}</span>
+                <span className="lightbox__count" aria-live="polite">{many ? `${live.indexOf(photo.key) + 1} / ${live.length}` : ""}</span>
                 <span className="lightbox__state" role="status">{status}</span>
               </span>
               <button type="button" className="lightbox__button lightbox__close" onClick={() => dialog.current?.close()} aria-label="关闭">
