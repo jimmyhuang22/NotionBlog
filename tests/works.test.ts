@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PublishedSocialCollection, SocialTimelineWork } from "../contracts/social-timeline.ts";
-import { coverPreviewWidths, coverShapes, groupWorksByYear, leadingFigures, workDay, workDayMoment, workLines, workMoment, workYear, worksDay } from "../src/lib/works.ts";
+import { coverPreviewWidths, coverShapes, groupWorksByPublishedYear, leadingFigures, workDayMoment, workLines, workMoment, worksDay } from "../src/lib/works.ts";
 import { examplePublication } from "./helpers/home-feed-samples.ts";
 
 const unknown = { views: null, likes: null, comments: null, shares: null, collections: null, coins: null, danmaku: null };
@@ -21,13 +21,11 @@ test("a work is listed under its collection's latest activity, else its own date
   assert.equal(workMoment(work("b", "2024-01-01T00:00:00.000Z", { collection: season(), publications: [] })), "2026-01-05T00:00:00.000Z");
   assert.equal(workMoment(work("c", "2024-01-01T00:00:00.000Z", { collection: season({ activity: null }), publications: [] })), "2024-01-01T00:00:00.000Z");
   assert.equal(workMoment(work("d", null)), null);
-  // Year and day follow the site's time zone, not UTC.
+  // The day follows the site's time zone, not UTC.
   const late = work("e", "2025-12-31T16:30:00.000Z");
-  assert.deepEqual(workYear(late, "Asia/Shanghai"), { key: "2026", label: "2026" });
-  assert.equal(workDay(late, "Asia/Shanghai"), "1 月 1 日");
-  assert.deepEqual(workYear(late, "UTC"), { key: "2025", label: "2025" });
-  assert.deepEqual(workYear(work("f", null), "UTC"), { key: "undated", label: "日期未记录" });
-  assert.equal(workDay(work("f", null), "UTC"), null);
+  assert.equal(workDayMoment(late, "Asia/Shanghai", null)?.rest, "1 月 1 日");
+  assert.equal(workDayMoment(late, "UTC", null)?.rest, "12 月 31 日");
+  assert.equal(workDayMoment(work("f", null), "UTC", null), null);
 });
 
 test("each place a work lives is its own line, with that platform's figures, time and address", () => {
@@ -84,14 +82,17 @@ test("a line without figures has no time to tell, and a noticed change is marked
   assert.equal(noticed[0]!.url, null);
 });
 
-test("works are grouped by year in the order they arrive, without re-sorting", () => {
-  const works = [work("a", "2026-03-01T00:00:00.000Z"), work("b", "2026-01-01T00:00:00.000Z"), work("c", "2025-06-01T00:00:00.000Z"), work("d", null), work("e", null)];
-  assert.deepEqual(groupWorksByYear(works, "UTC").map(group => `${group.year.label}:${group.works.map(entry => entry.id).join("")}`), ["2026:ab", "2025:c", "日期未记录:de"]);
+test("works-page years follow the published date in the site's time zone, in the order the works arrive", () => {
+  // A collection is dated by its latest member, as the works page orders it.
+  const at = (id: string, published: string | null) => work(id, null, { collection: season({ latestMemberPublishedAt: published }), publications: [] });
+  const works = [at("a", "2026-03-01T00:00:00.000Z"), at("b", "2026-01-01T00:00:00.000Z"), at("c", "2025-06-01T00:00:00.000Z"), at("d", null), at("e", null)];
+  assert.deepEqual(groupWorksByPublishedYear(works, "UTC").map(group => `${group.year.label}:${group.works.map(entry => entry.id).join("")}`), ["2026:ab", "2025:c", "日期未记录:de"]);
   // A later page continues the last group instead of opening the same year twice.
-  assert.equal(groupWorksByYear([...works.slice(0, 3), work("f", "2025-02-01T00:00:00.000Z")], "UTC").length, 2);
-  // An order the endpoint did not promise is shown as it came, not hidden by merging distant groups.
-  assert.deepEqual(groupWorksByYear([works[2]!, works[0]!, works[2]!], "UTC").map(group => group.year.key), ["2025", "2026", "2025"]);
-  assert.deepEqual(groupWorksByYear([], "UTC"), []);
+  assert.equal(groupWorksByPublishedYear([...works.slice(0, 3), at("f", "2025-02-01T00:00:00.000Z")], "UTC").length, 2);
+  // The new year begins at midnight in the site's time zone.
+  assert.equal(groupWorksByPublishedYear([at("g", "2025-12-31T16:30:00.000Z")], "Asia/Shanghai")[0]!.year.key, "2026");
+  assert.equal(groupWorksByPublishedYear([at("g", "2025-12-31T16:30:00.000Z")], "UTC")[0]!.year.key, "2025");
+  assert.deepEqual(groupWorksByPublishedYear([], "UTC"), []);
 });
 
 test("a work's day is named the way a status entry's is, to the day only", () => {

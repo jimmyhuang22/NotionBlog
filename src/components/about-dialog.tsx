@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
+import { useId, useRef, useState, type MouseEvent } from "react";
 import type { SitePage } from "../../contracts/content.ts";
 import { updatedLabel } from "../lib/format.ts";
 import { BrowserDocumentBody } from "./browser-document";
 import { Avatar } from "./avatar";
+import { closeOnBackdrop, useModal } from "./use-dismiss";
 
 type About = { status: "idle" | "loading" | "busy" | "failed" | "gone" } | { status: "done"; page: SitePage };
 
@@ -40,9 +41,7 @@ export function AboutDialog({ timeZone, avatar = null, name = "" }: { timeZone: 
     }
   }
 
-  useEffect(() => {
-    if (open && dialog.current && !dialog.current.open) dialog.current.showModal();
-  }, [open]);
+  useModal(dialog, open);
 
   function close() { dialog.current?.close(); }
   /** A link in the text leads away from the home page, so the dialog goes first; a link within the text does not. */
@@ -72,7 +71,7 @@ export function AboutDialog({ timeZone, avatar = null, name = "" }: { timeZone: 
         ref={dialog} className="about-dialog" aria-labelledby={titleId}
         // The image viewer inside the text is a dialog too, and React passes its close event up to this one.
         onClose={event => { if (event.target === event.currentTarget) setOpen(false); }}
-        onClick={event => { if (event.target === dialog.current) close(); }}
+        onClick={closeOnBackdrop}
       >
         {open ? (
           <div className="about-dialog__panel" onClick={onPanelClick}>

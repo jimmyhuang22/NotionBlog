@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fixtureItems } from "../fixtures/content.ts";
-import { itemDate, knownStatusLabel, libraryHref, libraryOrders, librarySections, statusLabel, summaryLine, summaryParts, timeLabel, workSentence, workFactText } from "../src/lib/library.ts";
+import { cardParts, itemDate, knownStatusLabel, libraryHref, libraryOrders, librarySections, statusLabel, workSentence, workFactText } from "../src/lib/library.ts";
 import { validateListQuery } from "../src/lib/content/query.ts";
 
 test("every library tab is a status filter the list endpoint accepts", () => {
@@ -11,11 +11,10 @@ test("every library tab is a status filter the list endpoint accepts", () => {
 });
 
 test("library labels state missing values instead of inventing them", () => {
-  for (const item of [...fixtureItems.movie, ...fixtureItems.book, ...fixtureItems.game]) {
-    assert.ok(statusLabel(item).length > 0);
-    const line = summaryLine(item);
-    assert.ok(!/null|undefined|NaN/u.test(line), line);
-    assert.ok(!line.startsWith(" · ") && !line.endsWith(" · "), line);
+  for (const item of [...fixtureItems.movie, ...fixtureItems.book, ...fixtureItems.game]) assert.ok(statusLabel(item).length > 0);
+  // Games have their own line (gameCard); films and books say only known facts, each a whole piece.
+  for (const item of [...fixtureItems.movie, ...fixtureItems.book]) {
+    for (const part of cardParts(item)) assert.ok(part.trim() && !/null|undefined|NaN/u.test(part), part);
   }
   const wishlist = fixtureItems.movie.find(movie => movie.status === "wishlist")!;
   assert.equal(statusLabel(wishlist), "想看");
@@ -27,13 +26,6 @@ test("library labels state missing values instead of inventing them", () => {
   assert.equal(statusLabel({ ...fixtureItems.game[0]!, status: "unknown" }), "状态未记录");
   assert.equal(knownStatusLabel({ ...fixtureItems.game[0]!, status: "platinumed" }), "白金");
   assert.equal(knownStatusLabel({ ...fixtureItems.game[0]!, status: "wishlist" }), "想玩");
-  assert.equal(timeLabel(null), null);
-  assert.equal(timeLabel({ value: 45, unit: "hour" }), "45 小时");
-  assert.equal(timeLabel({ value: 43.966666666667, unit: "hour" }), "44 小时");
-  assert.equal(timeLabel({ value: 74.613055555556, unit: "hour" }), "74.6 小时");
-  assert.equal(timeLabel({ value: 166.16, unit: "hour" }), "166.2 小时");
-  assert.equal(timeLabel({ value: 210, unit: "minute" }), "210 分钟");
-  assert.equal(summaryLine({ ...fixtureItems.game[0]!, platforms: [], playedTime: null, rating: null }), "");
 });
 
 test("album meta omits an unknown photo count and states a known empty album", async () => {
@@ -88,12 +80,12 @@ test("ratings on a small whole scale draw as dots, anything else stays text", as
 });
 
 test("the line under a title is made of whole facts, so it can wrap between them", () => {
-  const game = { ...fixtureItems.game[0]!, platforms: ["Nintendo Switch", "PlayStation"], playedTime: { value: 186.2, unit: "hour" as const }, rating: null };
-  // Platforms stay one piece; an unknown value leaves no empty piece behind.
-  assert.deepEqual(summaryParts(game), ["Nintendo Switch / PlayStation", "186.2 小时"]);
-  assert.deepEqual(summaryParts({ ...game, platforms: [], playedTime: null }), []);
-  // The plain-text line is the same facts joined.
-  for (const item of [...fixtureItems.movie, ...fixtureItems.book, ...fixtureItems.game]) assert.equal(summaryLine(item), summaryParts(item).join(" · "));
+  const book = { ...fixtureItems.book[0]!, authors: ["甲", "乙"], status: "reading" as const, progressPercent: 40, personalRating: null };
+  // Several authors stay one piece; an unknown value leaves no empty piece behind.
+  assert.deepEqual(cardParts(book), ["甲、乙", "40%"]);
+  assert.deepEqual(cardParts({ ...book, authors: [], progressPercent: null }), []);
+  // A film says only its rating, "未评分" when it has none, so every card in a row is the same height.
+  assert.deepEqual(cardParts({ ...fixtureItems.movie[0]!, rating: null }), ["未评分"]);
 });
 
 test("a game card names its platforms short in their makers' colours, writes time played plainly and marks platinum", async () => {

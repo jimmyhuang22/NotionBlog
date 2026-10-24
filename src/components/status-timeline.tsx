@@ -1,26 +1,18 @@
 import type { StatusEntry } from "../../contracts/content.ts";
-import { dateParts, momentLabel, type CalendarDay, type MomentLabel } from "../lib/format.ts";
+import { dateParts, momentLabel, type CalendarDay } from "../lib/format.ts";
 import { CoverImage } from "./cover-image";
 import { EntryMoment } from "./entry-moment";
 import { StatusBody } from "./status-body";
 import { MonthLabel } from "./month-label";
-
-interface Group { key: string; label: string; items: { entry: StatusEntry; moment: MomentLabel | null }[] }
+import { runsBy } from "../lib/runs.ts";
 
 /** Entries arrive newest first with unknown dates last; grouping keeps that order. */
-function groupByMonth(items: StatusEntry[], timeZone: string, today: CalendarDay | null): Group[] {
-  const groups: Group[] = [];
-  for (const entry of items) {
+function groupByMonth(items: StatusEntry[], timeZone: string, today: CalendarDay | null) {
+  const dated = items.map(entry => {
     const parts = entry.recordedAt ? dateParts(entry.recordedAt.start, entry.recordedAt.precision, timeZone) : null;
-    const key = parts ? `${parts.year}-${parts.month}` : "unknown";
-    let group = groups.at(-1);
-    if (!group || group.key !== key) {
-      group = { key, label: parts ? `${parts.year} 年 ${parts.month} 月` : "日期未记录", items: [] };
-      groups.push(group);
-    }
-    group.items.push({ entry, moment: parts ? momentLabel(parts, today) : null });
-  }
-  return groups;
+    return { entry, month: parts ? { year: parts.year, month: parts.month } : null, moment: parts ? momentLabel(parts, today) : null };
+  });
+  return runsBy(dated, ({ month }) => month ? { key: `${month.year}-${month.month}`, label: `${month.year} 年 ${month.month} 月` } : { key: "unknown", label: "日期未记录" });
 }
 
 export function StatusTimeline({ items, timeZone, today = null, leadFirst = false, level = 3, appendedFrom = null }: {

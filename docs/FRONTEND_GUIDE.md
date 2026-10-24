@@ -71,9 +71,12 @@ src/app/            页面与样式（api/ 与 media/ 是后端的路由，不�
   library.css       作品库、相册、博客
   motion.css        动效：图片淡入、列表追加、展开、看大图开合、首屏入场、页面切换
 src/components/     组件
+  platform-signs.tsx  发在其他平台的作品卡片共用的平台标志、数字旁的图标和“在某平台打开”的读屏文字
+  use-dismiss.ts      弹窗（看大图、搜索、关于）的打开与点背景关闭；菜单（主题、更多）的 Esc、点外面、焦点移出关闭
 src/lib/site/       个人信息配置的解析与读取
 src/lib/render/     代码高亮与公式排版（仅服务端），以及供浏览器端正文调用的转换函数；高亮配色里有几种颜色为对比度做了微调，按代码块底色 `--code` 核对，改这个变量时要一并核对并更新测试里的底色值
 src/lib/format.ts   日期、学期、评分的显示
+src/lib/runs.ts     列表按年、按月分组（只把相邻的同组条目合在一起，不重新排序）
 src/lib/library.ts、album.ts、timeline.ts   各栏目的显示逻辑，纯函数，有测试
 src/lib/request-cache.ts   同一请求内的读取去重
 ```

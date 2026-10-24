@@ -23,14 +23,10 @@ type Displays = Record<SocialMetric, string | null>;
  * One figure as text. An exact count is used when there is one (zero is a real zero); otherwise the
  * platform's own rounded display stands as it is. Null means unknown and is never shown as a number.
  */
-function figureText(metrics: Counts, displays: Displays | null, metric: SocialMetric): string | null {
+export function figureText(metrics: Counts, displays: Displays | null, metric: SocialMetric): string | null {
   const exact = metrics[metric];
   if (exact !== null && Number.isFinite(exact) && exact >= 0) return countText(exact);
   return displays?.[metric] || null;
-}
-
-export function metricText(publication: SocialPublication, metric: SocialMetric): string | null {
-  return figureText(publication.metrics, publication.metricDisplay, metric);
 }
 
 export interface Figure { metric: SocialMetric; label: string; value: string }

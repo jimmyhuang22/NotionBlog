@@ -4,7 +4,7 @@ import type { CalendarDay } from "../lib/format.ts";
 import { coverPreviewWidths, workDayMoment, workLines } from "../lib/works.ts";
 import { CoverImage } from "./cover-image";
 import { EntryMoment } from "./entry-moment";
-import { socialIconPaths } from "./social-icon-paths";
+import { PlatformExitNote, PlatformMark, PlaySign, StackSign } from "./platform-signs";
 
 /** Whether a work is drawn as a Bilibili home card: a Bilibili work that lives nowhere else. */
 export function isBiliCard(work: SocialTimelineWork): boolean {
@@ -27,12 +27,12 @@ export function BiliCard({ work, timeZone, today = null, showDay = true }: { wor
   const lead = workLines(work)[0]!;
   const views = lead.figures.find(figure => figure.metric === "views") ?? null;
   // "151 个视频" or "26 个分 P": the count on the cover, the words read out.
-  const count = lead.size ? /\d+/u.exec(lead.size)?.[0] ?? null : null;
+  const count = lead.count;
   // The day's total from the backend when it sends one, else the latest addition.
   const badge = work.collection ? collectionBadge(work.collection, timeZone) : null;
   const day = showDay ? workDayMoment(work, timeZone, today) : null;
   const name = platformNames[lead.platform];
-  const mark = <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d={socialIconPaths[lead.platform]} /></svg>;
+  const mark = <PlatformMark platform={lead.platform} size={15} />;
   const blank = <span className="bili-card__blank">{mark}<span className="visually-hidden">封面未记录</span></span>;
   const body = (
     <>
@@ -44,14 +44,14 @@ export function BiliCard({ work, timeZone, today = null, showDay = true }: { wor
         {work.cover ? <CoverImage className="bili-card__cover" image={work.cover} previewWidth={coverPreviewWidths.wide} label="作品封面" lazy sized={false} fallback={blank} /> : blank}
         <span className="bili-card__badge">{mark}<span className="visually-hidden">{name}</span>{lead.kind}</span>
         {badge ? <span className="bili-card__new" aria-hidden="true">{badge.count ? `+${badge.count}` : "新"}</span> : null}
-        {views || count ? (
+        {views || count !== null ? (
           <span className="bili-card__stats">
-            {views ? <span><svg aria-hidden="true" width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2.6v10.8L13 8z" /></svg><span className="visually-hidden">{views.label}</span>{views.value}</span> : <span />}
-            {count ? <span><svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"><path d="M8 2.2 14 5.2 8 8.2 2 5.2z M2 8l6 3 6-3 M2 10.8l6 3 6-3" /></svg><span className="visually-hidden">共{lead.size}</span><span aria-hidden="true">{count}</span></span> : null}
+            {views ? <span><PlaySign size={11} /><span className="visually-hidden">{views.label}</span>{views.value}</span> : <span />}
+            {count !== null ? <span><StackSign /><span className="visually-hidden">共{lead.size}</span><span aria-hidden="true">{count}</span></span> : null}
           </span>
         ) : null}
       </span>
-      {lead.url ? <span className="visually-hidden">，在{name}打开，原平台可能要求登录</span> : null}
+      {lead.url ? <PlatformExitNote name={name} /> : null}
     </>
   );
   // Only a checked address is a link; the address is used exactly as given.

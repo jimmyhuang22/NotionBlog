@@ -91,20 +91,15 @@ export function itemDate(item: LibraryItem): DateRange | null {
   return item.kind === "movie" ? item.watchedDate : item.kind === "book" ? item.readingDate : gameBrowsingDate(item);
 }
 
-/** Platform totals arrive as long decimals (43.966666666667 hours); one decimal place is as fine as the figure is worth. */
-export function timeLabel(amount: TimeAmount | null): string | null {
-  return amount ? `${Math.round(amount.value * 10) / 10} ${amount.unit === "hour" ? "小时" : "分钟"}` : null;
-}
-
 /**
  * What a list card says under its title. A film or show says only its rating, "未评分" when it has none,
  * so every card in a row is two lines high (the owner's choice, 2026-10-17); its kind, when not a film,
  * is a badge on the cover instead (`coverBadge`). Books keep their summary line; games have their own
  * line (`gameCard`).
  */
-export function cardParts(item: LibraryItem): string[] {
+export function cardParts(item: Book | Movie): string[] {
   if (item.kind === "movie") return [ratingLabel(item.rating, "未评分")];
-  return summaryParts(item);
+  return bookParts(item);
 }
 
 /** What is laid on a cover: a film or show's kind when it is not simply a film, a game's platinum. */
@@ -153,23 +148,11 @@ export function gameCard(item: Game): { platforms: PlatformChip[]; time: string 
   return { platforms: platformChips(item.platforms), time: cardTimeLabel(item.playedTime), rating: item.rating ? ratingLabel(item.rating) : null };
 }
 
-/** The facts of the quiet line under the title, one piece each. Unknown values are omitted here and stated on the detail page. */
-export function summaryParts(item: LibraryItem): string[] {
-  const parts: (string | null)[] = [];
-  if (item.kind === "movie") {
-    parts.push(item.mediaType, item.rating ? ratingLabel(item.rating) : null);
-  } else if (item.kind === "book") {
-    parts.push(item.authors.join("、") || null, item.status === "reading" && item.progressPercent !== null ? `${item.progressPercent}%` : null,
-      item.personalRating ? ratingLabel(item.personalRating) : null);
-  } else {
-    parts.push(item.platforms.join(" / ") || null, timeLabel(item.playedTime), item.rating ? ratingLabel(item.rating) : null);
-  }
+/** A book's facts for the quiet line under its title, one piece each. Unknown values are omitted here and stated on the detail page. */
+function bookParts(item: Book): string[] {
+  const parts = [item.authors.join("、") || null, item.status === "reading" && item.progressPercent !== null ? `${item.progressPercent}%` : null,
+    item.personalRating ? ratingLabel(item.personalRating) : null];
   return parts.filter((part): part is string => Boolean(part));
-}
-
-/** The same line as plain text. */
-export function summaryLine(item: LibraryItem): string {
-  return summaryParts(item).join(" · ");
 }
 
 /**
