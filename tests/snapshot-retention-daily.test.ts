@@ -74,6 +74,19 @@ test("database rechecks newly pinned and 1600 donor dependencies after archive",
   assert.equal((await port.index("nb_v2_media.sources",id(1))).length,1);
  }finally{await db.close();}
 });
+test("installed retention plan keeps completed rollback versions despite null timestamps and blocks their deletion",async()=>{
+ const {db,port}=await fixture();
+ try{
+  for(const n of [6,7,8,9])await db.query("INSERT INTO nb_v2.runs VALUES($1,'published',now()-interval '3 days',NULL,now()-interval '1 day')",[id(n)]);
+  await db.exec("SET ROLE nb_retention_executor");
+  const plan=await port.plan();
+  for(const n of [3,4,5,6,7,8,9])assert.ok(plan.protected.includes(id(n)));
+  assert.deepEqual(plan.candidates.map(row=>row.id),[id(1),id(2)]);
+  const g=await guard(port,"nb_v2_media.sources",id(3));
+  await assert.rejects(port.deleteChunk("nb_v2_media.sources",g,500,id(103),"a".repeat(64)),/RETENTION_PROTECTED_RUN/);
+  assert.equal((await port.index("nb_v2_media.sources",id(3))).length,1);
+ }finally{await db.close();}
+});
 test("catalog additions, changed pointers, bad hashes and duplicate operation IDs stop deletion",async()=>{
  const {db,port}=await fixture();
  try{
