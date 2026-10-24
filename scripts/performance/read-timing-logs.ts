@@ -1,6 +1,6 @@
 import type { ContentReadTiming } from "../../src/server/content-read-timing.ts";
 
-const operations = new Set(["detail", "metadata", "catalogue", "search", "home-feed", "social-snapshot", "works"]);
+const operations = new Set(["detail", "metadata", "catalogue", "search", "home-feed", "social-snapshot", "works", "status-page", "content-version"]);
 const kinds = new Set(["status", "movie", "book", "game", "course", "study-note", "post", "album", "project", "page", "unknown"]);
 const phases = new Set(["service", "database-runtime", "database-pool", "database-acquire", "database-roundtrip", "dto-projection",
   "search-read", "search-text", "search-match", "search-version", "home-content", "home-social", "home-compose", "home-hydrate",
