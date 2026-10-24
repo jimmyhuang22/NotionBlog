@@ -30,7 +30,8 @@
     "website:database": "node scripts/website-database.ts",
     "content:withdraw": "node scripts/public-cache/withdraw-cli.ts",
     "content:cache-refresh": "node scripts/public-cache/refresh-cli.ts",
-    "content:cache-consume": "node scripts/public-cache/consumer-cli.ts"
+    "content:cache-consume": "node scripts/public-cache/consumer-cli.ts",
+    "console": "node console/run.mjs"
   },
   "dependencies": {
     "@notionhq/client": "5.27.0",

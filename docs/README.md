@@ -26,7 +26,7 @@
 | 社交作品、合集与封面 | [社交采集](SOCIAL_SYNC.md)、[合集云端](SOCIAL_COLLECTIONS_CLOUD.md)、[社交读取](SOCIAL_READER.md) |
 | 首页与动态接口 | [首页混排](HOME_FEED.md)、[动态接口](STATUS_API.md) |
 | 公开页面缓存 | [缓存机制与接入](PUBLIC_CONTENT_CACHE.md) |
-| 后台控制台与冻结（方案） | [控制台方案](ADMIN_CONSOLE_PROPOSAL.md) |
+| 后台控制台与冻结 | [控制台方案](ADMIN_CONSOLE_PROPOSAL.md)、[对接协议](CONSOLE_BRIDGE.md) |
 
 ## 部署与交接
 
