@@ -205,3 +205,12 @@ test("browser upload preserves its failure and pause when configuration disappea
  for(const lock of ["cycle-xiaohongshu-http/worker.lock","xiaohongshu-browser-notes/worker.lock"])
   await assert.rejects(readFile(join(f.root,lock)),{code:"ENOENT"});
 });
+test("stalled directory reason is durable and cannot advance discovery or restart automatically",async t=>{
+  const f=await fixture(t);
+  await handleXhsDiscovery(f.root,{op:"xiaohongshu-start",manual:false});
+  const paused=await handleXhsDiscovery(f.root,{op:"xiaohongshu-pause",code:"XHS_DIRECTORY_STALLED"});
+  assert.deepEqual(paused,{status:"paused",pending:0,code:"XHS_DIRECTORY_STALLED"});
+  const state=(await readXhsDiscoveryState(f.root,hash(JSON.stringify(f.policy))))!;
+  assert.equal(state.checkedAt,null);assert.deepEqual(state.queue,[]);assert.deepEqual(state.links,[]);assert.equal(state.lastSubmission,null);
+  assert.deepEqual(await handleXhsDiscovery(f.root,{op:"xiaohongshu-start",manual:false}),paused);
+});
