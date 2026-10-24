@@ -17,9 +17,6 @@ import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
 
-// Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
-export const revalidate = 86399;
-
 type Props = { params: Promise<{ type: string; slug: string }> };
 
 /** The page's title and the page itself read the same work; within one request it is read once. */
