@@ -1,5 +1,7 @@
 # 项目需求
 
+同步入口防护（2026-10-24）：用户同意继续修复 B14 的普通同步入口绕过保护问题。`website:sync` 统一使用既有固定主机的 release 校验、原双锁、显式预算与 TLS verify；旧直接 CLI 的同步分支拒绝执行，管理操作另以 `website:admin` 明示，详见[决定](decisions/2026-10-24-guarded-sync-entry.md)。本项仅源码与离线验证，不授权真实同步、管理操作、运行包安装或调度调整。
+
 同步读取隔离（2026-10-24）：用户批准新增独立 `nb_delta_reader`、从网站读取组收回私有同步证据读取，并更新同步与网站连接检查；本轮仅实施源码与离线测试。真实权限核验、数据库安装、LOGIN 凭据／成员切换、业务任务与正式部署仍须另行授权。网站防护发布必须在数据库隔离验收之后，见[决定](decisions/2026-10-24-incremental-reader-isolation.md)与[实施方案](BACKEND_READER_ISOLATION_PLAN.md)。
 
 仓库密钥保护（2026-10-24）：用户明确批准启用 GitHub secret scanning 与 push protection，两项已更新并独立回读为 enabled。本机隐私检查、逐提交历史扫描和私有来源 blocklist 继续保留；设置变更不授权业务运行或正式发布，见[决定](decisions/2026-10-24-secret-protection.md)。

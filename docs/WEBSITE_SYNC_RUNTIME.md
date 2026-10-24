@@ -4,6 +4,10 @@
 
 `scripts/website-sync/run-private.mjs` 是 v2 网站同步的独立主机入口，配合原件复用。旧 `scripts/notion-sync/run-private.mjs`、v1 状态和调度不改变；不能把旧 v1 入口或旧单次批准当成 v2 持续运行授权。
 
+`npm run website:sync -- --config /absolute/private/runtime.json --mode publish --check` 现在直接调用这个固定主机入口，接受相同参数、退出码和回执；运行 Node 必须与 manifest 的规范路径／版本／摘要一致。旧的 `website:sync -- publish`／`dry-run`／`stage` 位置参数不再执行。直接调用 `scripts/website-sync/cli.ts` 的这三个命令也会在读取配置前拒绝，并提示受控替代入口，不能换成直调旧 CLI 绕过双锁、预算或 TLS。
+
+`website:admin` 明确保留 `cli.ts` 的迁移、政策与 deny/allow 管理操作，可用 `npm run website:admin -- --help` 离线查看。管理命令不是同步后门，不提供 dry-run/stage/publish；仍须独立维护授权、migration owner 和既有 TLS 配置，不能将其视为固定同步主机的双锁／超时保证。已有冻结运行包和调度不会因 npm 别名改变而自动升级或重启。
+
 ## 固定源码与私有配置
 
 从已提交版本导出独立 release，按相同锁文件准备依赖，不从开发工作树或 `current` 符号链接直接启动。私有 manifest 使用 `format=website-v2-release-1`，记录 commit、规范 Node 绝对路径／版本／SHA，以及所有导出源码的相对路径／SHA。入口核对文件与 Node 身份、拒绝 `.git` 开发检出和被改动源码；manifest 保存在源码之外、600 私有文件。依赖按锁文件安装或复用同锁文件已验证的本机依赖；源码摘要不代表逐个核对整个依赖目录。
