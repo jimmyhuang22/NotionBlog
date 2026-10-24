@@ -26,6 +26,15 @@ test("highlighting escapes code and falls back for unknown or oversized input", 
   assert.ok((await highlightCode("print('hi')", "python"))?.includes("print"));
 });
 
+test("a very long line stays plain and quick, so one block cannot keep the server busy", async () => {
+  // Without a line limit this one line took 32 seconds with the JavaScript regex engine.
+  const started = performance.now();
+  const html = await highlightCode(`${"a".repeat(39_000)}\nconst x = 1;`, "javascript");
+  assert.ok(performance.now() - started < 2_000);
+  assert.ok(html?.includes("a".repeat(1_000)));
+  assert.ok(html?.includes("const"));
+});
+
 test("formulas are typeset, and unsafe or broken input falls back to source text", () => {
   const html = renderEquation("a^2 + b^2 = c^2");
   assert.ok(html && html.includes("katex") && html.includes("<math"));

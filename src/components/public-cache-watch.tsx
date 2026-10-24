@@ -25,7 +25,9 @@ export function PublicCacheWatch() {
     let stopped = false;
     let asking: AbortController | null = null;
     const check = async () => {
-      if (stopped || asking || document.visibilityState !== "visible") return;
+      // The first answer is the version this page was opened with, so it is asked at once even in a tab opened in the
+      // background: taken later, on first showing the tab, it could already be a newer one and the page would never refresh.
+      if (stopped || asking || (known !== null && document.visibilityState !== "visible")) return;
       const request = new AbortController();
       asking = request;
       const timer = window.setTimeout(() => request.abort(), GIVE_UP);

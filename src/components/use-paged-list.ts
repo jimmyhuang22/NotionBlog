@@ -218,22 +218,32 @@ export function usePagedList<T extends { id: string }>(endpoint: string, query: 
   // A list that fits on its first page needs no footer saying it has ended and how many rows it shows.
   const paged = initial.hasMore || appendedFrom !== null || restarted || restored !== null;
 
+  // A back or forward is used up by the lists it brought on screen, whether or not they had anything to put back:
+  // otherwise a later ordinary link to the same address would still read as that traversal and restore an old list.
+  // After render, so every list mounted by the same traversal has read it first.
+  useLayoutEffect(() => { traversedTo = null; }, []);
   // Before the first paint, so the page is never seen at the wrong height.
   useLayoutEffect(() => {
     if (!restored) return;
-    traversedTo = null;
     window.scrollTo({ top: restored.scrollY, behavior: "instant" });
   }, [restored]);
+  // Whether the remembered list for this key is this visit's own; a fresh visit must not move an older one's place.
+  const owns = useRef(restored !== null);
   useEffect(() => {
     // Only a list that went past its first page has anything worth putting back; nothing while it starts again for a new version.
     if (resyncing) return;
     if (reuseOnNavigation && listIdentity !== desiredIdentity) return;
     if (!reuseOnNavigation && appendedFrom === null && !restored) return;
     remember(key, { address: address(), initialPage: firstPage, items, cursor, hasMore, total, scrollY: window.scrollY });
+    owns.current = true;
   }, [key, items, cursor, hasMore, total, appendedFrom, restored, firstPage, reuseOnNavigation, listIdentity, desiredIdentity, resyncing]);
   useEffect(() => {
     // The next page scrolls to its own top while this list is still being taken down; that is not this list's position.
-    const onScroll = () => { const snapshot = snapshots.get(key); if (snapshot && snapshot.address === address()) snapshot.scrollY = window.scrollY; };
+    const onScroll = () => {
+      if (!owns.current) return;
+      const snapshot = snapshots.get(key);
+      if (snapshot && snapshot.address === address()) snapshot.scrollY = window.scrollY;
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [key]);

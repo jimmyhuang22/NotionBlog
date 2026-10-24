@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function CopyButton({ text }: { text: string }) {
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
+  // One reset at a time: a second copy restarts the wait, so the first one cannot clear the second's "已复制" early.
+  const reset = useRef(0);
+  useEffect(() => () => window.clearTimeout(reset.current), []);
   async function copy() {
     try {
       await navigator.clipboard.writeText(text);
@@ -11,7 +14,8 @@ export function CopyButton({ text }: { text: string }) {
     } catch {
       setState("failed");
     }
-    setTimeout(() => setState("idle"), 1800);
+    window.clearTimeout(reset.current);
+    reset.current = window.setTimeout(() => setState("idle"), 1800);
   }
   return (
     <button type="button" className="code__copy" data-state={state} onClick={copy}>

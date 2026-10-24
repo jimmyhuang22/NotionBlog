@@ -254,30 +254,6 @@ a.home-works__row:focus-visible { outline-offset: -3px; border-radius: var(--rad
 .works { padding-bottom: 8px; }
 .works__group + .works__group { margin-top: 32px; }
 .works__group .section-title { padding: 0 4px 10px; font-family: var(--font-sans); font-size: var(--text-base); letter-spacing: 0.04em; color: var(--muted); }
-/* Every track but the title sizes to its cells: a line's own padding is then counted into the edge tracks, which a fixed track would not do. */
-.works__list { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; column-gap: 18px; margin: 0; padding: 0; list-style: none; border-radius: var(--radius-lg); overflow: hidden; }
-.work-row, .work-row__line { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
-.work-row + .work-row { border-top: 1px solid var(--rule); }
-.work-row__line { align-items: baseline; row-gap: 2px; padding: 13px 20px; color: inherit; line-height: 1.45; }
-.work-row__line--more { padding-top: 0; }
-a.work-row__line:hover { background: var(--soft); }
-a.work-row__line:focus-visible { outline-offset: -3px; border-radius: var(--radius-md); }
-/* Least widths keep the columns in the same places from one year's sheet to the next. */
-.work-row__date { min-width: 5.4em; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.work-row__title { min-width: 0; font-family: var(--font-hand); font-size: var(--text-body); overflow-wrap: anywhere; }
-.work-row__meta { display: inline-flex; align-items: baseline; gap: 6px; min-width: 15em; font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
-/* Centred on its own, so the words and not the mark set the line the row aligns to. */
-.work-row__meta svg { flex: 0 0 auto; align-self: center; }
-/* The dot only separates for the eye; where the browser allows, it is given no spoken form. */
-.work-row__part::before { content: "·"; content: "·" / ""; margin-right: 6px; }
-.work-row__figures { display: inline-flex; gap: 14px; min-width: 10.5em; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.work-row__label { color: var(--muted); }
-.work-row__arrow { min-width: 1em; font-size: var(--text-sm); color: var(--accent); }
-/* While the list is read: the same sheet with faint bars for lines. */
-.works__list--waiting .work-row__line + .work-row__line { border-top: 1px solid var(--rule); }
-/* Bars, not text cells: the columns keep their least widths on a wide screen and take the given widths on a narrow one. */
-.works__list--waiting .skeleton { display: block; height: 12px; min-width: 0; align-self: center; }
-.works__list--waiting .work-row__date { min-width: 0; }
 /*
  * The works page, one platform at a time (works-list.tsx, the owner's choice of 2026-10-18): Bilibili
  * frames four to a row, Xiaohongshu notes five, both two on a phone; fewer as the column narrows.
@@ -328,13 +304,14 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
 /* The margin counts towards the page's width, so it never reaches past the page's side padding (.wrap, 18px on a phone): wider, the page scrolled sideways mid-switch (F40 addendum, 2026-10-23). */
 @media (max-width: 520px) { .works__stage.is-moving { overflow-clip-margin: 18px; } }
 .works__pane--leaving { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
-/* A pressed order answers at once, as the filters do (M-10): the list it is about to replace steps back while the new one is read. */
-.works:has(.library__sort a:is(.is-turning, :has(.link-pending[data-pending]))) .works__stage { opacity: 0.45; }
+/* A pressed order answers at once, as the filters do (M-10): the list it is about to replace steps back while the new one is read.
+   No :has() inside :has() (not allowed): the pending mark is matched as a descendant of the order link instead. */
+.works:has(.library__sort a.is-turning, .library__sort a .link-pending[data-pending]) .works__stage { opacity: 0.45; }
 @media (prefers-reduced-motion: no-preference) {
   .works__pill { transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.34s cubic-bezier(0.3, 1.25, 0.4, 1); }
   .works__platforms > a { transition: color 0.25s; }
   /* Dims after a short delay, so an order that arrives quickly never flickers; comes back at once, the new cards rising from 45% (round four, M-12). */
-  .works:has(.library__sort a:is(.is-turning, :has(.link-pending[data-pending]))) .works__stage { transition: opacity 0.2s 0.1s; }
+  .works:has(.library__sort a.is-turning, .library__sort a .link-pending[data-pending]) .works__stage { transition: opacity 0.2s 0.1s; }
   .works__stage.is-moving { transition: height 0.42s cubic-bezier(0.22, 0.8, 0.2, 1); }
   /* After a switch a cover that is not ready keeps its soft place and fades in, instead of appearing all at once. */
   .works__stage[data-switched] .works-card__cover { transition: opacity 0.2s; }
@@ -346,22 +323,6 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
 .works__more { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 20px; padding-top: 24px; }
 .works__more span { font-size: var(--text-sm); color: var(--muted); }
 .works > .notice, .works__pane > .notice { margin: 0 0 20px; }
-/* Narrow: each work stacks into date, title, where it lives, figures; the way out stays at the top right. */
-@media (max-width: 760px) {
-  .works__list { display: block; }
-  .work-row { display: block; }
-  .work-row__line { display: grid; grid-template-columns: minmax(0, 1fr) 1em; row-gap: 3px; padding: 13px 16px; }
-  .work-row__date { grid-area: 1 / 1; }
-  .work-row__arrow { grid-area: 1 / 2; }
-  .work-row__title, .work-row__meta, .work-row__figures { grid-column: 1 / -1; justify-self: start; min-width: 0; }
-  .work-row__meta, .work-row__figures { flex-wrap: wrap; white-space: normal; }
-  /* Without a date the title takes the first line, beside the way out. */
-  .work-row__date:empty { display: none; }
-  .work-row__date:empty + .work-row__title { grid-area: 1 / 1; }
-  .work-row__line--more { padding-top: 0; }
-  .work-row__line--more .work-row__date, .work-row__line--more .work-row__title { display: none; }
-  .work-row__line--more .work-row__meta { grid-area: 1 / 1; }
-}
 /* On a phone the platform and its link share the first line and the figures take the next. */
 @media (max-width: 520px) {
   .home-works__row { padding: 11px 16px; }

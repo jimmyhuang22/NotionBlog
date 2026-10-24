@@ -80,7 +80,7 @@
 /* Highlighted tokens carry both theme colours as variables; the active theme picks one. */
 /* The colours the highlighter names (render/highlight.ts), taken from the skin's own tokens (round four, C-06). */
 .shiki { --code-ink: var(--ink); --code-key: var(--accent); --code-note: var(--muted); color: var(--code-ink); }
-.code figcaption, .figure figcaption, .embed figcaption { padding: 10px 4px 0; font-size: var(--text-sm); color: var(--muted); text-align: center; }
+.code figcaption, .figure figcaption { padding: 10px 4px 0; font-size: var(--text-sm); color: var(--muted); text-align: center; }
 .code figcaption { padding: 0 20px 14px; text-align: left; }
 
 .figure { margin: 0 0 18px; }
@@ -124,7 +124,6 @@
 
 .embed { margin: 0 0 18px; }
 .embed__link { margin: 0; }
-.embed iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--radius-md); background: var(--soft); }
 
 .child-page { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 56px; margin: 0 0 10px; padding: 10px 18px; border-radius: var(--radius-md); background: var(--soft); font-size: var(--text-md); font-weight: 600; line-height: 1.4; }
 .child-page--unavailable { background: transparent; border: 1px dashed var(--rule); color: var(--muted); font-weight: 400; }

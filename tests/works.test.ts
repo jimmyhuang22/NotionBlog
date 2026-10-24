@@ -128,4 +128,8 @@ test("ordered by views or likes, a card's day of another year carries its year; 
   assert.equal(text(worksDay(at("2026-06-10T04:00:00.000Z"), "Australia/Melbourne", today, true)), "6 月 10 日");
   assert.equal(text(worksDay(at("2026-10-20T04:00:00.000Z"), "Australia/Melbourne", today, true)), "昨天 · 10 月 20 日");
   assert.equal(text(worksDay(at("2025-06-19T04:00:00.000Z"), "Australia/Melbourne", today)), "6 月 19 日");
+  // Drawn before the visitor's day is known (cached markup): the year is written out, never left for this year's.
+  assert.equal(text(worksDay(at("2025-06-19T04:00:00.000Z"), "Australia/Melbourne", null, true)), "2025 年 6 月 19 日");
+  assert.equal(text(worksDay(at("2026-06-10T04:00:00.000Z"), "Australia/Melbourne", null, true)), "2026 年 6 月 10 日");
+  assert.equal(text(worksDay(at("2025-06-19T04:00:00.000Z"), "Australia/Melbourne", null)), "6 月 19 日");
 });

@@ -7,7 +7,7 @@ import { isNoticedActivity } from "../lib/home-feed.ts";
 import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
 import { PlatformChips } from "./platform-chips";
-import { cardTimeLabel, platformChip } from "../lib/library.ts";
+import { cardTimeLabel, platformChips } from "../lib/library.ts";
 import { EntryMoment } from "./entry-moment";
 import { MonthLabel } from "./month-label";
 import { isBiliCard } from "./bili-card";
@@ -25,7 +25,7 @@ import { useToday } from "./use-today";
  * line wraps as a whole, chips and all, never through a word.
  */
 function GameLine({ event }: { event: WorkEvent }) {
-  const platforms = (event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean).map(platformChip);
+  const platforms = platformChips((event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean));
   // The game's current total, written as on its card: none at all and unknown are left out.
   const time = cardTimeLabel(event.playedTime ?? null);
   const body: ReactNode = (

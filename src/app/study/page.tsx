@@ -4,8 +4,6 @@ import { getStudyProjects } from "@/lib/content/study";
 import { LinkPending } from "@/components/link-pending";
 import { alwaysFresh } from "@/lib/page-freshness";
 
-// Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
-export const revalidate = 86399;
 export const metadata: Metadata = { title: "学习" };
 
 export default async function StudyPage() {

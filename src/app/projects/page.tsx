@@ -6,8 +6,6 @@ import { getSiteConfig } from "@/lib/site";
 import { isEnabledContentKind } from "../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
 
-// Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
-export const revalidate = 86399;
 export const metadata: Metadata = { title: "项目" };
 
 const PAGE_SIZE = 24;

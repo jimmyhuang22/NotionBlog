@@ -62,12 +62,15 @@ test("learning rename and withdrawal rewrite only affected cached ordinary links
   assert.equal(result.records.length, 1); assert.equal(result.records[0].detail.item.id, studyId(20));
   const blocks = result.records[0].detail.document!.blocks;
   assert.equal(blocks[0].type, "paragraph"); if (blocks[0].type === "paragraph") assert.deepEqual(blocks[0].text[0].link, { kind: "internal", href: next.href });
-  assert.equal(blocks[1].type, "child-page"); if (blocks[1].type === "child-page") assert.deepEqual(blocks[1].target, next);
+  assert.equal(blocks[1].type, "child-page"); if (blocks[1].type === "child-page") { assert.deepEqual(blocks[1].target, next); assert.equal(blocks[1].title, next.title); }
   assert.deepEqual(s.store.readPublished({ sourceKey: "status", pageKey: studyId(20) }, s.state)!.record, s.ordinary);
   const withdrawn = s.store.incomingLinks([{ previous: href, current: null }], s.state).records[0].detail.document!.blocks;
   if (withdrawn[0].type === "paragraph") assert.deepEqual(withdrawn[0].text[0].link, { kind: "unavailable" });
-  if (withdrawn[1].type === "child-page") assert.equal(withdrawn[1].target, null);
-  assert.deepEqual(s.store.incomingLinks([{ previous: href, current: { href, title: s.checkpoint.entries[1].record.detail.item.title } }], s.state).records, []);
+  if (withdrawn[1].type === "child-page") { assert.equal(withdrawn[1].target, null); assert.equal(withdrawn[1].title, "Unavailable page"); }
+  const repaired = s.store.incomingLinks([{ previous: href, current: { href, title: s.checkpoint.entries[1].record.detail.item.title } }], s.state).records;
+  assert.equal(repaired.length, 1); // The fixture has a stale outer title even before a rename.
+  const repairedChild = repaired[0].detail.document!.blocks[1];
+  if (repairedChild.type === "child-page") assert.equal(repairedChild.title, s.checkpoint.entries[1].record.detail.item.title);
   assert.throws(() => s.store.incomingLinks([{ previous: href, current: { href: "https://example.test/", title: "Other" } }], s.state), error("CONTENT_CACHE_LINK_CHANGES_INVALID"));
 });
 
