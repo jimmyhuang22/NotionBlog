@@ -1,3 +1,6 @@
+/** A source user mention never authorizes publishing that person's identity. */
+export const PUBLIC_USER_MENTION_TEXT = "User";
+
 export function isNotionPageHost(value: string): boolean {
   const hostname = value.toLowerCase().replace(/\.$/, "");
   return ["notion.so", "notion.site", "notion.com"].some(host => hostname === host || hostname.endsWith(`.${host}`));
