@@ -20,23 +20,29 @@ export function scrollXhsDirectory(expected){
 }
 export async function captureXhsDirectory(api,job,{now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),owned=async()=>{}}={}){
   if(!job||!/^[-a-f0-9]{36}$/.test(job.id)||!/^[a-f0-9]{24}$/.test(job.accountId)||!Array.isArray(job.knownIds)||job.knownIds.length<1||job.knownIds.length>500||
-    job.knownIds.some(id=>!/^[a-f0-9]{24}$/.test(id))||Date.parse(job.expiresAt)<=now())throw Error("XHS_DIRECTORY_INVALID");
+    job.knownIds.some(id=>!/^[a-f0-9]{24}$/.test(id))||!Number.isFinite(Date.parse(job.expiresAt))||Date.parse(job.expiresAt)<=now())throw Error("XHS_DIRECTORY_INVALID");
   const url=`https://www.xiaohongshu.com/user/profile/${job.accountId}`,tab=await api.tabs.create({url,active:false});if(!Number.isInteger(tab.id))throw Error("BROWSER_REQUIRED");
-  const until=Math.min(now()+90000,Date.parse(job.expiresAt)),seen=new Map(),known=new Set(job.knownIds);let pages=0,lastCount=0;
+  const until=Math.min(now()+90000,Date.parse(job.expiresAt)),seen=new Map(),known=new Set(job.knownIds);let scrolls=0,lastCards=null,changedAt=now(),scrolledAt=-Infinity;
   try{
     await owned(tab.id,job.accountId);
     while(now()<until){
-      const current=await api.tabs.get(tab.id);if(current.status!=="complete"){await sleep(1000);continue;}
+      const current=await api.tabs.get(tab.id);if(current.status!=="complete"){lastCards=null;changedAt=now();await sleep(1000);continue;}
       if(current.url!==url)throw Error("SOURCE_BLOCKED");
       const rows=await api.scripting.executeScript({target:{tabId:tab.id,frameIds:[0]},world:"MAIN",func:captureXhsDirectoryPage,args:[{accountId:job.accountId}]}),p=rows.find(r=>r.frameId===0)?.result;
-      if(p?.error){if(p.error!=="DIRECTORY_NOT_READY")throw Error(p.error);await sleep(1000);continue;}
+      if(p?.error){if(p.error!=="DIRECTORY_NOT_READY")throw Error(p.error);lastCards=null;changedAt=now();await sleep(1000);continue;}
       if(!p?.cards)throw Error("XHS_DIRECTORY_INVALID");
       for(const c of p.cards)seen.set(c.publicationId,c);
+      const fingerprint=p.cards.map(c=>c.publicationId).join(",");
+      if(fingerprint!==lastCards){lastCards=fingerprint;changedAt=now();}
+      if(seen.size>300)throw Error("XHS_DIRECTORY_GAP");
       // Inspect the entire rendered page before accepting a boundary: known/pinned first cards
       // cannot hide a new card later in the same page. Missing old cards never mean deletion.
       if(p.cards.length>=30&&p.cards.slice(-5).every(c=>known.has(c.publicationId)))return {version:1,accountId:job.accountId,observedAt:p.observedAt,cards:[...seen.values()],boundaryFound:true};
-      if(seen.size>300||pages>=10)throw Error("XHS_DIRECTORY_GAP");
-      if(p.cards.length!==lastCount){lastCount=p.cards.length;pages++;await api.scripting.executeScript({target:{tabId:tab.id,frameIds:[0]},world:"MAIN",func:scrollXhsDirectory,args:[{accountId:job.accountId}]});}
+      // A stationary list is not proof of natural completion: loading may have failed.
+      // Retry the owned scroll within the existing cap, then report the missing boundary.
+      if(now()-changedAt>=10000)throw Error("XHS_DIRECTORY_STALLED");
+      if(scrolls>=10)throw Error("XHS_DIRECTORY_GAP");
+      if(now()-scrolledAt>=3000){scrolls++;scrolledAt=now();await api.scripting.executeScript({target:{tabId:tab.id,frameIds:[0]},world:"MAIN",func:scrollXhsDirectory,args:[{accountId:job.accountId}]});}
       await sleep(1000);
     }
     throw Error("BROWSER_TIMEOUT");
