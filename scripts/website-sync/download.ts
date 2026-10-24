@@ -44,13 +44,14 @@ interface RetryPorts {
   onReceivedBytes?(bytes: number): void;
   now?(): number;
 }
+const MAX_RATE_LIMIT_WAIT_MS = 120_000;
 const noStore = (value: string | undefined) => /(?:^|,)\s*no-store\s*(?:,|$)/i.test(value ?? "");
 function retryAfterMilliseconds(value: string | undefined): number | undefined {
   const text = value?.trim();
   const delay = text && /^\d+$/.test(text) ? Number(text) * 1000 :
     text && /^[A-Za-z]+[ ,]/.test(text) && Number.isFinite(Date.parse(text)) ? Date.parse(text) - Date.now() : 60_000;
-  // Node timers overflow above this limit. Never retry early after overflow;
-  // ordinary long cooldowns remain cancellable by the existing run deadline.
+  // Preserve the advertised delay for diagnostics; the caller rejects waits
+  // outside its per-image budget instead of retrying before the upstream limit.
   return Number.isFinite(delay) && delay <= 2_147_483_647 ? Math.max(1000, Math.ceil(delay)) : undefined;
 }
 function networkError(error: unknown): boolean {
@@ -201,7 +202,7 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
         const denied = last.status !== undefined && last.status >= 400 && last.status < 500;
         const limited = [429, 529].includes(last.status ?? 0) && last.retryAfterMs !== undefined;
         const transient = !denied && (ownDeadline || last.network || [502, 503, 504].includes(last.status ?? 0));
-        if (attempt === 2 || !(error instanceof WorkerError) ||
+        if (attempt === 2 || limited && last.retryAfterMs! > MAX_RATE_LIMIT_WAIT_MS || !(error instanceof WorkerError) ||
             !(limited && error.code === "RATE_LIMITED" || transient && ["IMAGE_UNAVAILABLE", "CANCELLED"].includes(error.code))) {
           const detail: WebsiteImageFailure = { inputUrl: input, requestUrl: last.url, requestHost: last.host,
             attempt: attempt + 1, httpStatus: last.status,

@@ -30,4 +30,7 @@ test("review CLI lists and resumes existing private work offline and honors the 
   assert.deepEqual(JSON.parse(resumed.stdout), { resumed: true });
   assert.deepEqual(JSON.parse(call("list-review").stdout), { entries: [] });
   assert.equal(call("resume").status, 1);
+  const compacted = call("compact-history"); assert.equal(compacted.status, 0, compacted.stderr);
+  assert.deepEqual(JSON.parse(compacted.stdout), { attempts: 0, retirements: 0 });
+  assert.equal(call("compact-history", ["--source", "status", "--page", "page"]).status, 1);
 });

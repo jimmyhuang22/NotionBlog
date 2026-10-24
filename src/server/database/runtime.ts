@@ -1,4 +1,5 @@
 import "server-only";
+import { isolatedWebsiteReader } from "./website-reader-isolation.ts";
 import { createLocalMediaStorage } from "./local-storage.ts";
 import { sqlExecutor } from "./connection.ts";
 import { createWebsiteDatabaseRepository } from "./website-repository.ts";
@@ -29,7 +30,7 @@ function createRuntime() {
   if(projection==="scoped"&&process.env.DATABASE_CONTENT_VERSION!=="2")
     throw new ContentServiceError("MISCONFIGURED","Scoped reads require database v2.");
   const pool=sharedContentReaderPool(process.env.DATABASE_READER_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
-  const rawDb=budgetedContentSql(sqlExecutor(pool));
+  const rawDb=isolatedWebsiteReader(budgetedContentSql(sqlExecutor(pool)));
   const db=publicationReader(rawDb,mode);
   let token: ReturnType<typeof createStorageReaderToken> | undefined;
   const objectProvider=storageProvider(process.env);

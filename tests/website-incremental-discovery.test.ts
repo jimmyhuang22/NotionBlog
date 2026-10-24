@@ -141,7 +141,7 @@ test("v1 local schema upgrade preserves pending and unknown publication attempts
   s.q.close();
   const Constructor = (sqlite as unknown as { Database?: typeof sqlite.DatabaseSync }).Database ?? sqlite.DatabaseSync;
   const db = new Constructor(join(s.dir, "incremental.sqlite"));
-  db.exec("DROP TABLE directory_baseline; DROP TABLE retirements; DROP TABLE directory; DROP TABLE discovery; DROP TABLE discovery_cursors; PRAGMA user_version=1;"); db.close();
+  db.exec("DROP INDEX attempt_history; DROP TABLE directory_baseline; DROP TABLE retirements; DROP TABLE directory; DROP TABLE discovery; DROP TABLE discovery_cursors; PRAGMA user_version=1;"); db.close();
   await s.reopen(true); const upgraded = s.q;
   assert.equal(upgraded.pendingVerifications()[0].ticket.operationId, ticket.operationId);
   assert.deepEqual(upgraded.claim(), []); assert.deepEqual(upgraded.directoryPage("status"), []);
@@ -264,4 +264,20 @@ test("automatic learning descendants are delegated rather than scanned as direct
   const f = fixture(); f.config.sources[0].kind = "study-note"; f.config.sources[0].publication.mode = "course-descendants";
   await assert.rejects(f.source().validate("status", new AbortController().signal), /DISCOVERY_SOURCE_UNSUPPORTED/);
   assert.deepEqual(f.queryInputs, []);
+});
+
+
+test("fenced directory discovery does not grow the external event ledger", async t => {
+  const s = await setup(t);
+  for (let n = 1; n <= 5; n++) {
+    const scan = s.q.beginDiscovery("status", s.q.discoveryState("status").revision,
+      { mode: "membership", startedAt: 5000 + n, overlapMs: 0 });
+    const m = member("page-1"); m.fingerprint = fingerprint(n); m.lastEditedAt = 5000 + n;
+    const page = s.q.commitDirectoryPage("status", scan.revision, [m], null);
+    assert.equal(page.inserted, 1);
+    assert.throws(() => s.q.commitDirectoryPage("status", scan.revision, [m], null), error("QUEUE_CHECKPOINT_CONFLICT"));
+    s.q.reconcileDirectoryAbsences("status", page.state.revision);
+    assert.equal(s.q.status().events, 0);
+    const ticket = s.q.claim()[0]; assert.equal(ticket.generation, n); s.q.completeUnchanged(ticket);
+  }
 });

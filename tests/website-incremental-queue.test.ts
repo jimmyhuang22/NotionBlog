@@ -195,3 +195,44 @@ test("repeated preparation failures back off, require review and expose new hint
   const [next] = q.claim(); assert.equal(next.generation, 3);
   assert.equal(q.retryPreparation(next, "TEMPORARY", 1000), "retry");
 });
+
+
+test("history GC preserves current retries, unknown sends, unretired work and the latest commit proof", async t => {
+  const s = await setup(t), q = await s.open();
+  const done = (id: string, commit = false) => {
+    q.enqueue([event(id)]); const ticket = q.claim(1)[0];
+    if (commit) { q.markSubmitting(ticket, { payloadDigest: payload, expectedRevision: "revision-1" }); q.confirmCommit(ticket, proof(ticket)); }
+    else q.completeUnchanged(ticket);
+    return ticket;
+  };
+  const old = done("old-commit", true), unretired = done("old-unchanged");
+  const latestCommit = done("new-commit", true);
+  const recent = done("new-unchanged");
+  q.enqueue([event("unknown", "page-unknown")]); const unknown = q.claim(1)[0];
+  q.markSubmitting(unknown, { payloadDigest: payload, expectedRevision: "revision-1" });
+  q.enqueue([event("retry", "page-retry")]);
+  for (let n = 0; n < 4; n++) { q.retryPreparation(q.claim(1)[0], "TEMPORARY", 0); }
+  const before = q.status();
+  assert.deepEqual(q.compactHistory(1), { attempts: 1, retirements: 0 }); // only superseded commit
+  assert.deepEqual(q.status(), before);
+  assert.deepEqual(q.compactHistory(), { attempts: 0, retirements: 0 });
+  const retirement = q.pendingRetirements().find(p => p.ticket.operationId === unretired.operationId)!;
+  q.acknowledgeRetirement(retirement);
+  assert.deepEqual(q.compactHistory(), { attempts: 1, retirements: 1 });
+  assert.equal(q.attemptClosure(unretired.operationId), null);
+  assert.ok(q.attemptClosure(recent.operationId));
+  assert.equal(q.pendingVerifications()[0].ticket.operationId, unknown.operationId);
+  assert.equal(q.retryPreparation(q.claim(1)[0], "TEMPORARY", 0), "needs_review");
+  s.close(q);
+  const Constructor = (sqlite as unknown as { Database?: typeof sqlite.DatabaseSync }).Database ?? sqlite.DatabaseSync;
+  const db = new Constructor(join(s.dir, "incremental.sqlite"), { readOnly: true });
+  try {
+    assert.equal(db.prepare("SELECT count(*) AS n FROM attempts WHERE id=?").get(old.operationId)!.n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM attempts WHERE id=?").get(latestCommit.operationId)!.n, 1);
+  } finally { db.close(); }
+  const reopened = await s.open();
+  assert.equal(reopened.enqueue([event("old-commit")]), 0);
+  assert.throws(() => reopened.enqueue([event("old-commit", "different")]), error("QUEUE_EVENT_CONFLICT"));
+  assert.equal(reopened.status().needs_review, 1);
+  assert.throws(() => reopened.compactHistory(1001), error("QUEUE_INPUT_INVALID"));
+});

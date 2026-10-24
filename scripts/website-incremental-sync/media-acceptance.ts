@@ -92,7 +92,7 @@ export async function verifyMediaAcceptance(plan: MediaAcceptancePlan, input: { 
   if (configDigest(bound) !== digest) fail("MEDIA_ACCEPTANCE_PLAN_CHANGED");
   const { budget } = input, db = budget.sql(input.reader); budget.guard();
   const endpoint = new URL(input.readerUrl);
-  const profile = (await db.query<Record<string, unknown>>(INCREMENTAL_LOGIN_SQL, ["nb_reader", requiredFunctions])).rows;
+  const profile = (await db.query<Record<string, unknown>>(INCREMENTAL_LOGIN_SQL, ["nb_delta_reader", requiredFunctions])).rows;
   const keys = ["safe_login", "isolated_role", "create_denied", "private_data_denied", "required_functions", "group_functions_only"];
   const p = profile[0], username = decodeURIComponent(endpoint.username);
   if (profile.length !== 1 || !p || Object.keys(p).length !== 8 || keys.some(k => p[k] !== true) ||

@@ -1,0 +1,6 @@
+{
+  "migration": {
+    "file": "20261024074008_incremental_reader_isolation.sql",
+    "sha256": "239b3e856faaed0029608f0072730a11db9dff7a5721d423f4705e68fb5b86f3"
+  }
+}
