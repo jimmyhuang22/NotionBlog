@@ -110,6 +110,8 @@ export interface SyncStatus {
   /** Plain words, such as "每 2 小时". */
   schedule: string | null;
   queue: { pending: number; needsReview: number } | null;
+  /** Why scheduled syncs are not running right now, in plain words; null when they run normally. */
+  hold: string | null;
   publishedVersionAt: string | null;
   observedAt: string;
 }
@@ -158,6 +160,7 @@ export type BackendErrorCode =
   | "UNSUPPORTED"
   | "INVALID_INPUT"
   | "OUTCOME_UNKNOWN"
+  | "RUN_FAILED"
   | "UNAVAILABLE";
 
 export interface BackendErrorBody {
@@ -210,5 +213,6 @@ export const errorText: Record<BackendErrorCode, string> = {
   UNSUPPORTED: "后端暂时还不支持这项操作。",
   INVALID_INPUT: "输入的内容无法识别。",
   OUTCOME_UNKNOWN: "结果未知：操作可能已经生效。请先核对，不要直接重试。",
+  RUN_FAILED: "这一轮没有完成。",
   UNAVAILABLE: "暂时连不上后端，请稍后再试。",
 };

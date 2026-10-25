@@ -137,6 +137,12 @@ export function SyncPanel({ initial, timeZone }: { initial: SyncStatus; timeZone
 
       {error ? <ErrorNotice error={error} /> : null}
 
+      {status.hold ? (
+        <div className="notice notice--warn">
+          <p>定时同步现在没有在跑：{status.hold}</p>
+        </div>
+      ) : null}
+
       {status.mode === "qualified" ? (
         <div className="notice notice--info">
           <p>现在是旧模式：每轮都会把全部页面重读一遍。冻结和“只同步一页”要等新模式上线后才能用。</p>

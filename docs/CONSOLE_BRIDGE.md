@@ -1,6 +1,6 @@
 # 控制台与后端的对接协议
 
-记录日期：2026-10-25。状态：控制台一侧已实现（`console/lib/bridge-backend.ts`），后端一侧的桥接命令尚未实现。背景与功能见[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)，运行方式见 [console/README.md](../console/README.md)。
+记录日期：2026-10-25。状态：控制台一侧已实现（`console/lib/bridge-backend.ts`）；桥接命令第一阶段（状态、操作记录、下架）由 Claude 按用户指定实现在 `scripts/console-bridge/`，见下文“第一阶段实现”。冻结等第二阶段仍待新模式上线。背景与功能见[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)，运行方式见 [console/README.md](../console/README.md)。
 
 控制台不直接连接 Notion、数据库、同步运行器或下架工具。它只调用一个由后端提供的**桥接命令**：每次操作启动一次命令，经标准输入写入一个 JSON 请求，从标准输出读取一个 JSON 回复。桥接命令由后端负责实现、安装和授权，控制台不需要知道私有路径、锁目录或凭据。
 
@@ -38,7 +38,7 @@
 
 | op | input | data |
 | --- | --- | --- |
-| `status` | `{}` | `SyncStatus`：发布模式、能力开关、正在运行的操作、上次成功时间、上一轮、下次定时、队列数、当前发布版本时间 |
+| `status` | `{}` | `SyncStatus`：发布模式、能力开关、正在运行的操作、上次成功时间、上一轮、下次定时、队列数、`hold`（定时同步暂停的原因，正常为 `null`）、当前发布版本时间 |
 | `sync.start` | `{ target: string \| null }` | `{ operationId }`；`target` 为空表示整轮 |
 | `content.sections` | `{}` | `SectionSummary[]`：每个栏目的顶层公开数量与冻结数量 |
 | `content.list` | `{ section, parentId, search }` | `{ items: ContentItem[], total }`；`parentId` 为空取顶层；`search` 非空时按标题搜索整个栏目，忽略 `parentId` |
@@ -66,8 +66,28 @@
 
 ## 错误码
 
-`BUSY`、`NOT_FOUND`、`NOT_PUBLISHED`、`ALREADY_FROZEN`、`NOT_FROZEN`、`PREVIEW_STALE`、`MEDIA_NOT_READY`、`PLAN_EXPIRED`、`UNSUPPORTED`、`INVALID_INPUT`、`OUTCOME_UNKNOWN`、`UNAVAILABLE`。控制台为每个码显示固定的中文说明（`console/lib/types.ts` 的 `errorText`），再附上 `message`。其他码一律当作 `UNAVAILABLE`。
+`BUSY`、`NOT_FOUND`、`NOT_PUBLISHED`、`ALREADY_FROZEN`、`NOT_FROZEN`、`PREVIEW_STALE`、`MEDIA_NOT_READY`、`PLAN_EXPIRED`、`UNSUPPORTED`、`INVALID_INPUT`、`OUTCOME_UNKNOWN`、`RUN_FAILED`（用于操作记录里没有完成的同步轮次，原因写在 `message`）、`UNAVAILABLE`。控制台为每个码显示固定的中文说明（`console/lib/types.ts` 的 `errorText`），再附上 `message`。其他码一律当作 `UNAVAILABLE`。
+
+## 第一阶段实现
+
+用户 2026-10-25 指定由 Claude 完成第一阶段。命令为 `node scripts/console-bridge/cli.ts --config <私有 config.json>`，只用 Node 内置模块。
+
+私有配置（不提交，0600）：
+
+```json
+{
+  "version": 1,
+  "stateDir": "/absolute/…/.local/console-bridge/state",
+  "siteOrigin": "https://网站地址",
+  "sync": { "stateFile": "/absolute/同步控制器状态文件", "suspendFlag": "/absolute/调度暂停标志", "schedule": "给人看的调度说明" },
+  "takedown": null
+}
+```
+
+- **状态与记录**：只读同步控制器的状态文件和调度暂停标志，不连接数据库、Dagu 接口或 Notion，不改变任何同步。历史轮次的原因只显示大写原因代码，路径和其他文字不外传。控制器在上一轮失败或暂停标志存在时不会开始新一轮，`hold` 据此说明。发布模式按现状报告为 `qualified`；网站内容版本时间需要读数据库，第一阶段报告 `null`。
+- **下架**：`takedown` 为 `{ "node", "project", "envFile" }` 时启用。`project` 指向已固定的运行副本，命令原样调用其中的 `scripts/public-cache/withdraw-cli.ts`，用 `envFile` 提供受限 operator 账号、缓存设置和锁清单；不修改下架工具。计划同步执行（55 秒内），执行与续办由独立的后台进程完成，进度读自下架工具自己的日志文件（PLANNED → DENIED_PURGE_PENDING → PURGED_VERIFY_PENDING → COMPLETE；DENY_OUTCOME_UNKNOWN 为结果未知）。日志、计划和操作记录都在 `stateDir`，必须位于 `.local` 下。
+- 目前 `takedown` 为 `null`：网站已切换到新数据库，新库的受限 operator 账号与对应 env 文件尚未确认，确认后再开启并用获准测试页验收。
 
 ## 验证方式
 
-`tests/console-backends.test.ts` 用临时脚本充当桥接命令，覆盖请求格式、错误码透传、未知码与坏回复、环境不外传和相对路径拒绝。后端实现桥接命令后，可用同样的方式先在本机以假数据核对，再接真实运行器。
+`tests/console-bridge.test.ts` 用虚构状态文件和假的下架工具覆盖第一阶段实现：状态与历史、暂停原因、能力开关、计划与后台执行、结果未知后续办、未开始的失败、坏输入与路径越界。`tests/console-backends.test.ts` 用临时脚本充当桥接命令，覆盖请求格式、错误码透传、未知码与坏回复、环境不外传和相对路径拒绝。后端实现桥接命令后，可用同样的方式先在本机以假数据核对，再接真实运行器。

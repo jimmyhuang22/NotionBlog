@@ -14,12 +14,12 @@ npm run console
 
 ## 接真实后端
 
-后端提供桥接命令后，在私有 env 文件（不提交）里写：
+桥接命令第一阶段在 `scripts/console-bridge/`，配置格式见[对接协议](../docs/CONSOLE_BRIDGE.md#第一阶段实现)。在私有 env 文件（不提交）里写：
 
 ```bash
 CONSOLE_BACKEND=bridge
-CONSOLE_BRIDGE_COMMAND=/absolute/path/to/bridge
-CONSOLE_BRIDGE_ARGS_JSON=["--config","/absolute/private/config.json"]
+CONSOLE_BRIDGE_COMMAND=/absolute/path/to/node
+CONSOLE_BRIDGE_ARGS_JSON=["/absolute/repo/scripts/console-bridge/cli.ts","--config","/absolute/.local/console-bridge/config.json"]
 CONSOLE_PASSWORD=至少 12 个字符
 CONSOLE_SESSION_SECRET=至少 32 个随机字符
 CONSOLE_SITE_ORIGIN=https://网站地址
