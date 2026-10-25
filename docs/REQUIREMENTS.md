@@ -1,5 +1,7 @@
 # 项目需求
 
+自托管展示图片（2026-10-25）：用户批准独立离线后端实现。Mac 生成宽度不超过1600、不放大的必备最大展示版与400/800副本，服务器只读展示文件；默认媒体地址返回最大展示版，缺档只选已有展示副本，损坏明确失败，不回源原图。新增可选 `ImageAsset.delivery`，由读取层按当前批次补充，不改冻结SQL与同步记录；严格TLS、reader隔离enforce、no-store及现有Vercel/COS行为保留。前端灯箱由Claude接线；真实图片、传输/安装、同步采用、上海部署、域名及发布另行安排，见[决定](decisions/2026-10-25-self-hosted-display-media.md)、[后端说明](SELF_HOSTED_MEDIA.md)与[前端交接](SELF_HOSTED_MEDIA_FRONTEND_HANDOFF.md)。
+
 网站隔离分阶段采用（2026-10-25）：用户批准 R01 源码与离线测试。`DATABASE_READER_ISOLATION` 缺省 off，网站延后额外隔离拒绝并记录尚未强制验证；enforce 保持原检查，非法值拒绝。独立同步和 B20 校验仍严格，真实隔离后须按阶段声明检查采用 enforce；不包含云配置、真实安装、任务恢复或发布，见[决定](decisions/2026-10-25-reader-isolation-staging.md)和[发布检查](READER_ISOLATION_RELEASE.md)。
 
 直连中央拒绝与图片代理（2026-10-25）：用户批准 B20 完整源码与隔离测试方案。`CONTENT_PROVIDER=notion` 必须具备受限数据库 reader 与独立中央 deny 能力，页面及学习祖先逐操作检查、版本变化即停止输出；单页 `mode: all` 按当前物理来源判断，列表仍完整枚举。直连 m1 图片改为有界服务器代理和输出前复核，缺配置／能力时 503；真实安装、凭据、联网验收、任务恢复及发布不包含在内，见[决定](decisions/2026-10-25-direct-notion-policy.md)及[接入顺序](NOTION_SETUP.md#直连模式的中央拒绝与媒体)。
@@ -217,6 +219,8 @@ Mac mini 增加独立的游戏平台 → Notion 程序，与现有 Notion → �
 用户随后明确同意在当前仓库开始独立社交模块开发。首个交付只读指定 B 站视频页面，核对作品与作者，保存本地 SQLite 的实际采样、失败状态及待上传队列；未知计数保持 null，重复和旧样本不能破坏最新记录。代码留开发 SSD，凭据与真实输入不入 Git。永久云表、网站展示、其他平台与自动调度按后续分阶段验收，不因本地采集自动启用公开来源。
 
 ## 部署与访问目标
+
+自托管准备（2026-10-25）：用户同意先离线实现独立构建/启动入口，以运行时PostgreSQL、严格TLS、受限reader及连接池关闭流程验证同一网站。普通开发隔离和Vercel行为保持，初始自托管关闭共享公开缓存，媒体另项接续；不包含真实数据迁移、项目访问、服务器配置或域名发布。见[决定](decisions/2026-10-25-self-hosted-runtime.md)和[入口说明](SELF_HOSTED.md)。
 
 公开资格预检应在数据区域查询，保持逐请求资格、撤回、所属关系及HTML 404／503语义。真实计时已确认，给全球Routing Middleware添加地区配置并未把其SQL执行锁到数据区域；后续采用普通区域函数执行原有资格检查，中间层只请求固定结果，无需查库的列表／关闭栏目仍本地判断。不缓存跨请求正资格，不在失败时回退直连数据库；通信超时、版本不符或异常响应一律503。地区通过vercel.json约束普通函数，不新增已弃用的preferredRegion配置；本机打包不能证明线上执行位置，真实平台构建、实际日志地域和前后耗时仍需另行验收，见[区域资格查询决策](decisions/2026-10-19-regional-route-qualification.md)。Preview的中间层只在项目地区运行，Production才全球部署，Preview地域和响应耗时不能作为Production等价证明；正式性能验收须覆盖Production调度，不切换正式域名的Production候选也须另行获准，见[验收边界](decisions/2026-10-19-preview-production-middleware-boundary.md)。middleware文件名兼容债务仍保留，不再以更名作为地域修复。
 

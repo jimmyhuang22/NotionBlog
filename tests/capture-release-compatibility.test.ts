@@ -131,6 +131,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
     if(laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer))continue;
     // New website/development capabilities remain outside these frozen transitions.
+    // The opt-in display route/runtime are pinned here and still reject old captures.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
     const expected = pair.path === "scripts/dev-real.mjs"
       ? "425464dc01fb77ee49fe383ed9e2101b93b6b16c8049d8d3b7130f842a2d53ac"
@@ -139,9 +140,9 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
-        ? "d9da424912bd96a9879ddb898952d722314a4b10a3922621befb2abad4837039"
+        ? "252c86f9b024439d08db7579926f51d9806c997ebce67103709e8535f507ff84"
       : pair.path === "src/server/database/runtime.ts"
-        ? "c36da1fb688dc7f9fc7cc6d379ff3ecb977002a1ce968c00d05ce913b74defd8"
+        ? "e3268ce8fdf64f109c4bacc105491b266988cf581910e2b6cc7844e392c5d194"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "3d7a448f5f1603ef1a66aab74975c043f06a78be83ef390cad603b128a3d44eb"
         : null;

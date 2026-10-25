@@ -16,6 +16,9 @@ export interface ImageAsset {
   alt: string;
   width: number | null;
   height: number | null;
+  /** Optional self-hosted capability; absent preserves original delivery behavior.
+   * Describes derived bytes only, never the private source or filesystem path. */
+  delivery?: { mode: "display-only"; maxWidth: number; maxHeight: number };
 }
 export interface ContentLink { title: string; href: string }
 export type TextLink =
