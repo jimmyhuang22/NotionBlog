@@ -1,5 +1,7 @@
 # 项目需求
 
+网站隔离分阶段采用（2026-10-25）：用户批准 R01 源码与离线测试。`DATABASE_READER_ISOLATION` 缺省 off，网站延后额外隔离拒绝并记录尚未强制验证；enforce 保持原检查，非法值拒绝。独立同步和 B20 校验仍严格，真实隔离后须按阶段声明检查采用 enforce；不包含云配置、真实安装、任务恢复或发布，见[决定](decisions/2026-10-25-reader-isolation-staging.md)和[发布检查](READER_ISOLATION_RELEASE.md)。
+
 直连中央拒绝与图片代理（2026-10-25）：用户批准 B20 完整源码与隔离测试方案。`CONTENT_PROVIDER=notion` 必须具备受限数据库 reader 与独立中央 deny 能力，页面及学习祖先逐操作检查、版本变化即停止输出；单页 `mode: all` 按当前物理来源判断，列表仍完整枚举。直连 m1 图片改为有界服务器代理和输出前复核，缺配置／能力时 503；真实安装、凭据、联网验收、任务恢复及发布不包含在内，见[决定](decisions/2026-10-25-direct-notion-policy.md)及[接入顺序](NOTION_SETUP.md#直连模式的中央拒绝与媒体)。
 
 缺失课程编号（2026-10-25）：用户批准 `Course.code` 使用 `string | null`，只保留来源编号属性的实际非空值，不从标题或页面 ID 推断。两套 provider、数据库校验、项目归类与必要显示兼容同步调整；无编号保留完整课程名，旧字符串快照继续可读。仅实施源码与离线验证，真实运行包更新与发布另行安排，见[决定](decisions/2026-10-25-course-code-null.md)和[实施范围](BACKEND_COURSE_CODE_NULL_PLAN.md)。
@@ -12,7 +14,7 @@
 
 同步入口防护（2026-10-24）：用户同意继续修复 B14 的普通同步入口绕过保护问题。`website:sync` 统一使用既有固定主机的 release 校验、原双锁、显式预算与 TLS verify；旧直接 CLI 的同步分支拒绝执行，管理操作另以 `website:admin` 明示，详见[决定](decisions/2026-10-24-guarded-sync-entry.md)。本项仅源码与离线验证，不授权真实同步、管理操作、运行包安装或调度调整。
 
-同步读取隔离（2026-10-24）：用户批准新增独立 `nb_delta_reader`、从网站读取组收回私有同步证据读取，并更新同步与网站连接检查；本轮仅实施源码与离线测试。真实权限核验、数据库安装、LOGIN 凭据／成员切换、业务任务与正式部署仍须另行授权。网站防护发布必须在数据库隔离验收之后，见[决定](decisions/2026-10-24-incremental-reader-isolation.md)与[实施方案](BACKEND_READER_ISOLATION_PLAN.md)。
+同步读取隔离（2026-10-24，2026-10-25 补充分阶段采用）：用户批准新增独立 `nb_delta_reader`、从网站读取组收回私有同步证据读取，并更新同步与网站连接检查；本轮仅实施源码与离线测试。真实权限核验、数据库安装、LOGIN 凭据／成员切换、业务任务与正式部署仍须另行授权。网站额外隔离守卫采用 enforce 前必须完成数据库隔离验收；off 阶段按上方 R01 决定保留旧读取，见[原决定](decisions/2026-10-24-incremental-reader-isolation.md)与[实施方案](BACKEND_READER_ISOLATION_PLAN.md)。
 
 仓库密钥保护（2026-10-24）：用户明确批准启用 GitHub secret scanning 与 push protection，两项已更新并独立回读为 enabled。本机隐私检查、逐提交历史扫描和私有来源 blocklist 继续保留；设置变更不授权业务运行或正式发布，见[决定](decisions/2026-10-24-secret-protection.md)。
 

@@ -17,7 +17,7 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
 } });
 const demo = createDemo(1), owner = demoId(1000), url = "https://assets.example.test/fictional.png?private-signature=fictional";
 demo.config.sources[0].cover = {strategy:"native-page-cover"}; demo.pages.get(owner)!.cover = {type:"external",external:{url}};
-Object.assign(process.env, {CONTENT_PROVIDER:"notion",NOTION_TOKEN:"fictional-token",MEDIA_SIGNING_SECRET:"fictional-signing",NOTION_SOURCES_JSON:JSON.stringify(demo.config),DATABASE_TLS:"verify"});
+Object.assign(process.env, {CONTENT_PROVIDER:"notion",NOTION_TOKEN:"fictional-token",MEDIA_SIGNING_SECRET:"fictional-signing",NOTION_SOURCES_JSON:JSON.stringify(demo.config),DATABASE_TLS:"verify",DATABASE_READER_ISOLATION:"off"});
 delete process.env.DATABASE_READER_URL;
 let queries = 0, notions = 0, images = 0, capability = true, denied = false, revision = "1:2", onDownload: (()=>void)|undefined;
 const raw = await readFile(new URL(`../../supabase/migrations/${protocol.migration.file}`,import.meta.url),"utf8");
