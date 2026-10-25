@@ -1,30 +1,37 @@
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
-import { planWithdrawal, executeWithdrawal, withdrawalDatabaseHash } from "./withdraw.ts";
+import { planWithdrawal, planCompactWithdrawal, executeWithdrawal, executeCompactWithdrawal, withdrawalDatabaseHash, withdrawalTarget, validateWithdrawalJournalVersion } from "./withdraw.ts";
 import { cacheClientConfig, cacheOperatorConnection, saveCacheJournal, readCacheJournal, acquireWithdrawalLocks } from "./local.ts";
 
 export async function runWithdrawalCli(args: string[]) {
-  const [target, flag, path, ...extra] = args;
-  if (args.length === 1 && target === "--help") {
-    console.log("node --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts <page URL> --plan <absolute .local journal>\nnode --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts --execute <absolute .local journal>\nnode --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts --resume <absolute .local journal>"); return;
+  if (args.length === 1 && args[0] === "--help") {
+    console.log("node --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts <page URL> --plan <absolute .local journal>\nnode --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts --compact <page URL> --plan <absolute .local journal>\nnode --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts --execute <absolute .local journal>\nnode --env-file=<private operator env> scripts/public-cache/withdraw-cli.ts --resume <absolute .local journal>"); return;
   }
-  const planning = flag === "--plan" && !!path && extra.length === 0;
-  const executing = ["--execute", "--resume"].includes(target ?? "") && !!flag && path === undefined;
+  const compact = args[0] === "--compact", [target, flag, path, ...extra] = compact ? args.slice(1) : args;
+  const planning = flag === "--plan" && !!path && extra.length === 0 && !!target && !target.startsWith("--");
+  const executing = !compact && ["--execute", "--resume"].includes(target ?? "") && !!flag && path === undefined;
   if (!planning && !executing) throw Error("WITHDRAW_USAGE");
-  const config = cacheClientConfig(), connection = await cacheOperatorConnection("nb_cache_operator");
+  // Reject malformed or mixed journals before configuration or connection setup.
+  const existing = executing ? validateWithdrawalJournalVersion(await readCacheJournal(flag!)) : undefined;
+  if (existing && ((target === "--execute" && existing.phase !== "PLANNED") || (target === "--resume" && existing.phase === "PLANNED"))) throw Error("WITHDRAW_PHASE");
+  const config = cacheClientConfig();
+  if (compact) withdrawalTarget(target!, config.origin);
+  const connection = await cacheOperatorConnection("nb_cache_operator");
   let release: (() => Promise<void>) | undefined;
   try {
     const hash = withdrawalDatabaseHash(connection.url);
     if (planning) {
-      const journal = await planWithdrawal(connection.db, target!, config, hash);
+      const journal = compact ? await planCompactWithdrawal(connection.db, target!, config, hash) : await planWithdrawal(connection.db, target!, config, hash);
       await saveCacheJournal(path!, journal, true);
-      console.log(JSON.stringify({ planned: true, pages: journal.plan.pages.length, images: journal.plan.assets.length, sharedOwnerUrl: journal.plan.sharedOwnerUrl, syncBusy: journal.plan.leaseActive, executed: false }));
+      console.log(JSON.stringify({ planned: true, pages: journal.plan.pages.length, images: journal.version === 2 ? journal.plan.assetSummary.count : journal.plan.assets.length,
+        sharedOwnerUrl: journal.plan.sharedOwnerUrl, syncBusy: journal.plan.leaseActive, executed: false }));
     } else {
-      const journal = await readCacheJournal(flag!);
-      if ((target === "--execute" && journal.phase !== "PLANNED") || (target === "--resume" && journal.phase === "PLANNED")) throw Error("WITHDRAW_PHASE");
+      const journal = existing!;
       release = await acquireWithdrawalLocks();
-      const result = await executeWithdrawal(journal, config, hash, { db: connection.db, save: value => saveCacheJournal(flag!, value) });
-      console.log(JSON.stringify({ phase: result.phase, pages: result.plan.pages.length, imageRelations: result.plan.assets.length, checkedRequests: result.checkedPaths?.length ?? 0, objectsDeleted: 0 }));
+      const ports = { db: connection.db, save: (value: unknown) => saveCacheJournal(flag!, value) };
+      const result = journal.version === 2 ? await executeCompactWithdrawal(journal, config, hash, ports) : await executeWithdrawal(journal, config, hash, ports);
+      console.log(JSON.stringify({ phase: result.phase, pages: result.plan.pages.length, imageRelations: result.version === 2 ? result.plan.assetSummary.count : result.plan.assets.length,
+        checkedRequests: result.checkedPaths?.length ?? 0, objectsDeleted: 0 }));
     }
   } finally { try { await release?.(); } finally { await connection.close(); } }
 }

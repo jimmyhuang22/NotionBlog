@@ -1,0 +1,303 @@
+{
+  "format": "notionblog-compact-withdrawal-protocol",
+  "version": 1,
+  "migration": {
+    "file": "20261025070031_compact_withdrawal.sql",
+    "sha256": "5a2353ff9c44b71d9ab76ac28bae3816c3bd8b82ffa58ecdf8509a88a4806b58"
+  },
+  "recipe": {
+    "prefix": "-- Opt-in compact withdrawal. The original v1 plan, event and reader functions are unchanged.\nBEGIN;\n",
+    "suffix": "COMMIT;\n",
+    "bodySha256": "6b2e0484018839ec86f5b55bee8ca2b7b04ca07dc81c647c77b85ad5f048ff5b"
+  },
+  "functions": [
+    {
+      "signature": "nb_cache_api.plan_withdraw_compact(text)",
+      "sourceSha256": "c5cf0a72e42ce2cd95d646551b4b41e507a36da148eef1edff6f3bb8d116419a",
+      "volatility": "s",
+      "language": "plpgsql",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "returnType": "jsonb",
+      "ownerTables": [
+        "nb_cache.state"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "privilege": "EXECUTE",
+          "grantable": false
+        },
+        {
+          "grantee": "nb_cache_operator",
+          "grantor": "$owner",
+          "privilege": "EXECUTE",
+          "grantable": false
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "authenticated": false,
+        "nb_cache_operator": true,
+        "nb_cache_publisher": false,
+        "nb_reader": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_writer": false,
+        "service_role": false
+      }
+    },
+    {
+      "signature": "nb_cache_api.withdraw_compact(uuid,jsonb)",
+      "sourceSha256": "daa95a825266e4811bc64efac82451c2748bf4c652ccb43841ae6dfddf40dc59",
+      "volatility": "v",
+      "language": "plpgsql",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "returnType": "jsonb",
+      "ownerTables": [
+        "nb_cache.state"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "privilege": "EXECUTE",
+          "grantable": false
+        },
+        {
+          "grantee": "nb_cache_operator",
+          "grantor": "$owner",
+          "privilege": "EXECUTE",
+          "grantable": false
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "authenticated": false,
+        "nb_cache_operator": true,
+        "nb_cache_publisher": false,
+        "nb_reader": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_writer": false,
+        "service_role": false
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "signature": "nb_cache_api.complete_event(uuid,bigint)",
+      "sourceSha256": "7744be3694fbb147cec549d7cde0e50b747da778a8922d1efde7388b875a651e",
+      "language": "plpgsql",
+      "volatility": "v",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        },
+        {
+          "grantee": "nb_cache_operator",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "nb_reader": false,
+        "nb_writer": false,
+        "service_role": false,
+        "authenticated": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_cache_operator": true,
+        "nb_cache_publisher": false
+      },
+      "returnType": "boolean",
+      "ownerTables": [
+        "nb_cache.state"
+      ]
+    },
+    {
+      "signature": "nb_cache_api.read_event(uuid)",
+      "sourceSha256": "d6d4dd8bc9a392d999e3106e71c8b1893f9a42cf69175c689c6e2006a8d3166f",
+      "language": "sql",
+      "volatility": "s",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        },
+        {
+          "grantee": "nb_cache_operator",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        },
+        {
+          "grantee": "nb_cache_publisher",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        },
+        {
+          "grantee": "nb_reader",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "nb_reader": true,
+        "nb_writer": false,
+        "service_role": false,
+        "authenticated": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_cache_operator": true,
+        "nb_cache_publisher": true
+      },
+      "returnType": "jsonb",
+      "ownerTables": [
+        "nb_cache.state"
+      ]
+    },
+    {
+      "signature": "nb_cache_api.read_withdraw(uuid)",
+      "sourceSha256": "8a7704e4870927ac1a5c44a626973169be65c6ec3c8bc803aa58c91cf45930c5",
+      "language": "sql",
+      "volatility": "s",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        },
+        {
+          "grantee": "nb_cache_operator",
+          "grantor": "$owner",
+          "grantable": false,
+          "privilege": "EXECUTE"
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "nb_reader": false,
+        "nb_writer": false,
+        "service_role": false,
+        "authenticated": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_cache_operator": true,
+        "nb_cache_publisher": false
+      },
+      "returnType": "jsonb",
+      "ownerTables": [
+        "nb_cache.state"
+      ]
+    },
+    {
+      "signature": "nb_v2.record_eligible(uuid,text)",
+      "sourceSha256": "3c68e55ac9d8eba34a4b8840ae2114f75389d1212979834d92d5a8266dba35f9",
+      "language": "sql",
+      "volatility": "s",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog, nb_v2, pg_temp"
+      ],
+      "returnType": "boolean",
+      "ownerTables": [
+        "nb_cache.state",
+        "nb_v2.state"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "privilege": "EXECUTE",
+          "grantable": false
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "authenticated": false,
+        "nb_cache_operator": false,
+        "nb_cache_publisher": false,
+        "nb_reader": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_writer": false,
+        "service_role": false
+      }
+    },
+    {
+      "signature": "nb_v2_api.set_denied(text,boolean)",
+      "sourceSha256": "5f2f80d14cf3f025ee29ee404825779678047008a3eebd9883befaf363aeaf5f",
+      "language": "plpgsql",
+      "volatility": "v",
+      "securityDefiner": true,
+      "searchPath": [
+        "search_path=pg_catalog, nb_v2, pg_temp"
+      ],
+      "returnType": "void",
+      "ownerTables": [
+        "nb_cache.state",
+        "nb_v2.state"
+      ],
+      "acl": [
+        {
+          "grantee": "$owner",
+          "grantor": "$owner",
+          "privilege": "EXECUTE",
+          "grantable": false
+        }
+      ],
+      "roleExecute": {
+        "anon": false,
+        "authenticated": false,
+        "nb_cache_operator": false,
+        "nb_cache_publisher": false,
+        "nb_reader": false,
+        "nb_social_reader": false,
+        "nb_social_worker": false,
+        "nb_writer": false,
+        "service_role": false
+      }
+    }
+  ],
+  "baseSources": [
+    {
+      "file": "supabase/migrations/20261020203508_public_content_cache.sql",
+      "sha256": "90355b5c3ca29ad539623e7203d69d91d59445ea7299ef3b5030050ac1a3e97b"
+    },
+    {
+      "file": "database/website-migrations/001_website.sql",
+      "sha256": "128014f4ce055172b8f4cdddeb2942822c7e109d52fbcdca38bacf49926c0937",
+      "schemaDigest": "6cc1930413741a7263cac15f5011ede34c7e7e61188435320af2c1d4ad9e4936"
+    }
+  ]
+}
