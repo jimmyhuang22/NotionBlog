@@ -35,7 +35,7 @@ export async function fullBaselineMain(args: readonly string[], env: NodeJS.Proc
   }
   if (env.SYNC_PUBLICATION_MODE !== "published" || env.SYNC_MEDIA_PROVIDER !== "storage" || !env.SYNC_READER_DATABASE_URL || !env.SYNC_DATABASE_URL) hostFail("HOST_INPUT_INVALID");
   const config = JSON.parse(await readPrivateFile(parsed.configPath)), controller = new AbortController(), abort = () => controller.abort();
-  process.once("SIGINT", abort); process.once("SIGTERM", abort);
+  process.on("SIGINT", abort); process.on("SIGTERM", abort);
   try {
     const report = await runFullBaselineHost({ ...parsed, config, signal: controller.signal,
       database: { readerUrl: env.SYNC_READER_DATABASE_URL, writerUrl: env.SYNC_DATABASE_URL, tls: env.DATABASE_TLS, ca: env.DATABASE_CA_CERT } }, {
