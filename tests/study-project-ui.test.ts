@@ -10,6 +10,7 @@ import { routeVerdict } from "../src/lib/route-verdict.ts";
 
 test("project membership only groups public courses and reserves explicit members before a catch-all", () => {
   const courses = fixtureItems.course;
+  assert.ok(courses[1].code);
   const rules = parseStudyProjects([
     { slug: "degree", title: "Degree", courseCodes: null },
     { slug: "practical", title: "Practical", layout: "sections", courseCodes: [courses[1].code.toLowerCase(), "UNPUBLISHED"] },
@@ -30,8 +31,21 @@ test("malformed project membership cannot accidentally collect all eligible cour
   assert.equal(coursesBySemester([{ ...fixtureItems.course[0], semester: null }, { ...fixtureItems.course[1], semester: "25S1" }])[1][0], null);
 });
 
+test("a missing code uses only the existing catch-all and never matches a title or identity as a code", () => {
+  const course = { ...fixtureItems.course[0], code: null, title: "ABC123 Full source title" };
+  const rules = parseStudyProjects([
+    { slug: "selected", title: "Selected", courseCodes: ["ABC123", course.id] },
+    { slug: "general", title: "General", courseCodes: null },
+  ]);
+  assert.deepEqual(studyProjects([course], rules).map(p => p.slug), ["general"]);
+  assert.equal(studyProjectForCourse(course, rules)!.slug, "general");
+  assert.equal(studyProjects([course])[0].courses[0].id, course.id);
+  assert.deepEqual(studyProjects([course], rules.slice(0, 1)), []);
+});
+
 test("a qualified course resolves the same breadcrumb without loading other courses", () => {
   const courses = fixtureItems.course;
+  assert.ok(courses[1].code);
   const configurations = [undefined, [], parseStudyProjects([
     { slug: "general", title: "General", courseCodes: null },
     { slug: "selected", title: "Selected", courseCodes: [courses[1].code.toLowerCase()] },

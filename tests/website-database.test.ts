@@ -41,6 +41,25 @@ test("v2 database supports all DTOs and preserves the frozen v1 worker and roles
   await db.query("SELECT nb_v2_api.configure_policy($1,600,$2::jsonb,$3::jsonb)",[digest,JSON.stringify(sources),JSON.stringify(permits)]);
   async function publish(){const lease=await writer.begin(randomUUID(),digest);await writer.stage(lease,batch);await writer.promote(lease,{records:batch.length,media:0,complete:true});return lease;}
   await publish();
+  await t.test("nullable course codes survive the v2 writer and reader without rewriting legacy strings", async () => {
+   const record = batch.find(row => row.detail.item.kind === "course")!, course = record.detail.item;
+   assert.equal(course.kind, "course");
+   if (course.kind !== "course") throw Error("Course fixture missing");
+   const original = course.code;
+   for (const code of ["LEGACY123", null, course.id]) {
+    course.code = code;
+    validateWebsiteRecord(record);
+    for (const invalid of [undefined, 1, {}, []]) {
+     const bad = structuredClone(record); Object.assign(bad.detail.item, { code: invalid });
+     assert.throws(() => validateWebsiteRecord(bad), controlled("CONTENT_UNAVAILABLE"));
+    }
+    await publish();
+    assert.equal((await repo.get("course", course.slug))!.item.code, code);
+    assert.equal((await repo.list("course")).items[0].code, code);
+    assert.equal((await repo.getCourseMetadata!(course.slug))!.code, code);
+   }
+   course.code = original; await publish();
+  });
   await t.test("rich Status previews use current reader projection without persisting list fields",async()=>{
    const record=batch.find(r=>r.detail.item.kind==="status")!, original=structuredClone(record.detail.document);
    record.detail.document={blocks:[{id:"quote",type:"quote",text:[{text:"x".repeat(450),bold:true}]}],toc:[],completeness:"complete"};

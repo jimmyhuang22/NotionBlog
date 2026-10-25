@@ -1,28 +1,10 @@
-import type { SocialPlatform } from "../../contracts/social.ts";
 import type { SocialTimelineWork } from "../../contracts/social-timeline.ts";
-import { collectionAddition, platformNames, sampleTime, type Figure } from "../lib/home-feed.ts";
+import { collectionAddition, platformNames, sampleTime } from "../lib/home-feed.ts";
 import type { CalendarDay } from "../lib/format.ts";
 import { coverPreviewWidths, coverShapes, workDayMoment, workLines, type WorkLine } from "../lib/works.ts";
 import { CoverImage } from "./cover-image";
 import { EntryMoment } from "./entry-moment";
-import { socialIconPaths } from "./social-icon-paths";
-
-// A word mark fills only a band of its square box; cropped to that band it reads at the same height as the glyphs.
-const WORD_MARKS: ReadonlySet<string> = new Set(["xiaohongshu"]);
-
-function PlatformMark({ platform, size = 16 }: { platform: SocialPlatform; size?: number }) {
-  const word = WORD_MARKS.has(platform);
-  return <svg aria-hidden="true" width={word ? size * 1.5 : size} height={size} viewBox={word ? "0 6 24 12" : "0 0 24 24"} fill="currentColor"><path d={socialIconPaths[platform]} /></svg>;
-}
-
-/** The signs the platforms put beside these two figures: a play mark, a thumb on one, a heart on the other. */
-const FIGURE_SIGNS: Partial<Record<Figure["metric"], Record<SocialPlatform, string>>> = {
-  views: { bilibili: "M4.5 2.6v10.8L13 8z", xiaohongshu: "M4.5 2.6v10.8L13 8z" },
-  likes: {
-    bilibili: "M5.2 7.1 7.7 2.2c1 0 1.8.8 1.8 1.8v2.3h2.9c.9 0 1.5.8 1.3 1.6l-.9 4.2c-.2.8-.8 1.3-1.6 1.3H5.2zm0 0H3.1c-.4 0-.7.3-.7.7v4.9c0 .4.3.7.7.7h2.1",
-    xiaohongshu: "M8 13.4S2.2 10 2.2 5.9A3 3 0 0 1 8 4.7a3 3 0 0 1 5.8 1.2C13.8 10 8 13.4 8 13.4z",
-  },
-};
+import { figureSignPath, PlatformExitNote, PlatformMark } from "./platform-signs";
 
 /**
  * A line's views and likes. On a cover they carry the platform's signs and their names are still read
@@ -34,7 +16,7 @@ function Figures({ line, signs, hint }: { line: WorkLine; signs: boolean; hint?:
   return (
     <span className="work-card__figures" title={hint}>
       {line.figures.map(figure => {
-        const sign = signs ? FIGURE_SIGNS[figure.metric]?.[line.platform] : undefined;
+        const sign = signs ? figureSignPath(figure.metric, line.platform) : null;
         return (
           <span key={figure.metric}>
             {sign
@@ -70,12 +52,8 @@ export function SocialWorkCard({ work, timeZone, today = null, small = false }: 
   const onCover = Boolean(work.cover) && (shape === "wide" || small);
   const update = work.collection ? collectionAddition(work.collection, timeZone) : null;
   const day = small ? workDayMoment(work, timeZone, today) : null;
-  const late = (line: WorkLine) => {
-    const sample = line.observedAt ? sampleTime(line.observedAt, timeZone, today) : null;
-    return { sample };
-  };
   const hint = (line: WorkLine, total: boolean) => {
-    const { sample } = late(line);
+    const sample = line.observedAt ? sampleTime(line.observedAt, timeZone, today) : null;
     return [total ? `整个${line.kind}的合计` : null, sample ? `数据截至 ${sample.label}` : null].filter(Boolean).join(" · ") || undefined;
   };
   const what = lead ? [lead.kind, lead.size].filter(Boolean) : [];
@@ -105,7 +83,7 @@ export function SocialWorkCard({ work, timeZone, today = null, small = false }: 
           {onCover && lead ? <span className="work-card__over"><Figures line={lead} signs hint={hint(lead, Boolean(work.collection))} /></span> : null}
         </span>
       ) : null}
-      {lead?.url ? <><span className="work-card__arrow" aria-hidden="true">↗</span><span className="visually-hidden">，在{platformNames[lead.platform]}打开，原平台可能要求登录</span></> : null}
+      {lead?.url ? <><span className="work-card__arrow" aria-hidden="true">↗</span><PlatformExitNote name={platformNames[lead.platform]} /></> : null}
     </>
   );
   return (
@@ -123,7 +101,7 @@ export function SocialWorkCard({ work, timeZone, today = null, small = false }: 
               <span>{name}</span><span className="work-card__part">{line.kind}</span>
             </span>
             <Figures line={line} signs={false} hint={hint(line, false)} />
-            {line.url ? <><span className="work-card__arrow" aria-hidden="true">↗</span><span className="visually-hidden">，在{name}打开，原平台可能要求登录</span></> : null}
+            {line.url ? <><span className="work-card__arrow" aria-hidden="true">↗</span><PlatformExitNote name={name} /></> : null}
           </>
         );
         return line.url

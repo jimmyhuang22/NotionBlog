@@ -1,0 +1,10 @@
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { cleanEnvironment } from '../development/clean-environment.mjs';
+const env = cleanEnvironment();
+env.NOTIONBLOG_DEVELOPMENT_MODE = 'offline';
+env.NODE_OPTIONS = `--require=${JSON.stringify(fileURLToPath(new URL('../development/offline-network.cjs', import.meta.url)))}`;
+const child = spawn(process.execPath, [fileURLToPath(new URL('./cli.ts', import.meta.url)), ...process.argv.slice(2)], { env, stdio: 'inherit' });
+child.once('error', () => { process.exitCode = 1; });
+child.once('exit', code => { process.exitCode = code ?? 1; });
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => child.kill(signal));

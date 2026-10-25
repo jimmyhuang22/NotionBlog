@@ -4,6 +4,8 @@
 
 ## 发布前准备
 
+网站读取隔离先填写[阶段声明](READER_ISOLATION_RELEASE.md)：尚未真实验收使用 deferred／off（含未设置），验收后使用 verified／enforce 并关联实际回执。声明检查只作本机一致性校验，不能替代真实角色／目标核验或本次发布授权。
+
 1. 固定源码提交，运行 `npm run check` 与 `npm run build`。分别核对核心／reader 摘要，保持冻结的同步 v1；记录独立分支和唯一同步操作者。
 2. 使用专用 reader 配置运行 `scripts/check-reader.ts --verify-access`。数据库 TLS、受限权限和 Auth 固定身份须全部通过。配置不含 writer、Notion Token 或 `NEXT_PUBLIC_` 凭据。
 3. 查询当前发布指针、租约、政策摘要、来源与允许名单。核对运行根的三类锁；没有锁只表示检查时空闲，真正运行仍需本机锁与云租约共同互斥。

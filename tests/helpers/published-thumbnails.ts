@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../../scripts/website-sync/owner-install-session.ts";
 import { readFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
@@ -8,6 +9,7 @@ import { mediaIdentity, configDigest } from "../../src/server/database/website-v
 import { publicationWriter } from "../../src/server/database/publication.ts";
 import { installPublication } from "../../scripts/website-sync/publication-migration.ts";
 import { installIncrementalPublication } from "../../scripts/website-sync/incremental-migration.ts";
+import { installIncrementalReaderIsolation } from "../../scripts/website-sync/incremental-reader-isolation.ts";
 import { installIncrementalReader } from "../../scripts/website-sync/incremental-reader-migration.ts";
 import { installPublishedThumbnails } from "../../scripts/website-sync/published-thumbnail-migration.ts";
 import type { SqlExecutor } from "../../src/server/database/sql.ts";
@@ -25,7 +27,7 @@ export async function thumbnailDatabase(extended = true) {
   const owner: SqlExecutor = {query: async <T>(sql: string, values?: unknown[]) => {
     if (sql.startsWith("--")) {await db.exec(sql); return {rows: [] as T[]};} return db.query<T>(sql, values);
   }};
-  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner);
+  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await withPGliteOwnerTransaction(db, installIncrementalReaderIsolation);
   await db.exec(await readFile(new URL(`../../supabase/migrations/${thumbnails.migrations[0].file}`, import.meta.url), "utf8"));
   await db.query("UPDATE nb_thumbnails.migrations SET digest=$1", [thumbnails.migrations[0].sha256]);
   // Broad owner defaults must not accidentally expose the new API.

@@ -54,6 +54,28 @@ function setup() {
 }
 const repo=(s:ReturnType<typeof setup>,deniedPageIds?:ReadonlySet<string>)=>createWebsiteNotionRepository({client:s.client,config:parseWebsiteNotionConfig(s.config),deniedPageIds});
 
+test("automatic course DTOs and collected payloads retain missing codes as null", async () => {
+  for (const value of [undefined, "", "   ", "EXPLICIT42"]) {
+    const s = setup(), course = s.pages.get(id(10))!;
+    course.properties.Name = { type: "title", id: "title", title: [rich("ABC123 Full source title")] } as PageObjectResponse["properties"][string];
+    s.schemas.get(id(1))!.properties.Code = { id: "code", name: "Code", description: null, type: "rich_text", rich_text: {} };
+    if (value !== undefined) course.properties.Code = { type: "rich_text", id: "code", rich_text: [rich(value)] } as PageObjectResponse["properties"][string];
+    const config = { ...s.config, sources: s.config.sources.map(source => source.kind === "course" ? { ...source, fields: { ...source.fields, code: "Code" } } : source) };
+    const repository = createWebsiteNotionRepository({ client: s.client, config: parseWebsiteNotionConfig(config) });
+    const expected = value?.trim() || null;
+    assert.equal((await repository.get("course", id(10)))!.item.code, expected);
+    assert.equal((await repository.list("course")).items[0].code, expected);
+    assert.equal((await repository.getCourseMetadata!(id(10)))!.code, expected);
+    const collected = (await repository.collectRecords()).find(row => row.detail.item.kind === "course")!.detail.item;
+    assert.equal(collected.kind, "course");
+    if (collected.kind === "course") assert.equal(collected.code, expected);
+    assert.equal(collected.title, "ABC123 Full source title");
+    const search = await repository.readSearchSnapshot!(["study-note"]);
+    assert.equal(search.searchContexts?.[id(20)]?.courseLabel, expected ?? collected.title);
+  }
+  assert.equal((await repo(setup()).get("course", id(10)))!.item.code, null);
+});
+
 test("discovery reports completed courses and cumulative nodes without additional reads or changing scope", async () => {
   const make = () => { const s = setup(); s.pages.set(id(11), s.page(11, "Second course", s.ds(1)));
     s.pages.set(id(40), s.page(40, "Second note", s.owner(11))); s.blocks.set(id(11), [s.child(40, 11, "child_page")]); return s; };
@@ -259,4 +281,21 @@ test("database lookup failures propagate and non-course documents never resolve 
   const n=setup();n.blocks.set(id(20),[n.child(2,20,"child_database")]);
   n.client.getDatabase=async()=>assert.fail("Note body must not authorize database directory targets");
   const detail=await repo(n).get("study-note",id(20));assert.equal(detail!.document!.blocks[0].type,"unsupported");
+});
+import { directPolicyRepository } from "../src/server/notion/direct-policy.ts";
+
+test("direct central policy removes automatic-study descendants through course and physical page ancestors", async () => {
+  for (const deniedId of [id(10), id(20), id(30), id(32)]) {
+    const s = setup(); let denied = false;
+    const repository = directPolicyRepository(repo(s), () => async ids => ({ revision: "1:2", denied: ids.map(key => denied && key === deniedId) }));
+    assert.ok(await repository.resolvePublicPage(id(32)));
+    denied = true;
+    assert.equal(await repository.resolvePublicPage(id(32)), null);
+    assert.equal(await repository.resolveMediaOwner!(id(32)), null);
+    assert.equal(await repository.get("study-note", id(32)), null);
+    assert.equal((await repository.list("study-note")).items.some(item => item.id === id(32)), false);
+    assert.equal((await repository.readSearchSnapshot!(["study-note"])).records.some(record => record.item.id === id(32)), false);
+    const tree = await repository.getCourseTree(id(10));
+    assert.equal(tree?.nodes.some(node => JSON.stringify(node).includes(id(32))) ?? false, false);
+  }
 });

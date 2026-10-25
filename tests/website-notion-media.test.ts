@@ -199,7 +199,7 @@ test("v2 learning media retains course and all ancestor allowlists without widen
   assert.equal(s.reads.queries, 0);
 });
 
-test("v2 generic page qualification and source listing still enumerate their explicit source", async () => {
+test("v2 exact page qualification avoids enumeration while its list still queries the source", async () => {
   const s = setup("game");
   s.client.listBlocks = async () => [];
   s.client.listPages = async identity => {
@@ -210,7 +210,21 @@ test("v2 generic page qualification and source listing still enumerate their exp
   assert.ok(await s.repository.resolveMediaOwner!(owner));
   assert.equal(s.reads.queries, 0);
   assert.ok(await s.repository.resolvePublicPage(owner));
-  assert.equal(s.reads.queries, 1);
+  assert.equal(s.reads.queries, 0);
   assert.equal((await s.repository.list("game")).total, 1);
-  assert.equal(s.reads.queries, 2);
+  assert.equal(s.reads.queries, 1);
+});
+import { directPolicyRepository } from "../src/server/notion/direct-policy.ts";
+
+test("v2 exact whole-source qualification and central withdrawal do not enumerate other records", async () => {
+  for (const kind of ["game", "album", "status", "book", "movie", "post", "project"] as const) {
+    const s = setup(kind); let denied = false;
+    const repository = directPolicyRepository(s.repository, () => async ids => ({ revision: "1:2", denied: ids.map(() => denied) }));
+    assert.equal((await repository.resolvePublicPage(owner))?.page.id, owner);
+    assert.equal(s.reads.queries, 0);
+    denied = true;
+    assert.equal(await repository.resolvePublicPage(owner), null);
+    assert.equal(await resolveNotionMediaSource(s.binding, repository, s.client), null);
+    assert.equal(s.reads.queries, 0);
+  }
 });

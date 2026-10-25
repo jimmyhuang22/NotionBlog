@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { mkdtemp, realpath, mkdir, writeFile, readFile, readdir, chmod, rm, copyFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, delimiter } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -35,9 +35,9 @@ async function fixture(t: TestContext) {
   const saveConfig = async () => writeFile(configFile, JSON.stringify(config), { mode: 0o600 }); await saveConfig();
   return { root, project, inputs, state, cache, nodePath, config, configFile, files, saveConfig, saveManifest, args: [nodePath, adapter, "--config", configFile] };
 }
-async function invoke(args: string[]) {
+async function invoke(args: string[], env: Partial<NodeJS.ProcessEnv> = {}) {
   return new Promise<{ code: number | null; out: string; err: string }>((done, reject) => {
-    const child = spawn(args[0], args.slice(1), { env: { ...process.env, HOST_SECRET_EXAMPLE: "fixture-only" }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(args[0], args.slice(1), { env: { ...process.env, HOST_SECRET_EXAMPLE: "fixture-only", ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = ""; child.stdout.on("data", x => { out += x; }); child.stderr.on("data", x => { err += x; });
     child.once("error", reject); child.once("close", code => done({ code, out, err }));
   });
@@ -46,7 +46,36 @@ async function clean(f: Awaited<ReturnType<typeof fixture>>) {
   assert.equal((await readdir(f.inputs)).some(n => n === "manual-run.lock" || n.startsWith(".website-runtime-env-")), false);
   assert.equal((await readdir(f.state)).includes("worker.lock"), false);
 }
-test("a worker-lock cleanup error cannot strand the independent manual lock or temporary environment", async t => {
+test("npm website:sync uses the fixed host for offline checks, original locks and verified child settings", async t => {
+  const f = await fixture(t), childPath = join(f.project, "scripts/website-sync/run.ts");
+  await writeFile(childPath, (await readFile(childPath, "utf8")) + `
+import {readFileSync} from 'node:fs';
+const e=process.env, locks=[join(e.WEBSITE_PRIVATE_ROOT,'manual-run.lock'),join(e.WEBSITE_STATE_DIR,'worker.lock')].map(p=>JSON.parse(readFileSync(p,'utf8')));
+console.log(JSON.stringify({tls:e.DATABASE_TLS,seconds:e.WEBSITE_TIMEOUT_SECONDS,locked:locks.every(l=>l.pid===process.ppid&&l.runId===e.WEBSITE_RUN_ID)}));`);
+  await f.saveManifest();
+  const args = ["npm", "run", "--silent", "website:sync", "--", "--config", f.configFile];
+  const env = { PATH: dirname(f.nodePath) + delimiter + process.env.PATH, DATABASE_TLS: "disable", WEBSITE_TIMEOUT_SECONDS: "999999" };
+  const check = await invoke([...args, "--mode", "publish", "--check"], env);
+  assert.equal(check.code, 0, check.err);
+  assert.equal(JSON.parse(check.out).workerStarted, false); await clean(f);
+  assert.deepEqual(await readdir(f.state), []);
+  for (const path of [join(f.inputs, "manual-run.lock"), join(f.state, "worker.lock")]) {
+    const original = JSON.stringify({ pid: process.pid, runId: "fixture-other-owner" });
+    await writeFile(path, original, { mode: 0o600 });
+    const busy = await invoke(args, env);
+    assert.equal(busy.code, 75, busy.err); assert.match(busy.err, /RUN_BUSY/);
+    assert.equal(busy.out.includes('"child"'), false);
+    assert.equal(await readFile(path, "utf8"), original);
+    await rm(path); await clean(f);
+  }
+  const result = await invoke(args, env);
+  assert.equal(result.code, 0, result.err);
+  const lines = result.out.trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(lines[0].mode, "dry-run");
+  assert.deepEqual(lines[1], { tls: "verify", seconds: "1", locked: true });
+  await clean(f);
+});
+test("a worker-lock cleanup error cannot strand the independent manual lock or create a temporary environment", async t => {
   const f = await fixture(t);
   await writeFile(join(f.project, "scripts/website-sync/run.ts"), `import {renameSync,writeFileSync} from 'node:fs';
     renameSync(process.env.WEBSITE_STATE_DIR,process.env.WEBSITE_STATE_DIR+'.saved');
@@ -68,6 +97,48 @@ test("v2 child defaults to dry-run, receives explicit cache/source settings, and
   const f = await fixture(t), result = await invoke(f.args); assert.equal(result.code, 0, result.err);
   const child = JSON.parse(result.out.split("\n")[0]); assert.deepEqual(child, { child: true, mode: "dry-run", cache: true, source: true, inherited: false, nodeOptions: false }); await clean(f);
   const files = await readdir(join(f.state, "website-v2")); assert.ok(files.includes("latest-run-private.json")); assert.equal(files.includes("last-success-private.json"), false);
+});
+test("v2 passes only validated worker values in memory, preserving multiline values without an env-file argument", async t => {
+  const f = await fixture(t), path = join(f.inputs, "supabase-worker.env"), childPath = join(f.project, "scripts/website-sync/run.ts");
+  await writeFile(path, (await readFile(path, "utf8")) + 'DATABASE_CA_CERT="fixture-line-1\nfixture-line-2"\nSYNC_IMAGE_USER_AGENT="fixture # 中文 = value"\nUNLISTED_EXAMPLE="fixture-only"\n', { mode: 0o600 });
+  await writeFile(childPath, (await readFile(childPath, "utf8")) + `
+console.log(JSON.stringify({envFile:process.execArgv.some(arg=>arg.startsWith('--env-file')),
+ values:process.env.NOTION_TOKEN==='fake'&&process.env.SYNC_DATABASE_URL==='fixture-only'&&process.env.STORAGE_API_KEY==='fixture-only'&&process.env.DATABASE_READER_URL==='fixture-only',
+ multiline:process.env.DATABASE_CA_CERT==='fixture-line-1\\nfixture-line-2',text:process.env.SYNC_IMAGE_USER_AGENT==='fixture # 中文 = value',
+ tls:process.env.DATABASE_TLS,path:process.env.PATH,telemetry:process.env.NEXT_TELEMETRY_DISABLED,
+ unlisted:!!process.env.UNLISTED_EXAMPLE,nodeOptions:!!process.env.NODE_OPTIONS}));`);
+  await f.saveManifest();
+  const result = await invoke(f.args); assert.equal(result.code, 0, result.err);
+  assert.deepEqual(JSON.parse(result.out.split("\n")[1]), { envFile: false, values: true, multiline: true, text: true,
+    tls: "verify", path: "/usr/bin:/bin", telemetry: "1", unlisted: false, nodeOptions: false });
+  await clean(f);
+  await writeFile(path, (await readFile(path, "utf8")) + `SYNC_IMAGE_USER_AGENT='fixture " rejected'\n`, { mode: 0o600 });
+  const rejected = await invoke(f.args); assert.equal(rejected.code, 1); assert.match(rejected.err, /PRIVATE_INPUT_INVALID/);
+  assert.equal(rejected.out.includes('"child"'), false); await clean(f);
+});
+test("SIGKILL of the v2 host leaves no new credential file and does not pretend to release its locks", async t => {
+  const f = await fixture(t); f.config.timeoutSeconds = 30; await f.saveConfig();
+  const originalInputs = await readdir(f.inputs);
+  await writeFile(join(f.project, "scripts/website-sync/run.ts"), "setInterval(()=>{},1000);console.log('READY');"); await f.saveManifest();
+  const host = spawn(f.args[0], f.args.slice(1), { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  let err = "", output = "";
+  host.stderr.on("data", data => { err += data; });
+  const exited = new Promise<{code:number|null;signal:NodeJS.Signals|null}>((done, reject) => {
+    host.once("error", reject); host.once("exit", (code, signal) => done({code,signal}));
+  });
+  const closed = new Promise<void>(done => { host.once("close", () => done()); });
+  const terminate = () => { if (host.pid) { try { process.kill(-host.pid, "SIGKILL"); } catch { host.kill("SIGKILL"); } } };
+  t.after(async () => { terminate(); await closed; });
+  await new Promise<void>((done, reject) => {
+    const timer = setTimeout(() => { terminate(); reject(new Error("Fixture worker did not start")); }, 5000);
+    host.stdout.on("data", data => { output += data; if (output.includes("READY")) { clearTimeout(timer); done(); } });
+    exited.then(result => { clearTimeout(timer); reject(new Error(`Fixture host exited before readiness: ${result.code}; ${err}`)); }, error => { clearTimeout(timer); reject(error); });
+  });
+  host.kill("SIGKILL"); assert.deepEqual(await exited, {code:null,signal:"SIGKILL"});
+  const after = await readdir(f.inputs);
+  assert.deepEqual(after.filter(name => !originalInputs.includes(name)), ["manual-run.lock"]);
+  assert.equal((await readdir(f.state)).includes("worker.lock"), true);
+  assert.equal(output.includes("fixture-only"), false);
 });
 test("v2 host validates explicit request pacing and forwards only the bound runtime value", async t => {
   const f = await fixture(t), childPath = join(f.project, "scripts/website-sync/run.ts");

@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../scripts/website-sync/owner-install-session.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -12,6 +13,7 @@ import { publicationReader, publicationWriter } from "../src/server/database/pub
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
 import { websiteMediaResponse } from "../src/server/database/website-media.ts";
 import { createIncrementalPublisher, preparePublicationDelta, readPublicationState, type PublicationDelta } from "../src/server/database/incremental-publication.ts";
+import { installIncrementalWithdrawalRecovery } from "../scripts/website-sync/incremental-withdrawal-recovery.ts";
 import { installPublication } from "../scripts/website-sync/publication-migration.ts";
 import { installIncrementalPublication } from "../scripts/website-sync/incremental-migration.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
@@ -31,6 +33,7 @@ test("atomic deltas preserve independent publication, media and recovery without
     await installPublication(operator);
     await db.exec("ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO anon,authenticated,service_role; ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO anon,authenticated,service_role;");
     await installIncrementalPublication(operator); await installIncrementalPublication(operator);
+    await withPGliteOwnerTransaction(db, installIncrementalWithdrawalRecovery); await withPGliteOwnerTransaction(db, installIncrementalWithdrawalRecovery);
     const role = (name: string): SqlExecutor => ({ query: <T>(sql: string, values?: unknown[]) => db.transaction(async tx => {
       await tx.exec(`SET LOCAL ROLE ${name}`); return tx.query<T>(sql, values);
     }) });
@@ -86,6 +89,46 @@ test("atomic deltas preserve independent publication, media and recovery without
       await assert.rejects(publisher.publish(operation, rebound), code("DELTA_OPERATION_CONFLICT"));
       await assert.rejects(role("nb_writer").query("SELECT nb_delta_api.apply_delta($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb)",
         [operation, delta.payloadDigest, delta.expectedRevision, digest, JSON.stringify(rebound.upserts), "[]", "[]"]), /NB_DELTA_OPERATION_CONFLICT/);
+    });
+    await t.test("deny across deltas retains private rows and restores all-source content, subtrees and media", async () => {
+      for (const denied of [owner, course1.id, note1.id]) {
+        const before = await repo.list("study-note");
+        await db.query("SELECT nb_v2_api.set_denied($1,true)", [denied]);
+        const publicKind = denied === owner ? "post" : denied === course1.id ? "course" : "study-note";
+        const slug = batch.find(r => r.detail.item.id === denied)!.detail.item.slug;
+        assert.equal(await repo.get(publicKind, slug), null);
+        const result = await publisher.publish(randomUUID(), await change([record(items[1].id)]));
+        assert.equal(result.records, batch.length); assert.equal(result.media, 1);
+        assert.equal(await repo.get(publicKind, slug), null);
+        if (denied === owner) {
+          const hidden = await websiteMediaResponse(assetId, publicationReader(reader, "published"), () => assert.fail("No storage read for denied owner"));
+          assert.equal(hidden.status, 404);
+        } else assert.equal((await repo.list("study-note")).total, 0);
+        // A new write to the denied page is still rejected, with no pointer change.
+        const state = await publisher.state();
+        await assert.rejects(publisher.publish(randomUUID(), await change([record(denied)])), code("DELTA_INPUT_INVALID"));
+        assert.deepEqual(await publisher.state(), state);
+        await db.query("SELECT nb_v2_api.set_denied($1,false)", [denied]);
+        assert.ok(await repo.get(publicKind, slug));
+        assert.equal((await repo.list("study-note")).total, before.total);
+        await publisher.publish(randomUUID(), await change([record(items[1].id)]));
+      }
+      assert.equal((await websiteMediaResponse(assetId, publicationReader(reader, "published"), () => ({ read: async () => bytes, put: async () => assert.fail() }))).status, 200);
+      // A deny must not hide corruption of the accepted ancestor chain.
+      await db.query("SELECT nb_v2_api.set_denied($1,true)", [course1.id]);
+      const current = (await publisher.state()).publicationRevision.split(":")[0];
+      await db.query("UPDATE nb_v2.records SET parent_id=$1,item=jsonb_set(item,'{parentId}',to_jsonb($1::text)) WHERE run_id=$2 AND id=$3", [note2.id, current, note1.id]);
+      const beforeCycle = await publisher.state();
+      await assert.rejects(publisher.publish(randomUUID(), await change([record(items[1].id)])), code("DELTA_INPUT_INVALID"));
+      assert.deepEqual(await publisher.state(), beforeCycle);
+      await db.query("UPDATE nb_v2.records SET parent_id=$1,item=jsonb_set(item,'{parentId}','null'::jsonb) WHERE run_id=$2 AND id=$3", [course1.id, current, note1.id]);
+      await db.query("SELECT nb_v2_api.set_denied($1,false)", [course1.id]);
+      // Denial cannot turn a proven source deletion into a restorable snapshot.
+      await db.query("SELECT nb_v2_api.set_denied($1,true)", [note1.id]);
+      await publisher.publish(randomUUID(), await change([], [{ id: note1.id, sourceKey: "notes", reason: "deleted" }]));
+      await db.query("SELECT nb_v2_api.set_denied($1,false)", [note1.id]);
+      assert.equal((await repo.list("study-note")).total, 0);
+      await publisher.publish(randomUUID(), await change([record(note1.id), record(note2.id)]));
     });
     await t.test("lost response recovers by operation ID after another publication", async () => {
       const delta = await change([record(items[1].id)]), operation = randomUUID();
@@ -173,6 +216,7 @@ test("explicit allowlist withdrawals retain tombstones and cannot bypass publica
       return db.query<T>(sql, values);
     } };
     await installPublication(operator); await installIncrementalPublication(operator);
+    await withPGliteOwnerTransaction(db, installIncrementalWithdrawalRecovery);
     const batch: WebsiteRecord[] = fixtureItems.post.slice(0, 2).map((raw, ordinal) => {
       const item = structuredClone(raw); item.cover = null;
       return { detail: { item, document: { blocks: [], toc: [], completeness: "complete" } },
@@ -186,6 +230,14 @@ test("explicit allowlist withdrawals retain tombstones and cannot bypass publica
     await writer.stage(lease, batch); await writer.promote(lease, { records: 2, media: 0, complete: true });
     const publisher = createIncrementalPublisher(db);
     const prepared = () => publisher.state();
+    await db.query("SELECT nb_v2_api.set_denied($1,true)", [batch[0].detail.item.id]);
+    const deniedState = await prepared();
+    await publisher.publish(randomUUID(), preparePublicationDelta({ expectedRevision: deniedState.publicationRevision,
+      configDigest: digest, upserts: [batch[1]], media: [], withdrawals: [] }));
+    const independent = createWebsiteDatabaseRepository(publicationReader(db, "published"));
+    assert.equal((await independent.list("post")).total, 1);
+    await db.query("SELECT nb_v2_api.set_denied($1,false)", [batch[0].detail.item.id]);
+    assert.equal((await independent.list("post")).total, 2);
     const state = await prepared(), qualifiedBefore = (await db.query("SELECT valid_until FROM nb_v2.runs WHERE id=$1", [lease.runId])).rows[0];
     const delta = preparePublicationDelta({ expectedRevision: state.publicationRevision, configDigest: digest, upserts: [], media: [],
       withdrawals: [{ id: batch[0].detail.item.id, sourceKey: "selected-posts", reason: "archived" }] });

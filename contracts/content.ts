@@ -16,6 +16,9 @@ export interface ImageAsset {
   alt: string;
   width: number | null;
   height: number | null;
+  /** Optional self-hosted capability; absent preserves original delivery behavior.
+   * Describes derived bytes only, never the private source or filesystem path. */
+  delivery?: { mode: "display-only"; maxWidth: number; maxHeight: number };
 }
 export interface ContentLink { title: string; href: string }
 export type TextLink =
@@ -24,6 +27,8 @@ export type TextLink =
   | { kind: "unavailable" };
 export interface TextRun {
   text: string;
+  /** v2 page-mention label follows its qualified target's title; authored links omit this. */
+  pageMention?: true;
   /** Notion inline equation; text contains the expression, never rendered HTML. */
   equation?: true;
   bold?: boolean;
@@ -153,7 +158,8 @@ export interface Game extends ContentBase {
 }
 export interface Course extends ContentBase {
   kind: "course";
-  code: string;
+  /** Only an explicit source property supplies the code; absent or blank stays null. */
+  code: string | null;
   semester: string | null;
   ratings: {
     experience: Rating | null;

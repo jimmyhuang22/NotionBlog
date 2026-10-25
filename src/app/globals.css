@@ -124,7 +124,10 @@ button, input, select { font: inherit; color: inherit; }
 img { max-width: 100%; }
 h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
 /* Focus rings are for the keyboard: after a click, a tap, or a return to the tab there is none (input-mode.ts). */
-:root:not([data-input="pointer"]) :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-xs); }
+/* Kept weak on purpose, so a component's own ring (an inset offset inside a clipped card, white in the viewer) and its own
+   shape (pills, circles, cards) win: the ring as low as one class, the corner lower still, for anything without corners. */
+:where(:root:not([data-input="pointer"])) :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:where(:root:not([data-input="pointer"]) :focus-visible) { border-radius: var(--radius-xs); }
 /* The browser's own ring as well; text fields keep their caret and their own focus styles. */
 :root[data-input="pointer"] :focus-visible { outline: none; }
 @media (prefers-reduced-motion: no-preference) {

@@ -154,11 +154,17 @@ npm run dev
 
 **数据库不用手动导入。** 同步程序第一次运行时，会把允许公开的内容全部写进 PostgreSQL，之后按你设定的间隔自动更新。网站目前用 Vercel 部署，只读数据库。步骤见[数据库接入](docs/WEBSITE_DATABASE_SETUP.md)、[同步程序](docs/NOTION_SYNC_WORKER.md)和[部署说明](docs/VERCEL_SUPABASE_TRIAL.md)。
 
+常驻 Node/容器部署使用[独立自托管入口](docs/SELF_HOSTED.md)，构建不接真实来源，启动显式加载受保护reader；数据、媒体和域名迁移分别验收。
+
+自托管可选[展示图片文件模式](docs/SELF_HOSTED_MEDIA.md)：原图保留本机，网站只读预生成副本。灯箱接线边界见[前端交接](docs/SELF_HOSTED_MEDIA_FRONTEND_HANDOFF.md)。
+
 | 读取方式 | 什么时候用 |
 | --- | --- |
 | `mock` | 离线演示，默认使用 |
-| `notion` | 本机直接读 Notion，核对字段和公开规则 |
+| `notion` | 直接读 Notion，配合受限数据库 reader 核对中央拒绝与公开规则 |
 | `database` | 正式上线，网站只读你的 PostgreSQL |
+
+直连 `notion` 需要先具备中央拒绝扩展和受限 `DATABASE_READER_URL`，缺失时返回不可用；图片由服务器校验后代取。安装顺序与流量边界见 [直连接入](docs/NOTION_SETUP.md#直连模式的中央拒绝与媒体)。
 
 ## 内容怎样到达页面
 

@@ -1,3 +1,4 @@
+import { cleanupAll } from "../cleanup.ts";
 import { isAbsolute,join,resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -49,6 +50,7 @@ export async function executeAtRoot(root:string,options:RootExecutionOptions){
   const releases:(()=>Promise<void>)[]=[],controller=new AbortController(),runId=randomUUID(),cancel=()=>controller.abort();
   const timer=setTimeout(cancel,MAX_REFRESH_RUN_MS);timer.unref();options.signal?.addEventListener("abort",cancel,{once:true});if(options.signal?.aborted)cancel();process.once("SIGTERM",cancel);process.once("SIGINT",cancel);
   let publications:Awaited<ReturnType<typeof openStore>>=null,collections:Awaited<ReturnType<typeof openCollectionStore>>=null;
+  let failed = false;
   let pubCloud:Awaited<ReturnType<typeof connectCloud>>|undefined,colCloud:Awaited<ReturnType<typeof connectCollectionCloud>>|undefined;
   try{
     for(const dir of [...new Set([root,...sourceDirs])].sort())releases.push(await acquireLock(dir,runId));
@@ -100,13 +102,13 @@ export async function executeAtRoot(root:string,options:RootExecutionOptions){
       ...(accountMode?{collectPublication:(target:Target,signal?:AbortSignal)=>collectAccountPublication(root,hash(JSON.stringify(accountPolicy)),target,signal,request,media.stageCollection),
         collectCollection:(target:CollectionTarget,signal?:AbortSignal)=>collectAccountCollection(root,hash(JSON.stringify(accountPolicy)),target,scope.publications.map(p=>p.target),signal,request,media.stageCollection)}:
         {collectCollection:(target:CollectionTarget,signal?:AbortSignal)=>collectCollection(target,signal,request,media.stageCollection)})});
+    failed=report.failed>0||report.paused||report.cancelled;
     return report;
-  }finally{
+  }catch(error){failed=true;throw error;}finally{
     clearTimeout(timer);options.signal?.removeEventListener("abort",cancel);process.removeListener("SIGTERM",cancel);process.removeListener("SIGINT",cancel);
-    const cleanup=await Promise.allSettled([pubCloud?.close(),colCloud?.close()]);
-    publications?.close();collections?.close();
-    for(const release of releases.reverse())await release();
-    if(cleanup.some(r=>r.status==="rejected"))throw new SocialSyncError("REFRESH_CLOSE_FAILED");
+    const complete=await cleanupAll([()=>pubCloud?.close(),()=>colCloud?.close(),
+      ()=>publications?.close(),()=>collections?.close(),...releases.reverse()]);
+    if(!complete&&!failed)throw new SocialSyncError("REFRESH_CLOSE_FAILED");
   }
 }
 export async function runExecuteCli(args:string[]){

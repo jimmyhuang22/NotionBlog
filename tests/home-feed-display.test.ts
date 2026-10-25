@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SocialMetric, SocialPublication } from "../contracts/social.ts";
 import type { SocialCollectionCard } from "../contracts/social-collections.ts";
 import type { PublishedSocialCollection } from "../contracts/social-timeline.ts";
-import { collectionAddition, collectionBadge, collectionFigures, collectionKinds, collectionSize, collectionUpdate, isNoticedActivity, metricText, platformNames, publicationFigures, publicationKinds, sampleTime } from "../src/lib/home-feed.ts";
+import { collectionAddition, collectionBadge, collectionFigures, collectionKinds, collectionSize, collectionUpdate, figureText, isNoticedActivity, platformNames, publicationFigures, publicationKinds, sampleTime } from "../src/lib/home-feed.ts";
 import { eventMoment } from "../src/lib/timeline.ts";
 import { examplePublication, exampleSocialWork } from "./helpers/home-feed-samples.ts";
 
 test("a figure is an exact count, else the platform's own display, else nothing", () => {
+  const metricText = (publication: SocialPublication, metric: SocialMetric) => figureText(publication.metrics, publication.metricDisplay, metric);
   const bilibili = examplePublication("bilibili");
   const xiaohongshu = examplePublication("xiaohongshu");
   // A real zero is shown; an unknown is left out and never becomes zero.

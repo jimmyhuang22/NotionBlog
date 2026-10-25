@@ -36,8 +36,8 @@ test("a busy website round does not read credentials, write state, pause sync or
   const sync=join(dir,"sync.json"),pause=join(dir,"pause"),locks=[0,1,2,3].map(n=>join(dir,`lock${n}`));
   const program=join(dir,"program.ts");await writeFile(program,"// frozen test fixture",{mode:0o600});
   await writeFile(sync,JSON.stringify({status:"RUNNING"}),{mode:0o600});await writeFile(locks[1],"writer",{mode:0o600});
-  const config:ScheduledConfig={format:"retention-daily-config-v2",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,websitePause:pause,
-   lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),healthURL:"https://example.org/api/health/content",cli:join(dir,"missing.ts"),
+  const config:ScheduledConfig={format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,websitePause:pause,
+   lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"missing.ts"),
    tailCatalog:join(dir,"missing.json"),tailRunsDirectory:join(dir,"runs"),programFiles:[{path:program,sha256:sha256("// frozen test fixture")}]};
   assert.deepEqual(await inspectScheduledReadiness(config),{status:"WAITING_FOR_SYNC",syncStatus:"RUNNING",sql:0,writes:0,credentialsRead:false,childProcesses:0});
   assert.deepEqual(await scheduledTick(config),{status:"WAITING_FOR_SYNC"});
@@ -72,16 +72,16 @@ test("the gap between successful acceptance and the 1600 tail waits without mark
   }
   await writeFile(sync,JSON.stringify({status:"PASS",runId,operation}),{mode:0o600});await writeFile(catalog,"{}",{mode:0o600});
   const locks=[0,1,2,3].map(n=>join(dir,`lock${n}`));
-  const result=await scheduledTick({format:"retention-daily-config-v2",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
-   websitePause:join(dir,"pause"),lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),healthURL:"https://example.org/api/health/content",cli:join(dir,"missing.ts"),
+  const result=await scheduledTick({format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
+   websitePause:join(dir,"pause"),lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"missing.ts"),
    tailCatalog:catalog,tailRunsDirectory:join(dir,"tail-runs"),programFiles:[{path:join(dir,"missing.ts"),sha256:"a".repeat(64)}]});
   assert.deepEqual(result,{status:"WAITING_FOR_TAIL"});
   for(const p of [...locks,join(dir,"maintenance/STATE_PRIVATE.json")])await assert.rejects(lstat(p),{code:"ENOENT"});
   const tailDirectory=join(dir,"tail-runs",runId,sha256("{}"));await mkdir(tailDirectory,{recursive:true,mode:0o700});
   await writeFile(join(tailDirectory,"RECEIPT_PRIVATE.json"),JSON.stringify({status:"PASS",runId,catalogSHA256:sha256("{}"),connectionsClosed:true,ownLocksReleased:true,
    inFlight:null,unknownWriteGroup:0,acknowledgedUnverifiedGroup:null}),{mode:0o600});
-  const rejected=await scheduledTick({format:"retention-daily-config-v2",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
-   websitePause:join(dir,"pause"),lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),healthURL:"https://example.org/api/health/content",cli:join(dir,"missing.ts"),
+  const rejected=await scheduledTick({format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
+   websitePause:join(dir,"pause"),lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"missing.ts"),
    tailCatalog:catalog,tailRunsDirectory:join(dir,"tail-runs"),programFiles:[{path:join(dir,"missing.ts"),sha256:"a".repeat(64)}]});
   assert.equal(rejected.status,"STOPPED");assert.equal(rejected.reason,"RETENTION_TAIL_NOT_VERIFIED");
  }finally{await rm(dir,{recursive:true,force:true});}
@@ -90,9 +90,9 @@ test("the gap between successful acceptance and the 1600 tail waits without mark
 test("invalid scheduler limits fail before filesystem admission or credential access",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"retention-invalid-limit-"));
  try{
-  const config:ScheduledConfig={format:"retention-daily-config-v2",maximumRuns:2,directory:join(dir,"not-created"),archiveDirectory:join(dir,"archive"),
+  const config:ScheduledConfig={format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"not-created"),archiveDirectory:join(dir,"archive"),
    syncState:join(dir,"missing-sync"),websitePause:join(dir,"pause"),lockFiles:[0,1,2,3].map(n=>join(dir,`lock${n}`)),
-   absentLocks:[join(dir,"native")],envFile:join(dir,"missing-secret"),healthURL:"https://example.org/api/health/content",cli:join(dir,"cli.ts"),
+   absentLocks:[join(dir,"native")],envFile:join(dir,"missing-secret"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"cli.ts"),
    tailCatalog:join(dir,"catalog"),tailRunsDirectory:join(dir,"runs"),programFiles:[{path:join(dir,"missing-program"),sha256:"a".repeat(64)}]};
   for(const value of [undefined,null,0,-1,3,8,1.5,"2"]){
    const invalid={...config,maximumRuns:value as number};
@@ -130,12 +130,15 @@ test("the selected one-or-two run limit reaches the actual spawned window unchan
     const path=process.argv.at(-1),window=JSON.parse(await readFile(path,'utf8'));
     await writeFile(join(dirname(path),'OBSERVED_PRIVATE.json'),JSON.stringify({maximumRuns:window.maximumRuns,format:window.format,proofs:window.proofs}),{mode:0o600});`;
    await writeFile(cli,program,{mode:0o600});
-   const config:ScheduledConfig={format:"retention-daily-config-v2",maximumRuns,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),
+   const config:ScheduledConfig={format:"retention-daily-config-v3",maximumRuns,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),
     syncState:sync,websitePause:join(dir,"pause"),lockFiles:[0,1,2,3].map(n=>join(dir,`lock${n}`)),absentLocks:[join(dir,"native")],envFile,
-    healthURL:"https://example.org/api/health/content",cli,tailCatalog:catalog,tailRunsDirectory:join(dir,"tail"),programFiles:[{path:cli,sha256:sha256(program)}]};
+    readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli,tailCatalog:catalog,tailRunsDirectory:join(dir,"tail"),programFiles:[{path:cli,sha256:sha256(program)}]};
    const result=await scheduledTick(config);assert.equal(result.status,"PASS");assert.ok(result.operation);
    const observed=JSON.parse(await readFile(join(config.directory,result.operation,"OBSERVED_PRIVATE.json"),"utf8"));
-   assert.equal(observed.maximumRuns,maximumRuns);assert.equal(observed.format,"retention-daily-window-v2");
+   assert.equal(observed.maximumRuns,maximumRuns);assert.equal(observed.format,"retention-daily-window-v3");
+   const actualWindow=JSON.parse(await readFile(join(config.directory,result.operation,"WINDOW_PRIVATE.json"),"utf8"));
+   assert.equal(actualWindow.readinessURL,config.readinessURL);assert.deepEqual(actualWindow.readinessSample,config.readinessSample);
+   assert.equal(Object.hasOwn(actualWindow,"healthURL"),false);assert.equal(Object.hasOwn(actualWindow,"RETENTION_READINESS_SECRET"),false);
    for(const path of maximumRuns===2?[visitor,continuation]:[visitor]){
     const expected=sha256(await readFile(path,"utf8"));
     assert.ok(observed.proofs.some((p:{path:string;sha256:string})=>p.path===path&&p.sha256===expected));

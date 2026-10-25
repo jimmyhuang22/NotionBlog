@@ -1,3 +1,4 @@
+import { cleanupAll } from "../cleanup.ts";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { unlink } from "node:fs/promises";
@@ -28,6 +29,13 @@ async function readState(root:string,digest:string):Promise<BrowserState>{
   if(s.job!==null){const j=object(s.job);if(Object.keys(j).sort().join()!=="expiresAt,id,targets,urls"||typeof j.id!=="string"||!/^[-a-f0-9]{36}$/.test(j.id)||typeof j.expiresAt!=="string"||!Array.isArray(j.targets)||j.targets.length<1||j.targets.length>3||!Array.isArray(j.urls)||j.urls.length!==j.targets.length)throw new SocialSyncError("XHS_BROWSER_NOTES_INVALID");timestamp(j.expiresAt);}
   if(s.lastSubmission!==null){const l=object(s.lastSubmission);if(Object.keys(l).sort().join()!=="id,keys,sha256"||typeof l.id!=="string"||!/^[-a-f0-9]{36}$/.test(l.id)||typeof l.sha256!=="string"||!/^[a-f0-9]{64}$/.test(l.sha256)||!Array.isArray(l.keys)||l.keys.length<1||l.keys.length>3||l.keys.some(k=>typeof k!=="string"||!/^[a-f0-9]{64}$/.test(k)))throw new SocialSyncError("XHS_BROWSER_NOTES_INVALID");}
   return s as unknown as BrowserState;
+}
+/** Both upload callers hold this lane's lock; never restore an entry snapshot. */
+async function pauseBrowserState(root:string,digest:string,code:string){
+  const state=await readState(root,digest);
+  if(state.status==="paused"||(await readBrowserRecovery(root,digest))?.status==="accepted")return;
+  state.status="paused";state.code=code;
+  await writeJson(join(root,"xiaohongshu-browser-notes","state.json"),state);
 }
 /** Evidence was validated at receipt; delaying upload preserves the actual observation time. */
 export async function readBrowserNoteCapture(root:string,target:Target,digest:string,at=new Date().toISOString()):Promise<XiaohongshuObservation|null>{
@@ -100,7 +108,19 @@ export async function retryBrowserNoteUpload(root:string,id:string){
     if(!ticket||ticket.id!==id||!["failed","captured"].includes(ticket.status)||!target||s.lastSubmission?.id!==ticket.jobId||s.lastSubmission.keys.length!==1||s.lastSubmission.keys[0]!==publicationKey(target)||!await readBrowserNoteCapture(root,target,digest))throw new SocialSyncError("XHS_BROWSER_RECOVERY_INVALID");
     ticket.status="captured";await saveBrowserRecovery(root,ticket);s.status="complete";s.code=null;await writeJson(join(dir,"state.json"),s);
     try{return await uploadBrowserNotes(root,s.lastSubmission.keys,digest);}catch(e){
-      if((e as {code?:string}).code!=="BUSY"){ticket.status="failed";await saveBrowserRecovery(root,ticket);s.status="paused";s.code=e instanceof SocialSyncError?e.code:"XHS_BROWSER_UPLOAD_FAILED";await writeJson(join(dir,"state.json"),s);}throw e;
+      if((e as {code?:string}).code!=="BUSY"){
+        const code=e instanceof SocialSyncError?e.code:"XHS_BROWSER_UPLOAD_FAILED";
+        const results=await Promise.allSettled([
+          (async()=>{
+            const latest=await readBrowserRecovery(root,digest);
+            if(!latest||latest.id!==id)throw new SocialSyncError("XHS_BROWSER_RECOVERY_INVALID");
+            if(latest.status!=="accepted"){latest.status="failed";await saveBrowserRecovery(root,latest);}
+          })(),
+          pauseBrowserState(root,digest,code),
+        ]);
+        if(results[0].status==="rejected")console.error(JSON.stringify({code:"XHS_BROWSER_RECOVERY_WRITE_FAILED"}));
+        if(results[1].status==="rejected")console.error(JSON.stringify({code:"XHS_BROWSER_PAUSE_WRITE_FAILED"}));
+      }throw e;
     }
   }finally{await release();}
 }
@@ -135,7 +155,11 @@ export async function handleXhsBrowserNotes(root:string,message:unknown,now=()=>
     if(msg.op==="xiaohongshu-notes-upload"){if(s.status==="paused")return {status:s.status,code:s.code};return await uploadBrowserNotes(root,s.lastSubmission?.keys??[],digest);}
     if(msg.op==="xiaohongshu-notes-pause"){
       if(typeof msg.code!=="string"||!/^[A-Z][A-Z_]{0,63}$/.test(msg.code))throw new SocialSyncError("BRIDGE_REQUEST_INVALID");
-      if(msg.diagnostic){const diagnostic=browserTimeoutDiagnostic(msg.diagnostic,msg.code,s.job);await writeJson(join(dir,`diagnostic-${s.job!.id}.json`),{...diagnostic,code:msg.code,recordedAt:now(),policyDigest:digest});}
+      const diagnostic=msg.diagnostic?browserTimeoutDiagnostic(msg.diagnostic,msg.code,s.job):null;
+      // The extension may report the close error after ACK/acceptance. Validate
+      // its message, but never turn accepted evidence back into a failed retry.
+      if(recovery?.status==="accepted")return {status:"paused",code:s.code??"BROWSER_RECOVERY_ACCEPTED"};
+      if(diagnostic)await writeJson(join(dir,`diagnostic-${s.job!.id}.json`),{...diagnostic,code:msg.code,recordedAt:now(),policyDigest:digest});
       s.status="paused";s.code=msg.code;await save();if(recovery){recovery.status="failed";await saveBrowserRecovery(root,recovery);}return {status:s.status,code:s.code};
     }
     const current=await readHttpNoteScope(root),directory=await readXhsDiscoveryState(root,digest),holds=await readNoteLinkHolds(root),pending=directory?.queue??[];
@@ -184,16 +208,31 @@ async function uploadBrowserNotes(root:string,keys:string[],digest:string){
   const {runXhsDiscovery}=await import("./xiaohongshu-discovery-worker.ts"),{CycleCloudSession}=await import("./cycle-cloud.ts"),{executeAtRoot}=await import("./execute-cli.ts");
   await privateDirectory(join(root,"cycle-xiaohongshu-http"));const release=await acquireLock(join(root,"cycle-xiaohongshu-http"),randomUUID());
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);timer.unref();let cloud:InstanceType<typeof CycleCloudSession>|undefined;
+  let scopeDigest:string|undefined,failed=false;
+  const pause=async(code:string,stage:"upload"|"close")=>{
+    // Both callers already own the browser-state lock. Reload after child work
+    // so an accepted recovery or a newer pause is never replaced by stale state.
+    const results=await Promise.allSettled([
+      recordExternalHttpPause(root,scopeDigest??"0".repeat(64),code,stage),
+      pauseBrowserState(root,digest,code),
+    ]);
+    if(results[0].status==="rejected")console.error(JSON.stringify({code:"XHS_HTTP_PAUSE_WRITE_FAILED"}));
+    if(results[1].status==="rejected")console.error(JSON.stringify({code:"XHS_BROWSER_PAUSE_WRITE_FAILED"}));
+  };
   try{
     const recovery=await readBrowserRecovery(root,digest);if(recovery&&recovery.status!=="captured")return {status:"paused",code:"BROWSER_RECOVERY_SPENT",pending:0};
     const enrolled=recovery?{state:"complete",uploaded:0,pending:0}:await runXhsDiscovery(root,controller.signal),current=await readHttpNoteScope(root),targets=current.scope.publications.filter(p=>keys.includes(publicationKey(p.target))).map(p=>p.target),captures:XiaohongshuObservation[]=[];
+    scopeDigest=hash(JSON.stringify(current.scope));
     if(recovery&&(targets.length!==1||targets[0].publicationId!==recovery.publicationId))throw new SocialSyncError("XHS_BROWSER_RECOVERY_INVALID");
-    const sourceRelease=await acquireLock(current.policy.stateDirectory,randomUUID());let store:Awaited<ReturnType<typeof openStore>>=null;
+    const sourceRelease=await acquireLock(current.policy.stateDirectory,randomUUID());let store:Awaited<ReturnType<typeof openStore>>=null,readFailed=false;
     try{store=await openStore(current.policy.stateDirectory,true);if(!store)throw new SocialSyncError("REFRESH_STATE_MISSING");
       for(const target of targets){const captured=await readBrowserNoteCapture(root,target,digest);if(!captured)continue;const latest=store.latest(target);if(!latest||captured.observedAt>latest.observedAt)captures.push(captured);}
-    }finally{store?.close();await sourceRelease();}
+    }catch(e){readFailed=true;throw e;}finally{
+      const complete=await cleanupAll([()=>store?.close(),sourceRelease]);
+      if(!complete&&!readFailed)throw new SocialSyncError("XHS_BROWSER_CLOSE_FAILED");
+    }
     if(!captures.length)return recovery?{...await acceptRecoveryUpload(root,recovery,digest),uploaded:0,pending:0}:{status:enrolled.state,uploaded:enrolled.uploaded,pending:enrolled.pending};
-    const base=refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))),policy=(await readXhsAccountPolicy(root,base))!,directory=await readXhsDiscoveryState(root,digest),scopeDigest=hash(JSON.stringify(current.scope)),raw=await readPrivateFile(join(root,"cloud.env"),65536);
+    const base=refreshConfig(JSON.parse(await readPrivateFile(join(root,"refresh-config.json"),MAX_REFRESH_CONFIG_BYTES))),policy=(await readXhsAccountPolicy(root,base))!,directory=await readXhsDiscoveryState(root,digest),raw=await readPrivateFile(join(root,"cloud.env"),65536);
     cloud=new CycleCloudSession(controller.signal,undefined,{httpNotes:true,xhsAccount:{accountId:policy.accountId,link:item=>{const l=directory?.links.find(l0=>l0.publicationId===item.observation.publicationId);return l?{url:candidateNoteShareUrl(l.url,automaticNoteTarget(policy.accountId,l.publicationId)),checkedAt:item.observation.observedAt}:null;}}});
     await cloud.preparePublications(raw,scopeDigest,controller.signal);
     await ingestAcceptedBrowserNotes(root,captures.map(publicationKey),digest);
@@ -203,8 +242,18 @@ async function uploadBrowserNotes(root:string,keys:string[],digest:string){
     if(recovery)return {...await acceptRecoveryUpload(root,recovery,digest),uploaded:report.uploaded,pending:0};
     return {status:"complete",uploaded:enrolled.uploaded+report.uploaded,pending:enrolled.pending,code:null};
   }catch(e){
+    failed=true;
     const code=e instanceof SocialSyncError?e.code:"XHS_BROWSER_UPLOAD_FAILED";
-    if((e as {code?:string})?.code!=="BUSY")await recordExternalHttpPause(root,hash(JSON.stringify((await readHttpNoteScope(root)).scope)),code,"upload");
+    if((e as {code?:string})?.code!=="BUSY")try{await pause(code,"upload");}catch{/* Preserve the upload failure. */}
     throw e;
-  }finally{clearTimeout(timer);try{await cloud?.close();}catch(e){await recordExternalHttpPause(root,hash(JSON.stringify((await readHttpNoteScope(root)).scope)),e instanceof SocialSyncError?e.code:"XHS_BROWSER_CLOSE_FAILED","close");throw e;}finally{await release();}}
+  }finally{
+    clearTimeout(timer);
+    const complete=await cleanupAll([async()=>{
+      try{await cloud?.close();}catch(e){
+        try{if(!failed)await pause(e instanceof SocialSyncError?e.code:"XHS_BROWSER_CLOSE_FAILED","close");}catch{/* Release the lock even if the pause receipt cannot be written. */}
+        throw e;
+      }
+    },release]);
+    if(!complete&&!failed)throw new SocialSyncError("XHS_BROWSER_CLOSE_FAILED");
+  }
 }

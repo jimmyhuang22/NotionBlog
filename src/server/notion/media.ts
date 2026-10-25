@@ -6,6 +6,7 @@ import { getProperty } from "./properties.ts";
 import { isNotionPageHost } from "./public-text.ts";
 import type { NotionRepository } from "./repository.ts";
 import type { NotionReadClient } from "./types.ts";
+import { sourceFingerprint } from "../media/notion-source.ts";
 
 /** property is an opaque keyed tag, never a source property name or ID. */
 interface AssetLocation { page: string; block?: string; property?: string }
@@ -57,12 +58,12 @@ export function createMediaSigner(secret: string) {
   };
 }
 
-export async function resolveMediaUrl(id: string, repository: NotionRepository, client: NotionReadClient, secret: string): Promise<string | null> {
+export async function resolveSignedMediaSource(id: string, repository: NotionRepository, client: NotionReadClient, secret: string): Promise<{ url: string; sourceFingerprint: string } | null> {
   const signer = createMediaSigner(secret);
   const location = signer.decode(id);
   if (!location) return null;
-  const owner = await repository.resolvePublicPage(location.page);
-  if (!owner) return null;
+  const owner = repository.resolveMediaOwner ? await repository.resolveMediaOwner(location.page) : await repository.resolvePublicPage(location.page);
+  if (!owner || normalizeId(owner.page.id) !== location.page || owner.page.archived || owner.page.in_trash || owner.page.is_archived) return null;
   let file = owner.page.cover;
   if (location.block) {
     const block = await client.getBlock(location.block);
@@ -89,5 +90,9 @@ export async function resolveMediaUrl(id: string, repository: NotionRepository, 
   if (file.type === "file" && (!Number.isFinite(Date.parse(file.file.expiry_time)) || Date.parse(file.file.expiry_time) <= Date.now() + 5000)) return null;
   const url = safeMediaUrl(file.type === "file" ? file.file.url : file.external.url);
   if (url && file.type === "external" && isNotionPageHost(new URL(url).hostname)) return null;
-  return url;
+  return url ? { url, sourceFingerprint: sourceFingerprint(url, file.type === "file") } : null;
+}
+
+export async function resolveMediaUrl(id: string, repository: NotionRepository, client: NotionReadClient, secret: string): Promise<string | null> {
+  return (await resolveSignedMediaSource(id, repository, client, secret))?.url ?? null;
 }

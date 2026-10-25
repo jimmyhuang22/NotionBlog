@@ -101,7 +101,7 @@ export async function runThumbnailRegistration(reviewedPlan: ThumbnailRegistrati
       typeof p.login !== "string" || p.database !== url.database || !url.username.startsWith(p.login) || !/^(?:\.[a-z0-9_-]{1,128})?$/.test(url.username.slice(p.login.length))) registrationFail("THUMBNAIL_REGISTRATION_ROLE_INVALID");
     return url.username.slice(p.login.length);
   };
-  if (await profile(reader, "nb_reader", a, readerFunctions) !== await profile(writer, "nb_writer", b, writerFunctions)) registrationFail("THUMBNAIL_REGISTRATION_TARGET_INVALID");
+  if (await profile(reader, "nb_delta_reader", a, readerFunctions) !== await profile(writer, "nb_writer", b, writerFunctions)) registrationFail("THUMBNAIL_REGISTRATION_TARGET_INVALID");
   const baseline = createDatabaseContentBaselineReader(reader), read = createPublishedThumbnailReader(reader), register = createPublishedThumbnailRegistrar(writer);
   const checkState = async () => {
     if (!same(await baseline.state(budget.signal), plan.state) || !same(await readPublicationState(writer), plan.state)) registrationFail("THUMBNAIL_REGISTRATION_PUBLICATION_CHANGED");

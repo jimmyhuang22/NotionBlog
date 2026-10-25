@@ -1,7 +1,15 @@
-import { contentRepository,getContentProvider } from "../../../../lib/content/index.ts";
-import { contentErrorResponse } from "../../../../lib/content/http.ts";
-export const dynamic="force-dynamic";
-export const runtime="nodejs";
-export async function GET() {
-  try{await contentRepository.getTimeline({limit:1});const provider=getContentProvider();return Response.json({data:{provider,...(provider==="database"?{databaseVersion:process.env.DATABASE_CONTENT_VERSION??"1"}:{})}},{headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex, nofollow"}});}catch(e){return contentErrorResponse(e);}
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+/** Public liveness only. Content readiness belongs to explicit acceptance runs. */
+export function GET() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Cache-Control": "private, no-store",
+      "CDN-Cache-Control": "no-store",
+      "Vercel-CDN-Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+    },
+  });
 }

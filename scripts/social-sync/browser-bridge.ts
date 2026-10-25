@@ -36,7 +36,8 @@ export function browserLinks(value:unknown,targets:{publicationId:string}[]):Map
   }return result;
 }
 /** Only the pinned extension can start a fixed-scope job. No paths, scripts or credentials in messages. */
-export async function handleBrowserMessage(root:string,origin:string,message:unknown,ports:{now?:()=>string;execute?:(options:RootExecutionOptions)=>Promise<RefreshReport>}={}){
+export async function handleBrowserMessage(root:string,origin:string,message:unknown,ports:{signal?:AbortSignal;now?:()=>string;execute?:(options:RootExecutionOptions)=>Promise<RefreshReport>}={}){
+  ports.signal?.throwIfAborted();
   await privateDirectory(root);
   const config=exact(JSON.parse(await readPrivateFile(join(root,"bridge-config.json"),4096)),["version","origin","enabled"]);
   if(config.version!==1||!validOrigin(config.origin)||config.origin!==origin||typeof config.enabled!=="boolean")throw new SocialSyncError("BRIDGE_ORIGIN_REJECTED");
@@ -63,6 +64,7 @@ export async function handleBrowserMessage(root:string,origin:string,message:unk
   let state:BridgeState|null=null;
   const save=async()=>{await writeJson(file,state);if(state?.cycle.status==="complete"&&state.cycle.finishedAt)await writeJson(join(dir,"last-successful-cycle.json"),state);};
   try{
+    ports.signal?.throwIfAborted();
     state=await optional(file);
     if(op==="start"){
       exact(message,Object.hasOwn(msg,"manual")?["op","manual"]:["op"]);
@@ -106,7 +108,7 @@ export async function handleBrowserMessage(root:string,origin:string,message:unk
       const targets=current.scope.publications.filter(p=>job.keys.includes(publicationKey(p.target))).map(p=>p.target),captures=snapshotBatch(raw,targets,now());
       if(captures.length!==job.keys.length)throw new SocialSyncError("BRIDGE_JOB_INCOMPLETE");
       for(const k of job.keys)if(current.entries.find(e=>e.key===k)?.snapshotSha256!==job.expected[k])throw new SocialSyncError("REFRESH_SOURCE_CHANGED");
-      const result=await (ports.execute??(async o=>await executeAtRoot(root,o) as RefreshReport))({platform:"xiaohongshu",limit:5,keys:job.keys,captures,scopeDigest:current.scopeDigest,expectedSnapshots:job.expected});
+      const result=await (ports.execute??(async o=>await executeAtRoot(root,o) as RefreshReport))({signal:ports.signal,platform:"xiaohongshu",limit:5,keys:job.keys,captures,scopeDigest:current.scopeDigest,expectedSnapshots:job.expected});
       applyBatch(active.cycle,result,job.keys);active.job=null;
       if(!active.cycle.remaining.length&&active.cycle.status==="running"){active.cycle.status=active.cycle.reviewRequired?"review-required":"complete";active.cycle.finishedAt=now();}
       const response=summary(active);active.lastJob={id:job.id,sha:hash(raw),response};await save();return response;
@@ -119,7 +121,7 @@ export async function handleBrowserMessage(root:string,origin:string,message:unk
       if(!state.cycle.remaining.length){state.cycle.status=state.cycle.reviewRequired?"review-required":"complete";state.cycle.finishedAt=now();state.job=null;await save();return summary(state);}
       // Already persisted, recent pending samples are sent without reopening their pages.
       const pending=state.cycle.remaining.filter(k=>{const e=current.entries.find(e=>e.key===k)!;return e.pending&&e.status==="fresh";}).slice(0,XHS_CYCLE.batchSize);
-      if(pending.length){const result=await (ports.execute??(async o=>await executeAtRoot(root,o) as RefreshReport))({platform:"xiaohongshu",limit:5,keys:pending,captures:[],uploadOnly:true,scopeDigest:current.scopeDigest});applyBatch(state.cycle,result,pending);await save();return {...summary(state),resumed:result.resumed};}
+      if(pending.length){const result=await (ports.execute??(async o=>await executeAtRoot(root,o) as RefreshReport))({signal:ports.signal,platform:"xiaohongshu",limit:5,keys:pending,captures:[],uploadOnly:true,scopeDigest:current.scopeDigest});applyBatch(state.cycle,result,pending);await save();return {...summary(state),resumed:result.resumed};}
       if(!state.job||Date.parse(state.job.expiresAt)<Date.parse(now())){
         const keys=state.cycle.remaining.slice(0,XHS_CYCLE.batchSize),expected=Object.fromEntries(keys.map(k=>[k,current.entries.find(e=>e.key===k)!.snapshotSha256]));
         state.job={id:randomUUID(),expiresAt:new Date(Date.parse(now())+5*60000).toISOString(),keys,expected};await save();

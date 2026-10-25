@@ -45,7 +45,14 @@ function receiptMatches(receipt: CommitReceipt, operationId: string, payloadDige
 }
 
 /** No credentials or implicit adapters: publication, source and media ports are explicit. */
-export async function runIncrementalCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>) {
+export function runIncrementalCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>) {
+  return runCycle(options, ports, false);
+}
+/** Recover old operations and retire closed preparation; never claim new work. */
+export function recoverIncrementalCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>) {
+  return runCycle(options, ports, true);
+}
+async function runCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>, recoveryOnly: boolean) {
   const maxTasks = options.maxTasks ?? 20, duration = options.maxDurationMs ?? 120_000, delay = options.retryDelayMs ?? 60_000;
   if (!digest(options.schemaDigest) || !Number.isInteger(maxTasks) || maxTasks < 1 || maxTasks > 50 ||
     !Number.isInteger(duration) || duration < 10 || duration > 899_000 || !Number.isInteger(delay) || delay < 0 || delay > 86_400_000) {
@@ -101,8 +108,10 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
       }
     }
     // Keep a still-running or unknown commit from racing a new global revision.
+    guard(signal);
+    if (recoveryOnly) queue.recoverExpiredPreparations();
     let retirementReady = await retireClosed();
-    while (retirementReady && steps < maxTasks && queue.status().awaiting_verification === 0) {
+    while (!recoveryOnly && retirementReady && steps < maxTasks && queue.status().awaiting_verification === 0) {
       guard(signal);
       const [ticket] = queue.claim(1, duration + 1000, { requireRetirement: !!ports.retire });
       if (!ticket) {
@@ -124,7 +133,9 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
           queue.requireReview(ticket, prepared.code); stats.review++; stats.errorCode = "PREPARATION_REQUIRES_REVIEW"; continue;
         }
         if (prepared.outcome === "retry") {
-          queue.retryPreparation(ticket, prepared.code, delay); stats.retried++; stats.errorCode = "PREPARATION_PENDING"; break;
+          if (prepared.code === "IMAGE_REJECTED") { queue.requireReview(ticket, prepared.code); stats.review++; }
+          else if (queue.retryPreparation(ticket, prepared.code, delay) === "needs_review") stats.review++; else stats.retried++;
+          stats.errorCode = "PREPARATION_PENDING"; continue;
         }
         if (prepared.outcome === "unchanged") { queue.completeUnchanged(ticket); stats.unchanged++; continue; }
         if (prepared.outcome !== "prepared" || prepared.delta.expectedRevision !== state.publicationRevision ||
@@ -150,13 +161,22 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
         if (submitted) { stats.unresolved++; stats.errorCode = signal.aborted ? "CANCELLED" : stats.errorCode === "CHECKPOINT_UNSAVED" ? stats.errorCode :
           stage === "verify" ? "READER_UNVERIFIED" : "SUBMISSION_UNCERTAIN"; }
         else {
-          try { queue.retryPreparation(ticket, signal.aborted ? "CANCELLED" : "PREPARATION_UNAVAILABLE", signal.aborted ? 0 : delay); }
+          try {
+            const cancelled = signal.aborted || error instanceof Cancelled;
+            const permanent = stage === "prepare" && (error as { code?: string })?.code === "IMAGE_REJECTED";
+            if (cancelled || stage === "state") {
+              queue.deferPreparation(ticket, cancelled ? "CANCELLED" : "PUBLICATION_UNAVAILABLE", cancelled ? 0 : delay); stats.retried++;
+            } else if (permanent) { queue.requireReview(ticket, "IMAGE_REJECTED"); stats.review++; }
+            else if (queue.retryPreparation(ticket, "PREPARATION_UNAVAILABLE", delay) === "needs_review") stats.review++;
+            else stats.retried++;
+          }
           catch (failure) {
             if (!(failure instanceof IncrementalQueueError && failure.code === "QUEUE_STALE_TICKET")) throw failure;
           }
-          stats.retried++; stats.errorCode = signal.aborted ? "CANCELLED" : stage === "state" ? "PUBLICATION_UNAVAILABLE" : "PREPARATION_UNAVAILABLE";
+          stats.errorCode = signal.aborted ? "CANCELLED" : stage === "state" ? "PUBLICATION_UNAVAILABLE" : "PREPARATION_UNAVAILABLE";
         }
         if (signal.aborted || error instanceof Cancelled) throw new Cancelled();
+        if (!submitted && stage === "prepare") continue;
         break;
       } finally {
         if (!signal.aborted && ports.retire) retirementReady = await retireClosed();
@@ -168,8 +188,8 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
   } finally {
     clearTimeout(timer); options.signal?.removeEventListener("abort", cancel);
   }
+  queue.compactHistory();
   const status = queue.status();
-  const outcome = stats.cancelled ? "cancelled" : status.awaiting_verification || (ports.retire && status.retirement_pending) ? "blocked" : status.needs_review ? "needs_review" :
-    stats.retried ? "retry" : status.pending + status.leased + status.retry ? "partial" : stats.published + stats.recovered ? "updated" : "unchanged";
+  const outcome = stats.cancelled ? "cancelled" : status.awaiting_verification || (ports.retire && status.retirement_pending) ? "blocked" : stats.retried ? "retry" : status.needs_review ? "needs_review" : status.pending + status.leased + status.retry ? "partial" : stats.published + stats.recovered ? "updated" : "unchanged";
   return { outcome, ...stats, queue: status };
 }

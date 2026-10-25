@@ -8,7 +8,28 @@ import { laterRecoveryRuntime } from "./helpers/recovery-runtime-sources.ts";
 import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
 
+const directNotionSources: Record<string, string> = {
+  'src/server/notion/client.ts': '784f927df86fc0a48fb2eec2f7b27b8a5395eb6d3448e58b8044a75b097b0647',
+  'src/server/notion/runtime.ts': '1e85c7dc9b44f6bee3637243afe594d0dd50614ae5259048b7092164c0439a93',
+  'src/server/notion/media.ts': '2c449ec24e117c49ac8097e9fe5960f715b1f69b26c517132ddc63cf10c4824e',
+  'src/server/notion/repository.ts': 'd49598f05cb3836e75049bb92b6b4a32e1921cbd7c217d4aa9193fc69f1a8d08',
+  'src/server/notion/website-repository.ts': 'e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9',
+  'src/server/notion/automatic-study.ts': '443c7c17f3e5568b218644bb5a4ba878200b6cfae76392df51ede2ecedfbc822',
+  'src/app/media/[assetId]/route.ts': '06015cf3d024d940fd773cedec714380528ac89ebcaaada1b9dc4b303fcbb0a5',
+};
+
 function laterPublicationRepair(path:string,current:string,prior:string,producer:Parameters<typeof checkCaptureReleaseCompatibility>[0],consumer:Parameters<typeof checkCaptureReleaseCompatibility>[1]):boolean {
+  if (directNotionSources[path] && current !== prior) {
+    assert.equal(current, directNotionSources[path], path);
+    // Both the historical B20 mapper and current N08 page-mention producer stay
+    // outside these old capture transitions. These are rejection observations.
+    for (const sha256 of [current, ...(path === "src/server/notion/website-repository.ts"
+      ? ["b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51"] : [])]) {
+      const changed = structuredClone(consumer); changed.files.find(file => file.path === path)!.sha256 = sha256;
+      assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });
+    }
+    return true;
+  }
   if (syncDiagnosticSources[path] && current !== prior) {
     assert.equal(current, syncDiagnosticSources[path], path);
     const changed = structuredClone(consumer);
@@ -83,8 +104,8 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // New mapper/website reader releases (including reader-only filtering) stay
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
-        ? "035363383d2dd8d8e01e7412d58bcef26989bd3a6e759bd3c4b1c89170688147"
-        : "4845eb9d686cdfa604a3923e50b52f843249a57ede08ace6f0ea99bc7ae956b4";
+        ? "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9"
+        : "abfe7e22581d86af28898d827833545bac79679a34983b29d1817136746704e0";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});
@@ -115,6 +136,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
     if(laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer))continue;
     // New website/development capabilities remain outside these frozen transitions.
+    // The opt-in display route/runtime are pinned here and still reject old captures.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
     const expected = pair.path === "scripts/dev-real.mjs"
       ? "425464dc01fb77ee49fe383ed9e2101b93b6b16c8049d8d3b7130f842a2d53ac"
@@ -123,11 +145,11 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
-        ? "e2e085608893f8e1387a03994581a6b7ce7c8f0169fe3b0177c7f2bafb55b483"
+        ? "252c86f9b024439d08db7579926f51d9806c997ebce67103709e8535f507ff84"
       : pair.path === "src/server/database/runtime.ts"
-        ? "5e099af3def60ef5f66e6c0937f07918ba4d2acedfc2736832d4cea11a52bc99"
+        ? "e3268ce8fdf64f109c4bacc105491b266988cf581910e2b6cc7844e392c5d194"
       : pair.path === "src/server/media/thumbnail.ts"
-        ? "d8daa3226e30451f36dee6637537141b8a5d3632583a90400e77a1a7fc6dab54"
+        ? "3d7a448f5f1603ef1a66aab74975c043f06a78be83ef390cad603b128a3d44eb"
         : null;
     if(expected) {
       assert.equal(current,expected,pair.path);

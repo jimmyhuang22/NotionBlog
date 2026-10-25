@@ -108,7 +108,7 @@ test("v2 obeys image Retry-After before bounded retries without trying another c
     assert.equal(calls, 3); assert.deepEqual(waits, [10_000, 10_000]);
     assert.equal(download.statistics().rateLimitResponses, 2);
   }
-  for (const [header, delay] of [[undefined, 60_000], ["invalid", 60_000], ["-1", 60_000], ["600", 600_000]] as const) {
+  for (const [header, delay] of [[undefined, 60_000], ["invalid", 60_000], ["-1", 60_000]] as const) {
     let calls = 0; const waits: number[] = [];
     const download = createWebsiteImageDownloader({ resolve: dns, request: async () => {
       calls++; return response(429, (async function* () {})(), { "retry-after": header });
@@ -257,4 +257,20 @@ test("the first terminal image failure remains available while other pages drain
     assert.equal(download.failure()?.inputUrl, bad);
     await download(url); assert.equal(download.failure(), undefined);
   } finally { release(); await slow; }
+});
+
+
+test("image cooldowns above two minutes fail immediately without early retry", async t => {
+  const now = Date.UTC(2026, 0, 1);
+  t.mock.timers.enable({ apis: ["Date"], now });
+  for (const header of ["121", "3600", "2147483", new Date(now + 3_600_000).toUTCString()]) {
+    let calls = 0;
+    const download = createWebsiteImageDownloader({ resolve: dns, request: async () => {
+      calls++; return response(429, (async function* () {})(), { "retry-after": header });
+    } }, { wait: async () => assert.fail("Do not occupy the run or retry early") });
+    try {
+      await assert.rejects(download(url), code("RATE_LIMITED"));
+      assert.equal(calls, 1); assert.ok(download.failure()!.retryAfterSeconds! > 120);
+    } finally { download.close(); }
+  }
 });

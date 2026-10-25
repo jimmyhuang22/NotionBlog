@@ -60,8 +60,10 @@ function link(x: unknown) {
 function runs(x: unknown) {
   if (!Array.isArray(x)) bad();
   for (const v of x) {
-    const o=object(v); keys(o,["text","bold","italic","code","underline","strike","color","link","equation"]);
+    const o=object(v); keys(o,["text","bold","italic","code","underline","strike","color","link","equation","pageMention"]);
     if (!text(o.text) || (o.equation !== undefined && o.equation !== true)) bad();
+    if (o.pageMention !== undefined && (o.pageMention !== true || o.equation !== undefined ||
+        !o.link || typeof o.link !== "object" || !["internal","unavailable"].includes(String((o.link as Record<string,unknown>).kind)))) bad();
     for (const k of ["bold","italic","code","underline","strike"]) if (o[k]!==undefined&&typeof o[k]!=="boolean") bad();
     if (o.color!==undefined && !["default","muted","accent","warning"].includes(o.color as string)) bad();
     if (o.link!==undefined) {
@@ -124,7 +126,7 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
   const time=(v:unknown)=>{if(v===null)return;const t=object(v);keys(t,["value","unit"]);if(typeof t.value!=="number"||!num(t.value)||!["minute","hour"].includes(String(t.unit)))bad();};
   switch(i.kind){
     case "status":date(i.recordedAt);runs(i.text);break;
-    case "course":if(!text(i.code))bad();nullable(i.semester);{const rs=object(i.ratings);keys(rs,["experience","usefulness","recommendation","difficulty"]);for(const k of ["experience","usefulness","recommendation","difficulty"])rating(rs[k]);}break;
+    case "course":nullable(i.code);nullable(i.semester);{const rs=object(i.ratings);keys(rs,["experience","usefulness","recommendation","difficulty"]);for(const k of ["experience","usefulness","recommendation","difficulty"])rating(rs[k]);}break;
     case "study-note":if(!identity(i.courseId)||!(i.parentId===null||identity(i.parentId))||!["course","assignment","summary","note","quiz","test","textbook","tool","unknown"].includes(String(i.noteType))||!Array.isArray(i.breadcrumbs))bad();date(i.date);i.breadcrumbs.forEach(link);break;
     case "post":date(i.publishedAt);break;
     case "album":date(i.date);if(!num(i.photoCount)||(typeof i.photoCount==="number"&&!Number.isInteger(i.photoCount)))bad();break;

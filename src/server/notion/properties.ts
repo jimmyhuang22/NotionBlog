@@ -1,7 +1,7 @@
 import type { PageObjectResponse, RichTextItemResponse } from "@notionhq/client";
 import type { DateRange, Rating } from "../../../contracts/content.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
-import { sanitizePublicText } from "./public-text.ts";
+import { PUBLIC_USER_MENTION_TEXT, sanitizePublicText } from "./public-text.ts";
 
 export type NotionPageProperty = PageObjectResponse["properties"][string];
 
@@ -17,8 +17,12 @@ export function getProperty(page: PageObjectResponse, field?: string): NotionPag
 }
 
 export function plainText(text: readonly RichTextItemResponse[]): string {
-  // Metadata has no async publication resolver; page/database mention labels stay generic.
-  return sanitizePublicText(text.map(run => run.type === "mention" && (run.mention.type === "page" || run.mention.type === "database") ? "Notion page" : run.plain_text).join(""));
+  // Metadata has no async resolver; mention labels never grant publication of identities.
+  return sanitizePublicText(text.map(run => {
+    if (run.type !== "mention") return run.plain_text;
+    if (run.mention.type === "user") return PUBLIC_USER_MENTION_TEXT;
+    return run.mention.type === "page" || run.mention.type === "database" ? "Notion page" : run.plain_text;
+  }).join(""));
 }
 
 export function getTitle(page: PageObjectResponse, field: string): string {

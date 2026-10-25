@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AnyContent, ContentBlock, ContentDetail, ContentDocument, ContentKind, ImageAsset } from "../contracts/content.ts";
+import type { AnyContent, ContentBlock, ContentDetail, ContentDocument, ContentKind, ImageAsset, TextRun } from "../contracts/content.ts";
 import type { PublicContentSnapshot } from "../contracts/website.ts";
 import { ContentServiceError } from "../contracts/repository.ts";
 import { selectThumbnailCandidates } from "../scripts/media-thumbnails/coverage.ts";
@@ -100,6 +100,37 @@ test("v1 and v2 canonical media namespaces are matched exactly", () => {
   assert.equal(selectThumbnailCandidates(snapshot(record("status", image(1, "v1"))), "v1", ["status"]).assets[0]!.assetId, id(1));
   assert.throws(() => selectThumbnailCandidates(snapshot(record("status", image(1, "v1"))), "v2", ["status"]), rejected);
   assert.throws(() => selectThumbnailCandidates(snapshot(record("status", image(1))), "v1", ["status"]), rejected);
+});
+
+test("v2 page mentions in nested bodies and Status text preserve selection while v1 rejects the field", () => {
+  for (const placement of ["body", "status"] as const) {
+    const run: TextRun = { text: "Current title", pageMention: true, link: placement === "body"
+      ? { kind: "internal", href: "/study/course/notes/note" } : { kind: "unavailable" } };
+    const input = (version: "v1" | "v2", marked: boolean) => {
+      const { pageMention: _marker, ...plain } = run, selected = marked ? run : plain;
+      const row = record("status", image(1, version), body([{ id: "toggle", type: "toggle", title: [], children: placement === "body"
+        ? [{ id: "mention", type: "paragraph", text: [selected] }] : [] }, block(2, image(2, version))]));
+      if (row.item.kind !== "status") assert.fail(); row.item.text = placement === "status" ? [selected] : [];
+      return snapshot(row);
+    };
+    assert.deepEqual(selectThumbnailCandidates(input("v2", true), "v2", ["status"]), selectThumbnailCandidates(input("v2", false), "v2", ["status"]));
+    assert.doesNotThrow(() => selectThumbnailCandidates(input("v1", false), "v1", ["status"]));
+    assert.throws(() => selectThumbnailCandidates(input("v1", true), "v1", ["status"]), rejected);
+  }
+});
+
+test("coverage rejects malformed page-mention markers and incompatible links or equations", () => {
+  const internal = { kind: "internal", href: "/study/course" };
+  for (const run of [
+    ...[false, "true", null, 1].map(pageMention => ({ text: "Title", pageMention, link: internal })),
+    { text: "Title", pageMention: true },
+    { text: "Title", pageMention: true, link: { kind: "external", url: "https://example.test/" } },
+    { text: "Title", pageMention: true, equation: true, link: internal },
+    { text: "Title", pageMention: true, link: internal, unexpected: true },
+  ]) {
+    const row = record("status", null, body([{ id: "mention", type: "paragraph", text: [run as TextRun] }]));
+    assert.throws(() => selectThumbnailCandidates(snapshot(row), "v2", ["status"]), rejected);
+  }
 });
 
 test("malformed selected media and unsafe direct URLs fail anonymously", async t => {

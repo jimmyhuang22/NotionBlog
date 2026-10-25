@@ -185,7 +185,7 @@ test("middleware qualification uses one fixed authenticated Node endpoint, bound
     assert.equal(new URL(String(input)).origin, config.origin);
     assert.equal(new URL(String(input)).pathname, "/api/internal/cache/route");
     return routeCacheLookupResponse(new Request(input, init), config, async (path, params) => {
-      reads++; assert.equal(path, "/study/course"); assert.equal(params.get("x"), "1"); return "found";
+      reads++; assert.equal(path, "/study/course"); assert.equal(params.size, 0); return "found";
     });
   };
   assert.equal(await fetchCachedRouteVerdict("/study/course?x=1", config, request), "found");

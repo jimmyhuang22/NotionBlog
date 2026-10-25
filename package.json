@@ -10,7 +10,10 @@
     "dev": "node scripts/dev-offline.mjs",
     "build": "node scripts/development/run.mjs build",
     "start": "node scripts/development/run.mjs start",
+    "build:self-hosted": "node scripts/self-hosted/build.mjs",
+    "start:self-hosted": "node scripts/self-hosted/start.mjs",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "test": "node scripts/development/run.mjs test",
     "privacy:check": "node scripts/check-privacy.mjs",
     "notion:check": "node scripts/check-notion.ts",
@@ -21,14 +24,17 @@
     "check": "node scripts/development/run.mjs check",
     "media:protocol": "node scripts/media-thumbnails/cli.ts verify",
     "media:thumbnails": "node scripts/media-thumbnails/cli.ts",
-    "website:sync": "node scripts/website-sync/cli.ts",
+    "website:sync": "node scripts/website-sync/run-private.mjs",
+    "website:admin": "node scripts/website-sync/cli.ts",
     "dev:real": "node scripts/dev-real.mjs",
     "website:capabilities": "node scripts/check-website-capabilities.ts",
     "website:protocol": "node scripts/check-website-protocol.ts",
     "website:database": "node scripts/website-database.ts",
     "content:withdraw": "node scripts/public-cache/withdraw-cli.ts",
     "content:cache-refresh": "node scripts/public-cache/refresh-cli.ts",
-    "content:cache-consume": "node scripts/public-cache/consumer-cli.ts"
+    "content:cache-consume": "node scripts/public-cache/consumer-cli.ts",
+    "console": "node console/run.mjs",
+    "media:self-hosted": "node scripts/self-hosted-media/run.mjs"
   },
   "dependencies": {
     "@notionhq/client": "5.27.0",
@@ -45,11 +51,15 @@
     "shiki": "4.5.0"
   },
   "devDependencies": {
+    "@babel/core": "8.0.9",
+    "@babel/eslint-parser": "8.0.7",
     "@electric-sql/pglite": "0.5.8",
     "@types/node": "26.6.5",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "typescript": "7.0.2"
   }
 }

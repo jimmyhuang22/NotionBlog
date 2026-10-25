@@ -11,6 +11,10 @@
 | home-feed | home-content、home-social、home-compose、home-hydrate；当前页封面在父作用域记录social-covers |
 | social-snapshot | database-pool、social-reader-check、social-collection-check、social-snapshot；v1仍在此作用域补封面 |
 | works | 完整作品读取及social-pagination、当前页social-covers；实际社交快照另有social-snapshot子作用域 |
+| status-page | Status 服务端页面的原有工作函数，含首屏／年份并行、公开缓存资格及复用；kind=status |
+| content-version | 已启用版本接口的一次 stamp 读取、校验、摘要及成功响应构造；kind=unknown |
+
+Status 页面保留原首屏数量、focus/year、JSX、错误与 notFound；版本接口的禁用 404 在作用域前，原 503 映射在作用域外，失败先记 error，再由原 catch 返回原响应。两项复用现有显式开关和阶段，不新增查询、动态标签、响应字段或 Server-Timing。只扩大固定 operation 的类型和解析白名单，原操作继续兼容。
 
 通用数据库阶段继续记录 database-runtime、database-acquire、database-roundtrip、dto-projection。搜索的search-read包含取得紧凑文字投影，search-text包含净化和资格引用过滤，search-match是应用内匹配，search-version保留末尾当前版本复核。legacy搜索仍有整个search及通用数据库阶段，新增text/read精细分段主要覆盖线上使用的scoped路径。
 

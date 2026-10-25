@@ -1,3 +1,4 @@
+import { directPageDenied, primeDirectDenials } from "./direct-policy.ts";
 import { createHash } from "node:crypto";
 import type { SearchContext, SearchSnapshot } from "../../../contracts/website.ts";
 import { makeSearchContext } from "../../lib/content/search-context.ts";
@@ -153,13 +154,11 @@ class ReadSession {
   private schemas = new Map<string, Promise<void>>();
   private sourcePages = new Map<string, Promise<Map<string, PageObjectResponse>>>();
   private options: NotionRepositoryOptions;
-  private mediaQualification: boolean;
   private automatic: AutomaticStudySession;
-  constructor(options: NotionRepositoryOptions, mediaQualification = false) {
+  constructor(options: NotionRepositoryOptions) {
     const deniedPageIds=new Set([...(options.deniedPageIds??[])].map(normalizeId));
     this.automatic = new AutomaticStudySession(options.client, options.config, deniedPageIds, options.onStudyDiscoveryProgress);
     this.options = { ...options, deniedPageIds, client: this.automatic.client };
-    this.mediaQualification = mediaQualification;
   }
 
   private page(id: string) {
@@ -198,7 +197,8 @@ class ReadSession {
   }
   async prefetchPages(ids: string[]): Promise<void> {
     // The transport still spaces HTTP starts; four outstanding reads overlap latency.
-    await mapBounded([...new Set(ids)], 4, id => this.page(id));
+    await primeDirectDenials(ids);
+    await mapBounded([...new Set(ids)], 4, async id => await directPageDenied(id) ? null : this.page(id));
   }
   async sourceIds(source: NotionSource): Promise<string[]> {
     if (source.publication.mode === "course-descendants") return this.automatic.ids(source);
@@ -250,7 +250,7 @@ class ReadSession {
 
   async resolve(id: string, expectedKind?: ContentKind, trail: string[] = []): Promise<PublicNotionPage | null> {
     const canonical = idOrNull(id);
-    if (!canonical || this.options.deniedPageIds?.has(canonical) || trail.includes(canonical) || trail.length >= 24) return null;
+    if (!canonical || this.options.deniedPageIds?.has(canonical) || trail.includes(canonical) || trail.length >= 24 || await directPageDenied(canonical)) return null;
     // Resolve explicit note/course identities before unrelated automatic Status sources.
     const sources = this.options.config.sources.filter(source => source.enabled && (!expectedKind || source.kind === expectedKind))
       .sort((a, b) => Number(a.publication.mode === "all") - Number(b.publication.mode === "all"));
@@ -260,20 +260,15 @@ class ReadSession {
         if (resolved) return resolved;
         continue;
       }
-      // Only configured whole-source kinds use the single-owner shortcut.
-      // About stays exact. Learning additionally requires its explicit root and
-      // live ownership chain; legacy sources retain the ancestor allowlists.
-      const directSourceMedia = source.publication.mode === "all" && (source.kind === "course" || (this.mediaQualification &&
-        ["status", "post", "album", "book", "movie", "game", "project"].includes(source.kind)));
-      const selected = directSourceMedia || (source.publication.mode === "all"
-        ? (await this.allStatusPages(source)).has(canonical)
-        : source.publication.allowlistPageIds.includes(canonical));
+      // Exact reads use the active page and its direct source parent. Enumeration belongs to lists.
+      const wholeSource = source.publication.mode === "all";
+      const selected = wholeSource || source.publication.allowlistPageIds.includes(canonical);
       if (!selected) continue;
       const page = await this.page(canonical);
       if (!page || !active(page) || normalizeId(page.id) !== canonical) return null;
       if (source.kind === "page") return source.pageId === canonical ? { page, source, course: null, ancestors: [] } : null;
       const direct = page.parent.type === "data_source_id" && idOrNull(page.parent.data_source_id) === source.dataSourceId;
-      if (directSourceMedia && !direct) continue;
+      if (wholeSource && !direct) continue;
       await this.schema(source);
       if (source.kind !== "study-note") {
         if (direct) return { page, source, course: null, ancestors: [] };
@@ -310,7 +305,7 @@ class ReadSession {
     const base = { id, kind: source.kind, slug: source.kind === "page" ? "about" : id, href, title, summary: getSelect(page, source.fields.summary), tags: getTags(page, source.fields.tags), cover: cover ? await this.cover(resolved) : null, updatedAt: normalizeDateTime(page.last_edited_time) };
     if (source.kind === "status") return { ...base, kind: "status", recordedAt: getDate(page, source.fields.recordedAt), text: [] };
     if (source.kind === "course") return {
-      ...base, kind: "course", code: getSelect(page, source.fields.code) ?? title.match(/^([A-Z]{2,}\d{2,})\b/)?.[1] ?? id,
+      ...base, kind: "course", code: getSelect(page, source.fields.code)?.trim() || null,
       semester: getSelect(page, source.fields.semester),
       ratings: {
         experience: getRating(page, source.fields.experience ?? source.fields.experienceRating),
@@ -331,8 +326,10 @@ class ReadSession {
         personalRating: getRating(page, f.personalRating), doubanRating: getNumber(page, f.doubanRating), externalUrl: getPublicUrl(page, f.externalUrl) };
     }
     if (source.kind === "movie") {
-      const publicRating = getNumber(page, f.publicRating ?? f.doubanRating);
-      if (!isMoviePublicRating(publicRating)) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid public movie rating.");
+      const mappedRating = getNumber(page, f.publicRating ?? f.doubanRating);
+      const publicRating = isMoviePublicRating(mappedRating) ? mappedRating : null;
+      // One invalid source field must not reject the whole collection. Never log page data.
+      if (!isMoviePublicRating(mappedRating)) console.warn("NOTION_MOVIE_PUBLIC_RATING_INVALID");
       return { ...base, kind: "movie", originalTitle: getSelect(page, f.originalTitle), mediaType: getSelect(page, f.mediaType), status: state(["watched", "wishlist"]) as ContentByKind["movie"]["status"], watchedDate: getDate(page, f.watchedDate), releaseDate: getDate(page, f.releaseDate), director: getSelect(page, f.director), actors: getValues(page, f.actors), rating: getRating(page, f.rating), doubanRating: getNumber(page, f.doubanRating), publicRating,
         ratingSource: publicRating === null ? null : normalizeMovieRatingSource(getSelect(page, f.ratingSource)) };
     }
@@ -392,6 +389,7 @@ class ReadSession {
       registerImage: input => this.options.registerImage?.(input) ?? Promise.resolve(null),
       canonicalImageUrls: true,
       inlineEquations: true,
+      pageMentions: true,
       externalVideos: true,
     });
   }
@@ -454,7 +452,7 @@ export function createWebsiteStudyChangeSource(options:NotionRepositoryOptions):
     const session=new ReadSession({...options,config,
     ...(supplied?{registerImage:async input=>{
       const image=await supplied(input);if(!image)throw new ContentServiceError("CONTENT_UNAVAILABLE","Study media preparation was incomplete.");return image;
-    }}:{})},true);
+    }}:{})});
     return {sourceDigest,read:(id,flags)=>session.studyChange(id,flags)};
   };
   return {sourceDigest,openOperation,read:(id,flags)=>openOperation().read(id,flags)};
@@ -597,7 +595,7 @@ function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?
         throw new ContentServiceError("MISCONFIGURED", "A valid source or directory ordinal is required.");
       }
       const deniedPageIds = new Set([...options.deniedPageIds ?? [], ...input.denied ?? []].map(normalizeId));
-      const reader = new ReadSession({ ...options, deniedPageIds }, true);
+      const reader = new ReadSession({ ...options, deniedPageIds });
       const resolved = await reader.resolve(id, input.kind);
       if (!resolved) return null;
       const item = await reader.item(resolved), document = await reader.document(resolved);
@@ -610,7 +608,7 @@ function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?
         courseId, parentId, ordinal: input.ordinal } };
     },
     resolvePublicPage: id => session().resolve(id),
-    resolveMediaOwner: id => new ReadSession(options, true).resolve(id),
+    resolveMediaOwner: id => new ReadSession(options).resolve(id),
     async getCourseMetadata(courseSlug) {
       const reader = session();
       const course = await reader.resolve(courseSlug, "course");

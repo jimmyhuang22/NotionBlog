@@ -1,4 +1,5 @@
 import { cacheableMediaHeaders } from "./cache.ts";
+import { excludeFromSharedCache } from "../public-cache/policy.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { ThumbnailProjection, ThumbnailWidth } from "../database/thumbnail-index.ts";
 import type { ObjectStorage } from "../database/storage.ts";
@@ -90,8 +91,9 @@ export async function thumbnailMediaResponse(assetId: string, width: ThumbnailWi
     const final = await ports.read(assetId, width);
     if (!final || JSON.stringify(final) !== JSON.stringify(current)) return missing();
   }
-  return new Response(Buffer.from(bytes), { headers: {
+  const response = new Response(Buffer.from(bytes), { headers: {
     ...(first.version === "v2" ? cacheableMediaHeaders(headers) : headers), "Content-Type": first.thumbnail.mime, "Content-Length": String(bytes.length),
     "Server-Timing": `thumb_scope;dur=${scopeMs.toFixed(2)}, thumb_object;dur=${objectMs.toFixed(2)};desc="${byteSource}", thumb_recheck;dur=${recheckMs.toFixed(2)}`,
   } });
+  return live ? excludeFromSharedCache(response) : response;
 }

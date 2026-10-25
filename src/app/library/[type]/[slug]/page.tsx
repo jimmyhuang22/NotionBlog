@@ -11,14 +11,11 @@ import { Cover } from "@/components/library-grid";
 import { PlatformChips } from "@/components/platform-chips";
 import { contentRepository } from "@/lib/content";
 import { dateParts, rangeLabel, ratingLabel } from "@/lib/format";
-import { librarySections, progressWidth, ratingDots, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChip, type PlatformChip } from "@/lib/library";
+import { librarySections, progressWidth, ratingDots, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
 import { getSiteConfig } from "@/lib/site";
 import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
-
-// Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
-export const revalidate = 86399;
 
 type Props = { params: Promise<{ type: string; slug: string }> };
 
@@ -76,7 +73,7 @@ function facts(item: LibraryItem, timeZone: string): Facts {
     ] };
   }
   // Platforms as boxes in the leading line, the same as on the card; times written as the card writes them, none at all left out (the owner's choice, 2026-10-17).
-  return { said: workSentence(item, undefined), rating: item.rating, progress: item.progressPercent, platforms: item.platforms.map(platformChip), rest: [
+  return { said: workSentence(item, undefined), rating: item.rating, progress: item.progressPercent, platforms: platformChips(item.platforms), rest: [
     ...gameDateRows(item, timeZone).map(([label, value]) => date(label, value)),
     ...optional("已玩时长", cardTimeLabel(item.playedTime)), ...optional("预计时长", cardTimeLabel(item.estimatedTime)),
     ...optional("发售", rangeLabel(item.releaseDate, timeZone)),

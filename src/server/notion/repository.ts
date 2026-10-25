@@ -7,6 +7,7 @@ import { statusPreview, statusTimeZone, statusYear, statusYears, type StatusRead
 import { buildNotionDocument, type RegisterBlockImageInput } from "./blocks.ts";
 import { assertSourceSchema, normalizeId } from "./config.ts";
 import { getDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime } from "./properties.ts";
+import { directPageDenied, primeDirectDenials } from "./direct-policy.ts";
 import { mapBounded } from "./bounded-work.ts";
 import type { NotionReadClient, NotionSource, NotionSourcesConfig, ReleaseContentKind } from "./types.ts";
 
@@ -69,10 +70,8 @@ class ReadSession {
   private schemas = new Map<string, Promise<void>>();
   private sourcePages = new Map<string, Promise<Map<string, PageObjectResponse>>>();
   private options: NotionRepositoryOptions;
-  private mediaQualification: boolean;
-  constructor(options: NotionRepositoryOptions, mediaQualification = false) {
+  constructor(options: NotionRepositoryOptions) {
     this.options = options;
-    this.mediaQualification = mediaQualification;
   }
 
   private page(id: string) {
@@ -111,7 +110,8 @@ class ReadSession {
   }
   async prefetchPages(ids: string[]): Promise<void> {
     // The transport still spaces HTTP starts; four outstanding reads overlap latency.
-    await mapBounded([...new Set(ids)], 4, id => this.page(id));
+    await primeDirectDenials(ids);
+    await mapBounded([...new Set(ids)], 4, async id => await directPageDenied(id) ? null : this.page(id));
   }
   async publishedIds(kind: ReleaseContentKind): Promise<string[]> {
     const ids = new Set<string>();
@@ -158,24 +158,20 @@ class ReadSession {
 
   async resolve(id: string, expectedKind?: ReleaseContentKind, trail: string[] = []): Promise<PublicNotionPage | null> {
     const canonical = idOrNull(id);
-    if (!canonical || trail.includes(canonical) || trail.length >= 24) return null;
+    if (!canonical || trail.includes(canonical) || trail.length >= 24 || await directPageDenied(canonical)) return null;
     // Resolve explicit note/course identities before unrelated automatic Status sources.
     const sources = this.options.config.sources.filter(source => source.enabled && (!expectedKind || source.kind === expectedKind))
       .sort((a, b) => Number(a.publication.mode === "all") - Number(b.publication.mode === "all"));
     for (const source of sources) {
-      // A media request already names one exact owner. For whole-source Status
-      // publication its fresh active page, direct source parent and current
-      // schema establish eligibility without enumerating every Status row.
-      // Listings, details and link qualification still use their existing query.
-      const directStatusMedia = this.mediaQualification && source.kind === "status" && source.publication.mode === "all";
-      const selected = directStatusMedia || (source.publication.mode === "all"
-        ? (await this.allStatusPages(source)).has(canonical)
-        : source.publication.allowlistPageIds.includes(canonical));
+      // Exact page identity and its physical source parent prove whole-source membership.
+      // Listings still enumerate the complete source independently.
+      const wholeSource = source.kind === "status" && source.publication.mode === "all";
+      const selected = wholeSource || source.publication.allowlistPageIds.includes(canonical);
       if (!selected) continue;
       const page = await this.page(canonical);
       if (!page || !active(page) || normalizeId(page.id) !== canonical) return null;
       const direct = page.parent.type === "data_source_id" && idOrNull(page.parent.data_source_id) === source.dataSourceId;
-      if (directStatusMedia && !direct) continue;
+      if (wholeSource && !direct) continue;
       await this.schema(source);
       if (source.kind !== "study-note") {
         if (direct) return { page, source, course: null, ancestors: [] };
@@ -210,7 +206,7 @@ class ReadSession {
     const base = { id, kind: source.kind, slug: id, href: source.kind === "status" ? `/status#${id}` : source.kind === "course" ? `/study/${id}` : `/study/${courseId}/notes/${id}`, title, summary: getSelect(page, source.fields.summary), tags: getTags(page, source.fields.tags), cover: cover ? await this.cover(resolved) : null, updatedAt: normalizeDateTime(page.last_edited_time) };
     if (source.kind === "status") return { ...base, kind: "status", recordedAt: getDate(page, source.fields.recordedAt), text: [] };
     if (source.kind === "course") return {
-      ...base, kind: "course", code: getSelect(page, source.fields.code) ?? title.match(/^([A-Z]{2,}\d{2,})\b/)?.[1] ?? id,
+      ...base, kind: "course", code: getSelect(page, source.fields.code)?.trim() || null,
       semester: getSelect(page, source.fields.semester),
       ratings: {
         experience: getRating(page, source.fields.experience ?? source.fields.experienceRating),
@@ -251,7 +247,7 @@ export function createNotionRepository(options: NotionRepositoryOptions): Notion
   const session = () => new ReadSession(options);
   return {
     resolvePublicPage: id => session().resolve(id),
-    resolveMediaOwner: id => new ReadSession(options, true).resolve(id),
+    resolveMediaOwner: id => new ReadSession(options).resolve(id),
     async getCourseMetadata(courseSlug) {
       const reader = session();
       const course = await reader.resolve(courseSlug, "course");

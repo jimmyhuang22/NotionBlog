@@ -22,4 +22,11 @@ export async function installPublishedThumbnails(db: SqlExecutor): Promise<void>
     catch (error) { await db.query("ROLLBACK").catch(() => {}); throw error; }
   }
   await verifyPublishedThumbnails(db);
+  // The separately installed sync reader verifies media without website credentials.
+  await db.query(`DO $$ BEGIN
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='nb_delta_reader') THEN
+      GRANT EXECUTE ON FUNCTION nb_publication_api.check_thumbnail_capability(text),
+        nb_publication_api.read_thumbnail(text,integer,text) TO nb_delta_reader;
+    END IF;
+  END $$;`);
 }

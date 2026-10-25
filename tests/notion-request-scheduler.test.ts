@@ -130,3 +130,26 @@ test("connection timing state is shared across instances and isolated by token",
   assert.equal(first, sharedNotionScheduler("scheduler-offline-connection-one"));
   assert.notEqual(first, sharedNotionScheduler("scheduler-offline-connection-two"));
 });
+
+
+test("long and overflowing cooldowns reject queued work without shortening the upstream pause", async () => {
+  for (const header of ["3600", "9".repeat(400), new Date(3_600_000).toUTCString()]) {
+    const clock = new VirtualClock(), scheduler = new NotionRequestScheduler({ clock });
+    await scheduler.run(async () => {});
+    const queued = assert.rejects(scheduler.run(async () => assert.fail("No early start")), RequestCooldownError);
+    scheduler.defer(header); await queued;
+    scheduler.defer("1");
+    await assert.rejects(scheduler.run(async () => assert.fail("Cooldown survives rejection")), RequestCooldownError);
+    await clock.advance(120_001);
+    await assert.rejects(scheduler.run(async () => assert.fail("Cooldown was not capped")), RequestCooldownError);
+  }
+});
+
+test("HTTP date cooldown resumes at the advertised deadline", async () => {
+  const clock = new VirtualClock(), scheduler = new NotionRequestScheduler({ clock });
+  scheduler.defer(new Date(120_000).toUTCString());
+  let started = false;
+  const pending = scheduler.run(async () => { started = true; }, { timeoutMs: 130_000 });
+  await clock.advance(119_999); assert.equal(started, false);
+  await clock.advance(1); await pending; assert.equal(started, true);
+});

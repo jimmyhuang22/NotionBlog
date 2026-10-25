@@ -1,0 +1,22 @@
+{
+  "format": "notionblog-owner-install-recipes",
+  "version": 1,
+  "recipes": {
+    "reader-isolation": {
+      "migration": "20261024074008_incremental_reader_isolation.sql",
+      "schemaDigest": "239b3e856faaed0029608f0072730a11db9dff7a5721d423f4705e68fb5b86f3",
+      "prefix": "-- Opt-in private synchronization reader. No LOGIN credentials or memberships changed.\nBEGIN;\n",
+      "suffix": "COMMIT;\n",
+      "removedStatement": "CREATE ROLE nb_delta_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;\n",
+      "bodyDigest": "2892583d942cf7c7c22cad19a751465b01d649de84d17ff0b32d0cec0ef362be"
+    },
+    "withdrawal-recovery": {
+      "migration": "20261024073522_incremental_withdrawal_recovery.sql",
+      "schemaDigest": "53a7982405958c14f33bfde88f7687d418dbf86ef22a1a0aa6b05d20f367b413",
+      "prefix": "-- Opt-in withdrawal recovery for incremental publication. No content or role changes.\nBEGIN;\n",
+      "suffix": "COMMIT;\n",
+      "removedStatement": null,
+      "bodyDigest": "4958cd0e4718807b37e59ecf03db34248c410c86e1828b81a4de89ac1251cf0b"
+    }
+  }
+}

@@ -12,13 +12,15 @@
 
 | 项目 | 配置 |
 | --- | --- |
-| 触发 | 发往 main／develop 的 PR，或手动选择分支；没有 push／schedule |
+| 触发 | 应用检查仍为 main／develop 目标 PR 与手动；独立隐私扫描另覆盖分支 push，无 schedule |
 | 环境 | 标准 GitHub 托管 `ubuntu-latest`、Node 24 |
-| 检查 | 两份锁文件安装、完整 `npm run check` 和 `npm run build`，45 分钟上限 |
+| 检查 | 应用先可信历史扫描，再两份锁文件安装、完整 `npm run check` 和 `npm run build`，45 分钟上限；独立隐私只用 Git／Node，不安装依赖 |
 | 输入与权限 | 离线 fixtures、隔离 PGlite 和本地媒体，Token 只读，checkout 不保留凭据 |
 | main | PR 保护、管理员受约束、解决讨论、禁止强推／删除，完整检查通过且分支为最新 |
 | develop | 同样 PR 保护，保留本机验证后合并规则，不强制等待平台 |
 | 外部 PR | 所有外部贡献者工作流需维护者审批；不配置真实来源或部署凭据 |
+
+N03／N07 增加独立 `Repository privacy`，不设置共享 concurrency；原 `Repository checks` 保留应用取消机制与 `Check and build (Node 24)` 名称。分支 push 不产生同名构建跳过实例，不新增 required check 或仓库设置。可信来源、固定事件 OID、旧规则自举与手动输入见[源码扫描说明](PRIVACY_SCANNING.md)。本机 YAML／引导验证不是实际 Actions 证明；新手动工作流与默认分支表单的采用仍按独立发布顺序，不为此自动合 main 或派发检查。
 
 托管工具缓存中的 Node 可能允许组／其他用户写入，冻结发布校验会拒绝这种运行时。CI 复制同一 Node 字节到临时专用目录，验证复制一致并设置非组／其他用户可写权限，后续 npm 和子进程使用该副本；生产权限校验保持。
 

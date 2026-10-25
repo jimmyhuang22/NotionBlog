@@ -67,6 +67,8 @@ const BASELINE_SCHEMA = `
     baseline_digest TEXT NOT NULL, seed_digest TEXT NOT NULL, members INTEGER NOT NULL) STRICT;
 `;
 
+const HISTORY_INDEX = `CREATE INDEX attempt_history ON attempts(source,page,generation,state);`;
+
 const SCHEMA = `
   CREATE TABLE scope(digest TEXT NOT NULL, sources TEXT NOT NULL) STRICT;
   CREATE TABLE events(id TEXT PRIMARY KEY, digest TEXT NOT NULL) STRICT;
@@ -105,12 +107,13 @@ export class IncrementalQueue {
         db.exec(RETIREMENT_SCHEMA);
         db.exec(BASELINE_SCHEMA);
         db.exec(`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=4;`);
-      } else if (application !== APPLICATION_ID || version < 1 || version > 4) fail("QUEUE_SCHEMA_MISMATCH");
+      } else if (application !== APPLICATION_ID || version < 1 || version > 5) fail("QUEUE_SCHEMA_MISMATCH");
       else if (version < 4) {
         if (version === 1) db.exec(DIRECTORY_SCHEMA);
         if (version < 3) db.exec(RETIREMENT_SCHEMA);
         db.exec(BASELINE_SCHEMA); db.exec("PRAGMA user_version=4;");
       }
+      if (version < 5) { db.exec(HISTORY_INDEX); db.exec("PRAGMA user_version=5;"); }
       const stored = db.prepare("SELECT digest,sources FROM scope").get();
       if (stored?.digest !== scope.digest || stored.sources !== JSON.stringify([...this.sources].sort())) fail("QUEUE_SCOPE_MISMATCH");
     });
@@ -121,7 +124,7 @@ export class IncrementalQueue {
   private transaction<T>(fn: () => T): T {
     try { this.db.exec("BEGIN IMMEDIATE"); } catch (error) { safeError(error); }
     try { const result = fn(); this.db.exec("COMMIT"); return result; }
-    catch (error) { this.db.exec("ROLLBACK"); safeError(error); }
+    catch (error) { try { this.db.exec("ROLLBACK"); } catch { /* Preserve the transaction failure. */ } safeError(error); }
   }
   private validateHints(events: readonly ChangeHint[]) {
     if (!Array.isArray(events) || events.length > MAX_BATCH) fail();
@@ -130,7 +133,7 @@ export class IncrementalQueue {
       if (!REASONS.includes(event.reason)) fail();
     }
   }
-  private ingest(events: readonly ChangeHint[], now: number) {
+  private ingest(events: readonly ChangeHint[], now: number, rememberEvents = true) {
     let inserted = 0;
     for (const event of events) {
       const fingerprint = hash([event.sourceKey, event.pageKey, event.reason, event.observedAt]);
@@ -140,7 +143,7 @@ export class IncrementalQueue {
       const generation = Number(job?.generation ?? 0) + 1; integer(generation, 1);
       const reasons: ChangeReason[] = job && job.state !== "done" ? JSON.parse(String(job.reasons)) : [];
       const merged = JSON.stringify([...new Set([...reasons, event.reason])].sort());
-      this.db.prepare("INSERT INTO events VALUES(?,?)").run(event.eventId, fingerprint);
+      if (rememberEvents) this.db.prepare("INSERT INTO events VALUES(?,?)").run(event.eventId, fingerprint);
       this.db.prepare(`INSERT INTO jobs(source,page,generation,reasons,state,available_at) VALUES(?,?,?,?,'pending',?)
         ON CONFLICT(source,page) DO UPDATE SET generation=excluded.generation,reasons=excluded.reasons,
           state=CASE WHEN jobs.state='done' THEN 'pending' ELSE jobs.state END,
@@ -161,6 +164,14 @@ export class IncrementalQueue {
   }
   /** Commit a fully fetched discovery page and its next cursor in one transaction. */
   commitDiscovery(input: { sourceKey: string; name: string; expectedRevision: number; nextCursor: string | null; events: readonly ChangeHint[] }) {
+    return this.commitCheckpoint(input, true);
+  }
+  /** Internal hints whose identity includes the checkpoint revision. A stale
+   * replay fails the checkpoint fence, so no permanent event ledger is needed. */
+  commitLocalDiscovery(input: Parameters<IncrementalQueue["commitDiscovery"]>[0]) {
+    return this.commitCheckpoint(input, false);
+  }
+  private commitCheckpoint(input: Parameters<IncrementalQueue["commitDiscovery"]>[0], rememberEvents: boolean) {
     this.source(input.sourceKey); key(input.name); integer(input.expectedRevision);
     if (input.nextCursor !== null) text(input.nextCursor);
     this.validateHints(input.events);
@@ -168,7 +179,7 @@ export class IncrementalQueue {
     const now = this.now();
     return this.transaction(() => {
       if (this.checkpoint(input.sourceKey, input.name).revision !== input.expectedRevision) fail("QUEUE_CHECKPOINT_CONFLICT");
-      const inserted = this.ingest(input.events, now), revision = input.expectedRevision + 1;
+      const inserted = this.ingest(input.events, now, rememberEvents), revision = input.expectedRevision + 1;
       integer(revision, 1);
       this.db.prepare(`INSERT INTO checkpoints VALUES(?,?,?,?) ON CONFLICT(source,name)
         DO UPDATE SET revision=excluded.revision,cursor=excluded.cursor`).run(input.sourceKey, input.name, revision, input.nextCursor);
@@ -281,7 +292,9 @@ export class IncrementalQueue {
           .run(sourceKey, pageKey, hash(["unavailable", pageKey]), scan.mode === "membership" ? scan.id : null, scan.mode === "membership" ? 1 : 0);
       }
       if (Number(this.db.prepare("SELECT count(*) AS n FROM directory WHERE source=?").get(sourceKey)!.n) > 20_000) fail("DISCOVERY_LIMIT_EXCEEDED");
-      const inserted = this.ingest(events, this.now());
+      // The source revision and directory metadata fence replay atomically.
+      // These internal hints need no permanent external-event deduplication row.
+      const inserted = this.ingest(events, this.now(), false);
       if (nextCursor === null && scan.mode === "changes") this.finishDiscovery(sourceKey, scan.startedAt, false);
       else this.db.prepare("UPDATE discovery SET revision=revision+1,cursor=?,phase=?,pages=pages+1 WHERE source=?")
         .run(nextCursor, nextCursor === null ? "missing" : "query", sourceKey);
@@ -298,7 +311,7 @@ export class IncrementalQueue {
         .all(sourceKey, scan.afterKey ?? "", scan.id, limit + 1) as Row[];
       const batch = rows.slice(0, limit);
       const inserted = this.ingest(batch.map(row => ({ eventId: hash(["absent", scan.id, sourceKey, row.page]),
-        sourceKey, pageKey: String(row.page), reason: "reconcile", observedAt: scan.startedAt })), this.now());
+        sourceKey, pageKey: String(row.page), reason: "reconcile", observedAt: scan.startedAt })), this.now(), false);
       for (const row of batch) this.db.prepare("UPDATE directory SET missing=1 WHERE source=? AND page=?").run(sourceKey, row.page);
       if (rows.length <= limit) this.finishDiscovery(sourceKey, scan.startedAt, true);
       else this.db.prepare("UPDATE discovery SET revision=revision+1,after_key=? WHERE source=?").run(batch.at(-1)!.page, sourceKey);
@@ -345,14 +358,7 @@ export class IncrementalQueue {
     if (options.requireRetirement !== undefined && typeof options.requireRetirement !== "boolean") fail();
     const now = this.now();
     return this.transaction(() => {
-      // Only preparation is safe to retry. A submission marker survives expiry.
-      const expired = this.db.prepare(`SELECT a.id,a.source,a.page FROM attempts a JOIN jobs j ON j.active_attempt=a.id
-        WHERE a.state='preparing' AND a.expires_at<=? LIMIT 200`).all(now) as Row[];
-      for (const a of expired) {
-        this.db.prepare("UPDATE attempts SET state='abandoned' WHERE id=?").run(a.id);
-        this.recordRetirement(String(a.id));
-        this.db.prepare("UPDATE jobs SET state='pending',active_attempt=NULL,available_at=? WHERE active_attempt=?").run(now, a.id);
-      }
+      this.expirePreparations(now);
       if (options.requireRetirement && this.db.prepare("SELECT 1 FROM retirements WHERE acknowledged=0 LIMIT 1").get()) return [];
       const jobs = this.db.prepare(`SELECT * FROM jobs WHERE state IN ('pending','retry') AND available_at<=?
         ORDER BY available_at,source,page LIMIT ?`).all(now, limit) as Row[];
@@ -364,6 +370,21 @@ export class IncrementalQueue {
         return this.ticket({ ...job, id });
       });
     });
+  }
+  /** Close expired preparation without claiming any pending or retry work. */
+  recoverExpiredPreparations() {
+    return this.transaction(() => this.expirePreparations(this.now()));
+  }
+  private expirePreparations(now: number) {
+    // Only preparation is safe to retry. A submission marker survives expiry.
+    const expired = this.db.prepare(`SELECT a.id FROM attempts a JOIN jobs j ON j.active_attempt=a.id
+      WHERE a.state='preparing' AND a.expires_at<=? LIMIT 200`).all(now) as Row[];
+    for (const a of expired) {
+      this.db.prepare("UPDATE attempts SET state='abandoned' WHERE id=?").run(a.id);
+      this.recordRetirement(String(a.id));
+      this.db.prepare("UPDATE jobs SET state='pending',active_attempt=NULL,available_at=? WHERE active_attempt=?").run(now, a.id);
+    }
+    return expired.length;
   }
   private recordRetirement(operationId: string) {
     this.db.prepare("INSERT INTO retirements(id) VALUES(?) ON CONFLICT DO NOTHING").run(operationId);
@@ -440,7 +461,18 @@ export class IncrementalQueue {
   }
   retryPreparation(ticket: QueueTicket, errorCode: string, delayMs: number) {
     code(errorCode); integer(delayMs, 0, 86_400_000);
-    this.transaction(() => { this.active(ticket, "preparing"); this.retry(ticket, errorCode, delayMs); });
+    return this.transaction(() => { this.active(ticket, "preparing"); return this.retry(ticket, errorCode, delayMs); });
+  }
+  /** A system failure or cancellation closes unsent work without charging the page. */
+  deferPreparation(ticket: QueueTicket, errorCode: string, delayMs: number) {
+    code(errorCode); integer(delayMs, 0, 86_400_000);
+    this.transaction(() => {
+      this.active(ticket, "preparing");
+      this.db.prepare("UPDATE attempts SET state='abandoned' WHERE id=?").run(ticket.operationId);
+      this.db.prepare("UPDATE jobs SET state='retry',active_attempt=NULL,error_code=?,available_at=? WHERE active_attempt=?")
+        .run(errorCode, this.now() + delayMs, ticket.operationId);
+      this.recordRetirement(ticket.operationId);
+    });
   }
   /** Requires definitive server rejection; a timeout or missing lookup is NOT proof. */
   confirmRejected(ticket: QueueTicket, proof: { operationId: string; payloadDigest: string; definitivelyRejected: true; code: string }, delayMs: number,
@@ -457,9 +489,14 @@ export class IncrementalQueue {
   }
   private retry(ticket: QueueTicket, errorCode: string, delayMs: number) {
     this.db.prepare("UPDATE attempts SET state='failed' WHERE id=?").run(ticket.operationId);
-    this.db.prepare("UPDATE jobs SET state='retry',active_attempt=NULL,error_code=?,available_at=? WHERE active_attempt=?")
-      .run(errorCode, this.now() + delayMs, ticket.operationId);
+    const failures = Number(this.db.prepare("SELECT count(*) AS n FROM attempts WHERE source=? AND page=? AND generation=? AND state='failed'")
+      .get(ticket.sourceKey, ticket.pageKey, ticket.generation)!.n);
+    const state = failures >= 5 ? "needs_review" : "retry";
+    const delay = Math.min(86_400_000, delayMs * 2 ** Math.min(20, Math.max(0, failures - 1)));
+    this.db.prepare("UPDATE jobs SET state=?,active_attempt=NULL,error_code=?,available_at=? WHERE active_attempt=?")
+      .run(state, errorCode, this.now() + delay, ticket.operationId);
     this.recordRetirement(ticket.operationId);
+    return state;
   }
   requireReview(ticket: QueueTicket, errorCode: string) {
     code(errorCode);
@@ -473,8 +510,43 @@ export class IncrementalQueue {
   /** Operator action only; fresh preparation still checks publication policy. */
   resume(sourceKey: string, pageKey: string) {
     this.source(sourceKey); key(pageKey);
-    return this.transaction(() => Number(this.db.prepare(`UPDATE jobs SET state='pending',error_code=NULL,available_at=?
+    return this.transaction(() => Number(this.db.prepare(`UPDATE jobs SET state='pending',generation=generation+1,error_code=NULL,available_at=?
       WHERE source=? AND page=? AND state='needs_review'`).run(this.now(), sourceKey, pageKey).changes) === 1);
+  }
+  /** Private operator output; new hints remain visible without silently releasing a hold. */
+  listReview(limit = 100, after?: { sourceKey: string; pageKey: string }) {
+    integer(limit, 1, 1000);
+    if (after) { this.source(after.sourceKey); key(after.pageKey); }
+    return this.db.prepare(`SELECT j.source,j.page,j.generation,j.error_code,
+      coalesce((SELECT max(a.generation) FROM attempts a WHERE a.source=j.source AND a.page=j.page),0) AS reviewed_generation
+      FROM jobs j WHERE j.state='needs_review' AND (j.source,j.page)>(?,?) ORDER BY j.source,j.page LIMIT ?`)
+      .all(after?.sourceKey ?? "", after?.pageKey ?? "", limit).map(row => ({ sourceKey: String(row.source), pageKey: String(row.page),
+        generation: Number(row.generation), errorCode: row.error_code === null ? null : String(row.error_code),
+        newChanges: Number(row.generation) > Number(row.reviewed_generation) }));
+  }
+  /** Bounded local history GC. Keep unresolved sends, the completed generation,
+   * latest committed proof and unacknowledged domain retirements. External event
+   * deduplication has no replay watermark, so those identifiers are never erased. */
+  compactHistory(limit = 200) {
+    integer(limit, 1, 1000);
+    return this.transaction(() => {
+      const rows = this.db.prepare(`SELECT a.id FROM attempts a
+        JOIN jobs j ON j.source=a.source AND j.page=a.page
+        LEFT JOIN retirements r ON r.id=a.id
+        WHERE a.generation<j.completed_generation AND a.id IS NOT j.active_attempt
+          AND a.state IN ('failed','abandoned','verified')
+          AND (r.acknowledged=1 OR (r.id IS NULL AND a.state='verified' AND a.publication_revision IS NOT NULL))
+          AND (a.publication_revision IS NULL OR EXISTS(SELECT 1 FROM attempts newer
+            WHERE newer.source=a.source AND newer.page=a.page AND newer.state='verified'
+              AND newer.publication_revision IS NOT NULL AND newer.generation>a.generation))
+        ORDER BY a.generation,a.id LIMIT ?`).all(limit) as Row[];
+      let retirements = 0;
+      for (const row of rows) {
+        retirements += Number(this.db.prepare("DELETE FROM retirements WHERE id=? AND acknowledged=1").run(row.id).changes);
+        this.db.prepare("DELETE FROM attempts WHERE id=?").run(row.id);
+      }
+      return { attempts: rows.length, retirements };
+    });
   }
   /** Counts only. Safe for a separate atomic Dashboard summary writer. */
   status() {

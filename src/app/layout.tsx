@@ -1,4 +1,4 @@
-import { Nunito } from "next/font/google";
+import "./fonts/nunito.css";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { contentFeatures } from "../../config/features.ts";
@@ -27,8 +27,6 @@ import "./library.css";
 import "./motion.css";
 import "./skins.css";
 
-/** The island skin's Latin face (skins.css). Not preloaded: the file is fetched only where the skin is in use. */
-const nunito = Nunito({ subsets: ["latin"], display: "swap", preload: false, variable: "--font-nunito" });
 
 export function generateMetadata(): Metadata {
   const { siteName } = getSiteConfig();
@@ -76,7 +74,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     nav.splice(firstFoldable === -1 ? nav.length : firstFoldable, 0, { href: "/works", label: "作品" });
   }
   return (
-    <html lang="zh-CN" className={nunito.variable} data-scroll-behavior="smooth" data-public-cache={publicCacheEnabled() ? "tagged-v1" : undefined} suppressHydrationWarning>
+    <html lang="zh-CN" className="font-nunito" data-scroll-behavior="smooth" data-public-cache={publicCacheEnabled() ? "tagged-v1" : undefined} suppressHydrationWarning>
       {/* The script's text must come from a plain module. Taken from a "use client" file it reaches the browser as a reference to that file's code, and the page then waits on it while becoming interactive; when that code arrived late, hydration failed now and then. */}
       <head><script dangerouslySetInnerHTML={{ __html: themeScript + inputModeScript + penScript }} /></head>
       <body>

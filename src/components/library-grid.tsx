@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import type { ImageAsset, Page } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel } from "../lib/format.ts";
+import { runsBy } from "../lib/runs.ts";
 import { cardParts, coverBadge, gameCard, itemDate, knownStatusLabel, workSentence, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
 import { LinkPending } from "./link-pending";
 import { ListTail } from "./list-tail";
@@ -59,18 +60,11 @@ interface Group { key: string; label: string | null; items: LibraryItem[] }
 /** Dated items group by year in list order; undated ones follow under one stated heading. A list sorted by name, or already narrowed to one year, is one run. */
 function groupByYear(items: LibraryItem[], timeZone: string, oneRun: boolean): Group[] {
   if (oneRun) return [{ key: "run", label: null, items }];
-  const groups: Group[] = [];
-  for (const item of items) {
+  const groups: Group[] = runsBy(items, item => {
     const date = itemDate(item);
     const parts = date ? dateParts(date.start, date.precision, timeZone) : null;
-    const key = parts ? String(parts.year) : "unknown";
-    let group = groups.at(-1);
-    if (!group || group.key !== key) {
-      group = { key, label: parts ? String(parts.year) : "日期未记录", items: [] };
-      groups.push(group);
-    }
-    group.items.push(item);
-  }
+    return parts ? { key: String(parts.year), label: String(parts.year) } : { key: "unknown", label: "日期未记录" };
+  });
   // A list with no dates at all (a wishlist) needs no heading.
   if (groups.length === 1 && groups[0]!.key === "unknown") groups[0]!.label = null;
   return groups;

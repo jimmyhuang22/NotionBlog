@@ -1,3 +1,5 @@
+import { withPGliteOwnerTransaction } from "../scripts/website-sync/owner-install-session.ts";
+import { rollbackFault } from "./helpers/rollback-fault.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
@@ -17,6 +19,8 @@ import { exportWebsiteArchive, restoreWebsiteArchive } from "../src/server/datab
 import { exportPublicationArchive, restorePublicationArchive, validatePublicationArchive, createPublicationArchiveStore, archivedPublicationObjects, type PublicationArchive } from "../src/server/database/publication-archive.ts";
 import { installPublication } from "../scripts/website-sync/publication-migration.ts";
 import { installIncrementalPublication } from "../scripts/website-sync/incremental-migration.ts";
+import { installIncrementalReaderIsolation } from "../scripts/website-sync/incremental-reader-isolation.ts";
+import { installIncrementalWithdrawalRecovery } from "../scripts/website-sync/incremental-withdrawal-recovery.ts";
 import { installIncrementalReader } from "../scripts/website-sync/incremental-reader-migration.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 import core from "../database/website-protocol.json" with {type: "json"};
@@ -144,6 +148,7 @@ test("strict extensions, empty targets and late failures cannot produce partial 
         await target.db.exec(`CREATE FUNCTION reject_ledger() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'SYNTHETIC_LEDGER_FAILURE'; END $$;
           CREATE CONSTRAINT TRIGGER reject_ledger AFTER INSERT ON nb_delta.operations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_ledger();`);
         await assert.rejects(restorePublicationArchive(target.owner, archive), /SYNTHETIC_LEDGER_FAILURE/);
+        await assert.rejects(restorePublicationArchive(rollbackFault(target.owner), archive), /SYNTHETIC_LEDGER_FAILURE/);
         assert.deepEqual(await exportPublicationArchive(target.owner), before);
       } finally {await target.db.close();}
     });
@@ -162,4 +167,32 @@ test("private publication bundle verifies all original and derived bytes before 
     const metadata = join(directory, "metadata"); await files.save(metadata, s.archive);
     assert.equal((await files.load(metadata)).mediaIncluded, false);
   } finally {await source.db.close(); await rm(directory, {recursive: true, force: true});}
+});
+
+
+test("archives preserve both audit extensions and refuse restoring across mismatched installed identities", async () => {
+  const source = await setup(), target = await setup();
+  try {
+    const old = await sample(source);
+    await withPGliteOwnerTransaction(source.db, installIncrementalWithdrawalRecovery);
+    await withPGliteOwnerTransaction(source.db, installIncrementalReaderIsolation);
+    const archive = await exportPublicationArchive(source.owner);
+    assert.equal(Object.keys(archive.incremental.state[0]).length, 6);
+    assert.deepEqual(archive.core, old.archive.core);
+    for (const key of ["reader_isolation_digest", "withdrawal_recovery_digest"]) {
+      const tampered = structuredClone(archive); tampered.incremental.state[0][key] = "f".repeat(64);
+      assert.throws(() => validatePublicationArchive(tampered));
+    }
+    await assert.rejects(restorePublicationArchive(target.owner, archive));
+    assert.equal((await exportPublicationArchive(target.owner)).core.tables.records.length, 0);
+    await withPGliteOwnerTransaction(target.db, installIncrementalReaderIsolation); // reverse installation order
+    await assert.rejects(restorePublicationArchive(target.owner, archive));
+    await withPGliteOwnerTransaction(target.db, installIncrementalWithdrawalRecovery);
+    await assert.rejects(restorePublicationArchive(target.owner, old.archive));
+    await restorePublicationArchive(target.owner, archive);
+    const restored = await exportPublicationArchive(target.owner);
+    assert.deepEqual(restored.incremental, archive.incremental);
+    assert.equal(restored.publication[0].run_id, null);
+    assert.deepEqual(sorted(restored.core.tables.records), sorted(archive.core.tables.records));
+  } finally { await source.db.close(); await target.db.close(); }
 });

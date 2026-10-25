@@ -13,7 +13,7 @@ function fail(code: string): never { throw new StudyDiscoveryError(code); }
 const equal = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 const key = (value: string) => { try { if (normalizeId(value) !== value) fail("STUDY_DISCOVERY_RESPONSE_INVALID"); return value; } catch { return fail("STUDY_DISCOVERY_RESPONSE_INVALID"); } };
 const hash = (value: unknown) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
-type Queue = Pick<IncrementalQueue, "scopeDigest" | "checkpoint" | "commitDiscovery">;
+type Queue = Pick<IncrementalQueue, "scopeDigest" | "checkpoint" | "commitDiscovery" | "commitLocalDiscovery">;
 export interface StudyChildDiscoveryOptions {
   queue: Queue;
   /** Verified durable domain cache; caller holds the canonical sync mutex. */
@@ -176,11 +176,12 @@ export async function runStudyChildDiscovery(options: StudyChildDiscoveryOptions
     if (!equal(before, after)) fail("STUDY_DISCOVERY_BASELINE_CHANGED");
     if (!equal(control, options.queue.checkpoint(options.sourceKey, NAME))) fail("STUDY_DISCOVERY_CURSOR_CHANGED");
     // No awaits between the baseline/queue fence and these durable commits.
-    // Each hint and its fingerprint are atomic. If a later slot conflicts,
-    // replay starts at the old control cursor and already committed hints dedupe.
+    // Each hint and its fingerprint commit atomically. A later slot conflict
+    // leaves the control cursor unchanged; replay skips matching fingerprints,
+    // while slot revisions fence writes. Internal hints use no permanent event ledger.
     for (const proposal of proposals) {
       signal.throwIfAborted();
-      result.hints += options.queue.commitDiscovery({ sourceKey: options.sourceKey, name: proposal.name, expectedRevision: proposal.revision,
+      result.hints += options.queue.commitLocalDiscovery({ sourceKey: options.sourceKey, name: proposal.name, expectedRevision: proposal.revision,
         nextCursor: proposal.cursor, events: proposal.event ? [proposal.event] : [] }).inserted;
     }
     const last = selected.at(-1), more = last && catalog.some(entry => identity(entry) > identity(last));

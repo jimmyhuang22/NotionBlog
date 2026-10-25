@@ -18,5 +18,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-  "exclude": ["node_modules", "**/*-development-kit/**", ".local", ".claude/worktrees"]
+  "exclude": ["node_modules", "**/*-development-kit/**", ".local", ".claude/worktrees", "console/.next", "console/next-env.d.ts"]
 }

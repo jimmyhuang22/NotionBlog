@@ -29,7 +29,7 @@ SQL 行大小在驱动交付该次结果后检查；过限结果已收到，随�
 
 沿用 plan 参数，增加 `verify` 与 `--plan-sha256 REVIEWED_DIGEST`。摘要变化在连接分配前拒绝。实际执行需单次明确维护授权，冻结代码、输入、凭据和绝对窗口；计划输出不授予该权限。
 
-verify 必须显式提供 `SYNC_READER_DATABASE_URL` 及 TLS／CA、`STORAGE_PROVIDER=cos` 和独立 COS reader 配置。只创建一个原生 pg Client，启动参数强制 `default_transaction_read_only=on`，继承现有证书验证、10 秒连接／15 秒 SQL／20 秒驱动超时；没有 writer 登录。核对实际 LOGIN、全部角色成员、管理／所有权、私表与 API 权限。真实 TLS 与 COS IAM 独立读取资格仍按既有部署证据绑定，逻辑 reader 参数不代替 CAM 证明。
+verify 必须显式提供 `SYNC_READER_DATABASE_URL` 及 TLS／CA、`STORAGE_PROVIDER=cos` 和独立 COS reader 配置。只创建一个原生 pg Client，启动参数强制 `default_transaction_read_only=on`，继承现有证书验证、10 秒连接／15 秒 SQL／20 秒驱动超时；没有 writer 登录。同步媒体读取使用独立 `nb_delta_reader`，包含公开小图核验函数但不能写入；核对实际 LOGIN、全部角色成员、管理／所有权、私表与 API 权限。真实 TLS 与 COS IAM 独立读取资格仍按既有部署证据绑定，逻辑 reader 参数不代替 CAM 证明。
 
 完整 page／media 成员必须等于该批次工件。每个原图的 400／800 查询核对当前政策、祖先与撤回资格、发布状态及完整描述；应有小图缺失、出现未审阅的有效小图或描述变化均失败。对全部 U 个对象验证 GET 的 MIME／长度／实际 SHA 与内容；读完后再次检查所有资产与成员和状态。不能只凭一份共享对象或 writer 回执证明多个页面公开资格。
 

@@ -134,7 +134,7 @@ test("review holds cannot be bypassed by new events, but can be explicitly resum
   q.requireReview(ticket, "SOURCE_SCOPE_UNKNOWN"); q.enqueue([event("event-2", "page-1", "policy", 3000)]);
   assert.deepEqual(q.claim(), []); assert.equal(q.status().needs_review, 1);
   assert.equal(q.resume("notes", "page-1"), true); assert.equal(q.resume("notes", "page-1"), false);
-  assert.equal(q.claim()[0].generation, 2);
+  assert.equal(q.claim()[0].generation, 3);
 });
 
 test("scope drift and unknown sources fail closed without dropping existing work", async t => {
@@ -173,4 +173,98 @@ test("opening an unrelated SQLite database does not install queue tables", async
   const read = new Constructor(path, { readOnly: true });
   try { assert.equal(read.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='scope'").get()!.n, 0); }
   finally { read.close(); }
+});
+
+test("repeated preparation failures back off, require review and expose new hints until explicit resume", async t => {
+  const s = await setup(t), q = await s.open(); q.enqueue([event()]);
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const [ticket] = q.claim(1); assert.ok(ticket);
+    assert.equal(q.retryPreparation(ticket, "IMAGE_UNAVAILABLE", 1000), attempt === 5 ? "needs_review" : "retry");
+    if (attempt < 5) {
+      assert.deepEqual(q.claim(), []);
+      s.time.now += 1000 * 2 ** (attempt - 1) - 1; assert.deepEqual(q.claim(), []);
+      s.time.now++; assert.equal(q.status().retry, 1);
+    }
+  }
+  assert.equal(q.status().needs_review, 1); assert.deepEqual(q.claim(), []);
+  assert.equal(q.listReview()[0].newChanges, false);
+  q.enqueue([event("edit-after-hold", "page-1", "removed", 999999)]);
+  assert.equal(q.listReview()[0].newChanges, true); assert.equal(q.status().events, 2);
+  assert.deepEqual(q.claim(), []);
+  assert.equal(q.resume("notes", "page-1"), true);
+  const [next] = q.claim(); assert.equal(next.generation, 3);
+  assert.equal(q.retryPreparation(next, "TEMPORARY", 1000), "retry");
+});
+
+test("deferral survives reopening, fences unsent work and preserves existing failure history", async t => {
+  const s = await setup(t); let q = await s.open(); q.enqueue([event()]);
+  for (let n = 0; n < 2; n++) q.retryPreparation(q.claim(1)[0], "PAGE_TEMPORARY", 0);
+  for (let n = 0; n < 6; n++) {
+    const [ticket] = q.claim(1);
+    q.deferPreparation(ticket, n % 2 ? "CANCELLED" : "PUBLICATION_UNAVAILABLE", 1000);
+    const proof = q.attemptClosure(ticket.operationId)!;
+    assert.equal(proof.disposition, "never_submitted"); assert.equal(proof.payloadDigest, null);
+    assert.throws(() => q.assertPreparing(ticket), error("QUEUE_STALE_TICKET"));
+    assert.throws(() => q.markSubmitting(ticket, { payloadDigest: payload, expectedRevision: "revision-1" }), error("QUEUE_STALE_TICKET"));
+    s.close(q); q = await s.open(); assert.ok(q.pendingRetirements().some(p => p.ticket.operationId === ticket.operationId));
+    s.time.now += 999; assert.deepEqual(q.claim(1), []); s.time.now++;
+    assert.equal(q.status().retry, 1); assert.equal(q.status().needs_review, 0);
+  }
+  for (let n = 3; n <= 5; n++) {
+    const [ticket] = q.claim(1); assert.equal(ticket.generation, 1); assert.deepEqual(ticket.reasons, ["content"]);
+    assert.equal(q.retryPreparation(ticket, "PAGE_TEMPORARY", 0), n === 5 ? "needs_review" : "retry");
+  }
+  assert.equal(q.status().needs_review, 1);
+});
+
+test("deferral cannot release an expired, foreign or already submitted ticket", async t => {
+  const s = await setup(t), q = await s.open(); q.enqueue([event()]);
+  const [ticket] = q.claim(1, 1000);
+  assert.throws(() => q.deferPreparation({ ...ticket, generation: 2 }, "CANCELLED", 0), error("QUEUE_STALE_TICKET"));
+  s.time.now += 1000;
+  assert.throws(() => q.deferPreparation(ticket, "CANCELLED", 0), error("QUEUE_STALE_TICKET"));
+  const [next] = q.claim(1); q.markSubmitting(next, { payloadDigest: payload, expectedRevision: "revision-1" });
+  assert.throws(() => q.deferPreparation(next, "CANCELLED", 0), error("QUEUE_STALE_TICKET"));
+  assert.equal(q.pendingVerifications()[0].ticket.operationId, next.operationId);
+});
+
+
+test("history GC preserves current retries, unknown sends, unretired work and the latest commit proof", async t => {
+  const s = await setup(t), q = await s.open();
+  const done = (id: string, commit = false) => {
+    q.enqueue([event(id)]); const ticket = q.claim(1)[0];
+    if (commit) { q.markSubmitting(ticket, { payloadDigest: payload, expectedRevision: "revision-1" }); q.confirmCommit(ticket, proof(ticket)); }
+    else q.completeUnchanged(ticket);
+    return ticket;
+  };
+  const old = done("old-commit", true), unretired = done("old-unchanged");
+  const latestCommit = done("new-commit", true);
+  const recent = done("new-unchanged");
+  q.enqueue([event("unknown", "page-unknown")]); const unknown = q.claim(1)[0];
+  q.markSubmitting(unknown, { payloadDigest: payload, expectedRevision: "revision-1" });
+  q.enqueue([event("retry", "page-retry")]);
+  for (let n = 0; n < 4; n++) { q.retryPreparation(q.claim(1)[0], "TEMPORARY", 0); }
+  const before = q.status();
+  assert.deepEqual(q.compactHistory(1), { attempts: 1, retirements: 0 }); // only superseded commit
+  assert.deepEqual(q.status(), before);
+  assert.deepEqual(q.compactHistory(), { attempts: 0, retirements: 0 });
+  const retirement = q.pendingRetirements().find(p => p.ticket.operationId === unretired.operationId)!;
+  q.acknowledgeRetirement(retirement);
+  assert.deepEqual(q.compactHistory(), { attempts: 1, retirements: 1 });
+  assert.equal(q.attemptClosure(unretired.operationId), null);
+  assert.ok(q.attemptClosure(recent.operationId));
+  assert.equal(q.pendingVerifications()[0].ticket.operationId, unknown.operationId);
+  assert.equal(q.retryPreparation(q.claim(1)[0], "TEMPORARY", 0), "needs_review");
+  s.close(q);
+  const Constructor = (sqlite as unknown as { Database?: typeof sqlite.DatabaseSync }).Database ?? sqlite.DatabaseSync;
+  const db = new Constructor(join(s.dir, "incremental.sqlite"), { readOnly: true });
+  try {
+    assert.equal(db.prepare("SELECT count(*) AS n FROM attempts WHERE id=?").get(old.operationId)!.n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM attempts WHERE id=?").get(latestCommit.operationId)!.n, 1);
+  } finally { db.close(); }
+  const reopened = await s.open();
+  assert.equal(reopened.enqueue([event("old-commit")]), 0);
+  assert.throws(() => reopened.enqueue([event("old-commit", "different")]), error("QUEUE_EVENT_CONFLICT"));
+  assert.equal(reopened.status().needs_review, 1);
+  assert.throws(() => reopened.compactHistory(1001), error("QUEUE_INPUT_INVALID"));
 });

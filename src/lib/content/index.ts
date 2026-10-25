@@ -1,13 +1,15 @@
+import { getContentProvider } from "./provider.ts";
+export { getContentProvider } from "./provider.ts";
 import { publicRepository } from "../../server/public-cache/runtime.ts";
 import { publicProjectionGeneration } from "../../server/public-cache/read.ts";
 import "server-only";
 import { cache } from "react";
 
-import { ContentServiceError, type ContentRepository } from "../../../contracts/repository.ts";
+import { type ContentRepository } from "../../../contracts/repository.ts";
 import { getNotionRuntime } from "../../server/notion/runtime.ts";
 import { getDatabaseRuntime } from "../../server/database/runtime.ts";
 import { getSiteConfig } from "../site/index.ts";
-import { createContentService, type ContentProvider } from "./factory.ts";
+import { createContentService } from "./factory.ts";
 import { readTimelineIndexSnapshot, hydrateTimelinePage } from "./website.ts";
 import type { TimelineEvent } from "../../../contracts/website.ts";
 import { contentFeatures } from "../../../config/features.ts";
@@ -48,13 +50,6 @@ const uncachedRepository: ContentRepository & Required<Pick<ContentRepository, "
   }),
   getCourseTree: (courseSlug, parentId) => getContentService().repository.getCourseTree(courseSlug, parentId),
 };
-
-/** The current provider is explicit; a real-provider failure never falls back to demo data. */
-export function getContentProvider(): ContentProvider {
-  const provider = process.env.CONTENT_PROVIDER ?? "mock";
-  if (provider !== "mock" && provider !== "notion" && provider !== "database") throw new ContentServiceError("MISCONFIGURED", "Unsupported content provider configuration.");
-  return provider;
-}
 
 /** Full eligible timeline snapshot for the server-side mixed feed; never exposed directly over HTTP. */
 export function readContentTimelineSnapshot() {

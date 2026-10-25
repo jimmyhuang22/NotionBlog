@@ -17,6 +17,11 @@ export async function checkVisitorResponses(plan: VisitorPlan, fetcher: typeof f
     const response = await fetcher(new URL(request.path, localOrigin), { method: "GET", headers: { "X-Visitor-Nonce": nonce } });
     const bytes = new Uint8Array(await response.arrayBuffer()), expected = request.expected;
     if (!(expected.type === "media" ? hasSafeMediaCachePolicy(response, request.path) : /(?:^|,)\s*no-store\s*(?:,|$)/i.test(response.headers.get("cache-control") ?? ""))) fail("VISITOR_CACHE_HEADERS");
+    if (expected.type === "health") {
+      if (response.status !== 204 || bytes.length !== 0) fail("VISITOR_HTTP_STATUS");
+      checks.push({ name: request.name, passed: true, bytes: 0 });
+      continue;
+    }
     if (response.status !== (expected.type === "missing" ? 404 : 200)) fail("VISITOR_HTTP_STATUS");
     if (expected.type === "media") {
       if (bytes.length !== expected.byteSize || response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== expected.mime ||
@@ -34,8 +39,7 @@ export async function checkVisitorResponses(plan: VisitorPlan, fetcher: typeof f
       else {
         if (Object.keys(envelope).length !== 1 || !Object.hasOwn(envelope, "data")) fail("VISITOR_RESPONSE_INVALID");
         const data = object(envelope.data);
-        if (expected.type === "health") same(data, { provider: "database", databaseVersion: "2" });
-        else if (expected.type === "exact") same(data, expected.data);
+        if (expected.type === "exact") same(data, expected.data);
         else if (expected.type === "list") {
           if (!Array.isArray(data.items) || data.items.length !== Math.min(2, expected.total) || data.total !== expected.total ||
             data.hasMore !== (expected.total > 2) || data.hasMore !== (typeof data.nextCursor === "string" && data.nextCursor.length > 0) ||

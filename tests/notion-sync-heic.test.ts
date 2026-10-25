@@ -33,6 +33,26 @@ test("untrusted writable or symlink converter executables cannot run", async () 
     assert.deepEqual(await readdir(f.state), []);
   } finally { await f.cleanup(); }
 });
+test("decoder failure or an unrequested signal is unavailable and cleans all temporary files", async () => {
+  for (const script of ['#!/bin/sh\nexit 75\n', '#!/bin/sh\nkill -TERM $$\n']) {
+    const f = await fixture(script);
+    try {
+      await assert.rejects(createHeicConverter({ executable: f.executable, temporaryRoot: f.state })(
+        new Uint8Array([1]), new AbortController().signal), code("IMAGE_UNAVAILABLE"));
+      assert.deepEqual(await readdir(f.state), []);
+    } finally { await f.cleanup(); }
+  }
+});
+test("a successful decoder still cannot return empty or incorrectly protected output", async () => {
+  for (const script of ['#!/bin/sh\numask 077\n: > "$2"\n', '#!/bin/sh\numask 022\nprintf x > "$2"\n']) {
+    const f = await fixture(script);
+    try {
+      await assert.rejects(createHeicConverter({ executable: f.executable, temporaryRoot: f.state })(
+        new Uint8Array([1]), new AbortController().signal), code("IMAGE_REJECTED"));
+      assert.deepEqual(await readdir(f.state), []);
+    } finally { await f.cleanup(); }
+  }
+});
 test("cancellation kills the decoder and removes temporary source images", async () => {
   const f=await fixture('#!/bin/sh\nexec /bin/sleep 5\n');
   try {

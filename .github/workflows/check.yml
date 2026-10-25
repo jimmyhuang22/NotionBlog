@@ -4,6 +4,23 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      trusted_branch:
+        description: Protected branch supplying the trusted scanner
+        required: true
+        type: choice
+        options: [develop, main]
+        default: develop
+      target_oid:
+        description: Exact full commit OID to inspect (independent of trusted source)
+        required: true
+        type: string
+      history_mode:
+        description: Commit selection boundary
+        required: true
+        type: choice
+        options: [legacy, full]
+        default: legacy
 
 permissions:
   contents: read
@@ -20,9 +37,150 @@ jobs:
     env:
       NOTIONBLOG_DEVELOPMENT_MODE: offline
     steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Scan event objects with the frozen trusted privacy source
+        shell: bash
+        run: |
+          node --input-type=module <<'PRIVACY_BOOTSTRAP'
+          // The inline control plane is duplicated intentionally: an old trusted base may
+          // not contain any new helper. Never load bootstrap code from the candidate tree.
+          import { spawnSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { join, dirname } from 'node:path';
+          import { pathToFileURL } from 'node:url';
+
+          const LEGACY_SCANNER_SHA256 = '9e00a14acaf65913e78a34963ebeac695881e89fe56ca7461eb1f4423a6799e7';
+          // User-approved one-time migration from the deployed pre-history scanner.
+          const TRANSITION_BASE = '53492c9f0bdecd0e6c983de02f430e508f0af482';
+          const TRANSITION_SCANNER_SHA256 = 'd8262fbf0f355967c202a9cfb3804c550c7f26657a34fe713dd3bdceddd40e5c';
+          const COMPATIBILITY_SOURCE = '19f0560542ef3a6a1f0dfea1a3625514e209c44a';
+          const oid = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value) && !/^0+$/.test(value);
+          const fail = () => { throw new Error('Privacy CI validation failed'); };
+          const requireOid = value => { if (!oid(value)) fail(); return value; };
+          const gitEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+          Object.assign(gitEnvironment, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_COUNT: '3', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: '/dev/null', GIT_CONFIG_KEY_1: 'protocol.file.allow', GIT_CONFIG_VALUE_1: 'never', GIT_CONFIG_KEY_2: 'protocol.ext.allow', GIT_CONFIG_VALUE_2: 'never' });
+
+          try {
+            const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+            const repository = process.env.GITHUB_REPOSITORY;
+            if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? '') || event.repository?.full_name?.toLowerCase() !== repository.toLowerCase() || process.env.GITHUB_SERVER_URL !== 'https://github.com') fail();
+            const remoteUrl = `https://github.com/${repository}.git`;
+            const root = mkdtempSync(join(process.env.RUNNER_TEMP, 'notionblog-privacy-'));
+            const objects = join(root, 'objects.git'), source = join(root, 'trusted');
+            const git = (args, { optional = false, cwd = objects } = {}) => {
+              const result = spawnSync('git', args, { cwd, env: gitEnvironment, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+              if (result.error || result.signal || result.status !== 0) { if (optional) return null; fail(); }
+              return result.stdout;
+            };
+            git(['init', '--bare', '--quiet', objects], { cwd: root });
+            const fetchCommit = sha => {
+              requireOid(sha);
+              git(['fetch', '--quiet', '--no-tags', '--no-recurse-submodules', remoteUrl, sha]);
+              if (git(['cat-file', '-t', sha]).trim() !== 'commit' || git(['rev-parse', '--verify', '--end-of-options', `${sha}^{commit}`]).trim() !== sha) fail();
+              return sha;
+            };
+            const freezeBranch = branch => {
+              if (!['main', 'develop'].includes(branch)) fail();
+              const answer = git(['ls-remote', '--refs', '--exit-code', remoteUrl, `refs/heads/${branch}`]);
+              const match = /^([a-f0-9]{40})\trefs\/heads\/(main|develop)\n?$/.exec(answer);
+              if (!match || match[2] !== branch) fail();
+              return fetchCommit(requireOid(match[1]));
+            };
+            let sourceSha, selection;
+            if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
+              const pr = event.pull_request;
+              if (!['main', 'develop'].includes(pr?.base?.ref) || pr.base.repo?.full_name?.toLowerCase() !== repository.toLowerCase()) fail();
+              sourceSha = fetchCommit(requireOid(pr.base.sha));
+              selection = { kind: 'pull_request', base: sourceSha, head: fetchCommit(requireOid(pr.head?.sha)) };
+            } else if (process.env.GITHUB_EVENT_NAME === 'push') {
+              if (typeof event.ref !== 'string' || !event.ref.startsWith('refs/heads/') || event.ref !== process.env.GITHUB_REF) fail();
+              if (typeof event.before !== 'string' || !/^[a-f0-9]{40}$/.test(event.before)) fail();
+              if (event.deleted === true) {
+                if (event.after !== '0'.repeat(40)) fail();
+                console.log('Privacy CI status=no-new-objects reason=branch-deletion history=not-scanned');
+                process.exit(0);
+              }
+              const after = requireOid(event.after);
+              if (after !== process.env.GITHUB_SHA || event.deleted !== false) fail();
+              const before = oid(event.before) ? event.before : null;
+              if (['refs/heads/main', 'refs/heads/develop'].includes(event.ref)) sourceSha = fetchCommit(requireOid(before));
+              else sourceSha = freezeBranch('develop');
+              selection = { kind: 'push', before: before ? fetchCommit(before) : null, after: fetchCommit(after) };
+            } else if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+              sourceSha = freezeBranch(event.inputs?.trusted_branch);
+              if (!['legacy', 'full'].includes(event.inputs?.history_mode)) fail();
+              selection = { kind: 'manual', target: fetchCommit(requireOid(event.inputs?.target_oid)), mode: event.inputs.history_mode };
+            } else fail();
+            console.log(`Privacy CI event=${selection.kind} source=${sourceSha} targets=${[selection.base, selection.head, selection.before, selection.after, selection.target].filter(Boolean).join(',')}`);
+            const readTrusted = (path, optional = false, commit = sourceSha) => {
+              const entry = git(['ls-tree', requireOid(commit), '--', path]);
+              if (!entry) { if (optional) return null; fail(); }
+              if (!/^100644 blob [a-f0-9]{40}\t/.test(entry)) fail();
+              return git(['show', `${commit}:${path}`]);
+            };
+            let scannerBody = readTrusted('scripts/check-privacy.mjs');
+            let scannerHash = createHash('sha256').update(scannerBody).digest('hex');
+            if (sourceSha === TRANSITION_BASE && scannerHash === TRANSITION_SCANNER_SHA256) {
+              // This older source has no range/history API. Use only the separately
+              // approved immutable scanner, never a candidate helper or branch tip.
+              const compatibilitySha = fetchCommit(COMPATIBILITY_SOURCE);
+              scannerBody = readTrusted('scripts/check-privacy.mjs', false, compatibilitySha);
+              scannerHash = createHash('sha256').update(scannerBody).digest('hex');
+              if (scannerHash !== LEGACY_SCANNER_SHA256) fail();
+              console.log(`Privacy CI compatibility=pinned-history source=${sourceSha} compatibilitySource=${compatibilitySha} scannerSHA256=${scannerHash}`);
+            }
+            mkdirSync(join(source, 'scripts/privacy'), { recursive: true, mode: 0o700 });
+            const scannerPath = join(source, 'scripts/check-privacy.mjs');
+            writeFileSync(scannerPath, scannerBody, { mode: 0o600 });
+            if (scannerHash === LEGACY_SCANNER_SHA256) {
+              // This precise old scanner predates collection input and safe path logging.
+              // Capture every byte; only fixed grammar and numeric counts reach the log.
+              const ranges = selection.kind === 'pull_request' ? [['--range', `${selection.base}..${selection.head}`], ['--history', selection.head]]
+                : selection.kind === 'push' ? [...new Set([selection.before, selection.after].filter(Boolean))].map(sha => ['--history', sha])
+                : [['--history', selection.target]];
+              let failed = false;
+              for (const args of ranges) {
+                const result = spawnSync(process.execPath, [scannerPath, ...args], { cwd: objects, env: gitEnvironment, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+                const success = result.status === 0 && !result.error && !result.signal && result.stderr === '' && /^PASS: privacy check of \d+ committed blob\/path versions files\.\n$/.test(result.stdout);
+                const findingLines = (result.stderr ?? '').split('\n');
+                const rejected = result.status === 1 && !result.error && !result.signal && result.stdout === '' && findingLines.shift() === 'Privacy check failed (matched values are never printed):' && findingLines.pop() === '' && findingLines.length > 0 && findingLines.every(line => line.startsWith('- '));
+                const count = success ? Number(/^PASS: privacy check of (\d+)/.exec(result.stdout)[1]) : rejected ? findingLines.length : 0;
+                if (!Number.isSafeInteger(count)) fail();
+                const exit = Number.isInteger(result.status) ? result.status : 'unavailable';
+                console.log(`Privacy CI policy=legacy-policy status=${success ? 'pass' : rejected ? 'rejected' : 'invalid-result'} exit=${exit} count=${count} source=${sourceSha}`);
+                if (!success) failed = true;
+              }
+              process.exitCode = failed ? 1 : 0;
+            } else {
+              const helperPaths = ['scripts/privacy/ci.mjs', 'scripts/privacy/git-selection.mjs', 'scripts/privacy/credential-rules.mjs', 'scripts/privacy/history-policy.json'];
+              for (const path of helperPaths) {
+                const body = readTrusted(path);
+                mkdirSync(dirname(join(source, path)), { recursive: true, mode: 0o700 });
+                writeFileSync(join(source, path), body, { mode: 0o600 });
+              }
+              // Policy lives in the frozen trusted tree. Fetch its immutable anchor only;
+              // never substitute a tracking ref or current remote tip for a missing OID.
+              const { readPolicy, verifyDestination } = await import(pathToFileURL(join(source, 'scripts/privacy/git-selection.mjs')).href);
+              const policy = readPolicy({ cwd: source });
+              verifyDestination(policy, remoteUrl);
+              if (selection.kind !== 'pull_request' && selection.mode !== 'full') fetchCommit(requireOid(policy.anchor));
+              for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
+              Object.assign(process.env, gitEnvironment);
+              const { runCi } = await import(pathToFileURL(join(source, 'scripts/privacy/ci.mjs')).href);
+              process.exitCode = runCi({ cwd: objects, sourceSha, repository, remoteUrl, selection });
+            }
+          } catch {
+            console.error('Privacy CI failed: trusted source, event objects, policy or scanner validation did not complete.');
+            process.exitCode = 1;
+          }
+          PRIVACY_BOOTSTRAP
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'

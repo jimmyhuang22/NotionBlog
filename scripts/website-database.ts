@@ -1,3 +1,4 @@
+import { closeOwnerPool } from "./cleanup.ts";
 import { createDatabasePool } from "../src/server/database/connection.ts";
 import { exportWebsiteArchive, restoreWebsiteArchive } from "../src/server/database/website-archive.ts";
 import { createWebsiteArchiveStore } from "../src/server/database/website-archive-files.ts";
@@ -21,6 +22,7 @@ async function main() {
   const url = process.env.DATABASE_MIGRATION_URL;
   const pool = createDatabasePool(url, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
   let client;
+  let failed = false;
   try {
     client = await pool.connect();
     if (command === "export") {
@@ -39,7 +41,8 @@ async function main() {
       await restoreWebsiteArchive(client, bundle!.archive);
       console.log(JSON.stringify({ restored: true, publicationEnabled: false, objectUploads: 0, mediaBackupVerified: bundle!.mediaIncluded }));
     }
-  } finally { client?.release(); await pool.end(); }
+  } catch (error) { failed = true; throw error; }
+  finally { await closeOwnerPool(pool, client, failed); }
 }
 main().catch(() => {
   console.error("Website backup operation failed. Check the private files, version, empty target and operator permissions; provider details are withheld."); process.exitCode = 1;

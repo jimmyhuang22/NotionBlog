@@ -4,6 +4,10 @@
 
 `scripts/website-sync/run-private.mjs` 是 v2 网站同步的独立主机入口，配合原件复用。旧 `scripts/notion-sync/run-private.mjs`、v1 状态和调度不改变；不能把旧 v1 入口或旧单次批准当成 v2 持续运行授权。
 
+`npm run website:sync -- --config /absolute/private/runtime.json --mode publish --check` 现在直接调用这个固定主机入口，接受相同参数、退出码和回执；运行 Node 必须与 manifest 的规范路径／版本／摘要一致。旧的 `website:sync -- publish`／`dry-run`／`stage` 位置参数不再执行。直接调用 `scripts/website-sync/cli.ts` 的这三个命令也会在读取配置前拒绝，并提示受控替代入口，不能换成直调旧 CLI 绕过双锁、预算或 TLS。
+
+`website:admin` 明确保留 `cli.ts` 的迁移、政策与 deny/allow 管理操作，可用 `npm run website:admin -- --help` 离线查看。管理命令不是同步后门，不提供 dry-run/stage/publish；仍须独立维护授权、migration owner 和既有 TLS 配置，不能将其视为固定同步主机的双锁／超时保证。已有冻结运行包和调度不会因 npm 别名改变而自动升级或重启。
+
 ## 固定源码与私有配置
 
 从已提交版本导出独立 release，按相同锁文件准备依赖，不从开发工作树或 `current` 符号链接直接启动。私有 manifest 使用 `format=website-v2-release-1`，记录 commit、规范 Node 绝对路径／版本／SHA，以及所有导出源码的相对路径／SHA。入口核对文件与 Node 身份、拒绝 `.git` 开发检出和被改动源码；manifest 保存在源码之外、600 私有文件。依赖按锁文件安装或复用同锁文件已验证的本机依赖；源码摘要不代表逐个核对整个依赖目录。
@@ -37,7 +41,9 @@
 
 ## 锁、会话和预算
 
-实际运行取得同一个输入根 `manual-run.lock` 和同一个 `state/worker.lock`，已有续期锁也拒绝启动，不偷锁。子进程只接收白名单私有配置和固定 PATH，不继承 shell 秘密／Node options；临时配置为 600，结束后清理自己的文件和锁。v2 输出在 `state/website-v2/`，不覆盖 v1 checkpoint。
+实际运行取得同一个输入根 `manual-run.lock` 和同一个 `state/worker.lock`，已有续期锁也拒绝启动，不偷锁。子进程只接收白名单私有配置和固定 PATH，不继承 shell 秘密／Node options。白名单值经既有 dotenv 校验／解码后直接通过子进程环境传入，不再创建 `.website-runtime-env-*` 凭据副本，也不使用 `--env-file` 参数；原私有输入文件及其权限要求保持。正常结束清理自己的锁，v2 输出在 `state/website-v2/`，不覆盖 v1 checkpoint。
+
+宿主被强杀时不会留下这类新环境文件，但进程环境仍含运行所需凭据，原输入文件也仍存在；本项不承诺内存清零或防止有权检查进程的本机用户读取。旧版本遗留文件不自动扫描或删除，须在原运行根按独立授权处理。强杀后的锁与可能已提交的云端状态仍需原有人工核对，不能因环境文件消失就自动重试或判定运行未发生。
 
 受限 writer 与独立 reader 均验证数据库角色和 TLS。Storage 会话在需要时通过原助手续期，要求服务器确认且静态连接／桶／API 配置不变；不新增身份或权限。来源仍按原公开规则完整枚举，图片通过[强验证器与原件复用](WEBSITE_IMAGE_REUSE.md)减少重复正文下载；HEIC 保留完整转换流程。
 
@@ -51,7 +57,7 @@
 
 临时 DNS 故障及内部响应头／图片期限遵守既有三次尝试与外层预算；调用方取消、权限／TLS／字节校验失败不因本项重试或放行。图片连接由创建者关闭，worker 不关闭调用方提供的下载器。
 
-退出前尽力保存发布事实，再分别启动图片连接和两个数据库池的清理；单项诊断写入或关闭异常不会跳过其他连接。最后的必需回执记录 `cleanupCompleted` 和可能的 `cleanupFailures`，清理失败不撤销已经确认的发布。worker 锁释放异常时，主机仍清理自己取得的手动锁和临时环境文件；替换或移走的锁继续保留。
+退出前尽力保存发布事实，再分别启动图片连接和两个数据库池的清理；单项诊断写入或关闭异常不会跳过其他连接。最后的必需回执记录 `cleanupCompleted` 和可能的 `cleanupFailures`，清理失败不撤销已经确认的发布。worker 锁释放异常时，主机仍清理自己取得的手动锁；替换或移走的锁继续保留。
 
 本项只收编诊断与收尾源码，不修改冻结兼容表、生产者校验器、SQL、旧工件或运行清单。旧转换仍拒绝新的运行字节；本机通过不代表新程序已安装或旧缓存已获准接续。映射移除、课程重投影及实际主机安装分别准备和验收，不修改正在使用的固定运行包。
 

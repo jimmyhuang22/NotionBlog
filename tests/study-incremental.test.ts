@@ -20,7 +20,7 @@ import incrementalProtocol from "../database/incremental-publication-protocol.js
 const id=(n:number)=>n.toString(16).padStart(32,"0"),time="2026-10-13T00:00:00.000Z";
 const text=(s:string)=>({type:"text",plain_text:s,text:{content:s,link:null},annotations:{bold:false,italic:false,strikethrough:false,underline:false,code:false,color:"default"},href:null});
 const owner=(n:number)=>({type:"page_id" as const,page_id:id(n)}),ds=(n:number)=>({type:"data_source_id" as const,data_source_id:id(n),database_id:id(n===3?2:n===8?7:100)});
-async function setup() {
+async function setup(withPageMention = false) {
   const config=parseWebsiteNotionConfig({schemaVersion:2,sources:[
     {key:"courses",kind:"course",enabled:true,dataSourceId:id(1),fields:{title:"Name"},publication:{mode:"all"}},
     {key:"notes",kind:"study-note",enabled:true,dataSourceId:id(1),fields:{title:"Name",date:"Date",order:"Sort"},publication:{mode:"course-descendants"}},
@@ -31,6 +31,10 @@ async function setup() {
   const pages=new Map([[id(10),page(10,"Course A",ds(1))],[id(11),page(11,"Course B",ds(1))],[id(20),page(20,"Week 2",ds(3))],[id(21),page(21,"Week 10",ds(3))],[id(30),page(30,"Deep note",owner(20))],[id(40),page(40,"Other course note",ds(8))]]);
   const block=(n:number,p:number,type:string,value:unknown)=>({object:"block",id:id(n),parent:owner(p),type,[type]:value,has_children:false,archived:false,in_trash:false}) as unknown as BlockObjectResponse;
   const blocks=new Map([[id(10),[block(2,10,"child_database",{title:"Notes A"})]],[id(11),[block(7,11,"child_database",{title:"Notes B"})]],[id(20),[block(30,20,"child_page",{title:"Deep note"})]],[id(21),[block(210,21,"paragraph",{rich_text:[text("Unchanged sibling")],color:"default"})]],[id(30),[block(300,30,"paragraph",{rich_text:[text("Old body")],color:"default"})]],[id(40),[]]]);
+  if(withPageMention)blocks.set(id(21),[block(210,21,"heading_2",{rich_text:[
+    {...text("Stale upstream label"),type:"mention",mention:{type:"page",page:{id:id(30)}}},
+    {...text("Custom label"),text:{content:"Custom label",link:{url:new URL(`/${id(30)}`,"https://www.notion.so").href}}},
+  ],color:"default",is_toggleable:false})]);
   const calls:string[]=[],mediaOwners:string[]=[];
   const client:NotionReadClient={
     getPage:async key=>{calls.push(`page:${key}`);return structuredClone(pages.get(key)??null);},
@@ -152,6 +156,18 @@ test("ancestor renames refresh breadcrumbs and cached link titles without readin
   assert.equal(note.kind,"study-note");if(note.kind==="study-note")assert.equal(note.breadcrumbs.at(-1)!.title,"Renamed week");
   assert.equal(s.calls.includes(`blocks:${id(30)}`),false);
 });
+test("v2-generated page mentions refresh cached text and TOC without reading the referring body",async()=>{
+  const s=await setup(true), before=s.checkpoint.entries.find(e=>e.record.detail.item.id===id(21))!.record.detail.document!;
+  assert.equal(before.blocks[0].type,"heading");if(before.blocks[0].type!=="heading")assert.fail();
+  assert.equal(before.blocks[0].text[0].pageMention,true);assert.equal(before.blocks[0].text[1].pageMention,undefined);
+  const title=s.pages.get(id(30))!.properties.Name;if(title.type!=="title")assert.fail();title.title=[text("Renamed target") as typeof title.title[number]];
+  const delta=await prepareStudyDelta(s.checkpoint,[id(30)],s.source());
+  const document=delta.upserts.find(e=>e.record.detail.item.id===id(21))!.record.detail.document!;
+  const heading=document.blocks[0];if(heading.type!=="heading")assert.fail();
+  assert.equal(heading.text[0].text,"Renamed target");assert.equal(heading.text[0].pageMention,true);
+  assert.equal(heading.text[1].text,"Custom label");assert.equal(document.toc[0].title,"Renamed targetCustom label");
+  assert.equal(s.calls.includes(`blocks:${id(21)}`),false);
+});
 test("withdrawn linked pages become unavailable in stored AST without refetching its owner",async()=>{
   const s=await setup();const href=`/study/${id(10)}/notes/${id(30)}`;
   const doc=s.checkpoint.entries.find(e=>e.record.detail.item.id===id(21))!.record.detail.document!;
@@ -160,7 +176,7 @@ test("withdrawn linked pages become unavailable in stored AST without refetching
   s.pages.get(id(30))!.in_trash=true;const delta=await prepareStudyDelta(s.checkpoint,[id(30)],s.source());
   const blocks=delta.upserts.find(e=>e.record.detail.item.id===id(21))!.record.detail.document!.blocks;
   const paragraph=blocks.at(-2)!;assert.equal(paragraph.type,"paragraph");if(paragraph.type==="paragraph")assert.deepEqual(paragraph.text[0].link,{kind:"unavailable"});
-  const link=blocks.at(-1)!;assert.equal(link.type,"child-page");if(link.type==="child-page")assert.equal(link.target,null);
+  const link=blocks.at(-1)!;assert.equal(link.type,"child-page");if(link.type==="child-page"){assert.equal(link.target,null);assert.equal(link.title,"Unavailable page");}
   assert.equal(s.calls.some(c=>c.startsWith("blocks:")),false);
 });
 test("media preparation failure and baseline drift never publish mismatched documents",async()=>{

@@ -1,4 +1,5 @@
 import { cacheableMediaHeaders } from "./cache.ts";
+import { excludeFromSharedCache } from "../public-cache/policy.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { ObjectStorage } from "../database/storage.ts";
 import { verifyMediaBytes } from "../database/storage.ts";
@@ -44,7 +45,7 @@ export async function hybridMediaResponse(assetId: string, ports: HybridMediaPor
     if (!finalSource || finalSource.sourceFingerprint !== current.binding.sourceFingerprint) return missing();
     const finalProjection = await ports.read(assetId);
     if (!finalProjection || JSON.stringify(finalProjection) !== JSON.stringify(current)) return missing();
-    return new Response(Buffer.from(bytes), { headers: { ...(ports.version === "v2" ? cacheableMediaHeaders(headers) : headers), "Content-Type": current.media.mime, "Content-Length": String(bytes.length) } });
+    return excludeFromSharedCache(new Response(Buffer.from(bytes), { headers: { ...(ports.version === "v2" ? cacheableMediaHeaders(headers) : headers), "Content-Type": current.media.mime, "Content-Length": String(bytes.length) } }));
   }
   return new Response(null, { status: 302, headers: { ...headers, Location: url } });
 }

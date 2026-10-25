@@ -1,3 +1,4 @@
+import { GET as healthResponse } from "../src/app/api/health/content/route.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
@@ -7,8 +8,9 @@ import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { fork } from "node:child_process";
 import { Client } from "pg";
-import { hostFixture } from "./helpers/incremental-host.ts";
+import { hostFixture as syncHostFixture } from "./helpers/incremental-host.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
+import { isolatedWebsiteReader } from "../src/server/database/website-reader-isolation.ts";
 import { publicationReader } from "../src/server/database/publication.ts";
 import { STUDY_DIRECTORY_SQL,STUDY_NOTE_ELIGIBILITY_SQL,STUDY_NOTE_DETAIL_SQL } from "../src/server/database/study-reads.ts";
 import { contentDetailResponse, contentListResponse, courseTreeResponse, statusYearsResponse } from "../src/lib/content/http.ts";
@@ -20,6 +22,13 @@ import { planVisitorAcceptance, VISITOR_MAXIMUM } from "../scripts/visitor-accep
 import { checkVisitorResponses } from "../scripts/visitor-acceptance/check.ts";
 import { installVisitorTransports } from "../scripts/visitor-acceptance/transport.ts";
 import { parseVisitorArguments, visitorSharedLimits, visitorCounters, visitorProfile, visitorMain, visitorBuildBinding } from "../scripts/visitor-acceptance/cli.ts";
+
+async function hostFixture() {
+  const f = await syncHostFixture();
+  // This acceptance exercises website credentials, never the private sync reader.
+  await f.db.exec("REVOKE nb_delta_reader FROM fixture_reader; GRANT nb_reader TO fixture_reader");
+  return f;
+}
 
 const origin = "https://fiction-12345.cos.ap-shanghai.myqcloud.com", localOrigin = "http://127.0.0.1:3257";
 function plan(f: Awaited<ReturnType<typeof hostFixture>>, overrides = {}) {
@@ -33,11 +42,11 @@ async function ledger(f: Awaited<ReturnType<typeof hostFixture>>, p: ReturnType<
 async function network(f: Awaited<ReturnType<typeof hostFixture>>, p: ReturnType<typeof plan>, change?: (url: URL, response: Response) => Promise<Response>) {
   const reader = f.open({ connectionString: f.options.database.readerUrl });
   const features = { ...contentFeatures, status: true, course: true, "study-note": true };
-  const repository = createContentService({ provider: "database", features, timeZone: "UTC", databaseRepository: createWebsiteDatabaseRepository(publicationReader(reader, "published"), { timeZone: "UTC" }) }).repository;
+  const repository = createContentService({ provider: "database", features, timeZone: "UTC", databaseRepository: createWebsiteDatabaseRepository(publicationReader(isolatedWebsiteReader(reader), "published"), { timeZone: "UTC" }) }).repository;
   const fetcher: typeof fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input), path = url.pathname.split("/");
     let response: Response;
-    if (url.pathname === "/api/health/content") { await repository.getTimeline!({ limit: 1 }); response = Response.json({ data: { provider: "database", databaseVersion: "2" } }, { headers: { "Cache-Control": "private, no-store" } }); }
+    if (url.pathname === "/api/health/content") response = healthResponse();
     else if (url.pathname === "/api/status/years") response = await statusYearsResponse(new Request(url), repository, features);
     else if (url.pathname.startsWith("/api/content/")) response = path.length === 5 ? await contentDetailResponse(new Request(url), path[3], path[4], repository, features) : await contentListResponse(new Request(url), path[3], repository, features);
     else if (url.pathname.startsWith("/api/study/")) response = await courseTreeResponse(new Request(url), path[3], repository, features);
@@ -147,12 +156,12 @@ test("oversized and late bodies/SQL rows are charged before cancellation; callba
 });
 test("SQL write/target mismatch are blocked before driver; compiled DTO drift and cached/redirected responses fail", async (t) => {
   const f = await hostFixture(); try {
-    for (const variant of ["mock", "cache", "dto", "redirect"] as const) await t.test(variant, async () => {
+    for (const variant of ["old-identity", "cache", "generic-ok", "redirect"] as const) await t.test(variant, async () => {
       const p = plan(f), b = await ledger(f, p), n = await network(f, p, async (url, response) => {
         if (url.pathname !== "/api/health/content") return response;
         if (variant === "cache") { response.headers.set("cache-control", "public, max-age=60"); return response; }
         if (variant === "redirect") return new Response("login", { status: 302, headers: { location: "https://example.test" } });
-        return Response.json({ data: { provider: variant === "mock" ? "mock" : "database", databaseVersion: "2", ...(variant === "dto" ? { private: "must fail" } : {}) } }, { headers: response.headers });
+        return Response.json(variant === "old-identity" ? { data: { provider: "database", databaseVersion: "2" } } : { data: { status: "ok" } }, { headers: response.headers });
       });
       const guard = installVisitorTransports({ budget: b, plan: p, readerUrl: f.options.database.readerUrl, role: "supervisor", localOrigin, fetch: n.fetcher, sqlPorts: [n.reader], checkConnections: false });
       try { await assert.rejects(checkVisitorResponses(p, guard.fetch, localOrigin, b.bridge.nonce)); assert.equal(b.read().counters.httpRequests, 1); } finally { guard.restore(); }

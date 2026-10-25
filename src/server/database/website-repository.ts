@@ -31,7 +31,7 @@ function project<T>(value: T, snapshot: Projection, timeZone: string): T {
     const o=x as Record<string,unknown>;
     if(o.kind==="internal" && !links.has(o.href as string))return {kind:"unavailable"};
     if(typeof o.src==="string"&&o.src.startsWith("/media/")&&!images.has(o.id as string))return null;
-    if(o.type==="child-page"&&o.target&&!links.has((o.target as {href:string}).href))return {id:o.id,type:"child-page",title:"Unavailable page",target:null};
+    if(o.type==="child-page"&&(!o.target||!links.has((o.target as {href:string}).href)))return {id:o.id,type:"child-page",title:"Unavailable page",target:null};
     if(typeof o.href==="string"&&!o.kind&&!links.has(o.href))return null;
     const out=Object.fromEntries(Object.entries(o).map(([k,v])=>[k,visit(v)]));
     if(o.kind==="game")return projectGameDates(out as unknown as Game,timeZone);

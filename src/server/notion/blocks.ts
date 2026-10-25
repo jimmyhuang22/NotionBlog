@@ -4,7 +4,7 @@ import type {
   ContentBlock, ContentDocument, ContentLink, ImageAsset, TextLink, TextRun,
 } from "../../../contracts/content.ts";
 import { normalizeId } from "./config.ts";
-import { isNotionPageHost, isTemporaryMediaUrl, sanitizePublicText } from "./public-text.ts";
+import { isNotionPageHost, isTemporaryMediaUrl, PUBLIC_USER_MENTION_TEXT, sanitizePublicText } from "./public-text.ts";
 import type { NotionReadClient } from "./types.ts";
 
 /** Raw media locations stay inside this server-side callback. */
@@ -24,6 +24,8 @@ export interface RegisterBlockImageInput {
 export interface BlockConversionContext {
   /** Opt-in v2 AST addition; frozen v1 collectors retain the original TextRun shape. */
   inlineEquations?: boolean;
+  /** v2 preserves page-mention label provenance; frozen v1 keeps its original shape. */
+  pageMentions?: boolean;
   /** Website v2 accepts browser-equivalent encoded image paths; v1 stays unchanged. */
   canonicalImageUrls?: boolean;
   /** Website v2 can carry stable external video links; frozen v1 stays unchanged. */
@@ -125,9 +127,13 @@ export async function convertNotionRichText(
       const target = await resolvedPage(rich.mention.page.id, context);
       run.text = target?.title ?? "Unavailable page";
       run.link = target ? { kind: "internal", href: target.href } : { kind: "unavailable" };
+      if (context.pageMentions) run.pageMention = true;
     } else if (rich.type === "mention" && rich.mention.type === "database") {
       run.text = "Unavailable page";
       run.link = { kind: "unavailable" };
+    } else if (rich.type === "mention" && rich.mention.type === "user") {
+      run.text = PUBLIC_USER_MENTION_TEXT;
+      // A profile link or the mention's raw href must not survive the neutral label.
     } else {
       const href = rich.type === "text" ? rich.text.link?.url ?? rich.href : rich.href;
       if (href) run.link = await resolveNotionTextLink(href, context);

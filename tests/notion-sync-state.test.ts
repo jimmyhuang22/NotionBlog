@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, realpath, rm, writeFile, symlink, chmod } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile, symlink, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { acquireLock, readPrivateFile, readStatus, saveReport, unlockStale } from "../scripts/notion-sync/state.ts";
 import { loadSourceConfig } from "../scripts/notion-sync/inputs.ts";
+import { WorkerError } from "../scripts/notion-sync/errors.ts";
 const exec = promisify(execFile);
 const code = (expected: string) => (e: unknown) => e instanceof Error && "code" in e && e.code === expected;
+const misconfigured = (error: unknown) => error instanceof WorkerError && error.code === "MISCONFIGURED" && error.message === "MISCONFIGURED";
 async function directory() { return realpath(await mkdtemp(join(tmpdir(), "notion-sync-test-"))); }
 test("local lock excludes a second process, releases cleanly and allows a subsequent run", async () => {
   const dir = await directory();
@@ -31,6 +33,40 @@ test("explicit stale recovery checks owner PID, reports rotate and files remain 
     const { readdir, stat } = await import("node:fs/promises");
     const reports = (await readdir(dir)).filter(f => f.startsWith("run-")); assert.equal(reports.length, 10);
     assert.equal((await stat(join(dir, "latest-run.json"))).mode & 0o077, 0);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+test("empty, damaged and invalid lock owners have fixed errors and remain untouched", async () => {
+  const dir = await directory(), path = join(dir, "worker.lock");
+  try {
+    for (const bytes of ["", '{"private":"fictional-sensitive-fragment",', "null", "[]", '"not-an-owner"',
+      ...[{}, { pid: "42" }, { pid: 0 }, { pid: -1 }, { pid: 1.5 }, { pid: 2147483648 }, { pid: Number.MAX_SAFE_INTEGER }].map(value => JSON.stringify(value))]) {
+      await writeFile(path, bytes, { mode: 0o600 });
+      await assert.rejects(unlockStale(dir), misconfigured);
+      await assert.rejects(readStatus(dir), misconfigured);
+      assert.equal(await readFile(path, "utf8"), bytes);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+test("legacy pid-only live locks remain busy and status preserves absent-file semantics", async () => {
+  const dir = await directory(), path = join(dir, "worker.lock");
+  try {
+    await assert.rejects(unlockStale(dir), { code: "ENOENT" });
+    assert.deepEqual(await readStatus(dir), { locked: false, latestRun: null, lastSuccess: null });
+    const bytes = JSON.stringify({ pid: process.pid }); await writeFile(path, bytes, { mode: 0o600 });
+    await assert.rejects(unlockStale(dir), code("BUSY"));
+    assert.deepEqual(await readStatus(dir), { locked: true, latestRun: null, lastSuccess: null });
+    assert.equal(await readFile(path, "utf8"), bytes);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+test("damaged report JSON never exposes parser input and is not rewritten by status", async () => {
+  const dir = await directory();
+  try {
+    for (const name of ["latest-run.json", "last-success.json"]) {
+      const path = join(dir, name), bytes = '{"private":"fictional-report-fragment",';
+      await writeFile(path, bytes, { mode: 0o600 });
+      await assert.rejects(readStatus(dir), misconfigured); assert.equal(await readFile(path, "utf8"), bytes);
+      await writeFile(path, "null", { mode: 0o600 });
+    }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 test("secret files with unsafe permissions or a symlink are rejected", async () => {
