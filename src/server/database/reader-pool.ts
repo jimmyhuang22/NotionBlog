@@ -1,9 +1,10 @@
 import { attachDatabasePool } from "@vercel/functions/db-connections";
 import type { Pool } from "pg";
+import { registerSelfHostedPool } from "../../../scripts/self-hosted/context.cjs";
 
 /** Match the social reader's host lifecycle without changing pool size or SQL. */
 export function attachContentReaderPool(pool: Pool): void {
-  attachDatabasePool(pool);
+  if (!registerSelfHostedPool(pool)) attachDatabasePool(pool);
   pool.on("error", error => {
     const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
     const safe = typeof code === "string" && (/^[0-9A-Z]{5}$/.test(code) ||
