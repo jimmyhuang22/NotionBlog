@@ -120,7 +120,7 @@ export function LightboxProvider({ className, children }: { className?: string; 
     large.src = photoLarge;
     // Stepping on stops waiting for this one.
     return () => { current = false; large.onload = large.onerror = null; large.src = ""; };
-  }, [photoKey, photoPreview, photoLarge, photoWidth]);
+  }, [photoKey, photoSrc, photoPreview, photoLarge, photoWidth]);
   const whole = Boolean(reached?.whole);
   useEffect(() => {
     if (!photoKey || !photoSrc || !photoPreview || !wantsOriginal || whole) return;
