@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { consoleConfig, getBackend } from "../../lib/backend.ts";
-import { BackendError, errorText, type Operation } from "../../lib/types.ts";
+import { BackendError, isBackendError, errorText, type Operation } from "../../lib/types.ts";
 import { OpList } from "../../components/op-list.tsx";
 
 export const metadata: Metadata = { title: "记录" };
@@ -12,7 +12,7 @@ export default async function ActivityPage() {
   try {
     ops = await getBackend().operations(100);
   } catch (error) {
-    if (!(error instanceof BackendError)) throw error;
+    if (!isBackendError(error)) throw error;
     failure = error;
   }
   return (
