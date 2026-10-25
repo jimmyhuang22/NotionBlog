@@ -191,6 +191,7 @@ export class DemoBackend implements ConsoleBackend {
       nextScheduledAt: iso(nextEvenHour(now)),
       schedule: "每 2 小时",
       queue: oldMode ? null : { pending, needsReview: 0 },
+      hold: null,
       publishedVersionAt: iso(this.lastSuccessAt),
       observedAt: iso(now),
     };
