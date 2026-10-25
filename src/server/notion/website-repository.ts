@@ -389,6 +389,7 @@ class ReadSession {
       registerImage: input => this.options.registerImage?.(input) ?? Promise.resolve(null),
       canonicalImageUrls: true,
       inlineEquations: true,
+      pageMentions: true,
       externalVideos: true,
     });
   }

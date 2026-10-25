@@ -60,8 +60,10 @@ function link(x: unknown) {
 function runs(x: unknown) {
   if (!Array.isArray(x)) bad();
   for (const v of x) {
-    const o=object(v); keys(o,["text","bold","italic","code","underline","strike","color","link","equation"]);
+    const o=object(v); keys(o,["text","bold","italic","code","underline","strike","color","link","equation","pageMention"]);
     if (!text(o.text) || (o.equation !== undefined && o.equation !== true)) bad();
+    if (o.pageMention !== undefined && (o.pageMention !== true || o.equation !== undefined ||
+        !o.link || typeof o.link !== "object" || !["internal","unavailable"].includes(String((o.link as Record<string,unknown>).kind)))) bad();
     for (const k of ["bold","italic","code","underline","strike"]) if (o[k]!==undefined&&typeof o[k]!=="boolean") bad();
     if (o.color!==undefined && !["default","muted","accent","warning"].includes(o.color as string)) bad();
     if (o.link!==undefined) {

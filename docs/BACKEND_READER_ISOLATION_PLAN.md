@@ -24,7 +24,7 @@
 
 off 不代表真实隔离已完成。开启 enforce 前仍须完成获批的真实权限核查、迁移、专用 LOGIN 成员调整及网站／同步读取验收，否则旧共享账号会被拒绝。每次发布明确阶段与拟采用模式，使用本机声明检查并核对真实回执；网站发布、云变量和实际安装仍分别授权。已有实例不动态重载模式，改权限／采用 enforce 时需按获批流程重建实例。
 
-源码安装入口为 `installIncrementalReaderIsolation(db)`，与 `installIncrementalWithdrawalRecovery(db)` 均是显式 owner 操作，不由启动或构建自动调用。两个扩展支持任意安装次序；旧迁移和原协议摘要保持原样。它们不处理 LOGIN 凭据或成员切换，不能把“SQL 已安装”当成“真实账号已隔离”。
+源码安装入口现为 `withOwnerInstallTransaction(config, session => installIncrementalReaderIsolation(session))`，withdrawal-recovery 同样接收受控 session；不再接受裸 SqlExecutor 或 Pool.query。两个函数均为显式 owner 操作，不由启动或构建自动调用。N08 将安装、摘要与末尾验证纳入同一固定 Client 事务，并用独立配方绑定执行体，详见[收尾方案](BACKEND_N08_FOLLOWUP_PLAN.md)。两个扩展支持任意安装次序；旧迁移和原协议摘要保持原样。它们不处理 LOGIN 凭据或成员切换，不能把“SQL 已安装”当成“真实账号已隔离”。
 
 备份导出保留新扩展的已知摘要，恢复要求来源和空目标扩展集合及摘要一致；旧备份可先恢复到匹配的旧空目标，再显式升级。备份不携带 LOGIN 凭据或成员，不会自动安装角色、启用发布或恢复任务。
 

@@ -7,10 +7,12 @@ import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { WEBSITE_SCHEMA_DIGEST } from "../contracts/website-sync.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
-import { publicationWriter } from "../src/server/database/publication.ts";
+import { publicationReader, publicationWriter } from "../src/server/database/publication.ts";
 import { preparePublicationDelta, readPublicationState, type PreparedPublicationDelta } from "../src/server/database/incremental-publication.ts";
 import { readPublishedRecord } from "../src/server/database/incremental-reader.ts";
 import { canonicalJson } from "../src/server/database/website-validation.ts";
+import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
+import { convertNotionRichText } from "../src/server/notion/blocks.ts";
 import { installPublication } from "../scripts/website-sync/publication-migration.ts";
 import { installIncrementalPublication } from "../scripts/website-sync/incremental-migration.ts";
 import { installIncrementalReader } from "../scripts/website-sync/incremental-reader-migration.ts";
@@ -30,6 +32,14 @@ test("actual queue, cache, study checkpoint and SQL recover mixed updates withou
   const f = cacheFixture(true), directory = await realpath(await mkdtemp(join(tmpdir(), "content-cache-sql-"))), db = await PGlite.create();
   const local: (() => void)[] = [], closeLocal = () => { for (const close of local.splice(0)) close(); };
   t.after(async () => { closeLocal(); await db.close(); await rm(directory, { recursive: true, force: true }); });
+  const target = f.checkpoint.entries[1].record.detail.item;
+  const marked = (await convertNotionRichText([{ type: "mention", mention: { type: "page", page: { id: target.id } },
+    plain_text: "Untrusted upstream label", href: null,
+    annotations: { bold: true, italic: false, code: false, underline: false, strikethrough: false, color: "default" } }],
+  { pageMentions: true, resolvePageLink: async () => ({ href: target.href, title: target.title }), registerImage: async () => assert.fail() }))[0];
+  const paragraph = f.ordinary.detail.document!.blocks[0]; if (paragraph.type !== "paragraph") assert.fail(); paragraph.text.push(marked);
+  if (f.ordinary.detail.item.kind !== "status") assert.fail(); f.ordinary.detail.item.text = [marked];
+  f.checkpoint.entries[0].record.detail.document!.blocks.push({ id: "course-mention", type: "paragraph", text: [marked] });
   await db.exec(await readFile(new URL("../database/website-migrations/001_website.sql", import.meta.url), "utf8"));
   await db.query("UPDATE nb_v2.state SET schema_digest=$1", [WEBSITE_SCHEMA_DIGEST]);
   await db.exec(await readFile(new URL("../database/website-study-migrations/001_automatic_study.sql", import.meta.url), "utf8"));
@@ -104,4 +114,13 @@ test("actual queue, cache, study checkpoint and SQL recover mixed updates withou
   const ordinary = cache!.readPublished({ sourceKey: "status", pageKey: studyId(20) }, state)!;
   assert.ok(JSON.stringify(ordinary.record).includes("New note title")); assert.ok(JSON.stringify(ordinary.record).includes("/notes/renamed"));
   assert.deepEqual(ordinary.media, f.baseline.media); assert.equal(f.reads(), readsAfterSend);
+  const updated = ordinary.record.detail.document!.blocks[0]; if (updated.type !== "paragraph") assert.fail();
+  assert.equal(updated.text[0].text, "See note"); assert.equal(updated.text[1].text, "New note title"); assert.equal(updated.text[1].pageMention, true);
+  const course = checkpoint!.load().entries[0].record.detail.document!.blocks.at(-1)!; if (course.type !== "paragraph") assert.fail();
+  assert.equal(course.text[0].text, "New note title"); assert.equal(course.text[0].pageMention, true);
+  const dto = await createWebsiteDatabaseRepository(publicationReader(reader, "published")).get("status", studyId(20)); if (!dto || dto.item.kind !== "status") assert.fail();
+  assert.equal(dto.item.text[0].text, "New note title"); assert.equal(dto.item.text[0].pageMention, true);
+  await reopen(); cache!.assertState(state);
+  const reopened = cache!.readPublished({ sourceKey: "status", pageKey: studyId(20) }, state)!.record.detail.document!.blocks[0];
+  if (reopened.type !== "paragraph") assert.fail(); assert.equal(reopened.text[1].pageMention, true); assert.equal(reopened.text[1].text, "New note title");
 });

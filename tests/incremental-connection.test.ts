@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../scripts/website-sync/owner-install-session.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -28,7 +29,7 @@ async function setup() {
     if (sql.startsWith("--")) {await db.exec(sql); return {rows: [] as T[]};}
     return db.query<T>(sql, values);
   }};
-  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await installIncrementalReaderIsolation(owner);
+  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await withPGliteOwnerTransaction(db, installIncrementalReaderIsolation);
   await db.exec(`CREATE ROLE fixture_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
     CREATE ROLE fixture_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
     GRANT nb_delta_reader TO fixture_reader; GRANT nb_writer TO fixture_writer;`);

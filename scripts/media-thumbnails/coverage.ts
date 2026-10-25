@@ -57,11 +57,13 @@ function array(value: unknown, maximum = 20_000, budget?: TraversalBudget): unkn
   return value;
 }
 function identity(value: unknown): value is string { return typeof value === "string" && ID.exec(value)?.[0] === value; }
-function runs(value: unknown, budget?: TraversalBudget): void {
+function runs(value: unknown, version: MediaSourceVersion, budget?: TraversalBudget): void {
   for (const entry of array(value, 20_000, budget)) {
     const run = object(entry);
-    keys(run, ["text"], ["equation", "bold", "italic", "code", "underline", "strike", "color", "link"]);
+    keys(run, ["text"], ["equation", "bold", "italic", "code", "underline", "strike", "color", "link", ...(version === "v2" ? ["pageMention"] : [])]);
     if (!boundedText(run.text, budget) || (run.equation !== undefined && run.equation !== true)) unavailable();
+    if (run.pageMention !== undefined && (run.pageMention !== true || run.equation !== undefined ||
+        !run.link || typeof run.link !== "object" || !["internal", "unavailable"].includes(String((run.link as Record<string, unknown>).kind)))) unavailable();
     for (const key of ["bold", "italic", "code", "underline", "strike"]) if (run[key] !== undefined && typeof run[key] !== "boolean") unavailable();
     if (run.color !== undefined && !["default", "muted", "accent", "warning"].includes(run.color as string)) unavailable();
     if (run.link !== undefined) {
@@ -75,7 +77,7 @@ function runs(value: unknown, budget?: TraversalBudget): void {
 }
 
 /** Validate only the known AST shape, without qualifying any image or following links. */
-function validateBlocks(value: unknown, budget: TraversalBudget, depth = 0, active = new Set<object>()): void {
+function validateBlocks(value: unknown, budget: TraversalBudget, version: MediaSourceVersion, depth = 0, active = new Set<object>()): void {
   if (depth > MAX_DEPTH) unavailable();
   const blocks = array(value, 20_000, budget);
   if (active.has(blocks)) unavailable();
@@ -86,8 +88,8 @@ function validateBlocks(value: unknown, budget: TraversalBudget, depth = 0, acti
       const block = object(entry);
       if (!identity(block.id)) unavailable();
       const check = (fields: string[]) => keys(block, ["id", "type", ...fields]);
-      const children = (child: unknown) => validateBlocks(child, budget, depth + 1, active);
-      const richText = (value: unknown) => runs(value, budget);
+      const children = (child: unknown) => validateBlocks(child, budget, version, depth + 1, active);
+      const richText = (value: unknown) => runs(value, version, budget);
       const string = (value: unknown) => boundedText(value, budget);
       switch (block.type) {
         case "paragraph": case "quote": check(["text"]); richText(block.text); break;
@@ -196,10 +198,10 @@ export function selectThumbnailCandidates(snapshot: PublicContentSnapshot, versi
       result.recordsConsidered++;
       if (!document) result.unloadedDocuments++;
       else if (document.completeness === "partial") result.partialDocuments++;
-      if (document) validateBlocks(document.blocks, budget);
+      if (document) validateBlocks(document.blocks, budget, version);
       if (kind === "status" || kind === "album") {
         if (kind === "status") {
-          runs(item.text, budget);
+          runs(item.text, version, budget);
           for (const image of statusPreview(item as unknown as StatusEntry, document).images!) select(image, item.id, kind, [400]);
           if (item.cover !== null) select(item.cover, item.id, kind, [800]);
         } else {
