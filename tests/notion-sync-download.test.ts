@@ -67,11 +67,11 @@ test("redirect loops are bounded and exact hostname restrictions cannot be bypas
   const restricted = createImageDownloader({ resolve: publicDns, allowedHosts: ["images.example.test"], request: async () => response() });
   await assert.rejects(restricted("https://images.example.test.attacker.test/a"), code("IMAGE_REJECTED"));
 });
-test("oversize streams, mismatched lengths, false MIME and encoded responses fail closed", async () => {
+test("oversize streams, invalid length headers, false MIME and encoded responses stay rejected", async () => {
   for (const [headers, bytes] of [
     [{ "content-type": "image/png", "content-length": "999" }, [DEMO_PNG]],
     [{ "content-type": "image/png" }, [DEMO_PNG, DEMO_PNG]],
-    [{ "content-type": "image/png", "content-length": "1" }, [DEMO_PNG]],
+    [{ "content-type": "image/png", "content-length": "invalid" }, [DEMO_PNG]],
     [{ "content-type": "image/png" }, [Buffer.from("GIF89a")]],
     [{ "content-type": "image/svg+xml" }, [Buffer.from("<svg/>")]],
     [{ "content-type": "image/png", "content-encoding": "gzip" }, [DEMO_PNG]],
@@ -79,6 +79,28 @@ test("oversize streams, mismatched lengths, false MIME and encoded responses fai
     const download = createImageDownloader({ resolve: publicDns, maxBytes: 100, request: async () => response(200, headers, bytes) });
     await assert.rejects(download("https://images.example.test/a"), code("IMAGE_REJECTED"));
   }
+});
+test("empty or length-mismatched complete bodies stay unavailable without another address attempt", async () => {
+  for (const [declared, bytes] of [
+    [String(DEMO_PNG.length + 1), [DEMO_PNG]],
+    [String(DEMO_PNG.length - 1), [DEMO_PNG]],
+    ["1", []], [undefined, []],
+  ] as const) {
+    let requests = 0, cancelled = 0;
+    const download = createImageDownloader({ resolve: async () => [{ address: "8.8.8.8", family: 4 }, { address: "1.1.1.1", family: 4 }],
+      request: async () => { requests++; return { ...response(200, { "content-type": "image/png", "content-length": declared }, [...bytes]),
+        cancel() { cancelled++; } }; } });
+    await assert.rejects(download("https://images.example.test/a"), code("IMAGE_UNAVAILABLE"));
+    assert.equal(requests, 1); assert.equal(cancelled, 1);
+  }
+});
+test("cancellation after a body chunk keeps its classification and cancels the response", async () => {
+  const controller = new AbortController(); let cancelled = 0;
+  const download = createImageDownloader({ resolve: publicDns, request: async () => ({ status: 200,
+    headers: { "content-type": "image/png", "content-length": String(DEMO_PNG.length + 1) },
+    bytes: (async function* () { yield DEMO_PNG; controller.abort(); })(), cancel() { cancelled++; } }) });
+  await assert.rejects(download("https://images.example.test/a", controller.signal), code("CANCELLED"));
+  assert.equal(cancelled, 1);
 });
 test("abort during DNS prevents a late DNS result from creating a connection", async () => {
   const controller = new AbortController(); let requests = 0;

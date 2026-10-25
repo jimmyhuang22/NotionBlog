@@ -29,7 +29,7 @@ export function createHeicConverter(options: { executable: string; temporaryRoot
         child.once("close", code => {
           signal.removeEventListener("abort", cancel);
           if (signal.aborted) reject(new WorkerError("CANCELLED"));
-          else if (code !== 0) reject(new WorkerError("IMAGE_REJECTED")); else resolve();
+          else if (code !== 0) reject(new WorkerError("IMAGE_UNAVAILABLE")); else resolve();
         });
       });
       checkSignal(signal);
