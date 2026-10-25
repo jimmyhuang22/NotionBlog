@@ -190,7 +190,7 @@ export function createImageDownloader(options: DownloadOptions = {}) {
         }
         checkSignal(signal);
         const bytes = Buffer.concat(chunks, size);
-        if (!size || (declared !== undefined && Number(declared) !== size)) throw new WorkerError("IMAGE_REJECTED");
+        if (!size || (declared !== undefined && Number(declared) !== size)) throw new WorkerError("IMAGE_UNAVAILABLE");
         const actualHeic = isHeic(bytes);
         if (heic || actualHeic) {
           if (!actualHeic || !options.convertHeic) throw new WorkerError("IMAGE_REJECTED");

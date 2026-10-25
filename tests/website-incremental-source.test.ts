@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BlockObjectResponse } from "@notionhq/client";
-import { createDemo, demoId, demoParagraph } from "../scripts/notion-sync/demo.ts";
+import { createDemo, demoId, demoParagraph, DEMO_PNG } from "../scripts/notion-sync/demo.ts";
+import { createHeicConverter } from "../scripts/notion-sync/heic.ts";
+import { createWebsiteImageDownloader } from "../scripts/website-sync/download.ts";
+import { createIndependentMediaPort } from "../scripts/website-incremental-sync/independent-media.ts";
+import { createHostBudget } from "../scripts/website-incremental-sync/host-budget.ts";
 import { parseWebsiteNotionConfig } from "../src/server/notion/website-config.ts";
 import { configDigest } from "../src/server/database/website-validation.ts";
 import type { NotionReadClient } from "../src/server/notion/types.ts";
@@ -160,4 +164,70 @@ test("a queued hint flows through the real single-page converter and explicit pu
   const result = await runIncrementalCycle({ queue, schemaDigest: state.schemaDigest }, { ...publication, prepare });
   assert.equal(result.outcome, "updated"); assert.equal(submitted, 1); assert.equal(verified, 1);
   assert.deepEqual(s.bodyReads, [s.owner]); assert.equal(queue.status().done, 1);
+});
+
+test("actual image adapters defer transient preparation, retain the five-failure cap and reject unsafe images", async t => {
+  for (const mode of ["converter", "length", "exhaustion", "oversize", "type", "source"] as const) await t.test(mode, async t => {
+    const s = fixture(), directory = await realpath(await mkdtemp(join(tmpdir(), "incremental-image-classification-")));
+    const temporaryRoot = join(directory, "conversion"), executable = join(directory, "decoder");
+    await mkdir(temporaryRoot, { mode: 0o700 });
+    await writeFile(executable, "#!/bin/sh\nexit 75\n", { mode: 0o700 });
+    const heic = Buffer.alloc(24); heic.writeUInt32BE(24); heic.write("ftypheic", 4); heic.write("mif1heic", 16);
+    let now = 2000, ready = false, requests = 0, puts = 0, reads = 0, submitted = 0;
+    const queue = await openIncrementalQueue(join(directory, "queue"), { digest: s.options.expectedConfigDigest, sourceKeys: ["status"] }, () => now);
+    const budget = createHostBudget(), download = createWebsiteImageDownloader({
+      maxBytes: mode === "oversize" ? DEMO_PNG.length - 1 : 1000,
+      allowedHosts: mode === "source" ? ["other.example.test"] : undefined,
+      resolve: async () => [{ address: "8.8.8.8", family: 4 }],
+      convertHeic: createHeicConverter({ executable, temporaryRoot }),
+      request: async () => {
+        requests++;
+        const conversion = mode === "converter";
+        const bytes = conversion ? heic : DEMO_PNG;
+        return { status: 200, headers: { "content-type": mode === "type" ? "image/svg+xml" : conversion ? "image/heic" : "image/png",
+          "content-length": String(bytes.length + (!ready && ["length", "exhaustion"].includes(mode) ? 1 : 0)) },
+        bytes: (async function* () { yield bytes; })(), cancel() {} };
+      },
+    }, { wait: async () => { assert.fail("These complete-body/converter failures must not add an immediate v2 retry"); } });
+    t.after(async () => { download.close(); budget.close(); queue.close(); await rm(directory, { recursive: true, force: true }); });
+    const storedBytes = mode === "converter" ? Buffer.from([255, 216, 255, 0]) : DEMO_PNG;
+    const media = createIndependentMediaPort({ budget, download, cached: () => null,
+      storage: { put: async (_media, bytes) => { assert.deepEqual(Buffer.from(bytes), storedBytes); puts++; },
+        read: async () => { reads++; return storedBytes; } } });
+    s.demo.blocks.set(s.owner, [s.image]);
+    queue.enqueue([{ eventId: "image-edit", sourceKey: "status", pageKey: s.owner, reason: "content", observedAt: 1000 }]);
+    const state: PublicationState = { publicationRevision: "revision-1", configDigest: s.options.expectedConfigDigest,
+      schemaDigest: "c".repeat(64), policyEpoch: "1" };
+    const prepare = createSinglePagePreparationPort({ client: s.client, config: s.options.config,
+      prepareImage: (input, signal) => media.prepare(input, signal), placement: async () => ({ ordinal: 7 }), readPublished: async () => null,
+      prepareDelta: input => ({ ...input, payloadDigest: "b".repeat(64) }) });
+    const publication = createIncrementalPublicationPort({ state: async () => state, lookup: async () => null,
+      publish: async (operationId, delta) => { submitted++; return { operationId, payloadDigest: delta.payloadDigest,
+        publicationRevision: "revision-2", committed: true }; } }, async () => true);
+    const run = () => runIncrementalCycle({ queue, schemaDigest: state.schemaDigest, maxTasks: 1, retryDelayMs: 1000 }, { ...publication, prepare });
+    const first = await run();
+    assert.equal(puts + reads + submitted, 0, "Failed images must not reach object storage or publication");
+    assert.deepEqual(await readdir(temporaryRoot), []);
+    if (["oversize", "type", "source"].includes(mode)) {
+      assert.equal(first.review, 1); assert.equal(first.retried, 0); assert.equal(queue.status().needs_review, 1);
+      assert.equal(requests, mode === "source" ? 0 : 1); return;
+    }
+    assert.equal(first.retried, 1); assert.equal(first.review, 0); assert.equal(requests, 1);
+    now += 999; assert.equal((await run()).claimed, 0); assert.equal(requests, 1);
+    now++;
+    if (mode !== "exhaustion") {
+      ready = true;
+      if (mode === "converter") await writeFile(executable, '#!/bin/sh\numask 077\nprintf "\\377\\330\\377\\000" > "$2"\n');
+      assert.equal((await run()).outcome, "updated"); assert.equal(queue.status().done, 1);
+      assert.equal(requests, 2); assert.equal(puts, 1); assert.equal(reads, 1); assert.equal(submitted, 1);
+    } else {
+      for (let attempt = 2; attempt <= 5; attempt++) {
+        if (attempt > 2) now += 1000 * 2 ** (attempt - 2);
+        const result = await run(); assert.equal(result.claimed, 1);
+        assert.equal(result.review, attempt === 5 ? 1 : 0);
+      }
+      assert.equal(requests, 5); assert.equal(queue.status().needs_review, 1); assert.equal(puts + reads + submitted, 0);
+      now += 86_400_000; assert.equal((await run()).claimed, 0); assert.equal(requests, 5);
+    }
+  });
 });
