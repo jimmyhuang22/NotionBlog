@@ -1,5 +1,7 @@
 # 项目需求
 
+路由资格缓存键（2026-10-25）：用户批准 N04 源码与离线方案。缓存入口按单次解码后的受管形状规范目标，等价编码共用键；路由 missing、元数据 null／undefined 和笔记资格 false 不写持久缓存。保留原始验签、generation／日期／取消守卫和错误语义，固定策略标记隔离旧负项；重复缺失读取可能增加。实际清理、配置、项目请求、任务恢复和发布不包含，见[决定](decisions/2026-10-25-route-cache-key-policy.md)与[实施记录](progress/2026-10-25-route-cache-key-policy.md)。
+
 隐私扫描与 CI（2026-10-25）：用户批准 N03／N07 的源码、局部虚构回归、本机既有公开历史审计及常规 develop 交付。扫描补齐符号／完整敏感键名／小写 JSON／libpq 连接串及安全错误输出；推送采用仓库绑定的固定 legacy 边界并总查目标完整树，边界不冒充历史无秘密证明。分支 push 使用独立无共享并发的轻量隐私扫描，PR／手动保留应用检查；扫描器来自固定可信提交，候选作为 Git 对象数据，首次旧规则自举如实标记。正常 PR／push 的自动 GitHub 托管扫描包含在内，项目请求、仓库设置、历史改写、真实凭据处置、main 发布和任务恢复均不包含，见[决定](decisions/2026-10-25-privacy-ci-scanning.md)与[实施方案](BACKEND_PRIVACY_CI_PLAN.md)。
 
 网站隔离分阶段采用（2026-10-25）：用户批准 R01 源码与离线测试。`DATABASE_READER_ISOLATION` 缺省 off，网站延后额外隔离拒绝并记录尚未强制验证；enforce 保持原检查，非法值拒绝。独立同步和 B20 校验仍严格，真实隔离后须按阶段声明检查采用 enforce；不包含云配置、真实安装、任务恢复或发布，见[决定](decisions/2026-10-25-reader-isolation-staging.md)和[发布检查](READER_ISOLATION_RELEASE.md)。

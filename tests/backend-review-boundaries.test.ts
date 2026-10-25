@@ -20,7 +20,7 @@ test("route keys drop tracking noise but preserve invalid and distinct focus ver
   for (const query of ["?utm_source=a", "?r=b", "?focus=a&focus=b", ""]) assert.equal(canonicalRouteTarget(`/study/course${query}`), "/study/course");
   assert.equal(canonicalRouteTarget("/status?utm=a&focus=item"), "/status?focus=item");
   for (const target of ["/status?focus=a&focus=b", "/status?focus=", "/status?focus=%2Fprivate"]) assert.equal(canonicalRouteTarget(target), "/status?focus=");
-  assert.equal(canonicalRouteTarget("/status/?focus=item&x=1"), "/status/?focus=item");
+  assert.equal(canonicalRouteTarget("/status/?focus=item&x=1"), "/status?focus=item");
   const config = { siteKey: "fixture-site", secret: "ab".repeat(32), origin: "https://fixture.example" };
   const targets: string[] = [];
   const transport: typeof fetch = async (url, init) => {
