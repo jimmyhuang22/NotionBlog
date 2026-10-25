@@ -49,8 +49,10 @@ if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1" && result.con
 // A kept development cache can make next dev reload forever; start clean.
 if (command === "dev") rmSync(path.join(here, ".next", "dev"), { recursive: true, force: true });
 
-const next = path.join(root, "node_modules", ".bin", "next");
+// Run Next's own script with this Node, so the console starts the same way under launchd, where
+// PATH holds no node for the .bin shim's `#!/usr/bin/env node`.
+const next = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const nextArgs = command === "build" ? ["build", here] : [command, here, "--hostname", host, "--port", port];
-const child = spawn(next, nextArgs, { cwd: root, stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
+const child = spawn(process.execPath, [next, ...nextArgs], { cwd: root, stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
 child.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));

@@ -48,6 +48,18 @@ CONSOLE_ALLOWED_HOSTS=Mac mini 的局域网地址,Mac mini 的 Bonjour 名称.lo
 
 启动脚本拒绝监听 `0.0.0.0` 这类“所有网络”地址；监听本机以外的地址时必须设置密码。
 
+## 开机自动运行（Mac mini）
+
+按 HomeLab 其他服务的做法安装：代码放在 `~/Services/notionblog-console/releases/<提交>/`，`current` 指向正在用的那一份；私有配置、env 和桥接状态放在同目录的 `.local/`（700，文件 600），不随代码更新；由 LaunchAgent `local.homelab.notionblog-console` 启动，开机运行、退出后自动拉起，日志在 `~/Library/Logs/HomeLab/notionblog-console/`。
+
+更新到新版本：
+
+1. 从 develop 导出新提交到新的 `releases/<提交>/`，在里面执行 `npm ci` 和 `node console/run.mjs build`。
+2. 把 `current` 改指向新目录。
+3. `launchctl kickstart -k gui/$(id -u)/local.homelab.notionblog-console` 重启。
+
+旧的 release 目录保留，出问题时把 `current` 改回去再重启。私有 env 里的桥接命令路径应指向 `current/scripts/console-bridge/cli.ts`，这样更新时不用改配置。
+
 ## 安全
 
 - 每个请求先核对 Host（防 DNS 重绑定），设置了密码时再核对登录 cookie（HMAC 签名，12 小时，HttpOnly、SameSite=Strict）。
