@@ -1,5 +1,7 @@
 # 项目需求
 
+B08 紧凑撤回（2026-10-25）：用户批准显式 opt-in v2 计划，使用完整历史不同资源集合的数量／强摘要和首项样本，数据库继续完整检查共享 owner URL、持原锁重算后原子 deny／事件并沿原阶段恢复。v2 容量 400,000 资源，旧 v1／40,000 边界、20,000 页面、8 MiB 与时间预算保持。新增独立 SQL 扩展、purpose 绑定安装器和必要本机工具准备，仅源码、隔离验证及常规 develop 交付；真实项目请求、安装采用、任务恢复与发布不包含，见[决定](decisions/2026-10-25-compact-withdrawal.md)和[方案](BACKEND_COMPACT_WITHDRAWAL_PLAN.md)。
+
 B06 遗留锁与取消（2026-10-25）：用户批准完整源码与离线方案。完整基线取消监听持续到异步清理结束；空／坏 worker 锁返回固定错误并保留。新增显式只读诊断，仅检查指定目录的 worker／manual 锁并匿名输出；格式和 PID 存在均不证明业务 owner，任何遗留锁或不确定状态都留待人工审阅，不新增删除或恢复能力。仅常规 develop 交付，真实目录检查／处置、项目请求、任务恢复与发布不包含，见[决定](decisions/2026-10-25-legacy-lock-diagnostics.md)和[方案](BACKEND_LEGACY_LOCK_DIAGNOSTICS_PLAN.md)。
 
 N08 后端收尾（2026-10-25）：用户批准 v2 页面提及可选语义标记与标题／目录同步，保留作者普通锚文本、旧未标记兼容和 v1 边界；两个显式增量扩展安装采用固定 owner 会话、单事务和独立受审配方，兼容集群组才复用，历史 SQL／manifest 及 LOGIN 成员不改。仅源码、局部虚构／原生双库验证及常规 develop 交付，不包含真实项目、安装采用、历史重采、任务恢复或发布，见[决定](decisions/2026-10-25-backend-n08-followup.md)和[完整方案](BACKEND_N08_FOLLOWUP_PLAN.md)。
