@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -321,5 +321,24 @@ test("content: lists, course trees, search and a short cache from the public API
     assert.equal(calls.length, before, "a second read within minutes comes from the cache");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("bridge: the command also runs when started through a symlink", async () => {
+  const bridge = setup({ plan: "ok", execute: "complete" });
+  try {
+    const link = path.join(bridge.root, "current-cli.ts");
+    symlinkSync(cli, link);
+    const reply = await new Promise<string>((resolve, reject) => {
+      const child = spawn(process.execPath, [link, "--config", bridge.configPath], { stdio: ["pipe", "pipe", "ignore"] });
+      let out = "";
+      child.stdout.on("data", (chunk) => (out += chunk));
+      child.on("error", reject);
+      child.on("close", () => resolve(out));
+      child.stdin.end(JSON.stringify({ version: 1, op: "status", input: {} }));
+    });
+    assert.equal(JSON.parse(reply).ok, true);
+  } finally {
+    bridge.cleanup();
   }
 });

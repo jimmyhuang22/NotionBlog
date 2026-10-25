@@ -3,7 +3,7 @@
  * Reads one JSON request on stdin and writes one JSON reply on stdout (docs/CONSOLE_BRIDGE.md).
  * Phase one: status, operation history and takedown. Everything else answers UNSUPPORTED.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Operation, Section, SyncStatus } from "../../console/lib/types.ts";
@@ -132,7 +132,16 @@ async function main(argv: string[]) {
   process.stdout.write(JSON.stringify(reply));
 }
 
-if (process.argv[1] === cliPath) {
+/** True when this file is the program being run, also when it was started through a symlink (`current/…`). */
+function isMain(): boolean {
+  try {
+    return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(cliPath);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) {
   main(process.argv.slice(2)).catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.stdout.write(JSON.stringify({ version: VERSION, ok: false, error: { code: "UNAVAILABLE", message: "桥接命令无法启动，请检查配置。" } }));
