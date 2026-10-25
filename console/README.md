@@ -37,12 +37,14 @@ node --env-file=/absolute/private/console.env console/run.mjs start
 
 ## 从手机或其他电脑访问
 
-默认只监听 `127.0.0.1`。要经 Tailscale 访问，加上：
+默认只监听 `127.0.0.1`。要让家里局域网的其他电脑访问，改为监听 Mac mini 的局域网地址，并列出访问时用的地址或主机名（例如 Bonjour 名称 `xxx.local`）：
 
 ```bash
-CONSOLE_HOST=Mac mini 的 Tailscale 地址
-CONSOLE_ALLOWED_HOSTS=Mac mini 的 Tailscale 主机名
+CONSOLE_HOST=Mac mini 的局域网地址
+CONSOLE_ALLOWED_HOSTS=Mac mini 的局域网地址,Mac mini 的 Bonjour 名称.local
 ```
+
+这时本机也要用局域网地址打开。局域网里是普通 HTTP，登录密码和 cookie 不加密；出门在外要用时改用 Tailscale 地址，或接到已有的 HTTPS 反向代理后面。
 
 启动脚本拒绝监听 `0.0.0.0` 这类“所有网络”地址；监听本机以外的地址时必须设置密码。
 
