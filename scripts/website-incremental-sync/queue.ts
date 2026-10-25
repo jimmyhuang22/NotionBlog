@@ -358,14 +358,7 @@ export class IncrementalQueue {
     if (options.requireRetirement !== undefined && typeof options.requireRetirement !== "boolean") fail();
     const now = this.now();
     return this.transaction(() => {
-      // Only preparation is safe to retry. A submission marker survives expiry.
-      const expired = this.db.prepare(`SELECT a.id,a.source,a.page FROM attempts a JOIN jobs j ON j.active_attempt=a.id
-        WHERE a.state='preparing' AND a.expires_at<=? LIMIT 200`).all(now) as Row[];
-      for (const a of expired) {
-        this.db.prepare("UPDATE attempts SET state='abandoned' WHERE id=?").run(a.id);
-        this.recordRetirement(String(a.id));
-        this.db.prepare("UPDATE jobs SET state='pending',active_attempt=NULL,available_at=? WHERE active_attempt=?").run(now, a.id);
-      }
+      this.expirePreparations(now);
       if (options.requireRetirement && this.db.prepare("SELECT 1 FROM retirements WHERE acknowledged=0 LIMIT 1").get()) return [];
       const jobs = this.db.prepare(`SELECT * FROM jobs WHERE state IN ('pending','retry') AND available_at<=?
         ORDER BY available_at,source,page LIMIT ?`).all(now, limit) as Row[];
@@ -377,6 +370,21 @@ export class IncrementalQueue {
         return this.ticket({ ...job, id });
       });
     });
+  }
+  /** Close expired preparation without claiming any pending or retry work. */
+  recoverExpiredPreparations() {
+    return this.transaction(() => this.expirePreparations(this.now()));
+  }
+  private expirePreparations(now: number) {
+    // Only preparation is safe to retry. A submission marker survives expiry.
+    const expired = this.db.prepare(`SELECT a.id FROM attempts a JOIN jobs j ON j.active_attempt=a.id
+      WHERE a.state='preparing' AND a.expires_at<=? LIMIT 200`).all(now) as Row[];
+    for (const a of expired) {
+      this.db.prepare("UPDATE attempts SET state='abandoned' WHERE id=?").run(a.id);
+      this.recordRetirement(String(a.id));
+      this.db.prepare("UPDATE jobs SET state='pending',active_attempt=NULL,available_at=? WHERE active_attempt=?").run(now, a.id);
+    }
+    return expired.length;
   }
   private recordRetirement(operationId: string) {
     this.db.prepare("INSERT INTO retirements(id) VALUES(?) ON CONFLICT DO NOTHING").run(operationId);
@@ -454,6 +462,17 @@ export class IncrementalQueue {
   retryPreparation(ticket: QueueTicket, errorCode: string, delayMs: number) {
     code(errorCode); integer(delayMs, 0, 86_400_000);
     return this.transaction(() => { this.active(ticket, "preparing"); return this.retry(ticket, errorCode, delayMs); });
+  }
+  /** A system failure or cancellation closes unsent work without charging the page. */
+  deferPreparation(ticket: QueueTicket, errorCode: string, delayMs: number) {
+    code(errorCode); integer(delayMs, 0, 86_400_000);
+    this.transaction(() => {
+      this.active(ticket, "preparing");
+      this.db.prepare("UPDATE attempts SET state='abandoned' WHERE id=?").run(ticket.operationId);
+      this.db.prepare("UPDATE jobs SET state='retry',active_attempt=NULL,error_code=?,available_at=? WHERE active_attempt=?")
+        .run(errorCode, this.now() + delayMs, ticket.operationId);
+      this.recordRetirement(ticket.operationId);
+    });
   }
   /** Requires definitive server rejection; a timeout or missing lookup is NOT proof. */
   confirmRejected(ticket: QueueTicket, proof: { operationId: string; payloadDigest: string; definitivelyRejected: true; code: string }, delayMs: number,

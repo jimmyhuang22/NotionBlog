@@ -196,6 +196,38 @@ test("repeated preparation failures back off, require review and expose new hint
   assert.equal(q.retryPreparation(next, "TEMPORARY", 1000), "retry");
 });
 
+test("deferral survives reopening, fences unsent work and preserves existing failure history", async t => {
+  const s = await setup(t); let q = await s.open(); q.enqueue([event()]);
+  for (let n = 0; n < 2; n++) q.retryPreparation(q.claim(1)[0], "PAGE_TEMPORARY", 0);
+  for (let n = 0; n < 6; n++) {
+    const [ticket] = q.claim(1);
+    q.deferPreparation(ticket, n % 2 ? "CANCELLED" : "PUBLICATION_UNAVAILABLE", 1000);
+    const proof = q.attemptClosure(ticket.operationId)!;
+    assert.equal(proof.disposition, "never_submitted"); assert.equal(proof.payloadDigest, null);
+    assert.throws(() => q.assertPreparing(ticket), error("QUEUE_STALE_TICKET"));
+    assert.throws(() => q.markSubmitting(ticket, { payloadDigest: payload, expectedRevision: "revision-1" }), error("QUEUE_STALE_TICKET"));
+    s.close(q); q = await s.open(); assert.ok(q.pendingRetirements().some(p => p.ticket.operationId === ticket.operationId));
+    s.time.now += 999; assert.deepEqual(q.claim(1), []); s.time.now++;
+    assert.equal(q.status().retry, 1); assert.equal(q.status().needs_review, 0);
+  }
+  for (let n = 3; n <= 5; n++) {
+    const [ticket] = q.claim(1); assert.equal(ticket.generation, 1); assert.deepEqual(ticket.reasons, ["content"]);
+    assert.equal(q.retryPreparation(ticket, "PAGE_TEMPORARY", 0), n === 5 ? "needs_review" : "retry");
+  }
+  assert.equal(q.status().needs_review, 1);
+});
+
+test("deferral cannot release an expired, foreign or already submitted ticket", async t => {
+  const s = await setup(t), q = await s.open(); q.enqueue([event()]);
+  const [ticket] = q.claim(1, 1000);
+  assert.throws(() => q.deferPreparation({ ...ticket, generation: 2 }, "CANCELLED", 0), error("QUEUE_STALE_TICKET"));
+  s.time.now += 1000;
+  assert.throws(() => q.deferPreparation(ticket, "CANCELLED", 0), error("QUEUE_STALE_TICKET"));
+  const [next] = q.claim(1); q.markSubmitting(next, { payloadDigest: payload, expectedRevision: "revision-1" });
+  assert.throws(() => q.deferPreparation(next, "CANCELLED", 0), error("QUEUE_STALE_TICKET"));
+  assert.equal(q.pendingVerifications()[0].ticket.operationId, next.operationId);
+});
+
 
 test("history GC preserves current retries, unknown sends, unretired work and the latest commit proof", async t => {
   const s = await setup(t), q = await s.open();

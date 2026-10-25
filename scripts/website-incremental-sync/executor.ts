@@ -45,7 +45,14 @@ function receiptMatches(receipt: CommitReceipt, operationId: string, payloadDige
 }
 
 /** No credentials or implicit adapters: publication, source and media ports are explicit. */
-export async function runIncrementalCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>) {
+export function runIncrementalCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>) {
+  return runCycle(options, ports, false);
+}
+/** Recover old operations and retire closed preparation; never claim new work. */
+export function recoverIncrementalCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>) {
+  return runCycle(options, ports, true);
+}
+async function runCycle<T extends PreparedDelta>(options: CycleOptions, ports: IncrementalPorts<T>, recoveryOnly: boolean) {
   const maxTasks = options.maxTasks ?? 20, duration = options.maxDurationMs ?? 120_000, delay = options.retryDelayMs ?? 60_000;
   if (!digest(options.schemaDigest) || !Number.isInteger(maxTasks) || maxTasks < 1 || maxTasks > 50 ||
     !Number.isInteger(duration) || duration < 10 || duration > 899_000 || !Number.isInteger(delay) || delay < 0 || delay > 86_400_000) {
@@ -101,8 +108,10 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
       }
     }
     // Keep a still-running or unknown commit from racing a new global revision.
+    guard(signal);
+    if (recoveryOnly) queue.recoverExpiredPreparations();
     let retirementReady = await retireClosed();
-    while (retirementReady && steps < maxTasks && queue.status().awaiting_verification === 0) {
+    while (!recoveryOnly && retirementReady && steps < maxTasks && queue.status().awaiting_verification === 0) {
       guard(signal);
       const [ticket] = queue.claim(1, duration + 1000, { requireRetirement: !!ports.retire });
       if (!ticket) {
@@ -153,9 +162,12 @@ export async function runIncrementalCycle<T extends PreparedDelta>(options: Cycl
           stage === "verify" ? "READER_UNVERIFIED" : "SUBMISSION_UNCERTAIN"; }
         else {
           try {
+            const cancelled = signal.aborted || error instanceof Cancelled;
             const permanent = stage === "prepare" && (error as { code?: string })?.code === "IMAGE_REJECTED";
-            if (permanent) { queue.requireReview(ticket, "IMAGE_REJECTED"); stats.review++; }
-            else if (queue.retryPreparation(ticket, signal.aborted ? "CANCELLED" : "PREPARATION_UNAVAILABLE", signal.aborted ? 0 : delay) === "needs_review") stats.review++;
+            if (cancelled || stage === "state") {
+              queue.deferPreparation(ticket, cancelled ? "CANCELLED" : "PUBLICATION_UNAVAILABLE", cancelled ? 0 : delay); stats.retried++;
+            } else if (permanent) { queue.requireReview(ticket, "IMAGE_REJECTED"); stats.review++; }
+            else if (queue.retryPreparation(ticket, "PREPARATION_UNAVAILABLE", delay) === "needs_review") stats.review++;
             else stats.retried++;
           }
           catch (failure) {

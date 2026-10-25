@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as sqlite from "node:sqlite";
 import { openIncrementalQueue, IncrementalQueueError } from "../scripts/website-incremental-sync/queue.ts";
-import { runIncrementalCycle, type IncrementalPorts, type PreparedDelta } from "../scripts/website-incremental-sync/executor.ts";
+import { recoverIncrementalCycle, runIncrementalCycle, type IncrementalPorts, type PreparedDelta } from "../scripts/website-incremental-sync/executor.ts";
 
 const configDigest = "a".repeat(64), payloadDigest = "b".repeat(64), schemaDigest = "c".repeat(64);
 const state = { publicationRevision: "revision-1", configDigest, schemaDigest, policyEpoch: "epoch-1" };
@@ -138,4 +138,36 @@ test("a successfully verified publication keeps its applied domain identity and 
   s.ports.retire = async () => assert.fail("Applied publication must not be retired");
   const result = await s.run(); assert.equal(result.outcome, "updated"); assert.equal(result.retired, 0);
   assert.deepEqual(order, ["install"]); assert.equal(s.q.status().done, 1);
+});
+
+test("recovery only retires expired preparation within its task budget and creates no new attempt", async t => {
+  const s = await setup(t);
+  s.q.enqueue(Array.from({ length: 50 }, (_, i) => ({ eventId: `more-${i}`, sourceKey: "notes", pageKey: `more-${i}`, reason: "content" as const, observedAt: 1000 })));
+  const tickets = [...s.q.claim(50, 1000), ...s.q.claim(1, 1000)]; assert.equal(tickets.length, 51);
+  s.time.now += 1000; await s.reopen();
+  s.ports.state = s.ports.prepare = s.ports.submit = async () => assert.fail("Recovery cannot prepare or submit new work");
+  s.ports.retire = async proof => { assert.ok(tickets.some(ticket => ticket.operationId === proof.ticket.operationId)); };
+  const first = await recoverIncrementalCycle({ queue: s.q, schemaDigest, maxTasks: 1 }, s.ports);
+  assert.equal(first.claimed, 0); assert.equal(first.retired, 1); assert.equal(first.outcome, "blocked");
+  assert.equal(s.q.status().pending, 51); assert.equal(s.q.status().retirement_pending, 50);
+  const second = await recoverIncrementalCycle({ queue: s.q, schemaDigest, maxTasks: 50 }, s.ports);
+  assert.equal(second.claimed, 0); assert.equal(second.retired, 50); assert.equal(second.outcome, "partial");
+  assert.equal(s.q.status().pending, 51); assert.equal(s.q.status().leased, 0);
+  assert.throws(() => s.q.markSubmitting(tickets[0], delta), error("QUEUE_STALE_TICKET"));
+});
+
+test("recovery preserves unknown submissions and leaves ready pages untouched after exact readback", async t => {
+  const s = await setup(t), [ticket] = s.q.claim(); s.q.markSubmitting(ticket, delta);
+  s.q.enqueue([{ eventId: "queued", sourceKey: "notes", pageKey: "queued", reason: "content", observedAt: 1000 }]);
+  s.ports.state = s.ports.prepare = s.ports.submit = async () => assert.fail("Recovery cannot start ready work");
+  s.ports.retire = async () => assert.fail("Unknown or applied submissions must not be retired");
+  assert.equal((await recoverIncrementalCycle({ queue: s.q, schemaDigest }, s.ports)).outcome, "blocked");
+  assert.equal(s.q.status().awaiting_verification, 1); assert.equal(s.q.status().pending, 1);
+  const order: string[] = [];
+  s.ports.lookup = async operationId => ({ operationId, payloadDigest, publicationRevision: "revision-2", committed: true });
+  s.ports.verify = async () => { order.push("verify"); return true; };
+  s.ports.finalize = async () => { order.push("finalize"); assert.equal(s.q.status().done, 0); };
+  const result = await recoverIncrementalCycle({ queue: s.q, schemaDigest }, s.ports);
+  assert.equal(result.recovered, 1); assert.equal(result.claimed, 0); assert.deepEqual(order, ["verify", "finalize"]);
+  assert.equal(s.q.status().done, 1); assert.equal(s.q.status().pending, 1); assert.equal(s.q.status().leased, 0);
 });
