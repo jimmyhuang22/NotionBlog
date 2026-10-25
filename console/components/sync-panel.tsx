@@ -75,6 +75,9 @@ export function SyncPanel({ initial, timeZone }: { initial: SyncStatus; timeZone
   const word = running ? `${kindLabels[running.kind]}中` : last?.state === "failed" ? "上次失败" : last?.state === "unknown" ? "结果未知" : "空闲";
   const dot = running ? "running" : last?.state === "failed" ? "failed" : last?.state === "unknown" ? "unknown" : "ok";
   const mode = modeText[status.mode];
+  // A day without a successful sync is worth a clear warning.
+  const sinceSuccess = status.lastSuccessAt ? now - Date.parse(status.lastSuccessAt) : null;
+  const staleDays = sinceSuccess !== null && sinceSuccess > 86_400_000 ? Math.floor(sinceSuccess / 86_400_000) : null;
 
   return (
     <div className="stack">
@@ -129,7 +132,7 @@ export function SyncPanel({ initial, timeZone }: { initial: SyncStatus; timeZone
             <dt>网站内容版本</dt>
             <dd>
               {status.publishedVersionAt ? formatDateTime(status.publishedVersionAt, timeZone) : "—"}
-              <small>{status.mode === "qualified" ? "超过 4 小时未更新会失效" : "长期有效"}</small>
+              <ValidityNote status={status} timeZone={timeZone} now={now} />
             </dd>
           </div>
         </dl>
@@ -137,15 +140,10 @@ export function SyncPanel({ initial, timeZone }: { initial: SyncStatus; timeZone
 
       {error ? <ErrorNotice error={error} /> : null}
 
-      {status.hold ? (
+      {staleDays !== null || status.hold ? (
         <div className="notice notice--warn">
-          <p>定时同步现在没有在跑：{status.hold}</p>
-        </div>
-      ) : null}
-
-      {status.mode === "qualified" ? (
-        <div className="notice notice--info">
-          <p>现在是旧模式：每轮都会把全部页面重读一遍。冻结和“只同步一页”要等新模式上线后才能用。</p>
+          {staleDays !== null ? <p>已经 {staleDays} 天没有成功同步了：这段时间在 Notion 里的修改都还没上网站。</p> : null}
+          {status.hold ? <p>定时同步现在没有在跑：{status.hold}</p> : null}
         </div>
       ) : null}
 
@@ -181,5 +179,18 @@ function RunCard({ op, now, timeZone, live = false, heading }: { op: Operation; 
         </Link>
       ) : null}
     </section>
+  );
+}
+
+function ValidityNote({ status, timeZone, now }: { status: SyncStatus; timeZone: string; now: number }) {
+  if (status.mode !== "qualified") return <small>长期有效</small>;
+  if (!status.contentValidUntil) return <small>每次成功同步后 4 小时内算最新</small>;
+  const until = Date.parse(status.contentValidUntil);
+  if (until > now) return <small>有效到 {formatDateTime(status.contentValidUntil, timeZone)}</small>;
+  const days = Math.floor((now - until) / 86_400_000);
+  return (
+    <small className="is-warn" title={`有效期到 ${formatDateTime(status.contentValidUntil, timeZone)}`}>
+      {days >= 1 ? `已过有效期 ${days} 天` : "已过有效期"}
+    </small>
   );
 }

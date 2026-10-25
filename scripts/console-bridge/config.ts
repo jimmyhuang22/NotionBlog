@@ -1,6 +1,7 @@
 /** The bridge's private configuration file (never committed). See docs/CONSOLE_BRIDGE.md. */
 import { readFileSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
+import type { JobsConfig } from "./jobs.ts";
 
 export interface BridgeConfig {
   /** Private directory for plans, journals and operation records; must sit under a `.local` folder. */
@@ -15,6 +16,8 @@ export interface BridgeConfig {
     /** Plain words for the console, such as "每 5 分钟检查一次". */
     schedule: string;
   };
+  /** Other scheduled jobs to show; null hides the list. */
+  jobs: JobsConfig | null;
   /** Null keeps takedown switched off. */
   takedown: {
     /** Node binary that runs the takedown tool. */
@@ -54,8 +57,24 @@ export function loadConfig(path: string): BridgeConfig {
     takedown = { node: absolute(entry.node, "TAKEDOWN_NODE"), project: absolute(entry.project, "TAKEDOWN_PROJECT"), envFile: absolute(entry.envFile, "TAKEDOWN_ENV") };
   }
 
+  let jobs: BridgeConfig["jobs"] = null;
+  if (value.jobs !== null && value.jobs !== undefined) {
+    const entry = value.jobs as Record<string, unknown>;
+    if (!Array.isArray(entry.list) || entry.list.length > 50) throw new Error("CONFIG_JOBS");
+    jobs = {
+      dataDir: absolute(entry.dataDir, "JOBS_DATA"),
+      suspendDir: absolute(entry.suspendDir, "JOBS_SUSPEND"),
+      list: entry.list.map((item: unknown) => {
+        const job = item as Record<string, unknown>;
+        if (typeof job.dag !== "string" || typeof job.name !== "string" || job.name.length > 40) throw new Error("CONFIG_JOB");
+        return { dag: job.dag, name: job.name, schedule: typeof job.schedule === "string" && job.schedule.length <= 60 ? job.schedule : null };
+      }),
+    };
+  }
+
   return {
     stateDir,
+    jobs,
     siteOrigin: origin.origin,
     sync: {
       stateFile: absolute(sync.stateFile, "SYNC_STATE"),

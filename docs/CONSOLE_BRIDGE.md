@@ -38,7 +38,7 @@
 
 | op | input | data |
 | --- | --- | --- |
-| `status` | `{}` | `SyncStatus`：发布模式、能力开关、正在运行的操作、上次成功时间、上一轮、下次定时、队列数、`hold`（定时同步暂停的原因，正常为 `null`）、当前发布版本时间 |
+| `status` | `{}` | `SyncStatus`：发布模式、能力开关、正在运行的操作、上次成功时间、上一轮、下次定时、队列数、`hold`（定时同步暂停的原因，正常为 `null`）、当前发布版本时间、`contentValidUntil`（按旧模式规则内容算最新的截止时间，未知为 `null`） |
 | `sync.start` | `{ target: string \| null }` | `{ operationId }`；`target` 为空表示整轮 |
 | `content.sections` | `{}` | `SectionSummary[]`：每个栏目的顶层公开数量与冻结数量 |
 | `content.list` | `{ section, parentId, search }` | `{ items: ContentItem[], total }`；`parentId` 为空取顶层；`search` 非空时按标题搜索整个栏目，忽略 `parentId` |
@@ -52,12 +52,13 @@
 | `takedown.resume` | `{ planId }` | `{ operationId }` |
 | `operation.get` | `{ id }` | `Operation`：类型、目标、来源（定时／控制台）、状态、步骤、计数、错误、可续办的计划 ID |
 | `operation.list` | `{ limit }` | `Operation[]`，最新在前，含定时同步 |
+| `jobs.list` | `{}` | `JobStatus[]`：其他定时任务的名称、调度说明、是否暂停、最近一次状态与时间、上次成功时间、失败的步骤名 |
 
 `target` 与 `input` 接受站内页面地址（路径或完整地址）、Notion 页面链接，或 `content.list` 返回的 `id`。`id` 对控制台不透明，不能是 Notion 地址。
 
 ## 约定
 
-- **能力开关。** `status.capabilities` 说明后端已经支持哪些功能（`sync` 整轮立即同步、`targetedSync` 单页同步、`freeze` 冻结与解冻、`takedown` 下架、`contentList` 内容列表），控制台据此停用按钮或显示“还没接上”。可以分批接入：例如先实现 `status`、`operation.*` 和下架，冻结等新模式上线后再打开。未支持的操作返回 `UNSUPPORTED`。
+- **能力开关。** `status.capabilities` 说明后端已经支持哪些功能（`sync` 整轮立即同步、`jobs` 其他定时任务、`targetedSync` 单页同步、`freeze` 冻结与解冻、`takedown` 下架、`contentList` 内容列表），控制台据此停用按钮或显示“还没接上”。可以分批接入：例如先实现 `status`、`operation.*` 和下架，冻结等新模式上线后再打开。未支持的操作返回 `UNSUPPORTED`。
 - **预览绑定确认。** `*.start` 必须带上预览返回的 `digest`。范围、图片状态或冻结状态在此期间变化时返回 `PREVIEW_STALE`，控制台会请用户重新查看。
 - **启动不等待。** `*.start` 和 `takedown.*` 只登记并启动工作，立即返回 `operationId`；控制台每 1.2 秒调用 `operation.get` 直到状态结束。
 - **同一把锁。** 同步、冻结、解冻和下架与定时任务共用现有的锁；已有写入在进行时返回 `BUSY` 并带上 `runningOperationId`，不排队、不抢锁。
@@ -80,11 +81,15 @@
   "stateDir": "/absolute/…/.local/console-bridge/state",
   "siteOrigin": "https://网站地址",
   "sync": { "stateFile": "/absolute/同步控制器状态文件", "suspendFlag": "/absolute/调度暂停标志", "schedule": "给人看的调度说明" },
+  "jobs": { "dataDir": "/absolute/Dagu 数据目录", "suspendDir": "/absolute/Dagu 暂停标志目录", "list": [{ "dag": "任务名", "name": "显示名", "schedule": "调度说明" }] },
   "takedown": null
 }
 ```
 
 - **状态与记录**：只读同步控制器的状态文件和调度暂停标志，不连接数据库、Dagu 接口或 Notion，不改变任何同步。历史轮次的原因只显示大写原因代码，路径和其他文字不外传。控制器在上一轮失败或暂停标志存在时不会开始新一轮，`hold` 据此说明。发布模式按现状报告为 `qualified`；网站内容版本时间需要读数据库，第一阶段报告 `null`。
+- **其他定时任务**：只读 Dagu 数据目录里各任务自己的运行记录（Dagu 的 HTTP 接口需要登录，数据目录不需要）和暂停标志目录，取最近一次状态、时间、失败的步骤名，并向前查找上次成功；不显示运行日志或错误文字。
+- **内容列表**：读网站公开接口（`/api/content/<类型>` 与 `/api/study/<课程>/tree`），即访客已经能看到的内容，结果在 `stateDir` 里缓存 3 分钟。新模式上线前不知道冻结状态，所有公开页面都报告为 `syncing`。
+- **失败原因**：已知的原因代码附带中文说明，原代码保留在括号里；未知代码原样显示。上次成功那一轮的回执里只读取 `validUntil`，作为 `contentValidUntil`。
 - **下架**：`takedown` 为 `{ "node", "project", "envFile" }` 时启用。`project` 指向已固定的运行副本，命令原样调用其中的 `scripts/public-cache/withdraw-cli.ts`，用 `envFile` 提供受限 operator 账号、缓存设置和锁清单；不修改下架工具。计划同步执行（55 秒内），执行与续办由独立的后台进程完成，进度读自下架工具自己的日志文件（PLANNED → DENIED_PURGE_PENDING → PURGED_VERIFY_PENDING → COMPLETE；DENY_OUTCOME_UNKNOWN 为结果未知）。日志、计划和操作记录都在 `stateDir`，必须位于 `.local` 下。
 - 目前 `takedown` 为 `null`：网站已切换到新数据库，新库的受限 operator 账号与对应 env 文件尚未确认，确认后再开启并用获准测试页验收。
 

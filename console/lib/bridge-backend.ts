@@ -14,6 +14,7 @@ import {
   type ContentItem,
   type ContentPage,
   type FreezePreview,
+  type JobStatus,
   type Operation,
   type Section,
   type SectionSummary,
@@ -100,6 +101,9 @@ export class BridgeBackend implements ConsoleBackend {
   }
   operations(limit: number) {
     return this.call<Operation[]>("operation.list", { limit }, "read", Array.isArray);
+  }
+  jobs() {
+    return this.call<JobStatus[]>("jobs.list", {}, "read", Array.isArray);
   }
 
   private async call<T>(op: string, input: unknown, timeout: Timeout, valid: (value: unknown) => boolean): Promise<T> {

@@ -27,6 +27,8 @@ export function ContentBrowser({ section, items, flat, capabilities, timeZone, s
   const [children, setChildren] = useState<Record<string, Children>>({});
   const [dialog, setDialog] = useState<DialogRequest | null>(null);
   const [version, setVersion] = useState(0);
+  // Long lists (hundreds of films) show a first page; the rest on request.
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(
     async (parentId: string) => {
@@ -82,9 +84,18 @@ export function ContentBrowser({ section, items, flat, capabilities, timeZone, s
     </ul>
   );
 
+  const pageSize = 100;
+  const visible = showAll ? items : items.slice(0, pageSize);
   return (
     <>
-      {renderList(items, false)}
+      {renderList(visible, false)}
+      {items.length > visible.length ? (
+        <p style={{ textAlign: "center", margin: "12px 0 0" }}>
+          <button type="button" className="button" onClick={() => setShowAll(true)}>
+            显示全部 {items.length} 项
+          </button>
+        </p>
+      ) : null}
       {dialog ? (
         <FreezeDialog
           key={`${dialog.kind}:${dialog.item.id}`}
@@ -182,9 +193,12 @@ function Row({ item, canExpand, expanded, onToggle, onDialog, onChanged, capabil
         </div>
       </div>
       <div className="row__side">
-        <span className={`chip chip--${chipState}`} title={item.inheritedFrozen ? "随上级页面一起冻结" : undefined}>
-          {item.inheritedFrozen ? "随上级冻结" : contentStateLabels[chipState]}
-        </span>
+        {/* Before freezing exists every page is simply in the sync; the chip only marks the exceptions. */}
+        {chipState !== "syncing" || capabilities.freeze ? (
+          <span className={`chip chip--${chipState}`} title={item.inheritedFrozen ? "随上级页面一起冻结" : undefined}>
+            {item.inheritedFrozen ? "随上级冻结" : contentStateLabels[chipState]}
+          </span>
+        ) : null}
         {item.state === "syncing" && capabilities.targetedSync ? (
           <button type="button" className="button button--quiet" onClick={syncNow} disabled={starting || syncing}>
             {syncing || starting ? "同步中…" : "同步"}

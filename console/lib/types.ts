@@ -92,6 +92,8 @@ export interface Operation {
 export interface Capabilities {
   /** Start a whole-site sync from the console. */
   sync: boolean;
+  /** Status of the other scheduled jobs on the Mac mini. */
+  jobs: boolean;
   /** Freeze and unfreeze (needs the persistent mode). */
   freeze: boolean;
   /** Sync one page instead of everything. */
@@ -113,7 +115,26 @@ export interface SyncStatus {
   /** Why scheduled syncs are not running right now, in plain words; null when they run normally. */
   hold: string | null;
   publishedVersionAt: string | null;
+  /** Until when the published content counts as current under the qualified rules; null when unknown or not applicable. */
+  contentValidUntil?: string | null;
   observedAt: string;
+}
+
+export type JobState = "running" | "queued" | "succeeded" | "partial" | "failed" | "cancelled" | "never" | "unknown";
+
+/** Another scheduled job on the Mac mini (game sync, social stats, cache refresh …). */
+export interface JobStatus {
+  id: string;
+  name: string;
+  /** Plain words, such as "每天 07:00 和 17:00". */
+  schedule: string | null;
+  suspended: boolean;
+  state: JobState;
+  lastStartedAt: string | null;
+  lastFinishedAt: string | null;
+  lastSuccessAt: string | null;
+  /** Name of the step that failed in the latest run, when there is one. */
+  failedStep: string | null;
 }
 
 export interface FreezePreview {
@@ -200,6 +221,7 @@ export interface ConsoleBackend {
   resumeTakedown(planId: string): Promise<{ operationId: string }>;
   operation(id: string): Promise<Operation>;
   operations(limit: number): Promise<Operation[]>;
+  jobs(): Promise<JobStatus[]>;
 }
 
 /** Plain-language text for each error code; the backend's message is shown underneath as detail. */
