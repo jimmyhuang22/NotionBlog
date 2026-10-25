@@ -4,10 +4,13 @@
  * Phase one: status, operation history and takedown. Everything else answers UNSUPPORTED.
  */
 import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Operation, SyncStatus } from "../../console/lib/types.ts";
+import type { Operation, Section, SyncStatus } from "../../console/lib/types.ts";
 import { loadConfig, type BridgeConfig } from "./config.ts";
 import { BridgeError } from "./errors.ts";
+import { ContentReader } from "./content.ts";
+import { readJobs } from "./jobs.ts";
 import { describeSync, type SyncView } from "./sync-status.ts";
 import { Takedown } from "./takedown.ts";
 
@@ -22,7 +25,18 @@ function readSync(config: BridgeConfig): SyncView {
     throw new BridgeError("UNAVAILABLE", "读不到同步程序的状态文件。");
   }
   const suspended = config.sync.suspendFlag !== null && existsSync(config.sync.suspendFlag);
-  return describeSync(state, { suspended, schedule: config.sync.schedule, now: Date.now() });
+  return describeSync(state, { suspended, schedule: config.sync.schedule, now: Date.now(), validUntilFor });
+}
+
+/** Reads `validUntil` from a finished round's receipt; nothing else from it leaves the bridge. */
+function validUntilFor(operation: string): string | null {
+  if (!isAbsolute(operation) || resolve(operation) !== operation) return null;
+  try {
+    const receipt = JSON.parse(readFileSync(join(operation, "PIPELINE_FINISHED_PRIVATE.json"), "utf8")) as { status?: unknown; validUntil?: unknown };
+    return receipt.status === "PASS" && typeof receipt.validUntil === "string" ? receipt.validUntil : null;
+  } catch {
+    return null;
+  }
 }
 
 function text(value: unknown, max = 2000): string {
@@ -42,7 +56,7 @@ export async function handle(request: unknown, config: BridgeConfig, configPath:
       const view = readSync(config);
       const status: SyncStatus = {
         ...view.status,
-        capabilities: { sync: false, targetedSync: false, freeze: false, takedown: takedown.enabled, contentList: false },
+        capabilities: { sync: false, jobs: config.jobs !== null, targetedSync: false, freeze: false, takedown: takedown.enabled, contentList: true },
         observedAt: new Date().toISOString(),
       };
       return status;
@@ -59,6 +73,18 @@ export async function handle(request: unknown, config: BridgeConfig, configPath:
       if (!found) throw new BridgeError("NOT_FOUND", "没有这条操作记录。");
       return found;
     }
+    case "content.sections":
+      return new ContentReader(config.siteOrigin, config.stateDir).sections();
+    case "content.list": {
+      const section = typeof args.section === "string" && ["study", "status", "movie", "book", "game", "album", "page"].includes(args.section) ? (args.section as Section) : null;
+      if (!section) throw new BridgeError("INVALID_INPUT", "未知栏目。");
+      const parentId = typeof args.parentId === "string" && args.parentId.length <= 200 ? args.parentId : null;
+      const search = typeof args.search === "string" && args.search.length <= 200 ? args.search : null;
+      return new ContentReader(config.siteOrigin, config.stateDir).list({ section, parentId, search });
+    }
+    case "jobs.list":
+      if (!config.jobs) throw new BridgeError("UNSUPPORTED", "没有配置其他任务。");
+      return readJobs(config.jobs);
     case "takedown.plan":
       return takedown.plan(text(args.input));
     case "takedown.execute":

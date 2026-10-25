@@ -33,7 +33,7 @@ export default async function ContentPageView({ searchParams }: { searchParams: 
       <div className="page-head">
         <div>
           <h1>内容</h1>
-          <p>网站上公开的内容。不再更新的可以冻结：留在网站上，同步不再去读它。</p>
+          <p>{status && !status.capabilities.freeze ? "网站上公开的内容（从网站接口读取，几分钟更新一次）。冻结要等新模式上线后才能用。" : "网站上公开的内容。不再更新的可以冻结：留在网站上，同步不再去读它。"}</p>
         </div>
       </div>
       {status && !status.capabilities.contentList ? (

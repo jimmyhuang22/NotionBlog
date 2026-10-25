@@ -9,6 +9,8 @@ import { handle } from "../scripts/console-bridge/cli.ts";
 import { loadConfig } from "../scripts/console-bridge/config.ts";
 import { BridgeError } from "../scripts/console-bridge/errors.ts";
 import { describeSync } from "../scripts/console-bridge/sync-status.ts";
+import { readJobs } from "../scripts/console-bridge/jobs.ts";
+import { ContentReader } from "../scripts/console-bridge/content.ts";
 import type { Operation, SyncStatus, TakedownPlan } from "../console/lib/types.ts";
 
 // The console bridge (scripts/console-bridge/) with a fictional sync state and a fake takedown tool.
@@ -34,12 +36,22 @@ test("sync state: history newest first, reasons only as codes, failure holds the
   assert.deepEqual(view.history.map((op) => op.state), ["failed", "failed", "succeeded"]);
   assert.equal(view.history[0].error?.code, "RUN_FAILED");
   assert.match(view.history[0].error?.message ?? "", /EXAMPLE_SOURCE_LIMIT/);
+  assert.equal(view.status.publishedVersionAt, "2026-01-01T02:00:00.000Z");
   assert.doesNotMatch(JSON.stringify(view), /private\/path|\/a\/path/);
   assert.equal(view.status.lastSuccessAt, "2026-01-01T02:00:00.000Z");
   assert.equal(view.status.lastRun?.id, view.history[0].id);
   assert.ok(view.status.hold);
   assert.equal(view.status.nextScheduledAt, null);
   assert.equal(view.status.running, null);
+});
+
+test("sync state: known reasons in plain words, and the last success's expiry from its receipt", () => {
+  const state = { ...fictionalState, history: [{ status: "PASS", finishedAtUTC: "2026-01-01T02:00:00Z", operation: "/fiction/op-1" }, { status: "FAILED", finishedAtUTC: "2026-01-02T03:10:00Z", reason: "READER_EAUTHQUERY" }] };
+  const asked: string[] = [];
+  const view = describeSync(state, { suspended: false, schedule: "x", now: 0, validUntilFor: (operation) => { asked.push(operation); return "2026-01-01T06:00:00Z"; } });
+  assert.deepEqual(asked, ["/fiction/op-1"]);
+  assert.equal(view.status.contentValidUntil, "2026-01-01T06:00:00.000Z");
+  assert.match(view.history[0].error?.message ?? "", /认证失败（READER_EAUTHQUERY）/);
 });
 
 test("sync state: a running round and the suspend flag", () => {
@@ -110,7 +122,7 @@ test("bridge: status reports phase-one capabilities", async () => {
   const off = setup({ plan: "ok", execute: "complete" }, false);
   try {
     const status = (await on.call("status")) as SyncStatus;
-    assert.deepEqual(status.capabilities, { sync: false, targetedSync: false, freeze: false, takedown: true, contentList: false });
+    assert.deepEqual(status.capabilities, { sync: false, jobs: false, targetedSync: false, freeze: false, takedown: true, contentList: true });
     assert.equal(status.mode, "qualified");
     assert.equal(((await off.call("status")) as SyncStatus).capabilities.takedown, false);
     await rejectsWith(off.call("takedown.plan", { input: "/study/example" }), "UNSUPPORTED");
@@ -236,5 +248,78 @@ test("bridge: the command speaks the protocol over stdin and stdout", async () =
     assert.equal(readFileSync(path.join(bridge.root, "state.json"), "utf8"), JSON.stringify(fictionalState));
   } finally {
     bridge.cleanup();
+  }
+});
+
+test("jobs: latest run, last success, failed step and suspend flag from Dagu's records", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "console-jobs-"));
+  try {
+    const run = (dag: string, day: string, id: string, record: object) => {
+      const dir = path.join(root, "data/dag-runs", dag, "dag-runs/2026/01", day, `dag-run_${id}`, `a_${id}`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "status.jsonl"), `${JSON.stringify({ status: 1 })}\n${JSON.stringify(record)}\n`);
+    };
+    run("game", "01", "20260101_070000Z_a", { status: 4, startedAt: "2026-01-01T07:00:00+11:00", finishedAt: "2026-01-01T07:01:00+11:00" });
+    run("game", "02", "20260102_070000Z_b", { status: 2, startedAt: "2026-01-02T07:00:00+11:00", finishedAt: "2026-01-02T07:00:30+11:00", nodes: [{ step: { name: "sync_and_verify" }, status: 2 }] });
+    run("covers", "02", "20260102_080000Z_c", { status: 1, startedAt: "2026-01-02T08:00:00+11:00", finishedAt: "" });
+    mkdirSync(path.join(root, "suspend"));
+    writeFileSync(path.join(root, "suspend/covers.suspend"), "");
+    const jobs = readJobs({
+      dataDir: path.join(root, "data"),
+      suspendDir: path.join(root, "suspend"),
+      list: [
+        { dag: "game", name: "游戏平台同步", schedule: "每天两次" },
+        { dag: "covers", name: "社交封面", schedule: null },
+        { dag: "missing", name: "没有记录", schedule: null },
+        { dag: "../escape", name: "坏名字", schedule: null },
+      ],
+    });
+    assert.equal(jobs[0].state, "failed");
+    assert.equal(jobs[0].failedStep, "sync_and_verify");
+    assert.equal(jobs[0].lastSuccessAt, "2025-12-31T20:01:00.000Z");
+    assert.equal(jobs[1].state, "running");
+    assert.equal(jobs[1].suspended, true);
+    assert.equal(jobs[1].lastFinishedAt, null);
+    assert.equal(jobs[2].state, "never");
+    assert.equal(jobs[3].state, "unknown");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("content: lists, course trees, search and a short cache from the public API", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "console-content-"));
+  const calls: string[] = [];
+  const site: Record<string, unknown> = {
+    "/api/content/course?limit=50": { data: { items: [{ slug: "c1", code: "DEMO101", title: "DEMO101 示例课程", href: "/study/c1", updatedAt: "2026-01-01T00:00:00Z" }], hasMore: false } },
+    "/api/study/c1/tree": { data: { nodes: [{ id: "n1", title: "第一周", href: "/study/c1/notes/n1", children: [{ id: "n2", title: "排序笔记", href: "/study/c1/notes/n2", children: [] }] }] } },
+    "/api/content/status?limit=50": { data: { items: [{ slug: "s1", href: "/status#s1", title: null, text: [{ text: "今天" }, { text: "去了海边" }] }], hasMore: true, nextCursor: "next" } },
+    "/api/content/status?limit=50&cursor=next": { data: { items: [{ slug: "s2", href: "/status#s2", title: "第二条" }], hasMore: false } },
+  };
+  const fetchJson = async (url: string) => {
+    const key = url.replace("https://example.com", "");
+    calls.push(key);
+    return site[key] ?? { data: { items: [], hasMore: false } };
+  };
+  try {
+    const reader = new ContentReader("https://example.com", path.join(root, ".local"), fetchJson);
+    const courses = await reader.list({ section: "study", parentId: null, search: null });
+    assert.equal(courses.items[0].title, "示例课程");
+    assert.equal(courses.items[0].subtitle, "DEMO101");
+    assert.equal(courses.items[0].childCount, 1);
+    const week = await reader.list({ section: "study", parentId: courses.items[0].id, search: null });
+    assert.equal(week.items[0].title, "第一周");
+    assert.equal(week.items[0].childCount, 1);
+    const notes = await reader.list({ section: "study", parentId: week.items[0].id, search: null });
+    assert.equal(notes.items[0].href, "/study/c1/notes/n2");
+    const found = await reader.list({ section: "study", parentId: null, search: "排序" });
+    assert.deepEqual(found.items.map((item) => item.title), ["排序笔记"]);
+    const status = await reader.list({ section: "status", parentId: null, search: null });
+    assert.deepEqual(status.items.map((item) => item.title), ["今天去了海边", "第二条"]);
+    const before = calls.length;
+    await reader.list({ section: "status", parentId: null, search: null });
+    assert.equal(calls.length, before, "a second read within minutes comes from the cache");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

@@ -6,6 +6,7 @@ import type { Operation, SyncStatus } from "../../console/lib/types.ts";
 
 interface HistoryEntry {
   status?: unknown;
+  operation?: unknown;
   startedAtUTC?: unknown;
   finishedAtUTC?: unknown;
   reason?: unknown;
@@ -27,7 +28,24 @@ function iso(value: unknown): string | null {
 
 /** Reason codes are upper-case words; anything else (a path, free text) is not shown. */
 function reasonCode(value: unknown): string | null {
-  return typeof value === "string" && /^[A-Z0-9_]{1,100}$/.test(value) ? value : null;
+  return typeof value === "string" && /^[A-Z0-9_-]{1,100}$/.test(value) ? value : null;
+}
+
+/** Plain words for the reason codes the controller has used; the code stays beside them. */
+const reasonWords: Record<string, string> = {
+  SOURCE_NATIVE_POOL_CONNECTION_LIMIT_DURING_DISCOVERY: "扫描 Notion 内容时，数据库连接数到了上限",
+  SOURCE_OWNER_RECEIPT_FIELD_MISMATCH_BEFORE_PUBLICATION: "发布前核对回执，字段对不上，所以没有发布",
+  SOURCE_ADMISSION_FAILED_BEFORE_PUBLICATION: "发布前的准入检查没通过，所以没有发布",
+  SOURCE_COLLECTION_FAILED_REVIEWED_NO_PUBLISH: "采集失败，核对后确认没有发布",
+  READER_EAUTHQUERY: "读取账号连数据库时认证失败",
+  CONTENT_FAILED: "采集或发布内容时失败",
+  "PRODUCTION-VISITOR_FAILED": "发布后的访客验收没通过",
+};
+
+export function reasonMessage(code: string | null): string {
+  if (!code) return "没有记录原因。";
+  const words = reasonWords[code];
+  return words ? `${words}（${code}）` : `原因代码：${code}`;
 }
 
 function syncOperation(entry: { state: Operation["state"]; startedAt: string | null; finishedAt: string | null; reason: string | null; id: string }): Operation {
@@ -47,13 +65,16 @@ function syncOperation(entry: { state: Operation["state"]; startedAt: string | n
     counts: null,
     error:
       entry.state === "failed"
-        ? { code: "RUN_FAILED", message: entry.reason ? `原因代码：${entry.reason}` : "没有记录原因。" }
+        ? { code: "RUN_FAILED", message: reasonMessage(entry.reason) }
         : null,
     resumePlanId: null,
   };
 }
 
-export function describeSync(state: unknown, options: { suspended: boolean; schedule: string; now: number }): SyncView {
+export function describeSync(
+  state: unknown,
+  options: { suspended: boolean; schedule: string; now: number; validUntilFor?: (operation: string) => string | null },
+): SyncView {
   if (typeof state !== "object" || state === null) throw new Error("SYNC_STATE_SHAPE");
   const record = state as Record<string, unknown>;
   const rawHistory = Array.isArray(record.history) ? (record.history as HistoryEntry[]) : [];
@@ -79,6 +100,9 @@ export function describeSync(state: unknown, options: { suspended: boolean; sche
     : null;
 
   const lastSuccess = history.find((op) => op.state === "succeeded")?.finishedAt ?? null;
+  // The last successful round's receipt says until when its content counts as current.
+  const lastPass = [...rawHistory].reverse().find((entry) => entry.status === "PASS");
+  const validUntil = lastPass && typeof lastPass.operation === "string" && options.validUntilFor ? iso(options.validUntilFor(lastPass.operation)) : null;
   const failedNow = typeof record.status === "string" && failedStates.has(record.status);
   // The controller admits no new round while the last one failed or the schedule flag is set.
   const hold =
@@ -102,7 +126,8 @@ export function describeSync(state: unknown, options: { suspended: boolean; sche
       schedule: options.suspended ? "已暂停" : options.schedule,
       queue: null,
       hold,
-      publishedVersionAt: null,
+      publishedVersionAt: lastSuccess,
+      contentValidUntil: validUntil,
     },
     history: running ? [running, ...history] : history,
   };

@@ -10,6 +10,7 @@ import {
   type ContentItem,
   type ContentPage,
   type FreezePreview,
+  type JobStatus,
   type Operation,
   type OperationCounts,
   type OperationKind,
@@ -184,7 +185,7 @@ export class DemoBackend implements ConsoleBackend {
     const pending = this.nodes.filter((node) => !node.withdrawn && !this.isFrozen(node) && node.sourceEditedAt && node.publishedAt && node.sourceEditedAt > node.publishedAt).length;
     return {
       mode: oldMode ? "qualified" : "published",
-      capabilities: { sync: !phaseOne, freeze: !oldMode, targetedSync: !oldMode, takedown: true, contentList: !phaseOne },
+      capabilities: { sync: !phaseOne, jobs: true, freeze: !oldMode, targetedSync: !oldMode, takedown: true, contentList: !phaseOne },
       running: running ? clone(running) : null,
       lastSuccessAt: iso(this.lastSuccessAt),
       lastRun: lastRun ? clone(lastRun) : null,
@@ -361,6 +362,19 @@ export class DemoBackend implements ConsoleBackend {
   async operations(limit: number): Promise<Operation[]> {
     this.tick(this.clock());
     return this.ops.slice(-limit).reverse().map((entry) => clone(entry.op));
+  }
+
+  async jobs(): Promise<JobStatus[]> {
+    const now = this.clock();
+    const at = (minutesAgo: number) => iso(now - minutesAgo * minute);
+    return [
+      { id: "demo-game", name: "游戏平台同步", schedule: "每天 07:00 和 17:00", suspended: false, state: "succeeded", lastStartedAt: at(301), lastFinishedAt: at(300), lastSuccessAt: at(300), failedStep: null },
+      { id: "demo-xhs", name: "小红书数据", schedule: "每 15 分钟", suspended: false, state: "succeeded", lastStartedAt: at(9), lastFinishedAt: at(6), lastSuccessAt: at(6), failedStep: null },
+      { id: "demo-bilibili", name: "B 站数据", schedule: "每 15 分钟", suspended: true, state: "failed", lastStartedAt: at(4320), lastFinishedAt: at(4320), lastSuccessAt: at(4400), failedStep: "refresh" },
+      { id: "demo-covers", name: "社交封面", schedule: "每 5 分钟", suspended: false, state: "running", lastStartedAt: at(1), lastFinishedAt: null, lastSuccessAt: at(6), failedStep: null },
+      { id: "demo-cache", name: "公开缓存刷新", schedule: "每 5 分钟", suspended: false, state: "succeeded", lastStartedAt: at(3), lastFinishedAt: at(3), lastSuccessAt: at(3), failedStep: null },
+      { id: "demo-retention", name: "快照清理", schedule: "每 15 分钟", suspended: false, state: "failed", lastStartedAt: at(10), lastFinishedAt: at(10), lastSuccessAt: null, failedStep: "retain" },
+    ];
   }
 
   private takedown(planId: string, resume: boolean): { operationId: string } {
