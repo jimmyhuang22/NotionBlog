@@ -19,7 +19,7 @@ try {
   for (const m of f.variants.values()) await storage.put(m, f.bytes.get(m.objectKey)!);
   Pool.prototype.query = (async (sql: string, values?: unknown[]) => {queries++; return s.reader.query(sql, values);}) as typeof Pool.prototype.query;
   globalThis.fetch = async () => {fetches++; throw Error("Unexpected network request");};
-  Object.assign(process.env, {CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "published",
+  Object.assign(process.env, {DATABASE_READER_ISOLATION: "enforce", CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "published",
     MEDIA_PROVIDER: "storage", MEDIA_THUMBNAILS: "enabled", DATABASE_TLS: "disable", DATABASE_READER_URL: url.href, DATABASE_MEDIA_DIRECTORY: directory});
   delete process.env.NOTION_TOKEN; delete process.env.NOTION_SOURCES_JSON; delete process.env.NOTION_SOURCES_CONFIG;
   const {GET} = await import("../../src/app/media/v2/[assetId]/route.ts");

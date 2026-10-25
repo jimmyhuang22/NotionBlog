@@ -22,7 +22,7 @@ let started!: () => void;
 const releases: boolean[] = [];
 const originalConnect = Pool.prototype.connect, originalQuery = Pool.prototype.query, originalFetch = globalThis.fetch;
 try {
-  Object.assign(process.env, { CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: version,
+  Object.assign(process.env, {DATABASE_READER_ISOLATION: "enforce",  CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: version,
     DATABASE_PUBLICATION_MODE: "qualified", DATABASE_READ_PROJECTION: "legacy", DATABASE_SEARCH_CONTEXT: "off",
     DATABASE_READER_URL: "postgres://fixture:fixture@localhost/db", DATABASE_TLS: "disable",
     MEDIA_PROVIDER: "storage", MEDIA_THUMBNAILS: "disabled", PUBLIC_CONTENT_CACHE: "disabled",

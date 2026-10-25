@@ -1,6 +1,14 @@
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { SqlExecutor } from "./sql.ts";
 
+export type WebsiteReaderIsolationMode = "off" | "enforce";
+/** A missing server setting deliberately defers enforcement during the staged rollout. */
+export function websiteReaderIsolationMode(value: unknown): WebsiteReaderIsolationMode {
+  if (value === undefined || value === "off") return "off";
+  if (value === "enforce") return "enforce";
+  throw new ContentServiceError("MISCONFIGURED", "The website reader isolation mode is invalid.");
+}
+
 /** Include every reachable role, even NOINHERIT memberships usable via SET ROLE. */
 export const WEBSITE_READER_ISOLATION_SQL = `WITH RECURSIVE roles(oid) AS (
  SELECT oid FROM pg_catalog.pg_roles WHERE rolname=current_user
@@ -12,9 +20,18 @@ SELECT NOT EXISTS(SELECT 1 FROM roles JOIN pg_catalog.pg_roles r USING(oid)
  CROSS JOIN roles r WHERE n.nspname='nb_delta_api' AND p.proname IN ('check_reader','read_page','verify_operation')
  AND pg_catalog.has_function_privilege(r.oid,p.oid,'EXECUTE')) AS isolated`;
 
-/** Check once before the runtime's first content query. Failed checks are not
- * cached; errors contain no credential, source or raw database diagnostics. */
-export function isolatedWebsiteReader(db: SqlExecutor): SqlExecutor {
+/** Strict library calls check once before the first content query. The website
+ * runtime can explicitly defer; failed strict checks are never cached. */
+export function isolatedWebsiteReader(db: SqlExecutor, mode: WebsiteReaderIsolationMode = "enforce",
+  reportDeferred: () => void = () => console.warn("WEBSITE_READER_ISOLATION_DEFERRED")): SqlExecutor {
+  const selected = websiteReaderIsolationMode(mode);
+  if (selected === "off") {
+    let reported = false;
+    return { async query<T>(text: string, values?: unknown[]) {
+      if (!reported) { reported = true; try { reportDeferred(); } catch { /* Diagnostics cannot block deferred reads. */ } }
+      return db.query<T>(text, values);
+    } };
+  }
   let ready: Promise<void> | undefined;
   async function inspect() {
     try {

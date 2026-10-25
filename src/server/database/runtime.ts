@@ -1,5 +1,5 @@
 import "server-only";
-import { isolatedWebsiteReader } from "./website-reader-isolation.ts";
+import { isolatedWebsiteReader, websiteReaderIsolationMode } from "./website-reader-isolation.ts";
 import { createLocalMediaStorage } from "./local-storage.ts";
 import { sqlExecutor } from "./connection.ts";
 import { createWebsiteDatabaseRepository } from "./website-repository.ts";
@@ -19,6 +19,7 @@ import { readSearchContextMode } from "./search-context.ts";
 
 let runtime: ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
+  const isolationMode=websiteReaderIsolationMode(process.env.DATABASE_READER_ISOLATION);
   const mode=publicationMode(process.env.DATABASE_PUBLICATION_MODE);
   if (mode==="published" && (process.env.DATABASE_CONTENT_VERSION!=="2" || (process.env.MEDIA_PROVIDER!==undefined && process.env.MEDIA_PROVIDER!=="storage"))) {
     throw new ContentServiceError("MISCONFIGURED", "Published content requires v2 and independent stored media.");
@@ -30,7 +31,7 @@ function createRuntime() {
   if(projection==="scoped"&&process.env.DATABASE_CONTENT_VERSION!=="2")
     throw new ContentServiceError("MISCONFIGURED","Scoped reads require database v2.");
   const pool=sharedContentReaderPool(process.env.DATABASE_READER_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
-  const rawDb=isolatedWebsiteReader(budgetedContentSql(sqlExecutor(pool)));
+  const rawDb=isolatedWebsiteReader(budgetedContentSql(sqlExecutor(pool)),isolationMode);
   const db=publicationReader(rawDb,mode);
   let token: ReturnType<typeof createStorageReaderToken> | undefined;
   const objectProvider=storageProvider(process.env);
