@@ -101,7 +101,7 @@ export function TakedownFlow({ initialTarget, timeZone, siteOrigin }: { initialT
 
           {plan.syncBusy && !operationId ? (
             <div className="notice notice--warn">
-              <p>数据库里还有一个同步租约没有释放。下架会让它失效，可能打断正在进行或等待恢复的同步。先确认这个租约可以作废再执行。</p>
+              <p>数据库里还留着一个同步租约（过期的也算），下架工具会拒绝执行。等同步任务处理完、租约清掉后，重新生成计划再试。</p>
             </div>
           ) : null}
 
@@ -135,11 +135,11 @@ export function TakedownFlow({ initialTarget, timeZone, siteOrigin }: { initialT
           ) : (
             <>
               <label className="confirm">
-                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                <input type="checkbox" checked={confirmed} disabled={plan.syncBusy} onChange={(event) => setConfirmed(event.target.checked)} />
                 <span>我确认下架「{plan.target.title}」{plan.descendants ? `和它的 ${plan.descendants} 个子页面` : ""}。</span>
               </label>
               <div className="field-row">
-                <button type="button" className="button button--danger" disabled={!confirmed || starting} onClick={() => execute(false)}>
+                <button type="button" className="button button--danger" disabled={plan.syncBusy || !confirmed || starting} onClick={() => execute(false)}>
                   {starting ? "正在开始…" : "下架"}
                 </button>
                 <button type="button" className="button button--quiet" onClick={reset}>
