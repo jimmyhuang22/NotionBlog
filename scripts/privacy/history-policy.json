@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "repository": "jimmyhuang22/NotionBlog",
+  "pushUrls": [
+    "https://github.com/jimmyhuang22/NotionBlog.git",
+    "git@github.com:jimmyhuang22/NotionBlog.git",
+    "ssh://git@github.com/jimmyhuang22/NotionBlog.git"
+  ],
+  "anchor": "19f0560542ef3a6a1f0dfea1a3625514e209c44a"
+}
