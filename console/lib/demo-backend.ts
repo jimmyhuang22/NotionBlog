@@ -335,6 +335,7 @@ export class DemoBackend implements ConsoleBackend {
       target: this.target(node),
       descendants: subtree.length - 1,
       images: subtree.reduce((sum, entry) => sum + entry.images, 0),
+      syncBusy: false,
       createdAt: iso(now),
       expiresAt: iso(now + 15 * minute),
     };

@@ -60,7 +60,8 @@ const behavior = JSON.parse(readFileSync(new URL("../../behavior.json", import.m
 const args = process.argv.slice(2);
 if (args[1] === "--plan") {
   if (behavior.plan === "fail") process.exit(1);
-  writeFileSync(args[2], JSON.stringify({ phase: "PLANNED", plan: { pages: [{ href: "/study/example" }, { href: "/study/example/a" }], assets: ["x", "y", "z"], leaseActive: false } }), { mode: 0o600, flag: "wx" });
+  writeFileSync(new URL("../../last-target.txt", import.meta.url), args[0]);
+  writeFileSync(args[2], JSON.stringify({ phase: "PLANNED", plan: { target: "p2", pages: [{ id: "p1", href: "/study/example/a" }, { id: "p2", href: "/study/example" }], assets: ["x", "y", "z"], leaseActive: false } }), { mode: 0o600, flag: "wx" });
 } else {
   const journal = JSON.parse(readFileSync(args[1], "utf8"));
   const outcome = args[0] === "--resume" ? "complete" : behavior.execute;
@@ -128,6 +129,7 @@ test("bridge: plan, execute in the background, and list the takedown", async () 
     assert.equal(plan.target.href, "/study/example");
     assert.equal(plan.descendants, 1);
     assert.equal(plan.images, 3);
+    assert.equal(plan.syncBusy, false);
     const started = (await bridge.call("takedown.execute", { planId: plan.planId })) as { operationId: string };
     const op = await settle(bridge.call, started.operationId);
     assert.equal(op.state, "succeeded");
@@ -137,6 +139,21 @@ test("bridge: plan, execute in the background, and list the takedown", async () 
     const list = (await bridge.call("operation.list", { limit: 10 })) as Operation[];
     assert.equal(list[0].id, started.operationId);
     assert.ok(list.some((entry) => entry.kind === "sync"));
+  } finally {
+    bridge.cleanup();
+  }
+});
+
+test("bridge: a Notion peek link targets the page in p, not the database in the path", async () => {
+  const bridge = setup({ plan: "ok", execute: "complete" });
+  try {
+    // Fictional workspace and IDs; the address is split so it never reads as a real Notion link.
+    const site = `https:${"//fiction.notion"}.site`;
+    await bridge.call("takedown.plan", { input: `${site}/Status-11111111111111111111111111111111?p=22222222222222222222222222222222&pm=c` });
+    assert.equal(readFileSync(path.join(bridge.root, "project/last-target.txt"), "utf8"), `${site}/22222222222222222222222222222222`);
+    await bridge.call("takedown.plan", { input: `${site}/Some-Page-33333333333333333333333333333333?v=x#y` });
+    assert.equal(readFileSync(path.join(bridge.root, "project/last-target.txt"), "utf8"), `${site}/Some-Page-33333333333333333333333333333333`);
+    await rejectsWith(bridge.call("takedown.plan", { input: `${site}/Status-1?p=not-an-id` }), "INVALID_INPUT");
   } finally {
     bridge.cleanup();
   }

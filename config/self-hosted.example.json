@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "environment": {
+    "DATABASE_READER_URL": "postgresql://nb_website_reader:replace-with-reader-password@database.example.invalid:5432/notionblog",
+    "DATABASE_TLS": "verify",
+    "DATABASE_CA_CERT": "Replace with the PEM CA certificate for the database hostname",
+    "SITE_URL": "https://blog.example.invalid",
+    "SITE_CONFIG_JSON": "{}",
+    "CONTENT_FEATURES_JSON": "{}"
+  }
+}

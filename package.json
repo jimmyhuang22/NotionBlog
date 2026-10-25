@@ -10,6 +10,8 @@
     "dev": "node scripts/dev-offline.mjs",
     "build": "node scripts/development/run.mjs build",
     "start": "node scripts/development/run.mjs start",
+    "build:self-hosted": "node scripts/self-hosted/build.mjs",
+    "start:self-hosted": "node scripts/self-hosted/start.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "node scripts/development/run.mjs test",
@@ -31,7 +33,8 @@
     "content:withdraw": "node scripts/public-cache/withdraw-cli.ts",
     "content:cache-refresh": "node scripts/public-cache/refresh-cli.ts",
     "content:cache-consume": "node scripts/public-cache/consumer-cli.ts",
-    "console": "node console/run.mjs"
+    "console": "node console/run.mjs",
+    "media:self-hosted": "node scripts/self-hosted-media/run.mjs"
   },
   "dependencies": {
     "@notionhq/client": "5.27.0",

@@ -1,5 +1,6 @@
 import { attachDatabasePool } from "@vercel/functions/db-connections";
 import type { Pool } from "pg";
+import { registerSelfHostedPool } from "../../../scripts/self-hosted/context.cjs";
 import type { SqlExecutor } from "../database/sql.ts";
 
 const networkErrorCodes = new Set([
@@ -16,7 +17,7 @@ function reportDatabaseError(error: unknown, stage: "query" | "idle_pool"): void
 
 /** Register once, immediately after creating the module-global social pool. */
 export function attachSocialReaderPool(pool: Pool): void {
-  attachDatabasePool(pool);
+  if (!registerSelfHostedPool(pool)) attachDatabasePool(pool);
   pool.on("error", error => reportDatabaseError(error, "idle_pool"));
 }
 

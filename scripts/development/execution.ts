@@ -1,9 +1,12 @@
 import { getContentProvider } from "../../src/lib/content/provider.ts";
 import { configureDevelopmentEnvironment } from './environment.ts';
 import { platformProduction, preservePlatformMetadata } from './platform-environment.mjs';
+import { configureSelfHostedEnvironment } from '../self-hosted/context.cjs';
 
 /** Also called by instrumentation in fresh serverless workers, before requests. */
-export function configureExecutionEnvironment(env: NodeJS.ProcessEnv, phase = 'runtime'): 'production' | 'offline' | 'cloud' {
+export function configureExecutionEnvironment(env: NodeJS.ProcessEnv, phase = 'runtime'): 'production' | 'offline' | 'cloud' | 'self-hosted' | 'self-hosted-build' {
+  const selfHosted = configureSelfHostedEnvironment(env);
+  if (selfHosted) return selfHosted;
   const development = phase === 'phase-development-server' || env.NODE_ENV === 'development';
   if (!development && platformProduction(env)) { getContentProvider(env); return 'production'; }
   const metadata: Record<string,string|undefined> = {};preservePlatformMetadata(env,metadata);
