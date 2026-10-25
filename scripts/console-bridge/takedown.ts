@@ -24,6 +24,7 @@ interface PlanRecord {
   target: { id: string; title: string; href: string | null };
   descendants: number;
   images: number;
+  syncBusy: boolean;
   createdAt: string;
   expiresAt: string;
 }
@@ -41,7 +42,7 @@ interface OperationRecord {
 
 interface Journal {
   phase?: unknown;
-  plan?: { pages?: { href?: unknown }[]; assets?: unknown[]; leaseActive?: unknown };
+  plan?: { target?: unknown; pages?: { id?: unknown; href?: unknown }[]; assets?: unknown[]; leaseActive?: unknown };
 }
 
 export class Takedown {
@@ -71,7 +72,8 @@ export class Takedown {
     const data = readJson<Journal>(journal);
     const pages = data.plan?.pages ?? [];
     const path = new URL(target).pathname;
-    const own = pages.find((page) => page.href === path) ?? pages[0];
+    // The plan names its own target; fall back to the address the user gave.
+    const own = pages.find((page) => page.id !== undefined && page.id === data.plan?.target) ?? pages.find((page) => page.href === path) ?? pages[0];
     const href = typeof own?.href === "string" ? own.href : null;
     const now = Date.now();
     const record: PlanRecord = {
@@ -80,11 +82,12 @@ export class Takedown {
       target: { id: planId, title: href ?? target, href },
       descendants: Math.max(0, pages.length - 1),
       images: Array.isArray(data.plan?.assets) ? data.plan.assets.length : 0,
+      syncBusy: data.plan?.leaseActive === true,
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + planMinutes * 60_000).toISOString(),
     };
     writePrivate(join(this.dir("plans"), `${planId}.json`), record);
-    return { planId, target: record.target, descendants: record.descendants, images: record.images, createdAt: record.createdAt, expiresAt: record.expiresAt };
+    return { planId, target: record.target, descendants: record.descendants, images: record.images, syncBusy: record.syncBusy, createdAt: record.createdAt, expiresAt: record.expiresAt };
   }
 
   start(planId: string, mode: "execute" | "resume"): { operationId: string } {
@@ -205,8 +208,26 @@ export class Takedown {
     if (value.startsWith("/") && !value.startsWith("//")) return new URL(value, this.config.siteOrigin).toString();
     try {
       const url = new URL(value);
-      if (url.protocol === "https:") return url.toString();
-    } catch {
+      if (url.protocol === "https:") {
+        const notion = url.hostname === "notion.so" || url.hostname === "www.notion.so" || url.hostname.endsWith(".notion.site");
+        if (!notion) return url.toString();
+        // A peek link (…/Database-<id>?p=<page id>) names the page in `p`; the path is the database.
+        // The takedown tool reads only the path, so pass the page alone.
+        const peek = url.searchParams.get("p");
+        if (peek !== null) {
+          if (!/^[a-f0-9]{32}$/i.test(peek.replaceAll("-", ""))) throw new BridgeError("INVALID_INPUT", "这个 Notion 链接里的页面编号无法识别。");
+          // Keep the user's own Notion host and put the page ID in the path, which the tool accepts.
+          url.pathname = `/${peek.replaceAll("-", "").toLowerCase()}`;
+          url.search = "";
+          url.hash = "";
+          return url.toString();
+        }
+        url.search = "";
+        url.hash = "";
+        return url.toString();
+      }
+    } catch (error) {
+      if (error instanceof BridgeError) throw error;
       // Falls through.
     }
     throw new BridgeError("INVALID_INPUT", "请输入以 / 开头的站内路径、完整的网站地址或 Notion 页面链接。");

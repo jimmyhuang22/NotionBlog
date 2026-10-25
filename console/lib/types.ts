@@ -144,6 +144,8 @@ export interface TakedownPlan {
   target: OperationTarget;
   descendants: number;
   images: number;
+  /** The database still holds a sync lease (even an expired one); the takedown tool refuses until it is cleared. */
+  syncBusy?: boolean;
   createdAt: string;
   expiresAt: string;
 }

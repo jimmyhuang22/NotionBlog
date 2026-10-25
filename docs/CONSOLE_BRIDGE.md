@@ -47,7 +47,7 @@
 | `freeze.start` | `{ target, digest }` | `{ operationId }` |
 | `unfreeze.preview` | `{ target, mode: "once" \| "permanent" }` | `UnfreezePreview`：将重读的页面数、会被覆盖的控制台修改、Notion 中已找不到的页面、`digest` |
 | `unfreeze.start` | `{ target, mode, digest }` | `{ operationId }` |
-| `takedown.plan` | `{ input }` | `TakedownPlan`：计划 ID、目标、后代数、图片数、过期时间 |
+| `takedown.plan` | `{ input }` | `TakedownPlan`：计划 ID、目标、后代数、图片数、`syncBusy`（数据库的租约字段仍非空，过期也算；此时下架工具会拒绝，控制台停用确认）、过期时间 |
 | `takedown.execute` | `{ planId }` | `{ operationId }` |
 | `takedown.resume` | `{ planId }` | `{ operationId }` |
 | `operation.get` | `{ id }` | `Operation`：类型、目标、来源（定时／控制台）、状态、步骤、计数、错误、可续办的计划 ID |
