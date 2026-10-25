@@ -35,6 +35,8 @@ export function StudyReadingDirectory({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const drawer = panel.current;
     if (!open || !drawer) return;
+    // The button that opened the drawer, kept for the cleanup: focus goes back to it when the drawer closes.
+    const opener = trigger.current;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     // Out of reach while the drawer is open, as behind a modal dialog: every branch of the page beside the drawer's own path.
@@ -64,7 +66,7 @@ export function StudyReadingDirectory({ children }: { children: ReactNode }) {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
       for (const element of outside) element.inert = false;
-      if (drawer.contains(document.activeElement)) trigger.current?.focus({ preventScroll: true });
+      if (drawer.contains(document.activeElement)) opener?.focus({ preventScroll: true });
     };
   }, [open]);
 
