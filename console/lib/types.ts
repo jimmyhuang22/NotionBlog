@@ -205,6 +205,14 @@ export class BackendError extends Error {
   }
 }
 
+/**
+ * True for a BackendError, also when it comes from another copy of this module (Next can bundle
+ * route handlers and server actions into separate chunks, where `instanceof` fails).
+ */
+export function isBackendError(error: unknown): error is BackendError {
+  return error instanceof Error && error.name === "BackendError" && typeof (error as { code?: unknown }).code === "string";
+}
+
 export interface ConsoleBackend {
   readonly kind: "demo" | "bridge";
   status(): Promise<SyncStatus>;

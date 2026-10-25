@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { consoleConfig, getBackend } from "../../lib/backend.ts";
-import { BackendError, errorText } from "../../lib/types.ts";
+import { BackendError, isBackendError, errorText } from "../../lib/types.ts";
 import { TakedownFlow } from "../../components/takedown-flow.tsx";
 
 export const metadata: Metadata = { title: "下架" };
@@ -14,7 +14,7 @@ export default async function TakedownPage({ searchParams }: { searchParams: Pro
   try {
     available = (await getBackend().status()).capabilities.takedown;
   } catch (error) {
-    if (!(error instanceof BackendError)) throw error;
+    if (!isBackendError(error)) throw error;
     failure = error;
   }
   return (

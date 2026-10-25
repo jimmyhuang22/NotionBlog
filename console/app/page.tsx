@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { consoleConfig, getBackend } from "../lib/backend.ts";
-import { BackendError, errorText, type JobStatus, type Operation, type SyncStatus } from "../lib/types.ts";
+import { BackendError, isBackendError, errorText, type JobStatus, type Operation, type SyncStatus } from "../lib/types.ts";
 import { JobsCard } from "../components/jobs-card.tsx";
 import { OpList } from "../components/op-list.tsx";
 import { SyncPanel } from "../components/sync-panel.tsx";
@@ -15,7 +15,7 @@ export default async function OverviewPage() {
   try {
     [status, ops] = await Promise.all([backend.status(), backend.operations(6)]);
   } catch (error) {
-    if (!(error instanceof BackendError)) throw error;
+    if (!isBackendError(error)) throw error;
     failure = error;
   }
   // The job list is extra; failing to read it never hides the sync status.
@@ -23,7 +23,7 @@ export default async function OverviewPage() {
     try {
       jobs = await backend.jobs();
     } catch (error) {
-      if (!(error instanceof BackendError)) throw error;
+      if (!isBackendError(error)) throw error;
     }
   }
 

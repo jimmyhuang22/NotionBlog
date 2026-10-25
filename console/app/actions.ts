@@ -7,6 +7,7 @@ import { demoScenarios, type DemoScenario } from "../lib/demo-scenarios.ts";
 import { SESSION_COOKIE, createSession, passwordMatches } from "../lib/session.ts";
 import {
   BackendError,
+  isBackendError,
   sectionLabels,
   type BackendErrorBody,
   type ContentItem,
@@ -26,7 +27,7 @@ async function run<T>(work: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await work() };
   } catch (error) {
-    if (error instanceof BackendError) {
+    if (isBackendError(error)) {
       const body: BackendErrorBody = { code: error.code, message: error.message };
       if (error.runningOperationId) body.runningOperationId = error.runningOperationId;
       return { ok: false, error: body };

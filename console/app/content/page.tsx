@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { consoleConfig, getBackend } from "../../lib/backend.ts";
-import { BackendError, errorText, sectionLabels, type ContentPage, type Section, type SectionSummary, type SyncStatus } from "../../lib/types.ts";
+import { BackendError, isBackendError, errorText, sectionLabels, type ContentPage, type Section, type SectionSummary, type SyncStatus } from "../../lib/types.ts";
 import { ContentBrowser } from "../../components/content-browser.tsx";
 
 export const metadata: Metadata = { title: "内容" };
@@ -24,7 +24,7 @@ export default async function ContentPageView({ searchParams }: { searchParams: 
       [sections, page] = await Promise.all([backend.sections(), backend.listContent({ section, parentId: null, search })]);
     }
   } catch (error) {
-    if (!(error instanceof BackendError)) throw error;
+    if (!isBackendError(error)) throw error;
     failure = error;
   }
 

@@ -7,7 +7,7 @@ import { BridgeBackend } from "../console/lib/bridge-backend.ts";
 import { hostName, readConfig } from "../console/lib/config.ts";
 import { DemoBackend } from "../console/lib/demo-backend.ts";
 import { createSession, passwordMatches, verifySession } from "../console/lib/session.ts";
-import { BackendError } from "../console/lib/types.ts";
+import { BackendError, isBackendError } from "../console/lib/types.ts";
 
 // The console (console/) reaches the backend only through these modules; the pages are checked by hand.
 
@@ -207,4 +207,12 @@ test("session: signed cookies expire and cannot be forged", async () => {
   assert.equal(await verifySession(secret, undefined, now), false);
   assert.equal(await passwordMatches(secret, "correct horse", "correct horse"), true);
   assert.equal(await passwordMatches(secret, "correct horse", "correct hors"), false);
+});
+
+test("backend errors are recognised by their fields, not only by class identity", () => {
+  assert.equal(isBackendError(new BackendError({ code: "BUSY", message: "x" })), true);
+  const copy = Object.assign(new Error("y"), { name: "BackendError", code: "UNAVAILABLE" });
+  assert.equal(isBackendError(copy), true);
+  assert.equal(isBackendError(new Error("z")), false);
+  assert.equal(isBackendError("BackendError"), false);
 });
