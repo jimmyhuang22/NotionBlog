@@ -2,6 +2,10 @@
 
 自托管展示图片（2026-10-25）：用户批准独立离线后端实现。Mac 生成宽度不超过1600、不放大的必备最大展示版与400/800副本，服务器只读展示文件；默认媒体地址返回最大展示版，缺档只选已有展示副本，损坏明确失败，不回源原图。新增可选 `ImageAsset.delivery`，由读取层按当前批次补充，不改冻结SQL与同步记录；严格TLS、reader隔离enforce、no-store及现有Vercel/COS行为保留。前端灯箱由Claude接线；真实图片、传输/安装、同步采用、上海部署、域名及发布另行安排，见[决定](decisions/2026-10-25-self-hosted-display-media.md)、[后端说明](SELF_HOSTED_MEDIA.md)与[前端交接](SELF_HOSTED_MEDIA_FRONTEND_HANDOFF.md)。
 
+路由资格缓存键（2026-10-25）：用户批准 N04 源码与离线方案。缓存入口按单次解码后的受管形状规范目标，等价编码共用键；路由 missing、元数据 null／undefined 和笔记资格 false 不写持久缓存。保留原始验签、generation／日期／取消守卫和错误语义，固定策略标记隔离旧负项；重复缺失读取可能增加。实际清理、配置、项目请求、任务恢复和发布不包含，见[决定](decisions/2026-10-25-route-cache-key-policy.md)与[实施记录](progress/2026-10-25-route-cache-key-policy.md)。
+
+隐私扫描与 CI（2026-10-25）：用户批准 N03／N07 的源码、局部虚构回归、本机既有公开历史审计及常规 develop 交付。扫描补齐符号／完整敏感键名／小写 JSON／libpq 连接串及安全错误输出；推送采用仓库绑定的固定 legacy 边界并总查目标完整树，边界不冒充历史无秘密证明。分支 push 使用独立无共享并发的轻量隐私扫描，PR／手动保留应用检查；扫描器来自固定可信提交，候选作为 Git 对象数据，首次旧规则自举如实标记。正常 PR／push 的自动 GitHub 托管扫描包含在内，项目请求、仓库设置、历史改写、真实凭据处置、main 发布和任务恢复均不包含，见[决定](decisions/2026-10-25-privacy-ci-scanning.md)与[实施方案](BACKEND_PRIVACY_CI_PLAN.md)。
+
 网站隔离分阶段采用（2026-10-25）：用户批准 R01 源码与离线测试。`DATABASE_READER_ISOLATION` 缺省 off，网站延后额外隔离拒绝并记录尚未强制验证；enforce 保持原检查，非法值拒绝。独立同步和 B20 校验仍严格，真实隔离后须按阶段声明检查采用 enforce；不包含云配置、真实安装、任务恢复或发布，见[决定](decisions/2026-10-25-reader-isolation-staging.md)和[发布检查](READER_ISOLATION_RELEASE.md)。
 
 直连中央拒绝与图片代理（2026-10-25）：用户批准 B20 完整源码与隔离测试方案。`CONTENT_PROVIDER=notion` 必须具备受限数据库 reader 与独立中央 deny 能力，页面及学习祖先逐操作检查、版本变化即停止输出；单页 `mode: all` 按当前物理来源判断，列表仍完整枚举。直连 m1 图片改为有界服务器代理和输出前复核，缺配置／能力时 503；真实安装、凭据、联网验收、任务恢复及发布不包含在内，见[决定](decisions/2026-10-25-direct-notion-policy.md)及[接入顺序](NOTION_SETUP.md#直连模式的中央拒绝与媒体)。
