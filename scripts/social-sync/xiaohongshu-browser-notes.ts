@@ -155,7 +155,11 @@ export async function handleXhsBrowserNotes(root:string,message:unknown,now=()=>
     if(msg.op==="xiaohongshu-notes-upload"){if(s.status==="paused")return {status:s.status,code:s.code};return await uploadBrowserNotes(root,s.lastSubmission?.keys??[],digest);}
     if(msg.op==="xiaohongshu-notes-pause"){
       if(typeof msg.code!=="string"||!/^[A-Z][A-Z_]{0,63}$/.test(msg.code))throw new SocialSyncError("BRIDGE_REQUEST_INVALID");
-      if(msg.diagnostic){const diagnostic=browserTimeoutDiagnostic(msg.diagnostic,msg.code,s.job);await writeJson(join(dir,`diagnostic-${s.job!.id}.json`),{...diagnostic,code:msg.code,recordedAt:now(),policyDigest:digest});}
+      const diagnostic=msg.diagnostic?browserTimeoutDiagnostic(msg.diagnostic,msg.code,s.job):null;
+      // The extension may report the close error after ACK/acceptance. Validate
+      // its message, but never turn accepted evidence back into a failed retry.
+      if(recovery?.status==="accepted")return {status:"paused",code:s.code??"BROWSER_RECOVERY_ACCEPTED"};
+      if(diagnostic)await writeJson(join(dir,`diagnostic-${s.job!.id}.json`),{...diagnostic,code:msg.code,recordedAt:now(),policyDigest:digest});
       s.status="paused";s.code=msg.code;await save();if(recovery){recovery.status="failed";await saveBrowserRecovery(root,recovery);}return {status:s.status,code:s.code};
     }
     const current=await readHttpNoteScope(root),directory=await readXhsDiscoveryState(root,digest),holds=await readNoteLinkHolds(root),pending=directory?.queue??[];

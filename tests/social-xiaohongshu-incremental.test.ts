@@ -413,6 +413,9 @@ test("retry-upload preserves partial acceptance and its primary error when recov
     finally{prepare.mock.restore();renameSpy.mock.restore();syncBuiltinESMExports();}
     if(mode==="partial-accepted"){
       assert.equal(await readFile(recoveryFile,"utf8"),accepted);assert.equal(await readFile(browserFile,"utf8"),before);assert.deepEqual(diagnostics,[]);
+      const pause=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"CLOUD_UPLOAD_FAILED"});
+      assert.equal(pause.status,"paused");assert.equal(pause.code,"BROWSER_RECOVERY_ACCEPTED");
+      assert.equal(await readFile(recoveryFile,"utf8"),accepted);assert.equal(await readFile(browserFile,"utf8"),before);
     }else{
       const expected=mode==="recovery-write"?"XHS_BROWSER_RECOVERY_WRITE_FAILED":"XHS_BROWSER_PAUSE_WRITE_FAILED";
       assert(diagnostics.length>0);assert(diagnostics.every(line=>line===JSON.stringify({code:expected})));
@@ -421,4 +424,27 @@ test("retry-upload preserves partial acceptance and its primary error when recov
     }
     await assertReleased(f.root);
   }
+});
+
+test("ordinary browser upload preserves accepted bytes when background reports its close failure",async t=>{
+  const f=await capturedFixture(t,true),ticket=f.ticket!,digest=hash(JSON.stringify(f.policy));
+  let sent=0,closed=0;
+  t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{});
+  t.mock.getter(CycleCloudSession.prototype,"httpNotesPrepared",()=>true);
+  t.mock.method(CycleCloudSession.prototype,"sendPublication",async(_raw:string,_scope:string,item:{key:string;sha256:string})=>{sent++;return {key:item.key,sha256:item.sha256};});
+  t.mock.method(CycleCloudSession.prototype,"close",async()=>{closed++;throw new SocialSyncError("CLOUD_CLOSE_FAILED");});
+  await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-upload"}),{code:"XHS_BROWSER_CLOSE_FAILED"});
+  assert.equal(sent,1);assert.equal(closed,1);
+  const browserFile=join(f.root,"xiaohongshu-browser-notes/state.json"),recoveryFile=join(f.root,"xiaohongshu-browser-notes/recovery.json");
+  const state=await readFile(browserFile),recovery=await readFile(recoveryFile);
+  assert.equal(JSON.parse(state.toString()).code,"BROWSER_RECOVERY_ACCEPTED");assert.equal(JSON.parse(recovery.toString()).status,"accepted");
+  const paused=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"XHS_BROWSER_CLOSE_FAILED"});
+  assert.deepEqual(paused,{status:"paused",code:"BROWSER_RECOVERY_ACCEPTED"});
+  await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"invalid-code"}),{code:"BRIDGE_REQUEST_INVALID"});
+  await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"BROWSER_PAGE_LOAD_TIMEOUT",diagnostic:{}}),{code:"XHS_BROWSER_DIAGNOSTIC_INVALID"});
+  assert.deepEqual(await readFile(browserFile),state);assert.deepEqual(await readFile(recoveryFile),recovery);
+  const captured=(await readBrowserNoteCapture(f.root,f.targets[0]!,digest))!;
+  await finishBrowserNoteRecovery(f.root,ticket.id,hash(JSON.stringify(captured)));
+  assert.equal((await inspectBrowserNoteRecovery(f.root)).status,"complete");
+  await assertReleased(f.root);
 });
