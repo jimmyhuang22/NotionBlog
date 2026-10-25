@@ -30,6 +30,13 @@ async function readState(root:string,digest:string):Promise<BrowserState>{
   if(s.lastSubmission!==null){const l=object(s.lastSubmission);if(Object.keys(l).sort().join()!=="id,keys,sha256"||typeof l.id!=="string"||!/^[-a-f0-9]{36}$/.test(l.id)||typeof l.sha256!=="string"||!/^[a-f0-9]{64}$/.test(l.sha256)||!Array.isArray(l.keys)||l.keys.length<1||l.keys.length>3||l.keys.some(k=>typeof k!=="string"||!/^[a-f0-9]{64}$/.test(k)))throw new SocialSyncError("XHS_BROWSER_NOTES_INVALID");}
   return s as unknown as BrowserState;
 }
+/** Both upload callers hold this lane's lock; never restore an entry snapshot. */
+async function pauseBrowserState(root:string,digest:string,code:string){
+  const state=await readState(root,digest);
+  if(state.status==="paused"||(await readBrowserRecovery(root,digest))?.status==="accepted")return;
+  state.status="paused";state.code=code;
+  await writeJson(join(root,"xiaohongshu-browser-notes","state.json"),state);
+}
 /** Evidence was validated at receipt; delaying upload preserves the actual observation time. */
 export async function readBrowserNoteCapture(root:string,target:Target,digest:string,at=new Date().toISOString()):Promise<XiaohongshuObservation|null>{
   let raw:string;try{raw=await readPrivateFile(join(root,"xiaohongshu-browser-notes",`${publicationKey(target)}.json`),MAX_SNAPSHOT_BYTES);}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return null;throw e;}
@@ -101,7 +108,19 @@ export async function retryBrowserNoteUpload(root:string,id:string){
     if(!ticket||ticket.id!==id||!["failed","captured"].includes(ticket.status)||!target||s.lastSubmission?.id!==ticket.jobId||s.lastSubmission.keys.length!==1||s.lastSubmission.keys[0]!==publicationKey(target)||!await readBrowserNoteCapture(root,target,digest))throw new SocialSyncError("XHS_BROWSER_RECOVERY_INVALID");
     ticket.status="captured";await saveBrowserRecovery(root,ticket);s.status="complete";s.code=null;await writeJson(join(dir,"state.json"),s);
     try{return await uploadBrowserNotes(root,s.lastSubmission.keys,digest);}catch(e){
-      if((e as {code?:string}).code!=="BUSY"){ticket.status="failed";await saveBrowserRecovery(root,ticket);s.status="paused";s.code=e instanceof SocialSyncError?e.code:"XHS_BROWSER_UPLOAD_FAILED";await writeJson(join(dir,"state.json"),s);}throw e;
+      if((e as {code?:string}).code!=="BUSY"){
+        const code=e instanceof SocialSyncError?e.code:"XHS_BROWSER_UPLOAD_FAILED";
+        const results=await Promise.allSettled([
+          (async()=>{
+            const latest=await readBrowserRecovery(root,digest);
+            if(!latest||latest.id!==id)throw new SocialSyncError("XHS_BROWSER_RECOVERY_INVALID");
+            if(latest.status!=="accepted"){latest.status="failed";await saveBrowserRecovery(root,latest);}
+          })(),
+          pauseBrowserState(root,digest,code),
+        ]);
+        if(results[0].status==="rejected")console.error(JSON.stringify({code:"XHS_BROWSER_RECOVERY_WRITE_FAILED"}));
+        if(results[1].status==="rejected")console.error(JSON.stringify({code:"XHS_BROWSER_PAUSE_WRITE_FAILED"}));
+      }throw e;
     }
   }finally{await release();}
 }
@@ -187,7 +206,14 @@ async function uploadBrowserNotes(root:string,keys:string[],digest:string){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);timer.unref();let cloud:InstanceType<typeof CycleCloudSession>|undefined;
   let scopeDigest:string|undefined,failed=false;
   const pause=async(code:string,stage:"upload"|"close")=>{
-    if(scopeDigest)await recordExternalHttpPause(root,scopeDigest,code,stage);
+    // Both callers already own the browser-state lock. Reload after child work
+    // so an accepted recovery or a newer pause is never replaced by stale state.
+    const results=await Promise.allSettled([
+      recordExternalHttpPause(root,scopeDigest??"0".repeat(64),code,stage),
+      pauseBrowserState(root,digest,code),
+    ]);
+    if(results[0].status==="rejected")console.error(JSON.stringify({code:"XHS_HTTP_PAUSE_WRITE_FAILED"}));
+    if(results[1].status==="rejected")console.error(JSON.stringify({code:"XHS_BROWSER_PAUSE_WRITE_FAILED"}));
   };
   try{
     const recovery=await readBrowserRecovery(root,digest);if(recovery&&recovery.status!=="captured")return {status:"paused",code:"BROWSER_RECOVERY_SPENT",pending:0};

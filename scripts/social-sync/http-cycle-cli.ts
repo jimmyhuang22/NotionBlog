@@ -29,9 +29,11 @@ export async function runHttpCycleCli(args: string[]) {
   const policy = await readHttpNotePolicy(root);
   if (!policy?.enabled) { console.log(JSON.stringify({ state: "disabled", executed: false })); return; }
   const policyDigest = hash(JSON.stringify(policy));
+  let lastScopeDigest: string | undefined;
   const checked = async () => {
     const current = await readHttpNoteScope(root);
     if (hash(JSON.stringify(current.policy)) !== policyDigest) throw new SocialSyncError("REFRESH_SCOPE_CHANGED");
+    lastScopeDigest = hash(JSON.stringify(current.scope));
     return current;
   };
   const scopeProvider = async () => (await checked()).scope, inspect = async () => {
@@ -74,7 +76,11 @@ export async function runHttpCycleCli(args: string[]) {
     const activeCloud = cloud, activeHttp = http;
     const {old,interrupted}=await readPrevious();
     if(command==="resume"&&account?.enabled){const digest=hash(JSON.stringify(account));await resumeXhsDirectory(root,digest);await resumeBrowserNoteLane(root,digest);}
-    if(command==="resume"||!old?.recovery.manualRequired&&!interrupted){try{await runXhsDiscovery(root,controller.signal);}catch(e){if((e as {code?:string}).code!=="BUSY")await recordExternalHttpPause(root,hash(JSON.stringify((await checked()).scope)),e instanceof SocialSyncError?e.code:"XHS_DISCOVERY_FAILED","upload");throw e;}}
+    if(command==="resume"||!old?.recovery.manualRequired&&!interrupted){try{await runXhsDiscovery(root,controller.signal);}catch(e){
+      if((e as {code?:string}).code!=="BUSY")try{await recordExternalHttpPause(root,lastScopeDigest??"0".repeat(64),e instanceof SocialSyncError?e.code:"XHS_DISCOVERY_FAILED","upload");}
+      catch{console.error(JSON.stringify({code:"XHS_HTTP_PAUSE_WRITE_FAILED"}));}
+      throw e;
+    }}
     const report = await runHttpNoteCycle(command as "run" | "resume", old, interrupted, {
       inspect,
       prepare: async digest => { await checked(); await activeCloud.preparePublications(await readPrivateFile(join(root, "cloud.env"), 65536), digest, controller.signal); },
