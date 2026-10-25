@@ -144,6 +144,8 @@ export interface TakedownPlan {
   target: OperationTarget;
   descendants: number;
   images: number;
+  /** The database still holds a sync lease; taking down invalidates it, so coordinate first. */
+  syncBusy?: boolean;
   createdAt: string;
   expiresAt: string;
 }

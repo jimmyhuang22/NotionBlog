@@ -99,6 +99,12 @@ export function TakedownFlow({ initialTarget, timeZone, siteOrigin }: { initialT
             计划 <Time value={plan.expiresAt} timeZone={timeZone} />过期（{formatDateTime(plan.expiresAt, timeZone)}）。
           </p>
 
+          {plan.syncBusy && !operationId ? (
+            <div className="notice notice--warn">
+              <p>数据库里还有一个同步租约没有释放。下架会让它失效，可能打断正在进行或等待恢复的同步。先确认这个租约可以作废再执行。</p>
+            </div>
+          ) : null}
+
           {operationId ? (
             <>
               {op ? <Steps steps={op.steps} /> : <Spinner label="正在开始…" />}
