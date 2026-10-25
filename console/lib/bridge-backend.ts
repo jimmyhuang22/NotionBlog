@@ -66,11 +66,12 @@ export class BridgeBackend implements ConsoleBackend {
   startSync(target: string | null) {
     return this.call<{ operationId: string }>("sync.start", { target }, "start", hasOperationId);
   }
+  // Content reads may page through a long list on a cold cache, so they get the longer limit.
   sections() {
-    return this.call<SectionSummary[]>("content.sections", {}, "read", Array.isArray);
+    return this.call<SectionSummary[]>("content.sections", {}, "preview", Array.isArray);
   }
   listContent(query: { section: Section; parentId: string | null; search: string | null }) {
-    return this.call<ContentPage>("content.list", query, "read", (value) => isObject(value) && Array.isArray(value.items));
+    return this.call<ContentPage>("content.list", query, "preview", (value) => isObject(value) && Array.isArray(value.items));
   }
   resolveTarget(input: string) {
     return this.call<ContentItem>("target.resolve", { input }, "read", (value) => isObject(value) && typeof value.id === "string");

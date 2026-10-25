@@ -291,6 +291,8 @@ test("content: lists, course trees, search and a short cache from the public API
   const root = mkdtempSync(path.join(tmpdir(), "console-content-"));
   const calls: string[] = [];
   const site: Record<string, unknown> = {
+    "/api/content/course?limit=1": { data: { items: [], total: 1 } },
+    "/api/content/status?limit=1": { data: { items: [], total: 2 } },
     "/api/content/course?limit=50": { data: { items: [{ slug: "c1", code: "DEMO101", title: "DEMO101 示例课程", href: "/study/c1", updatedAt: "2026-01-01T00:00:00Z" }], hasMore: false } },
     "/api/study/c1/tree": { data: { nodes: [{ id: "n1", title: "第一周", href: "/study/c1/notes/n1", children: [{ id: "n2", title: "排序笔记", href: "/study/c1/notes/n2", children: [] }] }] } },
     "/api/content/status?limit=50": { data: { items: [{ slug: "s1", href: "/status#s1", title: null, text: [{ text: "今天" }, { text: "去了海边" }] }], hasMore: true, nextCursor: "next" } },
@@ -319,6 +321,9 @@ test("content: lists, course trees, search and a short cache from the public API
     const before = calls.length;
     await reader.list({ section: "status", parentId: null, search: null });
     assert.equal(calls.length, before, "a second read within minutes comes from the cache");
+    const sections = await reader.sections();
+    assert.deepEqual(sections.slice(0, 2).map((entry) => entry.count), [1, 2]);
+    assert.ok(calls.includes("/api/content/status?limit=1"), "counts use the small total request");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -12,7 +12,7 @@ import { BridgeError } from "./errors.ts";
 
 const kinds: Partial<Record<Section, string>> = { study: "course", status: "status", movie: "movie", book: "book", game: "game", album: "album" };
 const order: Section[] = ["study", "status", "movie", "book", "game", "album"];
-const cacheMs = 3 * 60_000;
+const cacheMs = 10 * 60_000;
 const requestTimeoutMs = 10_000;
 const maxPages = 40;
 
@@ -47,11 +47,18 @@ export class ContentReader {
     this.fetchJson = fetchJson;
   }
 
+  /** Counts come from each list's `total`, one small request per section. */
   async sections(): Promise<SectionSummary[]> {
     return Promise.all(
       order.map(async (section) => {
-        const items = await this.items(section);
-        return { section, count: items.length, frozen: 0 };
+        const kind = kinds[section]!;
+        const total = await this.cached(`total-${kind}`, async () => {
+          const url = new URL(`/api/content/${kind}`, this.origin);
+          url.searchParams.set("limit", "1");
+          const body = (await this.fetchJson(url.toString())) as { data?: { total?: unknown } };
+          return typeof body.data?.total === "number" ? body.data.total : 0;
+        });
+        return { section, count: typeof total === "number" ? total : 0, frozen: 0 };
       }),
     );
   }
