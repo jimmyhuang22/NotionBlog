@@ -1,5 +1,7 @@
 # 项目需求
 
+Nunito 离线构建（2026-10-25）：用户批准复用原 Nunito 3.602 五个真实字体子集，保持视觉与回退度量，通过本地 CSS 消除构建下载；不改变主题与预加载策略，不扩大云配置、任务恢复或发布权限。见[决定](decisions/2026-10-25-nunito-local-fonts.md)。
+
 B08 紧凑撤回（2026-10-25）：用户批准显式 opt-in v2 计划，使用完整历史不同资源集合的数量／强摘要和首项样本，数据库继续完整检查共享 owner URL、持原锁重算后原子 deny／事件并沿原阶段恢复。v2 容量 400,000 资源，旧 v1／40,000 边界、20,000 页面、8 MiB 与时间预算保持。新增独立 SQL 扩展、purpose 绑定安装器和必要本机工具准备，仅源码、隔离验证及常规 develop 交付；真实项目请求、安装采用、任务恢复与发布不包含，见[决定](decisions/2026-10-25-compact-withdrawal.md)和[方案](BACKEND_COMPACT_WITHDRAWAL_PLAN.md)。
 
 B06 遗留锁与取消（2026-10-25）：用户批准完整源码与离线方案。完整基线取消监听持续到异步清理结束；空／坏 worker 锁返回固定错误并保留。新增显式只读诊断，仅检查指定目录的 worker／manual 锁并匿名输出；格式和 PID 存在均不证明业务 owner，任何遗留锁或不确定状态都留待人工审阅，不新增删除或恢复能力。仅常规 develop 交付，真实目录检查／处置、项目请求、任务恢复与发布不包含，见[决定](decisions/2026-10-25-legacy-lock-diagnostics.md)和[方案](BACKEND_LEGACY_LOCK_DIAGNOSTICS_PLAN.md)。

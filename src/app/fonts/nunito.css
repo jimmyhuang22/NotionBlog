@@ -1,0 +1,19 @@
+/* Pinned Nunito 3.602. Preserve subset coverage and the previous next/font metrics. */
+/* cyrillic-ext */
+@font-face{font-family:Nunito;font-style:normal;font-weight:200 1000;font-display:swap;src:url("./nunito/cyrillic-ext.woff2")format("woff2");unicode-range:u+460-52f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+
+/* cyrillic */
+@font-face{font-family:Nunito;font-style:normal;font-weight:200 1000;font-display:swap;src:url("./nunito/cyrillic.woff2")format("woff2");unicode-range:u+301,u+400-45f,u+490-491,u+4b0-4b1,u+2116}
+
+/* vietnamese */
+@font-face{font-family:Nunito;font-style:normal;font-weight:200 1000;font-display:swap;src:url("./nunito/vietnamese.woff2")format("woff2");unicode-range:u+102-103,u+110-111,u+128-129,u+168-169,u+1a0-1a1,u+1af-1b0,u+300-301,u+303-304,u+308-309,u+323,u+329,u+1ea0-1ef9,u+20ab}
+
+/* latin-ext */
+@font-face{font-family:Nunito;font-style:normal;font-weight:200 1000;font-display:swap;src:url("./nunito/latin-ext.woff2")format("woff2");unicode-range:u+100-2ba,u+2bd-2c5,u+2c7-2cc,u+2ce-2d7,u+2dd-2ff,u+304,u+308,u+329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c4,u+2113,u+2c60-2c7f,u+a720-a7ff}
+
+/* latin */
+@font-face{font-family:Nunito;font-style:normal;font-weight:200 1000;font-display:swap;src:url("./nunito/latin.woff2")format("woff2");unicode-range:U+0000-00FF,u+131,u+152-153,u+2bb-2bc,u+2c6,u+2da,u+2dc,u+304,u+308,u+329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+
+@font-face{font-family:Nunito Fallback;src:local("Arial");ascent-override:99.71%;descent-override:34.82%;line-gap-override:0.00%;size-adjust:101.39%}
+
+.font-nunito { --font-nunito: "Nunito", "Nunito Fallback"; }

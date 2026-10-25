@@ -87,7 +87,7 @@
  * cards and chunky buttons that press down on a solid ledge. By night ("①"): night-blue stripes and a deep teal bar.
  * Replaces 手帐; a visitor who had chosen it arrives here (skins.ts). The mint itself is too pale for words on
  * cream or behind white text, so text links use a darker mint and the day bar carries dark brown words.
- * Nunito (next/font, not preloaded) sets the Latin; Chinese stays in the system face.
+ * Nunito (local WOFF2, not preloaded) sets the Latin; Chinese stays in the system face.
  */
 :root[data-skin="island"] {
   color-scheme: light;
