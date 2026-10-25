@@ -96,7 +96,7 @@ for (const guarded of [false, true]) for (const firstSignal of ["SIGTERM", "SIGI
     await writeFile(fixture, hostFixtureSource(stateUrl), { mode: 0o600 });
     await writeFile(driver, childSource(hostUrl, pathToFileURL(fixture).href, entryUrl, guarded, args), { mode: 0o600 });
     const guard = fileURLToPath(new URL("../scripts/development/offline-network.cjs", import.meta.url));
-    const child = fork(driver, [], { execArgv: [], env: { PATH: process.env.PATH, NOTIONBLOG_DEVELOPMENT_MODE: "offline", NODE_OPTIONS: `--require=${guard}` }, stdio: ["ignore", "pipe", "pipe", "ipc"] });
+    const child = fork(driver, [], { execArgv: [], env: { PATH: process.env.PATH, NODE_ENV: "test", NOTIONBLOG_DEVELOPMENT_MODE: "offline", NODE_OPTIONS: `--require=${guard}` }, stdio: ["ignore", "pipe", "pipe", "ipc"] });
     let stdout = "", stderr = "", ended: { code: number | null; signal: NodeJS.Signals | null } | undefined;
     child.stdout!.setEncoding("utf8").on("data", value => { stdout += value; });
     child.stderr!.setEncoding("utf8").on("data", value => { stderr += value; });
@@ -127,7 +127,7 @@ for (const guarded of [false, true]) for (const firstSignal of ["SIGTERM", "SIGI
       const cleaning = await receive("cleanup-entered");
       assert.equal(cleaning.cleanup, 1); assert.equal(cleaning.released, 0); assert.equal(cleaning.aborted, true);
       await lstat(join(lockDirectory, "worker.lock"));
-      for (const [index, signal] of [firstSignal, firstSignal === "SIGTERM" ? "SIGINT" : "SIGTERM"].entries()) {
+      for (const [index, signal] of ([firstSignal, firstSignal === "SIGTERM" ? "SIGINT" : "SIGTERM"] as const).entries()) {
         assert.equal(child.kill(signal), true);
         child.send({ action: "probe", id: index });
         const pending = await receive(`probe:${index}`);

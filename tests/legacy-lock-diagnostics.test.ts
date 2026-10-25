@@ -13,7 +13,7 @@ const execute = promisify(execFile);
 const sourceUrl = new URL("../scripts/notion-sync/lock-diagnostics.ts", import.meta.url).href;
 const cli = fileURLToPath(new URL("../scripts/notion-sync/lock-diagnostics.ts", import.meta.url));
 const guard = fileURLToPath(new URL("../scripts/development/offline-network.cjs", import.meta.url));
-const childEnv = () => ({ PATH: process.env.PATH, NOTIONBLOG_DEVELOPMENT_MODE: "offline", NODE_OPTIONS: `--require=${guard}` });
+const childEnv = (): NodeJS.ProcessEnv => ({ PATH: process.env.PATH, NODE_ENV: "test", NOTIONBLOG_DEVELOPMENT_MODE: "offline", NODE_OPTIONS: `--require=${guard}` });
 const instant = "2026-01-02T03:04:05.000Z";
 const lock = (name: "worker.lock" | "manual-run.lock", status: string, reviewRequired: boolean, ownerFormat = "none", processPresence = "not-checked") =>
   ({ name, status, ownerFormat, processPresence, reviewRequired });
