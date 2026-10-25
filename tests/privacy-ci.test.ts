@@ -11,7 +11,9 @@ const root = resolve('.');
 const privacy = readFileSync('.github/workflows/privacy.yml', 'utf8');
 const application = readFileSync('.github/workflows/check.yml', 'utf8');
 const baseline = '19f0560542ef3a6a1f0dfea1a3625514e209c44a';
+const transitionBase = '53492c9f0bdecd0e6c983de02f430e508f0af482';
 const legacyScanner = execFileSync('git', ['show', `${baseline}:scripts/check-privacy.mjs`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const deployedScanner = execFileSync('git', ['show', `${transitionBase}:scripts/check-privacy.mjs`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 function inline(yaml: string) {
   const match = /          node --input-type=module <<'PRIVACY_BOOTSTRAP'\n([\s\S]+?)          PRIVACY_BOOTSTRAP\n/.exec(yaml);
   assert.ok(match);
@@ -33,7 +35,19 @@ function createFixture() {
   const actualGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
   // Redirect only the fixture's Git transport to its local repository. The
   // production bootstrap has no local-remote override or test mode.
-  const transport = `#!${process.execPath}\nimport { spawnSync } from 'node:child_process';\nconst argv = process.argv.slice(2).map(arg => arg === ${JSON.stringify(`https://github.com/${repository}.git`)} ? ${JSON.stringify(repo)} : arg);\nif (process.env.CI_TEST_MISSING_OID && argv.includes(process.env.CI_TEST_MISSING_OID)) process.exit(1);\nconst result = spawnSync(${JSON.stringify(actualGit)}, ['-c','protocol.file.allow=always',...argv], {env:process.env,stdio:'inherit'});\nprocess.exit(result.status ?? 1);\n`;
+  const transport = `#!${process.execPath}
+import { spawnSync } from 'node:child_process';
+const argv = process.argv.slice(2).map(arg => arg === ${JSON.stringify(`https://github.com/${repository}.git`)} ? ${JSON.stringify(repo)} : arg);
+if (process.env.CI_TEST_MISSING_OID && argv.includes(process.env.CI_TEST_MISSING_OID)) process.exit(1);
+if (process.env.CI_TEST_COMPAT_OBJECT && argv[0] === 'ls-tree' && argv[1] === process.env.CI_TEST_COMPAT_OID && argv.at(-1) === 'scripts/check-privacy.mjs') {
+  process.stdout.write(${JSON.stringify('120000 blob ' + '0'.repeat(40) + '\tscripts/check-privacy.mjs\n')}); process.exit(0);
+}
+if (process.env.CI_TEST_COMPAT_HASH && argv[0] === 'show' && argv[1] === process.env.CI_TEST_COMPAT_OID + ':scripts/check-privacy.mjs') {
+  process.stdout.write(${JSON.stringify("console.log('TAMPERED_COMPATIBILITY_EXECUTED');\n")}); process.exit(0);
+}
+const result = spawnSync(${JSON.stringify(actualGit)}, ['-c','protocol.file.allow=always',...argv], {env:process.env,stdio:'inherit'});
+process.exit(result.status ?? 1);
+`;
   writeFileSync(join(bin, 'git'), transport, { mode: 0o755 });
   const script = join(directory, 'bootstrap.mjs'); writeFileSync(script, bootstrap);
   const commit = (message: string) => { git('add', '-A'); git('commit', '-qm', message); return git('rev-parse', 'HEAD'); };
@@ -51,7 +65,7 @@ function createFixture() {
     }
     write('scripts/privacy/history-policy.json', JSON.stringify({ version: 1, repository, pushUrls: [`https://github.com/${repository}.git`], anchor }));
   };
-  return { directory, repo, git, write, commit, scan, pr, push, pushEnv, installV2 };
+  return { directory, repo, script, git, write, commit, scan, pr, push, pushEnv, installV2 };
 }
 
 function assertSafe(result: ReturnType<typeof spawnSync>, ...privateText: string[]) {
@@ -62,6 +76,9 @@ function assertSafe(result: ReturnType<typeof spawnSync>, ...privateText: string
 
 test('privacy workflow is independent and lightweight; application required check keeps its full path', () => {
   assert.equal(inline(application), bootstrap);
+  assert.ok(bootstrap.includes(`const TRANSITION_BASE = '${transitionBase}';`));
+  assert.ok(bootstrap.includes(`const COMPATIBILITY_SOURCE = '${baseline}';`));
+  assert.match(bootstrap, /sourceSha === TRANSITION_BASE && scannerHash === TRANSITION_SCANNER_SHA256/);
   assert.match(privacy, /push:\n    branches: \['\*\*'\]/);
   for (const yaml of [privacy, application]) {
     assert.match(yaml, /pull_request:\n    branches: \[main, develop\]/);
@@ -215,4 +232,67 @@ test('trusted v2 refuses unknown capabilities and broken policy rather than usin
   f.write('scripts/privacy/history-policy.json', '{ bad');
   const broken = f.commit('Broken trusted policy');
   assert.equal(f.scan('pull_request', f.pr(broken, broken)).status, 1);
+}));
+
+
+type TransitionFixture = ReturnType<typeof createFixture> & { transitionBase: string; compatibilitySource: string };
+function transitionFixture(run: (f: TransitionFixture) => void) {
+  fixture(f => {
+    // Keep negative fixtures small. Only the immutable IDs are rebound here;
+    // real pinned base/head objects are replayed separately before integration.
+    f.write('scripts/check-privacy.mjs', legacyScanner);
+    const compatibilitySource = f.commit('Pinned history-capable scanner');
+    f.write('scripts/check-privacy.mjs', deployedScanner);
+    const frozenBase = f.commit('Deployed pre-history scanner');
+    const adapted = bootstrap.replace(`const TRANSITION_BASE = '${transitionBase}';`, `const TRANSITION_BASE = '${frozenBase}';`)
+      .replace(`const COMPATIBILITY_SOURCE = '${baseline}';`, `const COMPATIBILITY_SOURCE = '${compatibilitySource}';`);
+    writeFileSync(f.script, adapted);
+    const scan: typeof f.scan = (eventName, event, extra = {}) => f.scan(eventName, event, { CI_TEST_COMPAT_OID: compatibilitySource, ...extra });
+    run({ ...f, scan, transitionBase: frozenBase, compatibilitySource });
+  });
+}
+function releaseEvent(f: TransitionFixture, head: string) {
+  const event = f.pr(f.transitionBase, head); event.pull_request.base.ref = 'main'; return event;
+}
+
+test('deployed pre-history main uses only the pinned compatibility scanner and ignores candidate code', () => transitionFixture(f => {
+  f.write('scripts/check-privacy.mjs', "console.log('CANDIDATE_SCANNER_EXECUTED'); process.exit(0);\n");
+  f.write('scripts/privacy/ci.mjs', "console.log('CANDIDATE_HELPER_EXECUTED'); process.exit(0);\n");
+  const head = f.commit('Untrusted candidate cannot choose the compatibility scanner');
+  const result = f.scan('pull_request', releaseEvent(f, head));
+  const output = assertSafe(result, 'CANDIDATE_SCANNER_EXECUTED', 'CANDIDATE_HELPER_EXECUTED');
+  assert.equal(result.status, 0);
+  assert.match(output, new RegExp(`compatibility=pinned-history source=${f.transitionBase} compatibilitySource=${f.compatibilitySource}`));
+  assert.equal((output.match(/legacy-policy status=pass/g) ?? []).length, 2);
+}));
+
+test('transition scanner still rejects removed credentials and never prints matched values or raw paths', () => transitionFixture(f => {
+  const secret = ['ntn', randomBytes(20).toString('hex')].join('_');
+  const privatePath = `${secret}.txt`; f.write(privatePath, secret); f.commit('Candidate credential');
+  f.git('rm', '-q', privatePath); const head = f.commit('Remove credential from final tree');
+  const result = f.scan('pull_request', releaseEvent(f, head));
+  const output = assertSafe(result, secret, privatePath);
+  assert.equal(result.status, 1); assert.match(output, /compatibility=pinned-history/);
+  assert.equal((output.match(/legacy-policy status=rejected/g) ?? []).length, 2);
+}));
+
+test('transition refuses a missing pinned commit, changed scanner bytes or non-file mode before execution', () => transitionFixture(f => {
+  f.write('candidate.txt', 'clean'); const head = f.commit('Clean candidate');
+  const cases: Record<string, string>[] = [{ CI_TEST_MISSING_OID: f.compatibilitySource }, { CI_TEST_COMPAT_HASH: '1' }, { CI_TEST_COMPAT_OBJECT: '1' }];
+  for (const extra of cases) {
+    const result = f.scan('pull_request', releaseEvent(f, head), extra);
+    const output = assertSafe(result, 'TAMPERED_COMPATIBILITY_EXECUTED');
+    assert.equal(result.status, 1); assert.match(output, /validation did not complete/);
+    assert.doesNotMatch(output, /legacy-policy status=pass|compatibility=pinned-history/);
+  }
+}));
+
+test('the old scanner hash on a different base cannot enable the narrowly pinned transition', () => transitionFixture(f => {
+  f.write('other-base.txt', 'clean'); const base = f.commit('Different source with same old scanner');
+  f.write('scripts/privacy/ci.mjs', "console.log('CANDIDATE_HELPER_EXECUTED');\n");
+  const head = f.commit('Candidate helper');
+  const event = f.pr(base, head); event.pull_request.base.ref = 'main';
+  const result = f.scan('pull_request', event);
+  const output = assertSafe(result, 'CANDIDATE_HELPER_EXECUTED');
+  assert.equal(result.status, 1); assert.doesNotMatch(output, /compatibility=pinned-history/);
 }));
