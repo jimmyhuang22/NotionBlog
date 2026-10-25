@@ -3,10 +3,11 @@ import { getDatabaseRuntime } from "../database/runtime.ts";
 import { getSiteConfig } from "../../lib/site/index.ts";
 import { contentFeatures } from "../../../config/features.ts";
 import { publicCacheEnabled, publicCacheNamespace, type PublicCacheScope } from "./policy.ts";
-import { readPublicProjection, validatePublicCacheStamp } from "./read.ts";
+import { readPublicProjection, validatePublicCacheStamp, type ProjectionAdmission } from "./read.ts";
 import { withListReadBudget } from "../list-read-budget.ts";
 
-export async function publicProjection<T>(scope: PublicCacheScope, operation: string, args: unknown, load: () => Promise<T>): Promise<T> {
+export async function publicProjection<T>(scope: PublicCacheScope, operation: string, args: unknown, load: () => Promise<T>,
+  admission?: ProjectionAdmission<T>): Promise<T> {
   if (!publicCacheEnabled()) return load();
   return readPublicProjection(scope, operation, args, publicCacheNamespace(process.env, getSiteConfig(), contentFeatures), {
     async stamp() {
@@ -19,14 +20,20 @@ export async function publicProjection<T>(scope: PublicCacheScope, operation: st
       const { unstable_cache } = await import("next/cache.js");
       return unstable_cache(load, [key], { tags, revalidate: false })();
     },
-  }, load);
+  }, load, admission);
 }
+
+const metadataAdmission: ProjectionAdmission<unknown> = { policy: "positive-v1", accepts: value => value !== null && value !== undefined };
+const noteAdmission: ProjectionAdmission<unknown> = { policy: "positive-v1", accepts: value => value === true };
 
 /** Keep the public DTO contracts intact; the search method deliberately remains live. */
 export function publicRepository<T extends object>(scope: PublicCacheScope, name: string, repository: T): T {
   return Object.fromEntries(Object.entries(repository).map(([method, fn]) => [method,
     typeof fn !== "function" || method === "search" ? fn : (...args: unknown[]) => {
-      const read = () => publicProjection(scope, `${name}:${method}`, args, async () => Reflect.apply(fn, repository, args));
+      const admission = scope === "content" && name === "contentRepository"
+        ? method === "getContentMetadata" ? metadataAdmission : method === "isStudyNoteAvailable" ? noteAdmission : undefined
+        : undefined;
+      const read = () => publicProjection(scope, `${name}:${method}`, args, async () => Reflect.apply(fn, repository, args), admission);
       // Stamp lookup and DTO reuse belong to the same pre-existing SSR/API deadline.
       return scope === "home" || scope === "social" ? withListReadBudget(scope === "home" ? "home-feed" : "works", read) : read();
     }])) as T;

@@ -20,6 +20,6 @@ export async function GET(request: Request) {
             { studyProject: async slug => (await getStudyProjects()).some(project => project.slug === slug) });
           if (verdict === "unknown") throw Error("ROUTE_UNAVAILABLE");
           return verdict;
-        }), { timeoutMs: 5000 }));
+        }, { policy: "positive-v1", accepts: verdict => verdict === "found" }), { timeoutMs: 5000 }));
   } catch (cause) { return contentErrorResponse(cause); }
 }
