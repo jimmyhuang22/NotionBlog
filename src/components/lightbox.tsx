@@ -13,6 +13,11 @@ export interface Photo {
   large?: string;
   /** The original's size, when known: the viewer gives the photo its final place before the original has arrived. */
   width?: number | null; height?: number | null;
+  /**
+   * Self-hosted display-only delivery: src is the largest version there is, at most this wide (smaller pictures are
+   * never enlarged). The viewer sharpens to src and stops there; the bar speaks of a sharper picture, not the original.
+   */
+  maxWidth?: number;
 }
 interface LightboxApi { register(photo: Photo): () => void; open(key: string): void }
 
@@ -35,6 +40,8 @@ const CLOSE_MS = 240;
  * the photo is enlarged beyond what the 1600 can show; a missing 1600 is served as the original itself.
  * Until the stage has any picture at all (no preview yet, or a "preview" that is really the original
  * on its way) a spinner stands in the middle of it, so a slow photo never looks like an empty screen.
+ * With display-only delivery (`maxWidth`) there is no original: src is the largest display version, so the
+ * viewer goes from the preview to src and no further, and judges sharpness by that version's width.
  */
 export function LightboxProvider({ className, children }: { className?: string; children: ReactNode }) {
   // The page's photos. Rendering reads the state, so a photo that leaves the page leaves the viewer too;
@@ -90,7 +97,9 @@ export function LightboxProvider({ className, children }: { className?: string; 
   const reach = (key: string, change: Omit<Reached, "key">) => setProgress(current => ({ ...(current?.key === key ? current : {}), key, ...change }));
   // The photo whose original was asked for by enlarging it beyond its 1600 version.
   const [wanted, setWanted] = useState<string | null>(null);
-  const photoKey = photo?.key, photoSrc = photo?.src, photoPreview = photo?.preview, photoWidth = photo?.width;
+  // The width that counts as the whole picture: the largest display version's where that is all there is, else the original's.
+  const photoKey = photo?.key, photoSrc = photo?.src, photoPreview = photo?.preview, photoWidth = photo?.maxWidth ?? photo?.width;
+  const displayOnly = photo?.maxWidth !== undefined;
   const photoLarge = photo?.preview ? photo.large : undefined;
   const reached = progress && progress.key === photoKey ? progress : null;
   const wantsOriginal = Boolean(photoKey) && (!photoLarge || reached?.large === "lost" || wanted === photoKey);
@@ -136,9 +145,11 @@ export function LightboxProvider({ className, children }: { className?: string; 
   // Enlarging the 1600 version beyond its own pixels asks for the original; read through a ref by gesture handlers bound earlier.
   const onLarge = useRef<string | null>(null);
   onLarge.current = photoKey && onScreen === photoLarge && !whole && wanted !== photoKey ? photoKey : null;
-  const status = waiting ? (photoLarge && reached?.large !== "lost" ? "正在加载清晰图…" : "正在加载原图…")
+  // Display-only has no original to speak of: src is the sharper picture, and failing to get it is said that way.
+  const status = waiting ? (displayOnly || (photoLarge && reached?.large !== "lost") ? "正在加载清晰图…" : "正在加载原图…")
     : wantsOriginal && photoLarge && reached?.large === "loaded" && !whole && !reached?.original ? "正在加载原图…"
-    : reached?.original === "lost" ? (reached.large === "loaded" ? "原图没有加载出来，这是较清晰的版本" : photo?.preview ? "原图没有加载出来，这是预览图" : "图片没有加载出来")
+    : reached?.original === "lost" ? (displayOnly ? (photo?.preview ? "清晰图没有加载出来，这是预览图" : "图片没有加载出来")
+      : reached.large === "loaded" ? "原图没有加载出来，这是较清晰的版本" : photo?.preview ? "原图没有加载出来，这是预览图" : "图片没有加载出来")
     : "";
   const sized = Boolean(photo?.width && photo.height);
   // Which photo has something on screen yet, whatever version it is.
