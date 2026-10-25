@@ -90,6 +90,8 @@ export interface Operation {
 }
 
 export interface Capabilities {
+  /** Start a whole-site sync from the console. */
+  sync: boolean;
   /** Freeze and unfreeze (needs the persistent mode). */
   freeze: boolean;
   /** Sync one page instead of everything. */

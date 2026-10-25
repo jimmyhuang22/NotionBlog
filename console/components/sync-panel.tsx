@@ -96,10 +96,12 @@ export function SyncPanel({ initial, timeZone }: { initial: SyncStatus; timeZone
           </p>
         </div>
         <div className="status__action">
-          <button type="button" className="button button--primary button--large" onClick={start} disabled={starting || Boolean(running)}>
+          <button type="button" className="button button--primary button--large" onClick={start} disabled={!status.capabilities.sync || starting || Boolean(running)}>
             {starting ? "正在启动…" : running ? "同步进行中" : "立即同步"}
           </button>
-          <span className="xs muted">{status.mode === "published" ? "只读取改过的页面" : "整轮重读，约十几分钟"}</span>
+          <span className="xs muted">
+            {!status.capabilities.sync ? "后端还没接上这个按钮，同步照常定时进行" : status.mode === "published" ? "只读取改过的页面" : "整轮重读，约十几分钟"}
+          </span>
         </div>
         <dl className="facts">
           <div>

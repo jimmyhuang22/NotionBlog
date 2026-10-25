@@ -19,11 +19,10 @@ export default async function ContentPageView({ searchParams }: { searchParams: 
   let page: ContentPage | null = null;
   let failure: BackendError | null = null;
   try {
-    [status, sections, page] = await Promise.all([
-      backend.status(),
-      backend.sections(),
-      backend.listContent({ section, parentId: null, search }),
-    ]);
+    status = await backend.status();
+    if (status.capabilities.contentList) {
+      [sections, page] = await Promise.all([backend.sections(), backend.listContent({ section, parentId: null, search })]);
+    }
   } catch (error) {
     if (!(error instanceof BackendError)) throw error;
     failure = error;
@@ -37,7 +36,11 @@ export default async function ContentPageView({ searchParams }: { searchParams: 
           <p>网站上公开的内容。不再更新的可以冻结：留在网站上，同步不再去读它。</p>
         </div>
       </div>
-      {status && page ? (
+      {status && !status.capabilities.contentList ? (
+        <div className="notice notice--info">
+          <p>后端还没接上内容列表，这一页暂时用不了。下架可以先在“下架”页输入页面地址。</p>
+        </div>
+      ) : status && page ? (
         <section className="card">
           <div className="toolbar">
             <nav className="tabs" aria-label="栏目">
