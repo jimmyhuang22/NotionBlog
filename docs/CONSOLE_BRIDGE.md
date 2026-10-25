@@ -57,7 +57,7 @@
 
 ## 约定
 
-- **能力开关。** `status.capabilities` 说明后端已经支持哪些功能（`freeze`、`targetedSync`、`takedown`、`contentList`），控制台据此隐藏按钮。可以分批接入：例如先实现 `status`、`operation.*` 和下架，冻结等新模式上线后再打开。未支持的操作返回 `UNSUPPORTED`。
+- **能力开关。** `status.capabilities` 说明后端已经支持哪些功能（`sync` 整轮立即同步、`targetedSync` 单页同步、`freeze` 冻结与解冻、`takedown` 下架、`contentList` 内容列表），控制台据此停用按钮或显示“还没接上”。可以分批接入：例如先实现 `status`、`operation.*` 和下架，冻结等新模式上线后再打开。未支持的操作返回 `UNSUPPORTED`。
 - **预览绑定确认。** `*.start` 必须带上预览返回的 `digest`。范围、图片状态或冻结状态在此期间变化时返回 `PREVIEW_STALE`，控制台会请用户重新查看。
 - **启动不等待。** `*.start` 和 `takedown.*` 只登记并启动工作，立即返回 `operationId`；控制台每 1.2 秒调用 `operation.get` 直到状态结束。
 - **同一把锁。** 同步、冻结、解冻和下架与定时任务共用现有的锁；已有写入在进行时返回 `BUSY` 并带上 `runningOperationId`，不排队、不抢锁。

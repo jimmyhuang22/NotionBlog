@@ -101,6 +101,20 @@ test("demo: the old mode refuses freezing and single-page syncs", async () => {
   await rejectsWith(backend.startSync("/study/demo-web"), "UNSUPPORTED");
 });
 
+test("demo: phase one offers status, history and takedown only", async () => {
+  const { backend, advance } = demo();
+  backend.setScenario("phase-one");
+  const { capabilities } = await backend.status();
+  assert.deepEqual(capabilities, { sync: false, freeze: false, targetedSync: false, takedown: true, contentList: false });
+  await rejectsWith(backend.startSync(null), "UNSUPPORTED");
+  await rejectsWith(backend.sections(), "UNSUPPORTED");
+  const plan = await backend.planTakedown("/study/demo-ml");
+  const { operationId } = await backend.executeTakedown(plan.planId);
+  advance(1000);
+  assert.equal((await backend.operation(operationId)).state, "succeeded");
+  assert.ok((await backend.operations(10)).some((op) => op.id === operationId));
+});
+
 function bridge(script: string, env?: Record<string, string>) {
   const directory = mkdtempSync(path.join(tmpdir(), "console-bridge-"));
   const file = path.join(directory, "bridge.mjs");

@@ -177,13 +177,14 @@ export class DemoBackend implements ConsoleBackend {
   async status(): Promise<SyncStatus> {
     const now = this.clock();
     this.tick(now);
-    const oldMode = this.scenario === "old-mode";
+    const oldMode = this.scenario === "old-mode" || this.scenario === "phase-one";
+    const phaseOne = this.scenario === "phase-one";
     const running = this.ops.find((entry) => entry.exclusive && isActive(entry.op))?.op ?? null;
     const lastRun = [...this.ops].reverse().find((entry) => entry.op.kind === "sync" && !isActive(entry.op))?.op ?? null;
     const pending = this.nodes.filter((node) => !node.withdrawn && !this.isFrozen(node) && node.sourceEditedAt && node.publishedAt && node.sourceEditedAt > node.publishedAt).length;
     return {
       mode: oldMode ? "qualified" : "published",
-      capabilities: { freeze: !oldMode, targetedSync: !oldMode, takedown: true, contentList: true },
+      capabilities: { sync: !phaseOne, freeze: !oldMode, targetedSync: !oldMode, takedown: true, contentList: !phaseOne },
       running: running ? clone(running) : null,
       lastSuccessAt: iso(this.lastSuccessAt),
       lastRun: lastRun ? clone(lastRun) : null,
@@ -197,6 +198,7 @@ export class DemoBackend implements ConsoleBackend {
 
   async startSync(target: string | null): Promise<{ operationId: string }> {
     this.tick(this.clock());
+    if (this.scenario === "phase-one") throw new BackendError({ code: "UNSUPPORTED", message: "第一阶段还没接上立即同步。" });
     if (target !== null && this.scenario === "old-mode") throw new BackendError({ code: "UNSUPPORTED", message: "旧模式只能整轮同步。" });
     const node = target === null ? null : this.requirePublished(target);
     this.assertIdle();
@@ -217,6 +219,7 @@ export class DemoBackend implements ConsoleBackend {
 
   async sections(): Promise<SectionSummary[]> {
     this.tick(this.clock());
+    this.requireContentList();
     const order: Section[] = ["study", "status", "movie", "book", "game", "album", "page"];
     return order.map((section) => {
       const top = this.nodes.filter((node) => node.section === section && node.parentId === null && !node.withdrawn);
@@ -226,6 +229,7 @@ export class DemoBackend implements ConsoleBackend {
 
   async listContent(query: { section: Section; parentId: string | null; search: string | null }): Promise<ContentPage> {
     this.tick(this.clock());
+    this.requireContentList();
     const search = query.search?.trim().toLowerCase() || null;
     let nodes = this.nodes.filter((node) => node.section === query.section);
     if (search) {
@@ -501,8 +505,12 @@ export class DemoBackend implements ConsoleBackend {
     if (running) throw new BackendError({ code: "BUSY", message: "另一项操作正在进行。", runningOperationId: running.op.id });
   }
 
+  private requireContentList() {
+    if (this.scenario === "phase-one") throw new BackendError({ code: "UNSUPPORTED", message: "第一阶段还没接上内容列表。" });
+  }
+
   private requireFreezeSupport() {
-    if (this.scenario === "old-mode") throw new BackendError({ code: "UNSUPPORTED", message: "冻结需要新模式（持久发布）上线。" });
+    if (this.scenario === "old-mode" || this.scenario === "phase-one") throw new BackendError({ code: "UNSUPPORTED", message: "冻结需要新模式（持久发布）上线。" });
   }
 
   private resolve(input: string): DemoNode {
