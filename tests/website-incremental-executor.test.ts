@@ -3,6 +3,7 @@ import test, { type TestContext } from "node:test";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as sqlite from "node:sqlite";
 import { openIncrementalQueue } from "../scripts/website-incremental-sync/queue.ts";
 import { runIncrementalCycle, type CommitReceipt, type IncrementalPorts, type PreparedDelta, type PublicationState } from "../scripts/website-incremental-sync/executor.ts";
 import { createIncrementalPublicationPort } from "../scripts/website-incremental-sync/publication-port.ts";
@@ -11,9 +12,9 @@ import { PublicationDeltaError } from "../src/server/database/incremental-public
 const configDigest = "a".repeat(64), payloadDigest = "b".repeat(64), schemaDigest = "c".repeat(64);
 const state: PublicationState = { publicationRevision: "revision-1", configDigest, schemaDigest, policyEpoch: "epoch-1" };
 const delta: PreparedDelta = { expectedRevision: state.publicationRevision, configDigest, payloadDigest };
-async function setup(t: TestContext, pages = 1) {
+async function setup(t: TestContext, pages = 1, now = Date.now) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "incremental-executor-")));
-  const q = await openIncrementalQueue(root, { digest: configDigest, sourceKeys: ["notes"] });
+  const q = await openIncrementalQueue(root, { digest: configDigest, sourceKeys: ["notes"] }, now);
   t.after(async () => { q.close(); await rm(root, { recursive: true, force: true }); });
   q.enqueue(Array.from({ length: pages }, (_, i) => ({ eventId: `event-${i}`, sourceKey: "notes", pageKey: `page-${i}`, reason: "content" as const, observedAt: 1000 })));
   const calls = { state: 0, prepare: 0, submit: 0, lookup: 0, verify: 0 };
@@ -26,7 +27,13 @@ async function setup(t: TestContext, pages = 1) {
     verify: async () => { calls.verify++; return true; },
   };
   const run = (extra = {}) => runIncrementalCycle({ queue: q, schemaDigest, ...extra }, ports);
-  return { q, ports, calls, receipt, run };
+  const failures = () => {
+    const Constructor = (sqlite as unknown as { Database?: typeof sqlite.DatabaseSync }).Database ?? sqlite.DatabaseSync;
+    const db = new Constructor(join(root, "incremental.sqlite"), { readOnly: true });
+    try { return Number(db.prepare("SELECT count(*) AS n FROM attempts WHERE state='failed'").get()!.n); }
+    finally { db.close(); }
+  };
+  return { q, ports, calls, receipt, run, failures };
 }
 
 test("one changed page is submitted after its durable marker and acknowledged only after independent readback", async t => {
@@ -164,4 +171,54 @@ test("permanently rejected media is held without retrying or blocking another pa
   const result = await s.run();
   assert.equal(result.review, 1); assert.equal(result.retried, 0); assert.equal(result.published, 1);
   assert.equal(s.q.listReview()[0].errorCode, "IMAGE_REJECTED");
+});
+
+test("repeated publication outages defer work without spending the page failure allowance", async t => {
+  const s = await setup(t);
+  s.ports.state = async () => { throw Error("private database outage"); };
+  for (let n = 0; n < 6; n++) {
+    const result = await s.run({ retryDelayMs: 0, maxTasks: 1 });
+    assert.equal(result.outcome, "retry"); assert.equal(result.errorCode, "PUBLICATION_UNAVAILABLE");
+    assert.equal(result.review, 0); assert.equal(s.failures(), 0);
+  }
+  assert.equal(s.q.status().retry, 1); assert.equal(s.q.status().needs_review, 0);
+  assert.equal(s.calls.prepare + s.calls.submit, 0);
+  s.ports.state = async () => state;
+  s.ports.prepare = async () => ({ outcome: "retry", code: "PAGE_TEMPORARY" });
+  for (let n = 1; n <= 5; n++) {
+    const result = await s.run({ retryDelayMs: 0, maxTasks: 1 });
+    assert.equal(s.failures(), n); assert.equal(result.review, n === 5 ? 1 : 0);
+  }
+  assert.equal(s.q.status().needs_review, 1);
+});
+
+test("system outages use a fixed delay rather than page-failure exponential backoff", async t => {
+  let now = 2000; const s = await setup(t, 1, () => now);
+  s.ports.state = async () => { throw Error("unavailable"); };
+  for (let n = 0; n < 6; n++) {
+    assert.equal((await s.run({ retryDelayMs: 1000, maxTasks: 1 })).claimed, 1);
+    now += 999; assert.equal((await s.run({ retryDelayMs: 1000, maxTasks: 1 })).claimed, 0);
+    now++; assert.equal(s.failures(), 0);
+  }
+});
+
+test("a system outage stops the cycle before claiming another ready page", async t => {
+  const s = await setup(t, 2);
+  s.ports.state = async () => { s.calls.state++; throw Error("unavailable"); };
+  const result = await s.run({ retryDelayMs: 0, maxTasks: 50 });
+  assert.equal(result.claimed, 1); assert.equal(s.calls.state, 1);
+  assert.equal(s.q.status().pending, 1); assert.equal(s.q.status().retry, 1);
+  assert.equal(s.failures(), 0); assert.equal(s.calls.prepare + s.calls.submit, 0);
+});
+
+test("pre-submission cancellation takes priority over a simultaneous permanent prepare error", async t => {
+  const s = await setup(t); let cancel: AbortController;
+  s.ports.prepare = async () => { cancel.abort(); throw Object.assign(Error("private converter error"), { code: "IMAGE_REJECTED" }); };
+  for (let n = 0; n < 6; n++) {
+    cancel = new AbortController();
+    const result = await s.run({ signal: cancel.signal });
+    assert.equal(result.outcome, "cancelled"); assert.equal(result.review, 0); assert.equal(s.failures(), 0);
+  }
+  assert.equal(s.q.status().retry, 1); assert.equal(s.q.status().needs_review, 0);
+  assert.equal(s.calls.submit, 0);
 });

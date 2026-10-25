@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { StoredMedia } from "../../contracts/sync.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../../contracts/website-sync.ts";
 import { openIncrementalDatabase, type IncrementalDatabaseOptions, IncrementalDatabaseError } from "../../src/server/database/incremental-connection.ts";
-import { readPublicationState, PublicationDeltaError, type PreparedPublicationDelta, type PublicationState } from "../../src/server/database/incremental-publication.ts";
+import { readPublicationState, PublicationDeltaError, type PublicationState } from "../../src/server/database/incremental-publication.ts";
 import { canonicalJson, configDigest } from "../../src/server/database/website-validation.ts";
 import { normalizeId } from "../../src/server/notion/config.ts";
 import { parseWebsiteNotionConfig, websiteCollectionTimeZone, type WebsiteNotionConfig } from "../../src/server/notion/website-config.ts";
@@ -21,7 +21,7 @@ import { createDatabasePublicationPort } from "./publication-port.ts";
 import { createStudyDomainPort } from "./study-domain.ts";
 import { createIncrementalCoordinator } from "./coordinator.ts";
 import { withContentCache } from "./content-cache-ports.ts";
-import { runIncrementalCycle, type IncrementalPorts } from "./executor.ts";
+import { recoverIncrementalCycle, runIncrementalCycle } from "./executor.ts";
 import { runDirectoryDiscovery } from "./discovery.ts";
 import { runStudyChildDiscovery } from "./study-child-discovery.ts";
 import { createHostBudget, hostAwait, hostFail, IncrementalHostError, type HostBudget, type HostBudgetOptions } from "./host-budget.ts";
@@ -155,12 +155,8 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
       const ports = withContentCache({ store: cache, ports: coordinator, queue, readVerifiedState: readerState });
       const pending = queue.status(); report.phase = "recovery";
       if (pending.awaiting_verification || pending.retirement_pending || pending.leased) {
-        // The actual executor persists expired preparation closures on claim.
-        // A bounded no-source preparation closes at most one newly claimed task,
-        // making all retirement flow use the real durable queue proofs.
-        const recovery: IncrementalPorts<PreparedPublicationDelta> = { ...ports, prepare: async () => ({ outcome: "retry", code: "HOST_RECOVERY_ONLY" }) };
-        const result = await runIncrementalCycle({ queue, schemaDigest: WEBSITE_SCHEMA_DIGEST, signal: budget.signal,
-          maxTasks: 50, maxDurationMs: Math.max(10, budget.remainingMs()), retryDelayMs: 0 }, recovery);
+        const result = await recoverIncrementalCycle({ queue, schemaDigest: WEBSITE_SCHEMA_DIGEST, signal: budget.signal,
+          maxTasks: 50, maxDurationMs: Math.max(10, budget.remainingMs()) }, ports);
         report.recovered += result.recovered; report.retired += result.retired;
       }
       budget.guard();
