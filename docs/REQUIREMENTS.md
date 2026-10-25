@@ -1,5 +1,7 @@
 # 项目需求
 
+小红书早期失败暂停（2026-10-25）：用户批准 N05 完整源码与离线方案。已验证执行上下文中的早期非 BUSY 错误，独立尝试既有 HTTP 手工闩及本浏览器 lane 暂停；未知 scope 用既有全零占位，不授权执行。异常时不重读损坏配置，保留原始失败、最新暂停／accepted 恢复与全部清理，显式恢复和两 lane 边界保持。真实暂停目录、配置、项目访问、安装恢复和发布不包含，见[决定](decisions/2026-10-25-xhs-early-pause.md)与[实施记录](progress/2026-10-25-xhs-early-pause.md)。
+
 自托管展示图片（2026-10-25）：用户批准独立离线后端实现。Mac 生成宽度不超过1600、不放大的必备最大展示版与400/800副本，服务器只读展示文件；默认媒体地址返回最大展示版，缺档只选已有展示副本，损坏明确失败，不回源原图。新增可选 `ImageAsset.delivery`，由读取层按当前批次补充，不改冻结SQL与同步记录；严格TLS、reader隔离enforce、no-store及现有Vercel/COS行为保留。前端灯箱由Claude接线；真实图片、传输/安装、同步采用、上海部署、域名及发布另行安排，见[决定](decisions/2026-10-25-self-hosted-display-media.md)、[后端说明](SELF_HOSTED_MEDIA.md)与[前端交接](SELF_HOSTED_MEDIA_FRONTEND_HANDOFF.md)。
 
 路由资格缓存键（2026-10-25）：用户批准 N04 源码与离线方案。缓存入口按单次解码后的受管形状规范目标，等价编码共用键；路由 missing、元数据 null／undefined 和笔记资格 false 不写持久缓存。保留原始验签、generation／日期／取消守卫和错误语义，固定策略标记隔离旧负项；重复缺失读取可能增加。实际清理、配置、项目请求、任务恢复和发布不包含，见[决定](decisions/2026-10-25-route-cache-key-policy.md)与[实施记录](progress/2026-10-25-route-cache-key-policy.md)。

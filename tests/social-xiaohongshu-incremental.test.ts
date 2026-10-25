@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp,chmod,rm,readFile,writeFile,realpath } from "node:fs/promises";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -16,12 +18,13 @@ import { automaticNoteTarget,newDirectoryCards,xhsDirectory,candidateNoteShareUr
 import { handleXhsDiscovery,readXhsDiscoveryState } from "../scripts/social-sync/xiaohongshu-discovery-bridge.ts";
 import { runXhsDiscovery } from "../scripts/social-sync/xiaohongshu-discovery-worker.ts";
 import { holdNoteLink,readNoteLinkHolds } from "../scripts/social-sync/xiaohongshu-link-holds.ts";
-import { CycleCloudSession } from "../scripts/social-sync/cycle-cloud.ts";
+import { CycleCloudSession,emptyUploadCost } from "../scripts/social-sync/cycle-cloud.ts";
 import { executeRefresh } from "../scripts/social-sync/refresh-executor.ts";
 import { captureXhsDirectory } from "../scripts/social-sync/browser/xiaohongshu-directory.js";
 import { httpTarget,httpHtml,httpUrl,httpState } from "./helpers/social-xiaohongshu-http-samples.ts";
 import { handleXhsBrowserNotes,readBrowserOnlyIds,readBrowserNoteCapture,ingestAcceptedBrowserNotes,resumeBrowserNoteLane } from "../scripts/social-sync/xiaohongshu-browser-notes.ts";
-import { recordExternalHttpPause,parseHttpHealth } from "../scripts/social-sync/xiaohongshu-http-cycle.ts";
+import { recordExternalHttpPause,parseHttpHealth,runHttpNoteCycle,type HttpCyclePorts } from "../scripts/social-sync/xiaohongshu-http-cycle.ts";
+import { runHttpCycleCli } from "../scripts/social-sync/http-cycle-cli.ts";
 import { armBrowserNoteRecovery,finishBrowserNoteRecovery,inspectBrowserNoteRecovery,cancelBrowserNoteRecovery,retryBrowserNoteUpload } from "../scripts/social-sync/xiaohongshu-browser-notes.ts";
 
 const now=()=>new Date().toISOString(),card=(n:number)=>({publicationId:httpTarget(n).publicationId,url:`https://www.xiaohongshu.com/user/profile/${httpTarget().accountId}/${httpTarget(n).publicationId}?xsec_token=example_public_locator&xsec_source=pc_user`});
@@ -38,6 +41,31 @@ async function fixture(t:{after:(f:()=>Promise<void>)=>void}){
   const policy={version:1,enabled:true,accountId:httpTarget().accountId,baseScopeDigest:hash(JSON.stringify(base)),discoveryHours:1,statisticsHours:1};await writeFile(join(root,"xiaohongshu-account.json"),JSON.stringify(policy),{mode:0o600});
   await writeFile(join(root,"cloud.env"),"SOCIAL_DATABASE_URL=postgresql://nb_social_worker:example@localhost/example\nDATABASE_TLS=disable\n",{mode:0o600});
   return {root,base,policy,dir:hp.stateDirectory as string,targets};
+}
+async function capturedFixture(t:Parameters<typeof fixture>[0],recovery=false){
+  const f=await fixture(t);await holdNoteLink(f.root,publicationKey(f.targets[0]!),httpUrl(2));
+  let leased=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false}) as {job:{id:string}};
+  let ticket:Awaited<ReturnType<typeof armBrowserNoteRecovery>>|undefined;
+  if(recovery){
+    await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"BROWSER_TIMEOUT"});
+    ticket=await armBrowserNoteRecovery(f.root,f.targets[0]!.publicationId);
+    leased=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false}) as {job:{id:string}};
+  }
+  const n=httpState(2).note.noteDetailMap[httpTarget(2).publicationId]!.note;
+  const snapshot={version:1,source:"browser-note-state",observedAt:now(),pageUrl:httpTarget(2).url,note:{noteId:n.noteId,userId:n.user.userId,type:n.type,title:n.title,time:n.time,lastUpdateTime:null,coverUrl:null,interactInfo:n.interactInfo}};
+  await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-submit",jobId:leased.job.id,snapshots:[snapshot]});
+  return {...f,snapshot,ticket};
+}
+async function seedHealth(root:string){
+  await recordExternalHttpPause(root,"a".repeat(64),"SOURCE_VERIFICATION_REQUIRED","capture");
+  const file=join(root,"cycle-xiaohongshu-http","health.json"),health=parseHttpHealth(JSON.parse(await readFile(file,"utf8")));
+  health.lastCollectedAt=now();health.lastUploadedAt=now();health.cycle={startedAt:now(),finishedAt:now(),uploaded:1,remaining:2};
+  health.cost={starts:1,requests:1,bytes:123,cpuMs:2,peakRssBytes:456};health.uploadCost=emptyUploadCost();
+  await writeFile(file,JSON.stringify(health),{mode:0o600});return health;
+}
+async function assertReleased(root:string){
+  for(const path of ["cycle-xiaohongshu-http/worker.lock","xiaohongshu-browser-notes/worker.lock"])
+    await assert.rejects(readFile(join(root,path)),{code:"ENOENT"});
 }
 test("hourly statistics do not mutate the original shared cadence, and a directory check does not sample known notes",async t=>{
   const f=await fixture(t),before=await readFile(join(f.root,"refresh-config.json"));
@@ -202,6 +230,8 @@ test("browser upload preserves its failure and pause when configuration disappea
  assert.equal(closed,1);
  const health=parseHttpHealth(JSON.parse(await readFile(join(f.root,"cycle-xiaohongshu-http/health.json"),"utf8")));
  assert.equal(health.recovery.code,"CLOUD_UPLOAD_FAILED");assert.equal(health.recovery.stage,"upload");
+ const browser=JSON.parse(await readFile(join(f.root,"xiaohongshu-browser-notes/state.json"),"utf8"));
+ assert.equal(browser.status,"paused");assert.equal(browser.code,"CLOUD_UPLOAD_FAILED");
  for(const lock of ["cycle-xiaohongshu-http/worker.lock","xiaohongshu-browser-notes/worker.lock"])
   await assert.rejects(readFile(join(f.root,lock)),{code:"ENOENT"});
 });
@@ -213,4 +243,208 @@ test("stalled directory reason is durable and cannot advance discovery or restar
   const state=(await readXhsDiscoveryState(f.root,hash(JSON.stringify(f.policy))))!;
   assert.equal(state.checkedAt,null);assert.deepEqual(state.queue,[]);assert.deepEqual(state.links,[]);assert.equal(state.lastSubmission,null);
   assert.deepEqual(await handleXhsDiscovery(f.root,{op:"xiaohongshu-start",manual:false}),paused);
+});
+
+test("early discovery and scope failures persist both pauses without config, retaining old health and evidence",async t=>{
+  let prepares=0;
+  t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{prepares++;assert.fail("Early failure must not prepare cloud");});
+  for(const fault of ["discovery-xiaohongshu/state.json","xiaohongshu-http.json"]){
+    for(const withHealth of [false,true]){
+      const f=await capturedFixture(t),healthFile=join(f.root,"cycle-xiaohongshu-http/health.json"),browserFile=join(f.root,"xiaohongshu-browser-notes/state.json");
+      // Preserve a real outstanding lease as well as the already captured packet.
+      await holdNoteLink(f.root,publicationKey(f.targets[1]!),httpUrl(3));
+      await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false});
+      const beforeBrowser=JSON.parse(await readFile(browserFile,"utf8")),old=withHealth?await seedHealth(f.root):null;
+      const configPath=join(f.root,"refresh-config.json"),config=await readFile(configPath),faultPath=join(f.root,fault);
+      let original:Buffer|null=null;try{original=await readFile(faultPath);}catch(e){if((e as NodeJS.ErrnoException).code!=="ENOENT")throw e;}
+      if(fault.startsWith("discovery-"))await fsPromises.mkdir(join(f.root,"discovery-xiaohongshu"),{recursive:true,mode:0o700});
+      await writeFile(faultPath,"{",{mode:0o600});
+      const open=fsPromises.open;let removed=false;
+      const spy=t.mock.method(fsPromises,"open",async(...args:Parameters<typeof fsPromises.open>)=>{
+        if(String(args[0])===faultPath&&!removed){removed=true;await rm(configPath);}
+        return open(...args);
+      });syncBuiltinESMExports();
+      try{await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-upload"}),SyntaxError);}
+      finally{spy.mock.restore();syncBuiltinESMExports();}
+      assert(removed);const health=parseHttpHealth(JSON.parse(await readFile(healthFile,"utf8")));
+      assert.equal(health.scopeDigest,old?.scopeDigest??"0".repeat(64));assert(health.recovery.manualRequired);
+      assert.equal(health.recovery.code,"XHS_BROWSER_UPLOAD_FAILED");assert.equal(health.recovery.stage,"upload");
+      if(old){const {state:_s,recovery:_r,...oldFacts}=old,{state:_s2,recovery:_r2,...facts}=health;assert.deepEqual(facts,oldFacts);}
+      const afterBrowser=JSON.parse(await readFile(browserFile,"utf8"));
+      assert.deepEqual(afterBrowser,{...beforeBrowser,status:"paused",code:"XHS_BROWSER_UPLOAD_FAILED"});
+      await assertReleased(f.root);
+      // The extension's separate pause message cannot repair a broken config.
+      await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"BROWSER_REQUIRED"}),{code:"ENOENT"});
+      await writeFile(configPath,config,{mode:0o600});
+      if(original)await writeFile(faultPath,original,{mode:0o600});else await rm(faultPath);
+      assert.equal((await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false})).status,"paused");
+      let prepared=0,executed=0;
+      const ports:HttpCyclePorts={
+        inspect:async()=>({scopeDigest:"b".repeat(64),keys:[publicationKey(f.targets[0]!)],reviewRequired:0} as Awaited<ReturnType<HttpCyclePorts["inspect"]>>),
+        prepare:async()=>{prepared++;},execute:async()=>{executed++;assert.fail("Paused HTTP run must not execute");},
+        saveCycle:async()=>{assert.fail("Paused HTTP run must not create a cycle");},saveHealth:async value=>{parseHttpHealth(value);},finish:async()=>{},
+        cost:()=>({starts:0,requests:0,bytes:0,cpuMs:0,peakRssBytes:0}),uploadCost:emptyUploadCost,
+      };
+      const blocked=await runHttpNoteCycle("run",health,false,ports);
+      assert(blocked.recovery.manualRequired);assert.equal(prepared,0);assert.equal(executed,0);
+      await resumeBrowserNoteLane(f.root,hash(JSON.stringify(f.policy)));
+      assert.notEqual((await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false})).status,"paused");
+      assert(parseHttpHealth(JSON.parse(await readFile(healthFile,"utf8"))).recovery.manualRequired);
+    }
+  }
+  assert.equal(prepares,0);
+});
+
+test("pause writers are independent and fixed diagnostics never replace the upload failure",async t=>{
+  const diagnostics:string[]=[];t.mock.method(console,"error",(value:unknown)=>{diagnostics.push(String(value));});
+  for(const failedWriter of ["http","browser","both"]){
+    const f=await capturedFixture(t),original=new SocialSyncError("XHS_DIRECTORY_INVALID"),httpFile=join(f.root,"cycle-xiaohongshu-http/health.json"),browserFile=join(f.root,"xiaohongshu-browser-notes/state.json"),attempts:string[]=[];
+    const open=fsPromises.open,rename=fsPromises.rename;let triggered=false;diagnostics.length=0;
+    const openSpy=t.mock.method(fsPromises,"open",async(...args:Parameters<typeof fsPromises.open>)=>{
+      if(String(args[0])===join(f.root,"discovery-xiaohongshu/state.json")&&!triggered){triggered=true;await rm(join(f.root,"refresh-config.json"));throw original;}
+      return open(...args);
+    });
+    const renameSpy=t.mock.method(fsPromises,"rename",async(...args:Parameters<typeof fsPromises.rename>)=>{
+      const lane=String(args[1])===httpFile?"http":String(args[1])===browserFile?"browser":null;
+      if(lane){attempts.push(lane);if(lane===failedWriter||failedWriter==="both")throw Error("Synthetic private write failure");}
+      return rename(...args);
+    });syncBuiltinESMExports();
+    try{await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-upload"}),error=>error===original);}
+    finally{openSpy.mock.restore();renameSpy.mock.restore();syncBuiltinESMExports();}
+    assert(triggered);assert.deepEqual(new Set(attempts),new Set(["http","browser"]));await assertReleased(f.root);
+    const expected=failedWriter==="both"?["XHS_HTTP_PAUSE_WRITE_FAILED","XHS_BROWSER_PAUSE_WRITE_FAILED"]:[failedWriter==="http"?"XHS_HTTP_PAUSE_WRITE_FAILED":"XHS_BROWSER_PAUSE_WRITE_FAILED"];
+    assert.deepEqual(diagnostics.map(line=>JSON.parse(line).code).sort(),expected.sort());
+    assert(diagnostics.every(line=>/^\{"code":"XHS_(?:HTTP|BROWSER)_PAUSE_WRITE_FAILED"\}$/.test(line)));
+    if(failedWriter==="http")assert.equal(JSON.parse(await readFile(browserFile,"utf8")).status,"paused");
+    if(failedWriter==="browser")assert(parseHttpHealth(JSON.parse(await readFile(httpFile,"utf8"))).recovery.manualRequired);
+  }
+});
+
+test("late pauses and accepted recovery facts survive upload failure without stale state overwrite",async t=>{
+  for(const mode of ["paused","accepted","accepted-before-state"]){
+    const f=await capturedFixture(t),original=new SocialSyncError("CLOUD_UPLOAD_FAILED"),browserFile=join(f.root,"xiaohongshu-browser-notes/state.json"),recoveryFile=join(f.root,"xiaohongshu-browser-notes/recovery.json");
+    let latest="",ticket:string|null=null;
+    const prepare=t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{
+      const current=JSON.parse(await readFile(browserFile,"utf8"));
+      if(mode!=="accepted-before-state"){current.status="paused";current.code=mode==="accepted"?"BROWSER_RECOVERY_ACCEPTED":"SOURCE_VERIFICATION_REQUIRED";}
+      current.browserIds=[...new Set([...current.browserIds,f.targets.at(-1)!.publicationId])];
+      latest=JSON.stringify(current);await writeFile(browserFile,latest,{mode:0o600});
+      if(mode!=="paused"){
+        ticket=JSON.stringify({version:1,id:"00000000-0000-0000-0000-000000000001",policyDigest:hash(JSON.stringify(f.policy)),publicationId:f.targets[0]!.publicationId,createdAt:now(),expiresAt:new Date(Date.now()+30*60000).toISOString(),status:"accepted",jobId:current.lastSubmission.id});
+        await writeFile(recoveryFile,ticket,{mode:0o600});
+      }
+      throw original;
+    });
+    try{await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-upload"}),error=>error===original);}
+    finally{prepare.mock.restore();}
+    assert.equal(await readFile(browserFile,"utf8"),latest);
+    if(ticket)assert.equal(await readFile(recoveryFile,"utf8"),ticket);
+    else await assert.rejects(readFile(recoveryFile),{code:"ENOENT"});
+    const automatic=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-start",manual:false});
+    assert.equal(automatic.status,"paused");assert(!("job" in automatic));
+    assert.equal(await readFile(browserFile,"utf8"),latest);
+    await assertReleased(f.root);
+  }
+});
+
+test("HTTP CLI discovery catch never rereads broken config or masks the original error",async t=>{
+  const diagnostics:string[]=[];t.mock.method(console,"error",(value:unknown)=>{diagnostics.push(String(value));});
+  for(const failPause of [false,true]){
+    const f=await fixture(t);await handleXhsDiscovery(f.root,{op:"xiaohongshu-start",manual:false});
+    const old=await seedHealth(f.root);old.state="complete";old.recovery={manualRequired:false,code:null,stage:null,since:null};
+    const healthFile=join(f.root,"cycle-xiaohongshu-http/health.json");await writeFile(healthFile,JSON.stringify(old),{mode:0o600});
+    const original=new SocialSyncError("XHS_DIRECTORY_INVALID"),open=fsPromises.open;let discoveryReads=0,triggered=false,configReadsAfterFailure=0;diagnostics.length=0;
+    const spy=t.mock.method(fsPromises,"open",async(...args:Parameters<typeof fsPromises.open>)=>{
+      const path=String(args[0]);
+      if(triggered&&path===join(f.root,"refresh-config.json"))configReadsAfterFailure++;
+      if(path===join(f.root,"discovery-xiaohongshu/state.json")&&++discoveryReads===2){triggered=true;await rm(join(f.root,"refresh-config.json"));throw original;}
+      if(triggered&&failPause&&path===healthFile)throw Error("Synthetic private health failure");
+      return open(...args);
+    });syncBuiltinESMExports();
+    try{await assert.rejects(runHttpCycleCli(["run",f.root]),error=>error===original);}
+    finally{spy.mock.restore();syncBuiltinESMExports();}
+    assert(triggered);assert.equal(configReadsAfterFailure,0);await assertReleased(f.root);
+    if(failPause)assert.deepEqual(diagnostics,[JSON.stringify({code:"XHS_HTTP_PAUSE_WRITE_FAILED"})]);
+    else{
+      assert.deepEqual(diagnostics,[]);const health=parseHttpHealth(JSON.parse(await readFile(healthFile,"utf8")));
+      assert(health.recovery.manualRequired);assert.equal(health.scopeDigest,old.scopeDigest);assert.equal(health.recovery.code,"XHS_DIRECTORY_INVALID");
+      assert.deepEqual(health.cost,old.cost);assert.deepEqual(health.cycle,old.cycle);
+    }
+  }
+});
+
+test("retry-upload keeps a genuinely accepted ACK when cloud close subsequently fails",async t=>{
+  const f=await capturedFixture(t,true),ticket=f.ticket!,digest=hash(JSON.stringify(f.policy));
+  let sent=0,closed=0;
+  t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{});
+  t.mock.getter(CycleCloudSession.prototype,"httpNotesPrepared",()=>true);
+  t.mock.method(CycleCloudSession.prototype,"sendPublication",async(_raw:string,_scope:string,item:{key:string;sha256:string})=>{sent++;return {key:item.key,sha256:item.sha256};});
+  t.mock.method(CycleCloudSession.prototype,"close",async()=>{closed++;throw new SocialSyncError("CLOUD_CLOSE_FAILED");});
+  await assert.rejects(retryBrowserNoteUpload(f.root,ticket.id),{code:"XHS_BROWSER_CLOSE_FAILED"});
+  assert.equal(sent,1);assert.equal(closed,1);
+  const state=JSON.parse(await readFile(join(f.root,"xiaohongshu-browser-notes/state.json"),"utf8"));
+  const recovery=JSON.parse(await readFile(join(f.root,"xiaohongshu-browser-notes/recovery.json"),"utf8"));
+  assert.equal(state.status,"paused");assert.equal(state.code,"BROWSER_RECOVERY_ACCEPTED");assert.equal(recovery.status,"accepted");
+  const captured=(await readBrowserNoteCapture(f.root,f.targets[0]!,digest))!;
+  await finishBrowserNoteRecovery(f.root,ticket.id,hash(JSON.stringify(captured)));
+  assert.equal((await inspectBrowserNoteRecovery(f.root)).status,"complete");
+  assert(parseHttpHealth(JSON.parse(await readFile(join(f.root,"cycle-xiaohongshu-http/health.json"),"utf8"))).recovery.manualRequired);
+  await assertReleased(f.root);
+});
+
+test("retry-upload preserves partial acceptance and its primary error when recovery or state writes fail",async t=>{
+  const diagnostics:string[]=[];t.mock.method(console,"error",(value:unknown)=>{diagnostics.push(String(value));});
+  for(const mode of ["partial-accepted","recovery-write","browser-write"]){
+    const f=await capturedFixture(t,true),ticket=f.ticket!,browserFile=join(f.root,"xiaohongshu-browser-notes/state.json"),recoveryFile=join(f.root,"xiaohongshu-browser-notes/recovery.json");
+    const before=await readFile(browserFile,"utf8"),original=new SocialSyncError("CLOUD_UPLOAD_FAILED"),rename=fsPromises.rename;
+    let failed=false,accepted="";diagnostics.length=0;
+    const prepare=t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{
+      if(mode==="partial-accepted"){
+        const current=JSON.parse(await readFile(recoveryFile,"utf8"));current.status="accepted";
+        accepted=JSON.stringify(current);await writeFile(recoveryFile,accepted,{mode:0o600});
+      }
+      failed=true;throw original;
+    });
+    const renameSpy=t.mock.method(fsPromises,"rename",async(...args:Parameters<typeof fsPromises.rename>)=>{
+      if(failed&&(mode==="recovery-write"&&String(args[1])===recoveryFile||mode==="browser-write"&&String(args[1])===browserFile))throw Error("Synthetic private retry write failure");
+      return rename(...args);
+    });syncBuiltinESMExports();
+    try{await assert.rejects(retryBrowserNoteUpload(f.root,ticket.id),error=>error===original);}
+    finally{prepare.mock.restore();renameSpy.mock.restore();syncBuiltinESMExports();}
+    if(mode==="partial-accepted"){
+      assert.equal(await readFile(recoveryFile,"utf8"),accepted);assert.equal(await readFile(browserFile,"utf8"),before);assert.deepEqual(diagnostics,[]);
+      const pause=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"CLOUD_UPLOAD_FAILED"});
+      assert.equal(pause.status,"paused");assert.equal(pause.code,"BROWSER_RECOVERY_ACCEPTED");
+      assert.equal(await readFile(recoveryFile,"utf8"),accepted);assert.equal(await readFile(browserFile,"utf8"),before);
+    }else{
+      const expected=mode==="recovery-write"?"XHS_BROWSER_RECOVERY_WRITE_FAILED":"XHS_BROWSER_PAUSE_WRITE_FAILED";
+      assert(diagnostics.length>0);assert(diagnostics.every(line=>line===JSON.stringify({code:expected})));
+      if(mode==="recovery-write")assert.equal(JSON.parse(await readFile(browserFile,"utf8")).status,"paused");
+      else assert.equal(JSON.parse(await readFile(recoveryFile,"utf8")).status,"failed");
+    }
+    await assertReleased(f.root);
+  }
+});
+
+test("ordinary browser upload preserves accepted bytes when background reports its close failure",async t=>{
+  const f=await capturedFixture(t,true),ticket=f.ticket!,digest=hash(JSON.stringify(f.policy));
+  let sent=0,closed=0;
+  t.mock.method(CycleCloudSession.prototype,"preparePublications",async()=>{});
+  t.mock.getter(CycleCloudSession.prototype,"httpNotesPrepared",()=>true);
+  t.mock.method(CycleCloudSession.prototype,"sendPublication",async(_raw:string,_scope:string,item:{key:string;sha256:string})=>{sent++;return {key:item.key,sha256:item.sha256};});
+  t.mock.method(CycleCloudSession.prototype,"close",async()=>{closed++;throw new SocialSyncError("CLOUD_CLOSE_FAILED");});
+  await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-upload"}),{code:"XHS_BROWSER_CLOSE_FAILED"});
+  assert.equal(sent,1);assert.equal(closed,1);
+  const browserFile=join(f.root,"xiaohongshu-browser-notes/state.json"),recoveryFile=join(f.root,"xiaohongshu-browser-notes/recovery.json");
+  const state=await readFile(browserFile),recovery=await readFile(recoveryFile);
+  assert.equal(JSON.parse(state.toString()).code,"BROWSER_RECOVERY_ACCEPTED");assert.equal(JSON.parse(recovery.toString()).status,"accepted");
+  const paused=await handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"XHS_BROWSER_CLOSE_FAILED"});
+  assert.deepEqual(paused,{status:"paused",code:"BROWSER_RECOVERY_ACCEPTED"});
+  await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"invalid-code"}),{code:"BRIDGE_REQUEST_INVALID"});
+  await assert.rejects(handleXhsBrowserNotes(f.root,{op:"xiaohongshu-notes-pause",code:"BROWSER_PAGE_LOAD_TIMEOUT",diagnostic:{}}),{code:"XHS_BROWSER_DIAGNOSTIC_INVALID"});
+  assert.deepEqual(await readFile(browserFile),state);assert.deepEqual(await readFile(recoveryFile),recovery);
+  const captured=(await readBrowserNoteCapture(f.root,f.targets[0]!,digest))!;
+  await finishBrowserNoteRecovery(f.root,ticket.id,hash(JSON.stringify(captured)));
+  assert.equal((await inspectBrowserNoteRecovery(f.root)).status,"complete");
+  await assertReleased(f.root);
 });
