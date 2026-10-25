@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../scripts/website-sync/owner-install-session.ts";
 import { rollbackFault } from "./helpers/rollback-fault.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -173,8 +174,8 @@ test("archives preserve both audit extensions and refuse restoring across mismat
   const source = await setup(), target = await setup();
   try {
     const old = await sample(source);
-    await installIncrementalWithdrawalRecovery(source.owner);
-    await installIncrementalReaderIsolation(source.owner);
+    await withPGliteOwnerTransaction(source.db, installIncrementalWithdrawalRecovery);
+    await withPGliteOwnerTransaction(source.db, installIncrementalReaderIsolation);
     const archive = await exportPublicationArchive(source.owner);
     assert.equal(Object.keys(archive.incremental.state[0]).length, 6);
     assert.deepEqual(archive.core, old.archive.core);
@@ -184,9 +185,9 @@ test("archives preserve both audit extensions and refuse restoring across mismat
     }
     await assert.rejects(restorePublicationArchive(target.owner, archive));
     assert.equal((await exportPublicationArchive(target.owner)).core.tables.records.length, 0);
-    await installIncrementalReaderIsolation(target.owner); // reverse installation order
+    await withPGliteOwnerTransaction(target.db, installIncrementalReaderIsolation); // reverse installation order
     await assert.rejects(restorePublicationArchive(target.owner, archive));
-    await installIncrementalWithdrawalRecovery(target.owner);
+    await withPGliteOwnerTransaction(target.db, installIncrementalWithdrawalRecovery);
     await assert.rejects(restorePublicationArchive(target.owner, old.archive));
     await restorePublicationArchive(target.owner, archive);
     const restored = await exportPublicationArchive(target.owner);

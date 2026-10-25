@@ -176,8 +176,9 @@ export async function runStudyChildDiscovery(options: StudyChildDiscoveryOptions
     if (!equal(before, after)) fail("STUDY_DISCOVERY_BASELINE_CHANGED");
     if (!equal(control, options.queue.checkpoint(options.sourceKey, NAME))) fail("STUDY_DISCOVERY_CURSOR_CHANGED");
     // No awaits between the baseline/queue fence and these durable commits.
-    // Each hint and its fingerprint are atomic. If a later slot conflicts,
-    // replay starts at the old control cursor and already committed hints dedupe.
+    // Each hint and its fingerprint commit atomically. A later slot conflict
+    // leaves the control cursor unchanged; replay skips matching fingerprints,
+    // while slot revisions fence writes. Internal hints use no permanent event ledger.
     for (const proposal of proposals) {
       signal.throwIfAborted();
       result.hints += options.queue.commitLocalDiscovery({ sourceKey: options.sourceKey, name: proposal.name, expectedRevision: proposal.revision,

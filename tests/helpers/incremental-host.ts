@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../../scripts/website-sync/owner-install-session.ts";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, realpath, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -49,7 +50,7 @@ export async function hostFixture(timeZone?: string) {
   await db.exec(await readFile(new URL("../../database/website-study-migrations/001_automatic_study.sql", import.meta.url), "utf8"));
   await db.query("UPDATE nb_v2.migrations SET digest=$1 WHERE version=$2", [studyProtocol.migration.sha256, studyProtocol.migration.version]);
   const owner: SqlExecutor = { query: async <T>(sql: string, values?: unknown[]) => { if (sql.startsWith("--")) { await db.exec(sql); return { rows: [] as T[] }; } return db.query<T>(sql, values); } };
-  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await installIncrementalReaderIsolation(owner);
+  await installPublication(owner); await installIncrementalPublication(owner); await installIncrementalReader(owner); await withPGliteOwnerTransaction(db, installIncrementalReaderIsolation);
   await db.exec("CREATE ROLE fixture_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT; CREATE ROLE fixture_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT; GRANT nb_delta_reader TO fixture_reader; GRANT nb_writer TO fixture_writer;");
   await db.query("SELECT nb_v2_api.configure_policy($1,600,$2::jsonb,'[]')", [digest, JSON.stringify(config.sources.map(s => ({ key: s.key, kind: s.kind,
     mode: s.publication.mode, dataSourceId: s.dataSourceId, databaseParentId: null, pageId: s.pageId })))]);

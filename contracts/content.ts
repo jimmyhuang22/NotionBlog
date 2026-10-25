@@ -27,6 +27,8 @@ export type TextLink =
   | { kind: "unavailable" };
 export interface TextRun {
   text: string;
+  /** v2 page-mention label follows its qualified target's title; authored links omit this. */
+  pageMention?: true;
   /** Notion inline equation; text contains the expression, never rendered HTML. */
   equation?: true;
   bold?: boolean;

@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../scripts/website-sync/owner-install-session.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -15,8 +16,8 @@ test("separate groups keep private preparation out of website credentials withou
     if (sql.startsWith("--")) { await f.db.exec(sql); return { rows: [] as T[] }; }
     return f.db.query<T>(sql, values);
   } };
-  await installIncrementalReaderIsolation(owner); // idempotent, never grant a LOGIN
-  await installIncrementalWithdrawalRecovery(owner); // either extension installation order
+  await withPGliteOwnerTransaction(f.db, installIncrementalReaderIsolation); // idempotent, never grant a LOGIN
+  await withPGliteOwnerTransaction(f.db, installIncrementalWithdrawalRecovery); // either extension installation order
   const role = (name: string): SqlExecutor => ({ query: <T>(sql: string, values?: unknown[]) => f.db.transaction(async tx => {
     await tx.exec(`SET LOCAL ROLE ${name}`); return tx.query<T>(sql, values);
   }) });

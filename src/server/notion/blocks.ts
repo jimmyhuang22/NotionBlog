@@ -24,6 +24,8 @@ export interface RegisterBlockImageInput {
 export interface BlockConversionContext {
   /** Opt-in v2 AST addition; frozen v1 collectors retain the original TextRun shape. */
   inlineEquations?: boolean;
+  /** v2 preserves page-mention label provenance; frozen v1 keeps its original shape. */
+  pageMentions?: boolean;
   /** Website v2 accepts browser-equivalent encoded image paths; v1 stays unchanged. */
   canonicalImageUrls?: boolean;
   /** Website v2 can carry stable external video links; frozen v1 stays unchanged. */
@@ -125,6 +127,7 @@ export async function convertNotionRichText(
       const target = await resolvedPage(rich.mention.page.id, context);
       run.text = target?.title ?? "Unavailable page";
       run.link = target ? { kind: "internal", href: target.href } : { kind: "unavailable" };
+      if (context.pageMentions) run.pageMention = true;
     } else if (rich.type === "mention" && rich.mention.type === "database") {
       run.text = "Unavailable page";
       run.link = { kind: "unavailable" };

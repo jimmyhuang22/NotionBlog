@@ -1,3 +1,4 @@
+import { withPGliteOwnerTransaction } from "../scripts/website-sync/owner-install-session.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -32,7 +33,7 @@ test("atomic deltas preserve independent publication, media and recovery without
     await installPublication(operator);
     await db.exec("ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO anon,authenticated,service_role; ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO anon,authenticated,service_role;");
     await installIncrementalPublication(operator); await installIncrementalPublication(operator);
-    await installIncrementalWithdrawalRecovery(operator); await installIncrementalWithdrawalRecovery(operator);
+    await withPGliteOwnerTransaction(db, installIncrementalWithdrawalRecovery); await withPGliteOwnerTransaction(db, installIncrementalWithdrawalRecovery);
     const role = (name: string): SqlExecutor => ({ query: <T>(sql: string, values?: unknown[]) => db.transaction(async tx => {
       await tx.exec(`SET LOCAL ROLE ${name}`); return tx.query<T>(sql, values);
     }) });
@@ -215,7 +216,7 @@ test("explicit allowlist withdrawals retain tombstones and cannot bypass publica
       return db.query<T>(sql, values);
     } };
     await installPublication(operator); await installIncrementalPublication(operator);
-    await installIncrementalWithdrawalRecovery(operator);
+    await withPGliteOwnerTransaction(db, installIncrementalWithdrawalRecovery);
     const batch: WebsiteRecord[] = fixtureItems.post.slice(0, 2).map((raw, ordinal) => {
       const item = structuredClone(raw); item.cover = null;
       return { detail: { item, document: { blocks: [], toc: [], completeness: "complete" } },

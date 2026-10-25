@@ -1,5 +1,7 @@
 # 项目需求
 
+N08 后端收尾（2026-10-25）：用户批准 v2 页面提及可选语义标记与标题／目录同步，保留作者普通锚文本、旧未标记兼容和 v1 边界；两个显式增量扩展安装采用固定 owner 会话、单事务和独立受审配方，兼容集群组才复用，历史 SQL／manifest 及 LOGIN 成员不改。仅源码、局部虚构／原生双库验证及常规 develop 交付，不包含真实项目、安装采用、历史重采、任务恢复或发布，见[决定](decisions/2026-10-25-backend-n08-followup.md)和[完整方案](BACKEND_N08_FOLLOWUP_PLAN.md)。
+
 小红书早期失败暂停（2026-10-25）：用户批准 N05 完整源码与离线方案。已验证执行上下文中的早期非 BUSY 错误，独立尝试既有 HTTP 手工闩及本浏览器 lane 暂停；未知 scope 用既有全零占位，不授权执行。异常时不重读损坏配置，保留原始失败、最新暂停／accepted 恢复与全部清理，显式恢复和两 lane 边界保持。真实暂停目录、配置、项目访问、安装恢复和发布不包含，见[决定](decisions/2026-10-25-xhs-early-pause.md)与[实施记录](progress/2026-10-25-xhs-early-pause.md)。
 
 自托管展示图片（2026-10-25）：用户批准独立离线后端实现。Mac 生成宽度不超过1600、不放大的必备最大展示版与400/800副本，服务器只读展示文件；默认媒体地址返回最大展示版，缺档只选已有展示副本，损坏明确失败，不回源原图。新增可选 `ImageAsset.delivery`，由读取层按当前批次补充，不改冻结SQL与同步记录；严格TLS、reader隔离enforce、no-store及现有Vercel/COS行为保留。前端灯箱由Claude接线；真实图片、传输/安装、同步采用、上海部署、域名及发布另行安排，见[决定](decisions/2026-10-25-self-hosted-display-media.md)、[后端说明](SELF_HOSTED_MEDIA.md)与[前端交接](SELF_HOSTED_MEDIA_FRONTEND_HANDOFF.md)。
