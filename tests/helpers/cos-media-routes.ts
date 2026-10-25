@@ -18,7 +18,7 @@ try {
     objects++; const bytes = f.bytes.get(url.pathname.slice("/notionblog/".length));
     return bytes ? new Response(bytes) : new Response(null, {status: 404});
   };
-  Object.assign(process.env, {CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "published",
+  Object.assign(process.env, {DATABASE_READER_ISOLATION: "enforce", CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "published",
     MEDIA_PROVIDER: "storage", MEDIA_THUMBNAILS: "enabled", DATABASE_TLS: "disable", DATABASE_READER_URL: "postgres://fixture:fixture@localhost/db",
     STORAGE_PROVIDER: "cos", COS_BUCKET: "fiction-media-1250000000", COS_REGION: "ap-shanghai", COS_PREFIX: "notionblog",
     COS_SECRET_ID: "fixtureSecretId123", COS_SECRET_KEY: "fixtureSecretKeyForCos123"});

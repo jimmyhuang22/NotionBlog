@@ -19,6 +19,9 @@ test("public sync reader configuration cannot reuse website, evidence or writer 
 });
 
 test("separate public sync LOGIN reads public snapshots but cannot read evidence or write", async t => {
+  const previousMode = process.env.DATABASE_READER_ISOLATION;
+  process.env.DATABASE_READER_ISOLATION = "off";
+  t.after(() => { if (previousMode === undefined) delete process.env.DATABASE_READER_ISOLATION; else process.env.DATABASE_READER_ISOLATION = previousMode; });
   const f = await hostFixture(); t.after(() => f.close());
   await f.db.exec(`CREATE ROLE ${login} LOGIN INHERIT; GRANT nb_reader TO ${login}`);
   const db: SqlExecutor = { query: async <T>(sql: string, values?: unknown[]) => {

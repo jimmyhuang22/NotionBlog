@@ -10,7 +10,7 @@ try {
   await f.db.exec("REVOKE nb_delta_reader FROM fixture_reader; GRANT nb_reader TO fixture_reader");
   const record = f.artifact.collection.records.find(r => r.detail.item.kind === "status")!;
   assert.ok(record);
-  Object.assign(process.env, { CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "published",
+  Object.assign(process.env, { DATABASE_READER_ISOLATION: "enforce", CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: "2", DATABASE_PUBLICATION_MODE: "published",
     DATABASE_READER_URL: f.options.database.readerUrl, DATABASE_TLS: "verify", DATABASE_READ_PROJECTION: "legacy", DATABASE_SEARCH_PROJECTION: "on-demand",
     MEDIA_PROVIDER: "storage", STORAGE_PROVIDER: "supabase", CONTENT_READINESS_SECRET: "a".repeat(64), SITE_CONFIG_JSON: "{}" });
   delete process.env.SITE_CONFIG;
