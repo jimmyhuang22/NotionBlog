@@ -23,6 +23,16 @@ export async function readPrivateFile(path: string, maxBytes = 2 * 1024 * 1024):
     return await handle.readFile("utf8");
   } finally { await handle.close(); }
 }
+function privateJson(text: string) {
+  try { return JSON.parse(text); }
+  catch { throw new WorkerError("MISCONFIGURED"); }
+}
+function lockPid(owner: unknown): number {
+  if (!owner || typeof owner !== "object" || Array.isArray(owner)) throw new WorkerError("MISCONFIGURED");
+  const pid = (owner as Record<string, unknown>).pid;
+  if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 1 || pid > 2147483647) throw new WorkerError("MISCONFIGURED");
+  return pid;
+}
 async function atomicJson(dir: string, name: string, data: unknown) {
   const temp = join(dir, `.tmp-${process.pid}-${randomUUID()}`);
   const handle = await open(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
@@ -57,9 +67,8 @@ export async function acquireLock(dir: string, runId: string): Promise<() => Pro
 export async function unlockStale(dir: string): Promise<void> {
   await privateDirectory(dir);
   const path = join(dir, "worker.lock"), before = await lstat(path);
-  const owner = JSON.parse(await readPrivateFile(path));
-  if (!Number.isSafeInteger(owner.pid) || owner.pid < 1) throw new WorkerError("MISCONFIGURED");
-  try { process.kill(owner.pid, 0); throw new WorkerError("BUSY"); }
+  const pid = lockPid(privateJson(await readPrivateFile(path)));
+  try { process.kill(pid, 0); throw new WorkerError("BUSY"); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
   const after = await lstat(path);
   if (before.ino !== after.ino || before.dev !== after.dev) throw new WorkerError("BUSY");
@@ -88,9 +97,10 @@ export async function saveReport(dir: string, report: RunReport | { runId: strin
 export async function readStatus(dir: string) {
   await privateDirectory(dir);
   const read = async (name: string) => {
-    try { return JSON.parse(await readPrivateFile(join(dir, name))); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+    try { return privateJson(await readPrivateFile(join(dir, name))); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
   };
   const lock = await read("worker.lock");
-  return { locked: Boolean(lock), latestRun: await read("latest-run.json"), lastSuccess: await read("last-success.json") };
+  if (lock !== undefined) lockPid(lock);
+  return { locked: lock !== undefined, latestRun: await read("latest-run.json") ?? null, lastSuccess: await read("last-success.json") ?? null };
 }
