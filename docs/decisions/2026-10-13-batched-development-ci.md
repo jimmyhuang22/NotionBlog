@@ -1,4 +1,5 @@
 # 2026-10-13：日常开发本机验证后合并，CI 集中运行
+状态：已被 [2026-10-22-develop-merge-local-verification](2026-10-22-develop-merge-local-verification.md) 取代。
 
 用户在自托管 CI 排队阻止后端继续合并时提出：“不过CI，直接合并，然后继续开发”，并建议约一两小时做一次。本轮按该行动请求调整 develop，默认间隔取两小时；不将此请求扩大为跳过生产发布验收。
 

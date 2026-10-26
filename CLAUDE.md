@@ -1,6 +1,6 @@
 # 前端与 UI
 
-先读 [开发接手说明](docs/DEVELOPMENT_HANDOFF.md) 和 [前端接手说明](docs/FRONTEND_GUIDE.md)，再读 AGENTS.md、README.md、docs/REQUIREMENTS.md、决策记录与进度记录（`docs/decisions/` 与 `docs/progress/` 下的各项记录，以及 2026-10-12 前的存档 docs/DECISIONS.md 与 docs/PROGRESS.md）。本地若存在 `.local/PROJECT_MEMORY.md` 和 `.local/FRONTEND_PRIVATE_NOTES.md`，一并读取，个人细节不得复制到公共文件。
+先读 [入口说明](docs/START_HERE.md)、AGENTS.md 和 [前端接手说明](docs/FRONTEND_GUIDE.md)；决策、进度与存档按任务检索，读法见入口说明，不要试图通读。本地若存在 `.local/PROJECT_MEMORY.md` 和 `.local/FRONTEND_PRIVATE_NOTES.md`，读其中的当前要求与前端私有记录，个人细节不得复制到公共文件。
 
 Claude 负责视觉、页面、组件与交互；后端、同步、数据库和部署由 Codex 负责。共享工程位于当前根目录，不另外初始化前端项目。
 
@@ -20,6 +20,6 @@ Claude 负责视觉、页面、组件与交互；后端、同步、数据库和�
 
 ## 协作
 
-依赖、契约、fixtures、栏目开关和全局入口属于共享范围，变更前先和用户确认。每项工作从最新 develop 开短期分支、向 develop 开合并请求，按影响范围完成本机验证后自行合并，不必等用户逐个放行，也不等平台检查：目前私人 PR 的平台应用检查为 `SKIPPED`，不算通过；Mac mini 运行器已停用，恢复平台检查后另行约定。不为无关 develop 更新反复同步和检查。存在冲突或依赖／同一逻辑变化时先整合验证；纯说明与记录文档做记录格式、链接、差异和隐私检查，应用／构建输入改变做集中 check／build，具体见 AGENTS.md。发布到 main 仍验收完整集成版本，只由用户合并，除非用户就那一次发布明确指定代为合并。Git 上的文字用英文，文档与界面文案用中文。每次完成在 `docs/progress/` 下新建一个文件（不再编辑 docs/PROGRESS.md），写明页面、组件、验证方式与宽度、限制与下一项；只在演示数据下验证过的要明说。
+依赖、契约、fixtures、栏目开关和全局入口属于共享范围，变更前先和用户确认。每项工作从最新 develop 开短期分支、向 develop 开合并请求，按影响范围完成本机验证后自行合并，不必等用户逐个放行，也不等平台检查；平台检查在 GitHub 托管环境运行，未完成或 `SKIPPED` 都不能写成平台通过。不为无关 develop 更新反复同步和检查。存在冲突或依赖／同一逻辑变化时先整合验证；纯说明与记录文档做记录格式、链接、差异和隐私检查，应用／构建输入改变做集中 check／build，具体见 AGENTS.md。发布到 main 仍验收完整集成版本，只由用户合并，除非用户就那一次发布明确指定代为合并。Git 上的文字用英文，文档与界面文案用中文。每次完成在 `docs/progress/` 下新建一个文件（不再编辑 docs/PROGRESS.md），写明页面、组件、验证方式与宽度、限制与下一项；只在演示数据下验证过的要明说。
 
 develop → main 发布请求打开期间，暂缓向 develop 合并，避免改变受检版本而让检查重排；独立分支可继续开发。等发布合并后恢复日常合并；用户另行明确解除暂停时按其指令执行，具体见 AGENTS.md 的发布窗口约定。
