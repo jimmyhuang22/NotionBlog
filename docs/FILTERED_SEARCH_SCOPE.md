@@ -6,6 +6,8 @@
 
 先执行现有快照、物理父链和中央撤回检查，再做不丢失必要候选的预筛。只有本条语句已经确认的记录可复用资格，其他链接与媒体 owner 继续走原检查，缺失媒体不会恢复。没有学习笔记候选时沿用原投影；无法构造完整必要条件时读取原片段。匹配、排序、完整分页、游标与末尾版本复核仍由同一 repository 完成，不提前截取首屏，也不在请求间缓存资格。
 
+预筛优先使用完整查询；完整词可能跨占位文字、包含标点或超过正则限制时，改为选择可证明必需的连续片段。例如 `python` 末尾可能来自生成的 `Notion page`，不能直接要求原文含有 `python`，但仍可要求原文含有 `pytho`。所选片段本身不得与占位文字相交，保留完整 Unicode 逆像，不截断正则分支；最长 16 字符、每次最多尝试 128 个片段、正则最多 2 KiB。无法证明安全、仅搜索占位文字或运行时 Unicode／locale 不匹配时仍回原路径。此优化只减少数据库候选，最终查询、排序与分页语义不变。
+
 [协议](../database/search-filtered-scope-protocol.json)引用既有规范迁移 [filtered_search_scope_reuse.sql](../supabase/migrations/20261022214425_filtered_search_scope_reuse.sql)，字节保持原样。需要 scoped／search-parts／iterative-walk 及版本五能力，旧 filtered／precomputed 扩展不是前置。缺函数、空摘要或错误摘要明确报错，不回退 mock；搜索能力失败与普通页面能力分开。
 
 公开读取函数沿用专用 reader 的受限 `SECURITY DEFINER` 入口，私有 helper 为 `SECURITY INVOKER`；固定 `search_path=pg_catalog`，PUBLIC、writer 及其他平台角色不取得新入口权限。helper 使用 STABLE 的同语句快照，不能接受 reader 伪造的已授权集合。语义参见 [PostgreSQL STABLE](https://www.postgresql.org/docs/17/xfunc-volatility.html) 与 [Supabase 函数权限](https://supabase.com/docs/guides/database/functions)。

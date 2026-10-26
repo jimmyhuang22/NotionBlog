@@ -73,6 +73,41 @@ async function seed(f: Awaited<ReturnType<typeof setup>>, withReferences = true)
   await f.db.query("SELECT nb_publication_api.activate($1)", [lease.runId]);
   return { lease, rows, course, note, target, assetId };
 }
+
+test("safe anchors reduce the v5 projection and preserve all pages, generated matches and withdrawal", async () => {
+  const f = await setup({ scope: true, filtered: false, precomputed: false });
+  try {
+    const page = new URL("/fictional", "https://" + ["notion", "so"].join("."));
+    const texts = ["python", "ＰＹＴＨＯＮ", "pytho" + page.href, "oﬃce", "two words", "no-match",
+      "eJava", page.href + "Java", "j" + page.href, "Notion page", "Media", "Java Media words", "unrelated content"];
+    const records = texts.map((text, index) => status(index, body(text)));
+    await f.publish(records);
+    for (const mode of modes) {
+      const before = f.repoFor(mode, "on-demand"), after = f.repoFor(mode);
+      for (const q of ["python", "office", "ffi", "fi", "two words", "no-match", "eJava", "jNotion", "Notion page", "Media", "Java Media words"])
+        for (const limit of [1, 3]) {
+          let cursor: string | undefined;
+          do {
+            const query = { q, limit, ...(cursor ? { cursor } : {}) };
+            const expected = await before.search!(query), actual = await after.search!(query);
+            assert.deepEqual(actual, expected, `${mode}/${q}/${limit}`);
+            cursor = actual.nextCursor ?? undefined;
+          } while (cursor);
+        }
+      const baseline = (await before.search!({ q: "python" })).total;
+      assert.equal(baseline, 3, "Includes a match crossing a generated Notion label");
+      const projection = (await f.reader.query<{ result: { records: unknown[] } }>(
+        "SELECT nb_read_api.read_search_filtered_scope($1,ARRAY['status'],$2) AS result", [mode, searchFilterPatterns("python")])).rows[0].result;
+      if (searchFilterPatterns("python").length) assert(projection.records.length < records.length);
+    }
+    await f.db.query("SELECT nb_v2_api.set_denied($1,true)", [records[0].detail.item.id]);
+    for (const mode of modes) {
+      const expected = await f.repoFor(mode, "on-demand").search!({ q: "python" });
+      assert.equal(expected.total, 2);
+      assert.deepEqual(await f.repoFor(mode).search!({ q: "python" }), expected);
+    }
+  } finally { await f.db.close(); }
+});
 async function comparePages(before: ContentRepository, after: ContentRepository, q: string, limit: number) {
   let cursor: string | undefined, total = 0; const ids = new Set<string>();
   do {
