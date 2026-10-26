@@ -6,6 +6,7 @@
 
 | 目标 | 文档 |
 | --- | --- |
+| 刚接手、不知道从哪读 | [入口说明](START_HERE.md) |
 | 了解范围与协作方式 | [项目需求](REQUIREMENTS.md)、[开发约定](../AGENTS.md) |
 | 本机开发、离线构建、有限真实联调 | [开发隔离](DEVELOPMENT_ISOLATION.md) |
 | 配置 Notion 来源与字段 | [Notion 接入](NOTION_SETUP.md)、[内容能力](WEBSITE_CAPABILITIES.md) |
@@ -33,7 +34,7 @@
 - [部署试验](VERCEL_SUPABASE_TRIAL.md)：托管平台、数据库和同步链路的准备顺序。
 - [重构交接](REFACTOR_ROLLOUT.md)：阶段能力、运行切换、验收与回退边界。
 - [开发环境交接](DEVELOPMENT_HANDOFF.md)：依赖、私有输入及接手步骤。
-- [Actions 运行器](GITHUB_ACTIONS_RUNNER.md)：现有私人仓库的检查环境；公开前须另行处理运行器隔离。
+- [Actions 运行器](GITHUB_ACTIONS_RUNNER.md)：检查环境说明；私人阶段的 Mac mini 运行器已退役，公开后使用 GitHub 托管环境。
 - [决策](decisions/README.md)与[进度](progress/README.md)：每项工作独立记录，按日期查看；旧的单文件记录仅为存档。
 
 安装迁移、运行采集器、启动调度、切换生产 provider 和公开仓库是不同操作。配置示例及一次本机测试通过，不代表已经完成真实上线。

@@ -1,6 +1,6 @@
 # 开发接手说明
 
-最后更新：2026-10-13。后续开发集中到 Mac mini；GitHub 私人仓库保存公共源码、测试与文档，设备私有背景和输入单独迁移。本文件是新开发环境的入口；当前上线与重构接线顺序先读 [重构上线准备](REFACTOR_ROLLOUT.md)。
+最后更新：2026-10-13（2026-10-26 修正仓库与检查现状）。后续开发集中到 Mac mini；GitHub 仓库保存公共源码、测试与文档（干净新仓库 2026-10-23 起公开），设备私有背景和输入单独迁移。当前事实与读法先看[入口说明](START_HERE.md)；本文件是新开发环境的入口；当前上线与重构接线顺序先读 [重构上线准备](REFACTOR_ROLLOUT.md)。
 
 ## 开始顺序
 
@@ -94,6 +94,6 @@ node scripts/notion-sync/cli.ts --demo --mode dry-run --state-dir "$SYNC_PRIVATE
 
 ## 自动检查与分支部署
 
-`.github/workflows/check.yml` 保留 main／develop PR 与手动入口，没有 push 或 schedule，也不复用旧树缓存。当前私人 PR 的应用检查跳过；专用 Mac mini 运行器已退役，不再手动派发私人任务。公开后使用标准托管 Ubuntu，完整检查使用 Node 24、安装上述两份锁文件，运行 `npm run check` 和 `npm run build`，该路径仍须实际验收，见[运行说明](GITHUB_ACTIONS_RUNNER.md)。日常 develop 按影响完成本机验证后合并；main 发布规则保持，CI 停用期间如何满足平台验收待用户另行决定。只有仓库只读权限，不读取私人环境或部署 Token；Actions 固定官方提交，checkout 不保留凭据。
+`.github/workflows/check.yml` 保留 main／develop PR 与手动入口，没有 push 或 schedule，也不复用旧树缓存。仓库公开后，合并请求的检查在标准托管 Ubuntu 上运行：Node 24、安装上述两份锁文件，运行 `npm run check` 和 `npm run build`，另有隐私历史检查（2026-10-26 核对，最近的合并请求均已通过），见[运行说明](GITHUB_ACTIONS_RUNNER.md)。专用 Mac mini 运行器已退役。日常 develop 按影响完成本机验证后合并，不等平台检查；main 发布须完整检查通过。只有仓库只读权限，不读取私人环境或部署 Token；Actions 固定官方提交，checkout 不保留凭据。
 
 `vercel.json` 的自动 Git 部署只允许 main，develop 和工作分支不生成新预览；日常合并依赖按影响的本机验证，平台检查恢复另行约定。集中积累改动后再开 develop → main 的发布请求，由用户合并。旧工作分支需要先整合最新 develop 才取得此配置；历史 Preview 保持旧代码。Git 配置不控制手动部署、重新部署或部署钩子，只有用户明确要求时才执行；内容同步和刷新页面不需要部署。配置依据见 [Vercel Git 配置](https://vercel.com/docs/project-configuration/git-configuration)。
