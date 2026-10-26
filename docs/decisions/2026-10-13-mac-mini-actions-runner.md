@@ -1,4 +1,5 @@
 # 2026-10-13：Mac mini 承担仓库 Actions 检查
+状态：已失效。Mac mini 运行器已于 2026-10-22 退役，仓库公开后检查在 GitHub 托管环境运行，见 [AGENTS.md](../../AGENTS.md)。
 
 用户授权安装本仓库的官方原生 runner，并选择系统启动后无需 GUI 登录接单。使用专用普通账户和单个 repository-level runner；程序及注册身份放内盘，任务检出与可重建缓存放独立外置 SSD 目录。GitHub 分发任务，launchd 保活，不引入容器或第二个调度器。
 

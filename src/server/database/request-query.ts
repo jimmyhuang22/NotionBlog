@@ -2,6 +2,7 @@ import type { Pool, PoolClient, QueryConfig } from "pg";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { checkContentReadBudget, type ReadBudget } from "../content-read-budget.ts";
 import { measureContentReadAsync } from "../content-read-timing.ts";
+import type { ResultQueryPlan } from "./result-response-budget.ts";
 
 const unavailable = () => new ContentServiceError("CONTENT_UNAVAILABLE", "The content read was cancelled or exceeded its deadline.");
 const remaining = (budget: ReadBudget) => Math.max(0, Math.floor(budget.deadline - budget.now()));
@@ -34,8 +35,10 @@ function acquire(pool: Pool, budget: ReadBudget): Promise<PoolClient> {
  * destruction of only this query's client on cancellation/timeout. */
 export async function requestPoolQuery<T>(pool: Pool, budget: ReadBudget, text: string, values?: unknown[]): Promise<{ rows: T[] }> {
   let stage: "acquire" | "query" = "acquire";
+  let resultPlan: ResultQueryPlan | undefined;
   try {
     checkContentReadBudget();
+    resultPlan = budget.resultBudget?.prepare(text, values);
     const client = await measureContentReadAsync("database-acquire", () => acquire(pool, budget));
     let released = false, failed = false;
     const onError = () => {}; // Keep active-client transport errors handled until release.
@@ -49,10 +52,10 @@ export async function requestPoolQuery<T>(pool: Pool, budget: ReadBudget, text: 
       const driverLimit = pool.options.query_timeout;
       const timeout = Math.max(1, Math.min(remaining(budget), typeof driverLimit === "number" && driverLimit > 0 ? driverLimit : Infinity));
       // pg 8.23 supports this per-query limit; @types/pg omits the driver field.
-      const config: QueryConfig & { query_timeout: number } = { text, values, query_timeout: timeout };
+      const config: QueryConfig & { query_timeout: number } = { text: resultPlan?.text ?? text, values: resultPlan?.values ?? values, query_timeout: timeout };
       const result = await measureContentReadAsync("database-roundtrip", () => client.query(config));
       checkContentReadBudget();
-      return { rows: result.rows as T[] };
+      return { rows: resultPlan ? resultPlan.accept<T>(result.rows) : result.rows as T[] };
     } catch (error) { failed = true; throw error; }
     finally {
       budget.signal.removeEventListener("abort", abort);
@@ -60,6 +63,7 @@ export async function requestPoolQuery<T>(pool: Pool, budget: ReadBudget, text: 
       client.removeListener("error", onError);
     }
   } catch (error) {
+    resultPlan?.fail();
     const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
     const safeCode = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : "UNKNOWN";
     const reason = budget.signal.aborted ? "aborted" : remaining(budget) === 0 ? "deadline"

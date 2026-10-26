@@ -1,4 +1,5 @@
 # 2026-10-13：合并到 develop 不必等用户逐个放行
+状态：部分取代。合并条件以 [2026-10-22-develop-merge-local-verification](2026-10-22-develop-merge-local-verification.md) 为准；“不必等用户逐个放行”仍有效。
 
 用户确认（2026-10-13 在负责 UI/UX 的 Claude 对话里提出“把这个规定改掉”，并在随后的选项里选定“只放开 develop”）。
 

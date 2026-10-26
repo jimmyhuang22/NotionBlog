@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type FocusEvent, type MouseEvent, type RefObject } from "react";
+import { useEffect, useRef, type FocusEvent, type MouseEvent, type RefObject } from "react";
 
 /**
  * How the site's overlays open and go away, in one place.
@@ -25,19 +25,21 @@ export function closeOnBackdrop(event: MouseEvent<HTMLDialogElement>) {
 
 /** While a menu is open, Escape closes it and puts focus back on its button, and a press outside it closes it. */
 export function useMenuDismiss(open: boolean, close: () => void, group: RefObject<HTMLElement | null>, button: RefObject<HTMLElement | null>) {
+  // `close` is a fresh function on every render; the listeners read the latest one, so they are set up only when the menu opens.
+  const latestClose = useRef(close);
+  useEffect(() => { latestClose.current = close; });
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      close();
+      latestClose.current();
       button.current?.focus();
     };
-    const onDown = (event: PointerEvent) => { if (!group.current?.contains(event.target as Node)) close(); };
+    const onDown = (event: PointerEvent) => { if (!group.current?.contains(event.target as Node)) latestClose.current(); };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
-    // `close` is a fresh function on every render that only closes the menu; opening and closing are what matter here.
-  }, [open]);
+  }, [open, group, button]);
 }
 
 /** For a menu's onBlur: tabbing past its last entry leaves the group, which closes it as well. */
