@@ -55,7 +55,7 @@ test('actual build wrapper excludes inherited and dotenv credentials before its 
 test('offline development replaces loaded real providers, removes credentials and blocks external transports before lookup',async()=>{
  const script=`
  const {configureDevelopmentEnvironment}=await import(${JSON.stringify(environment)});
- const env={CONTENT_PROVIDER:'database',SOCIAL_PROVIDER:'database',DATABASE_READER_URL:'private-database',SOCIAL_READER_DATABASE_URL:'private-social',NOTION_TOKEN:'private-notion',COS_SECRET_KEY:'private-cos',SITE_CONFIG_JSON:'{"avatar":"https://example.invalid/private.png"}',SITE_INDEXING_ENABLED:'true',NEXT_PUBLIC_REMOTE:'private-public',PORT:'3199'};
+ const env={CONTENT_PROVIDER:'database',SOCIAL_PROVIDER:'database',DATABASE_READER_URL:'private-database',SOCIAL_READER_DATABASE_URL:'private-social',NOTION_TOKEN:'private-notion',COS_SECRET_KEY:'private-cos',SITE_CONFIG_JSON:'{"avatar":"https://example.invalid/private.png"}',SITE_INDEXING_ENABLED:'true',NEXT_PUBLIC_REMOTE:'private-public',DATABASE_SEARCH_PROJECTION:'filtered-scope',DATABASE_SEARCH_RESULT_BUDGET:'bounded-v1',PORT:'3199'};
  const mode=configureDevelopmentEnvironment(env);
  const net=await import('node:net'),tls=await import('node:tls'),http=await import('node:http');
  let lookups=0,blocked=0;
@@ -65,9 +65,9 @@ test('offline development replaces loaded real providers, removes credentials an
  await new Promise((r,j)=>{server.once('error',j);server.listen(0,'127.0.0.1',r)});
  const response=await fetch('http://127.0.0.1:'+server.address().port);
  const body=await response.text();server.closeAllConnections();await new Promise(r=>server.close(r));
- console.log(JSON.stringify({mode,content:env.CONTENT_PROVIDER,social:env.SOCIAL_PROVIDER,indexing:env.SITE_INDEXING_ENABLED,site:env.SITE_CONFIG_JSON,secrets:['DATABASE_READER_URL','SOCIAL_READER_DATABASE_URL','NOTION_TOKEN','COS_SECRET_KEY','NEXT_PUBLIC_REMOTE'].map(k=>env[k]),blocked,lookups,body}));`;
+ console.log(JSON.stringify({mode,content:env.CONTENT_PROVIDER,social:env.SOCIAL_PROVIDER,search:env.DATABASE_SEARCH_PROJECTION,resultBudget:env.DATABASE_SEARCH_RESULT_BUDGET,indexing:env.SITE_INDEXING_ENABLED,site:env.SITE_CONFIG_JSON,secrets:['DATABASE_READER_URL','SOCIAL_READER_DATABASE_URL','NOTION_TOKEN','COS_SECRET_KEY','NEXT_PUBLIC_REMOTE'].map(k=>env[k]),blocked,lookups,body}));`;
  const result=await execute(process.execPath,['--input-type=module','-e',script]);
- assert.deepEqual(JSON.parse(result.stdout.trim()),{mode:'offline',content:'mock',social:'mock',indexing:'false',site:'{}',secrets:['','','','',''],blocked:4,lookups:0,body:'local-only'});
+ assert.deepEqual(JSON.parse(result.stdout.trim()),{mode:'offline',content:'mock',social:'mock',search:'on-demand',resultBudget:'off',indexing:'false',site:'{}',secrets:['','','','',''],blocked:4,lookups:0,body:'local-only'});
 });
 
 test('direct Next dev/build/start are isolated after dotenv without a platform production target',async()=>{
