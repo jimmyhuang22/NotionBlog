@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scopedReader, SCOPED_FILTERED_SEARCH_SQL, SCOPED_SEARCH_SQL, SCOPED_VERSION_SQL } from "../src/server/database/scoped-reads.ts";
+import { scopedReader, SCOPED_FILTERED_SEARCH_SQL, SCOPED_FILTERED_SCOPE_SEARCH_SQL, SCOPED_SEARCH_SQL, SCOPED_VERSION_SQL } from "../src/server/database/scoped-reads.ts";
 import type { SearchProjectionMode } from "../src/server/database/scoped-reads.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 
@@ -14,15 +14,15 @@ function driver(check: (optional: boolean) => Promise<boolean>) {
   const db: SqlExecutor = { async query<T>(sql: string) {
     let result: unknown;
     if (sql.includes("nb_read_api.check_capability(")) {
-      const optional = /check_search_(filtered|precomputed)\(/.test(sql);
+      const optional = /check_search_(filtered_scope|filtered|precomputed)\(/.test(sql);
       checks.push(optional); result = await check(optional);
     } else { reads.push(sql); result = reads.length; }
     return { rows: [{ result } as T] };
   } };
   return { db, checks, reads };
 }
-const modes: SearchProjectionMode[] = ["filtered", "precomputed"];
-const searchSQL = (mode: SearchProjectionMode) => mode === "filtered" ? SCOPED_FILTERED_SEARCH_SQL : SCOPED_SEARCH_SQL;
+const modes: SearchProjectionMode[] = ["filtered", "precomputed", "filtered-scope"];
+const searchSQL = (mode: SearchProjectionMode) => mode === "filtered" ? SCOPED_FILTERED_SEARCH_SQL : mode === "filtered-scope" ? SCOPED_FILTERED_SCOPE_SEARCH_SQL : SCOPED_SEARCH_SQL;
 
 for (const mode of modes) {
   test(`${mode}: ordinary reads never require the optional extension or cache content`, async () => {

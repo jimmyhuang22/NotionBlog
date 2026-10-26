@@ -5,6 +5,7 @@ import type { ContentKind } from "../../../contracts/content.ts";
 import { isContentKind } from "../../../config/features.ts";
 import { contentErrorResponse } from "./http.ts";
 import { withContentReadBudget } from "../../server/content-read-budget.ts";
+import { searchResultBudget } from "../../server/database/result-response-budget.ts";
 const headers={"Cache-Control":"private, no-store","X-Robots-Tag":"noindex, nofollow"};
 function query(request: Request,search=false): CursorQuery|SearchQuery {
   const values: Record<string,unknown>={};
@@ -18,7 +19,8 @@ function query(request: Request,search=false): CursorQuery|SearchQuery {
 }
 export async function websiteQueryResponse(request: Request,repository: ContentRepository,type:"timeline"|"search") {
   try {
-    const data=await withContentReadBudget(request.signal, async () => type==="timeline"?await repository.getTimeline!(query(request)):await repository.search!(query(request,true) as SearchQuery));
+    const data=await withContentReadBudget(request.signal, async () => type==="timeline"?await repository.getTimeline!(query(request)):await repository.search!(query(request,true) as SearchQuery),
+      { resultBudget: type==="search"?searchResultBudget():undefined });
     const response=Response.json({data},{headers});
     return type==="search"?response:publicHttpResponse(request,response,"content");
   }catch(error){return contentErrorResponse(error);}
