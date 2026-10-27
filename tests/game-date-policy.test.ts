@@ -63,13 +63,12 @@ test("stable archives retain playing activity and F44 completion dates independe
     const item = projectGameDates(game({ status, playedDate: day("2023-01-02", "2023-08-03"), lastPlayedDate: moment("2025-12-31T13:30:00Z") }), zone);
     const detail = { item, document: null };
     const events = timelineEvents({ version: "same", records: [detail, detail] }, zone);
-    assert.equal(events.length, 1);
-    assert.equal(events[0]!.type, status === "clear" ? "game-cleared" : `game-${status}`);
-    assert.deepEqual(events[0]!.occurredAt, day(status === "playing" ? "2026-01-01" : "2023-08-03"));
+    assert.deepEqual(events.map(event => [event.type, event.occurredAt]), status === "playing"
+      ? [["game-playing", day("2026-01-01")]]
+      : [["game-playing", day("2026-01-01")], [status === "clear" ? "game-cleared" : "game-platinumed", day("2023-08-03")]]);
     assert.equal(contentYear(item, zone), 2023);
     const noPersonal = timelineEvents({ version: "same", records: [{ ...detail, item: projectGameDates({ ...item, playedDate: null }, zone) }] }, zone);
-    if (status === "playing") assert.deepEqual(noPersonal[0]!.occurredAt, day("2026-01-01"));
-    else assert.deepEqual(noPersonal, []);
+    assert.deepEqual(noPersonal.map(event => [event.type, event.occurredAt]), [["game-playing", day("2026-01-01")]]);
   }
 });
 
