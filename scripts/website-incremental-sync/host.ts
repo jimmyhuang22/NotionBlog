@@ -13,8 +13,8 @@ import { WorkerError } from "../notion-sync/errors.ts";
 import { openIncrementalQueue, type QueueTicket } from "./queue.ts";
 import { openContentCache, ContentCacheError, contentCacheBaselineDigest, type ContentCacheStore, type ContentCacheBaselineProof } from "./content-cache.ts";
 import { openStudyCheckpoint, StudyCheckpointError } from "./study-checkpoint.ts";
-import { createDatabaseStudyBaselineReader, initializeStudyBaseline, validateStudyBaselineCollection } from "./study-baseline.ts";
-import { createDatabaseContentBaselineReader, readContentBaselineProof } from "./content-baseline.ts";
+import { createDatabaseStudyBaselineReader, initializeStudyBaseline, validateStudyBaselineCollection, StudyBaselineError } from "./study-baseline.ts";
+import { createDatabaseContentBaselineReader, readContentBaselineProof, ContentBaselineError } from "./content-baseline.ts";
 import { initializeStudyAndContentBaseline } from "./study-shared-baseline.ts";
 import { initializeDirectoryBaseline, type DirectoryBaselineCapture } from "./discovery-baseline.ts";
 import { createDatabasePublicationPort } from "./publication-port.ts";
@@ -41,6 +41,7 @@ export interface IncrementalHostOptions extends HostBudgetOptions {
   freezeEnabled?: boolean; target?: { sourceKey: string; pageKey: string };
   refreshFrozenGroup?: string; expectedFreezeGeneration?: string;
   expectedPublicationRevision?: string;
+  maxBaselineReads?: number;
 }
 export interface IncrementalHostDependencies {
   /** Internal transport seam only. The CLI always opens the reviewed real binding. */
@@ -51,7 +52,7 @@ export interface IncrementalHostDependencies {
 function safeCode(e: unknown): string {
   if (e instanceof WorkerError) return e.code === "BUSY" ? "HOST_BUSY" : "HOST_PRIVATE_STATE_INVALID";
   if (e instanceof IncrementalHostError || e instanceof ContentCacheError || e instanceof StudyCheckpointError ||
-    e instanceof IncrementalDatabaseError || e instanceof PublicationDeltaError) return e.code;
+    e instanceof IncrementalDatabaseError || e instanceof PublicationDeltaError || e instanceof StudyBaselineError || e instanceof ContentBaselineError) return e.code;
   return "HOST_UNAVAILABLE";
 }
 function same(a: unknown, b: unknown) { return canonicalJson(a) === canonicalJson(b); }
@@ -79,6 +80,9 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
   websiteCollectionTimeZone(config);
   const studyKeys = config.sources.filter(s => s.kind === "course" || s.kind === "study-note").map(s => s.key);
   const tasks = options.maxTasks ?? 20, sourceLimit = options.maxSources ?? 3;
+  const baselineReads = options.maxBaselineReads ?? 2000;
+  if (!Number.isInteger(baselineReads) || baselineReads < 1 || baselineReads > 20000 ||
+      options.maxBaselineReads !== undefined && options.command !== "initialize") hostFail("HOST_INPUT_INVALID");
   if (!["initialize", "recover", "run"].includes(options.command) || !sourceKeys.length || sourceKeys.length > 50 || !studyKeys.length ||
     config.sources.some(s => s.kind === "course" ? s.publication.mode !== "all" : s.kind === "study-note" && s.publication.mode !== "course-descendants") ||
     !Number.isInteger(tasks) || tasks < 1 || tasks > 50 || !Number.isInteger(sourceLimit) || sourceLimit < 1 || sourceLimit > 50 ||
@@ -123,19 +127,19 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
         // Only this invocation's complete independent read can supply both
         // installations. A receipt or partially installed cache cannot do so.
         const result = await hostAwait(budget, () => initializeStudyAndContentBaseline({
-          content: { baseline, fullRunId: artifact.fullRunId, store: cache!, reader: createDatabaseContentBaselineReader(db!.reader) },
+          content: { baseline, fullRunId: artifact.fullRunId, store: cache!, reader: createDatabaseContentBaselineReader(db!.reader), maxReads: baselineReads },
           collection: artifact.collection, config, deniedPageIds: exclusions, studyStore: study!,
         }, budget.signal));
         proof = { ...baseline.state, readerVerified: true, complete: true, records: result.content.records,
           media: result.content.media, contentDigest: result.content.contentDigest };
       } else {
         const verified = await hostAwait(budget, () => readContentBaselineProof({ baseline, fullRunId: artifact.fullRunId, store: cache!,
-          reader: createDatabaseContentBaselineReader(db!.reader) }, budget.signal)); budget.guard();
+          reader: createDatabaseContentBaselineReader(db!.reader), maxReads: baselineReads }, budget.signal)); budget.guard();
         if (!hasContent) cache.initialize(verified.baseline, verified.proof);
         if (previous) {
           if (previous.version !== artifact.state.publicationRevision || !same(previous.entries, artifact.collection.baseline.entries)) hostFail("HOST_BASELINE_CONFLICT");
         } else await hostAwait(budget, () => initializeStudyBaseline({ collection: artifact.collection, config, deniedPageIds: exclusions, fullRunId: artifact.fullRunId,
-          store: study!, reader: createDatabaseStudyBaselineReader(db!.reader) }, budget.signal));
+          store: study!, reader: createDatabaseStudyBaselineReader(db!.reader), maxReads: baselineReads }, budget.signal));
         proof = verified.proof;
       }
       const current = await hostAwait(budget, () => readerState(budget.signal)); budget.guard();

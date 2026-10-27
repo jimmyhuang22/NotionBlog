@@ -14,6 +14,8 @@
 
 `initialize ... --artifact /absolute/private/baseline.json` 消费同一次已接受完整发布的私有工件：`format=incremental-baseline-v1`、真实完整发布 `fullRunId`、独立读回的 `state`、`collectWebsiteStudyBaseline` 的 `collection`、该次全部 `media` 描述、`deniedPageIds` 和同次 `captureDirectoryMetadata(...).seal(records)` 得到的 `directory`。该文件为 600、最多 48 MiB；不得从旧运行计数、公开 DTO、旧单课快照或再爬一次的来源拼造。
 
+首次可显式传 `--baseline-reads 3000` 调整完整页读回上限（默认 2,000、最高 20,000），只允许 initialize，不能放大日常 run。学习检查点上限 32 MiB、带同次记录的 collection 上限 64 MiB，工件文件仍最多 48 MiB，增量提交及日常预算保持原值。
+
 入口独立回读完整内容／媒体集合及正文证明，首次两个缓存都缺失时共用这一次实际完整读回，再验证学习排序 companion，不重复读取学习正文。中断重试时已有同版本缓存必须与完整输入逐项匹配，并重新完成独立完整证明，缺失的那份单独安装，不改版本字符串或覆盖原内容。最后确认全局状态未变，事务保存目录种子，再持久写 `incremental-ready.json`。任一步失败均不能进入发现；取消和中断可用原工件重试。目录种子不清 pending／unknown，不制造水位；首次仍扫描元数据，既有未变正文不会全部重新排队。正常周期不重复基线证明或来源全量采集。
 
 ## 恢复与单周期

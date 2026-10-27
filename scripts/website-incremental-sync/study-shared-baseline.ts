@@ -33,7 +33,7 @@ export async function initializeStudyAndContentBaseline(options: SharedStudyBase
   let config: SharedStudyBaselineOptions["config"], denied: Set<string>;
   try {
     if (Buffer.byteLength(JSON.stringify({ collection: options.collection, baseline: options.content.baseline })) >
-        64 * 1024 * 1024) fail("STUDY_BASELINE_BUDGET_EXCEEDED");
+        128 * 1024 * 1024) fail("STUDY_BASELINE_BUDGET_EXCEEDED");
     collection = structuredClone(options.collection); baseline = structuredClone(options.content.baseline);
     config = structuredClone(options.config); denied = new Set(options.deniedPageIds);
     validateStudyBaselineCollection(collection, config, denied);

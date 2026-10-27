@@ -11,6 +11,7 @@ import { INCREMENTAL_LOGIN_SQL } from "../../src/server/database/incremental-con
 import { createLocalMediaStorage } from "../../src/server/database/local-storage.ts";
 import { createSupabaseStorage, verifyMediaBytes, type ObjectStorage } from "../../src/server/database/storage.ts";
 import { configuredCosStorage, storageProvider, thumbnailStorageProvider } from "../../src/server/database/cos-config.ts";
+import { createStorageReaderToken } from "../../src/server/database/reader-auth.ts";
 import { parseWebsiteNotionConfig } from "../../src/server/notion/website-config.ts";
 import { configDigest } from "../../src/server/database/website-validation.ts";
 import { readPrivateFile, privateDirectory } from "../notion-sync/state.ts";
@@ -63,6 +64,7 @@ export async function managementMain(args: string[], env: NodeJS.ProcessEnv = pr
   let closed = false;
   const close = async () => { if (!closed) { closed = true; await closeOwnerPool(pool, client, false); } };
   const stores = new Map<boolean, ObjectStorage>(); let sourceConfig: ReturnType<typeof parseWebsiteNotionConfig> | undefined;
+  let storageToken: ReturnType<typeof createStorageReaderToken> | undefined;
   const settings = async () => sourceConfig ??= parseWebsiteNotionConfig(JSON.parse(await readPrivateFile(config.sourceConfigPath)));
   const queue = async () => { const source = await settings(); return openIncrementalQueue(join(config.runtimeDirectory, "queue"), {digest: configDigest(source), sourceKeys: source.sources.map(s => s.key)}); };
   const required = ["nb_freeze_api.check_capability(text)", "nb_freeze_api.read_state()", "nb_freeze_api.preview(text,text)",
@@ -86,7 +88,10 @@ export async function managementMain(args: string[], env: NodeJS.ProcessEnv = pr
         const fetcher: typeof fetch = (url, init) => fetch(url, {...init, signal: AbortSignal.any([signal, ...(init?.signal ? [init.signal] : [])])});
         storage = env.DATABASE_MEDIA_DIRECTORY ? createLocalMediaStorage(env.DATABASE_MEDIA_DIRECTORY, env.SYNC_DATABASE_URL ?? "", "reader") :
           (thumbnail ? thumbnailStorageProvider(env) : storageProvider(env)) === "cos" ? configuredCosStorage(env, "reader", {fetch: fetcher}) :
-          createSupabaseStorage({url: env.STORAGE_URL ?? "", bucket: env.STORAGE_BUCKET ?? "", apiKey: env.STORAGE_API_KEY ?? "", token: env.STORAGE_READ_TOKEN ?? "", role: "reader", fetch: fetcher});
+          createSupabaseStorage({url: env.STORAGE_URL ?? "", bucket: env.STORAGE_BUCKET ?? "", apiKey: env.STORAGE_API_KEY ?? "",
+            token: storageToken ??= createStorageReaderToken({storageUrl: env.STORAGE_URL ?? "", apiKey: env.STORAGE_API_KEY ?? "",
+              email: env.STORAGE_READER_EMAIL, password: env.STORAGE_READER_PASSWORD, userId: env.STORAGE_READER_USER_ID,
+              staticToken: env.STORAGE_READ_TOKEN, fetch: fetcher}), role: "reader", fetch: fetcher});
         stores.set(thumbnail, storage);
       }
       signal.throwIfAborted(); verifyMediaBytes(media, await storage.read(media)); signal.throwIfAborted();
