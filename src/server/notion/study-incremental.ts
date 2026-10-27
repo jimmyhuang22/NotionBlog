@@ -61,7 +61,7 @@ function complete(doc:ContentDocument|null) {
 }
 function index(state:StudyCheckpoint):Map<string,StudyEntry> {
   if(!/^[A-Za-z0-9:._-]{1,160}$/.test(state.version)||!/^[a-f0-9]{64}$/.test(state.sourceDigest)||!Array.isArray(state.entries)||state.entries.length>20000)bad();
-  if(Buffer.byteLength(JSON.stringify(state))>16*1024*1024)bad();
+  if(Buffer.byteLength(JSON.stringify(state))>32*1024*1024)bad();
   const result=new Map<string,StudyEntry>();
   for(const e of state.entries){
     const i=item(e);if(!["course","study-note"].includes(i.kind)||normalizeId(i.id)!==i.id||result.has(i.id))bad();
