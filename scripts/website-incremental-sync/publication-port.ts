@@ -4,6 +4,7 @@ import type { SqlExecutor } from "../../src/server/database/sql.ts";
 import { readPublishedRecord, verifyPublishedDelta } from "../../src/server/database/incremental-reader.ts";
 import { normalizeId } from "../../src/server/notion/config.ts";
 import type { QueueTicket } from "./queue.ts";
+import { createFreezeStore, FreezeError } from "../../src/server/database/freeze.ts";
 
 /** Structural match for the separately owned createIncrementalPublisher helper. */
 export interface DeltaPublisher<T extends PreparedDelta> {
@@ -16,6 +17,8 @@ const REJECTIONS = new Map([
   ["DELTA_POLICY_CHANGED", false], ["DELTA_OPERATION_CONFLICT", false],
   ["DELTA_WITHDRAWAL_INVALID", false], ["DELTA_INPUT_INVALID", false],
   ["DELTA_DEPENDENCY_MISSING", false],
+  ["FREEZE_PROTECTED", false], ["FREEZE_PREVIEW_STALE", false], ["FREEZE_NOT_FROZEN", false],
+  ["FREEZE_NOT_FOUND", false], ["FREEZE_OPERATION_CONFLICT", false],
 ]);
 function guard(signal: AbortSignal) { if (signal.aborted) throw new Error("CANCELLED"); }
 
@@ -31,7 +34,7 @@ export function createIncrementalPublicationPort<T extends PreparedDelta>(publis
       guard(signal);
       try { return { outcome: "committed", receipt: await publisher.publish(operationId, delta) }; }
       catch (error) {
-        if (error instanceof PublicationDeltaError && REJECTIONS.has(error.code)) {
+        if ((error instanceof PublicationDeltaError || error instanceof FreezeError) && REJECTIONS.has(error.code)) {
           return { outcome: "rejected", code: error.code, retryable: REJECTIONS.get(error.code)! };
         }
         throw error;
@@ -42,8 +45,12 @@ export function createIncrementalPublicationPort<T extends PreparedDelta>(publis
 }
 
 /** Explicit reviewed SQL bindings. Caller owns separate role/TLS-verified connections. */
-export function createDatabasePublicationPort(writer: SqlExecutor, reader: SqlExecutor) {
-  return createIncrementalPublicationPort(createIncrementalPublisher(writer), (receipt, signal) => verifyPublishedDelta(reader, receipt, signal));
+export function createDatabasePublicationPort(writer: SqlExecutor, reader: SqlExecutor, refresh?: () => { groupId: string; generation: string }) {
+  const publisher = createIncrementalPublisher(writer);
+  return createIncrementalPublicationPort(refresh ? { ...publisher, publish(operationId, delta) {
+    const selected = refresh();
+    return createFreezeStore(writer).refresh(operationId, selected.groupId, selected.generation, delta);
+  } } : publisher, (receipt, signal) => verifyPublishedDelta(reader, receipt, signal));
 }
 export function createDatabasePublishedPageReader(reader: SqlExecutor) {
   return (ticket: QueueTicket, state: PublicationState, signal: AbortSignal) => readPublishedRecord(reader,

@@ -25,7 +25,7 @@ function supportedNamespace(hybrid: boolean): string {
   const allowed = hybrid ? "'nb_v2_api','nb_v2_media','nb_v2_media_api'" : "'nb_v2_api'";
   return `NOT EXISTS(SELECT FROM pg_namespace WHERE
     (nspname LIKE 'nb\\_v2\\_%' ESCAPE '\\' AND nspname NOT IN (${allowed})) OR
-    nspname IN ('nb_publication','nb_publication_api','nb_delta','nb_delta_api','nb_study','nb_study_api'))`;
+    nspname IN ('nb_publication','nb_publication_api','nb_delta','nb_delta_api','nb_study','nb_study_api','nb_freeze','nb_freeze_api'))`;
 }
 type Row = Record<string, unknown>;
 interface WebsiteArchiveBase {

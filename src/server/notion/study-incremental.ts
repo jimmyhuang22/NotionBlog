@@ -83,7 +83,7 @@ function index(state:StudyCheckpoint):Map<string,StudyEntry> {
 /** Signals have no authority to delete/publish: read the current source first.
  * Bodies are read only for signalled/new/changed pages; dependent metadata and
  * stored AST links are updated without downloading their bodies or media. */
-export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:string[],source:StudyChangeSource,maxReads=200):Promise<StudyDelta> {
+export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:string[],source:StudyChangeSource,maxReads=200,frozenPageIds:ReadonlySet<string>=new Set()):Promise<StudyDelta> {
   const before=index(checkpoint);
   if(source.sourceDigest!==checkpoint.sourceDigest)throw new ContentServiceError("MISCONFIGURED","Study source scope changed; a new baseline is required.");
   if(!Number.isInteger(maxReads)||maxReads<1||maxReads>2000||!Array.isArray(pageIds)||pageIds.length>maxReads)bad();
@@ -96,6 +96,7 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
   const withdrawalReasons=new Map<string,StudyDelta["withdrawalEvidence"][number]["reason"]>();let reads=0;
   const enqueue=(value:string,document:boolean,children:boolean)=>{
     const id=normalizeId(value),completed=done.get(id);
+    if(frozenPageIds.has(id))return;
     if(completed&&(!document||completed.document)&&(!children||completed.children))return;
     const pending=queue.get(id);queue.set(id,{document:document||pending?.document===true,children:children||pending?.children===true});
   };
@@ -114,6 +115,7 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
     const observation=await source.read(id,options);done.set(id,{document:options.document||done.get(id)?.document===true,children:options.children||done.get(id)?.children===true});
     if(observation.state==="withdrawn"){
       if(!["archived","deleted","out-of-scope","denied"].includes(observation.reason))bad();
+      if(descendants(id).some(key=>frozenPageIds.has(key)))bad();
       directlyWithdrawn.add(id);
       if(before.has(id))withdrawalReasons.set(id,observation.reason);
       for(const key of [id,...descendants(id)]){
@@ -153,7 +155,10 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
     if(previous&&(item(previous).title!==item(next).title||parent(previous)!==parent(next)||course(previous)!==course(next)))for(const dependent of descendants(id))enqueue(dependent,false,false);
     if(options.children){
       if(!Array.isArray(observation.children)||observation.children.length>20000)bad();
-      const children=observation.children,seen=new Set<string>();
+      const children=[...observation.children],seen=new Set<string>();
+      // A live parent's directory cannot implicitly unfreeze a missing frozen child.
+      for(const [key,e] of current)if(parent(e)===id&&frozenPageIds.has(key)&&!children.some(child=>child.id===key))
+        children.push({id:key,position:e.position??e.record.evidence.ordinal,updatedAt:item(e).updatedAt});
       for(const child of children){
         if(normalizeId(child.id)!==child.id||seen.has(child.id)||child.id===id||!Number.isSafeInteger(child.position)||child.position<0)bad();seen.add(child.id);
         if(!directlyWithdrawn.has(child.id))removed.delete(child.id);
@@ -169,13 +174,13 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
   for(const [id,children] of childLists){
     if(!current.has(id))continue;
     const listed=new Set(children.map(c=>c.id));
-    for(const child of children){const e=current.get(child.id);if(!e||parent(e)!==id)bad();e.position=child.position;}
+    for(const child of children){const e=current.get(child.id);if(!e||parent(e)!==id)bad();if(!frozenPageIds.has(child.id))e.position=child.position;}
     for(const [key,e] of current)if(parent(e)===id&&!listed.has(key))bad();
   }
   const hrefChanges:StudyDelta["hrefChanges"]=[];
   for(const [id,e] of before){const updated=current.get(id);if(!updated||item(updated).href!==item(e).href||item(updated).title!==item(e).title)hrefChanges.push({previous:item(e).href,current:updated?{href:item(updated).href,title:item(updated).title}:null});}
   const links=new Map(hrefChanges.map(c=>[c.previous,c.current]));
-  for(const e of current.values())e.record.detail=rewriteStudyLinks(e.record.detail,links) as typeof e.record.detail;
+  for(const e of current.values())if(!frozenPageIds.has(item(e).id))e.record.detail=rewriteStudyLinks(e.record.detail,links) as typeof e.record.detail;
   const courses=new Set<string>();
   for(const [id,e] of before)if(!current.has(id)||!equal(e,current.get(id)))courses.add(course(e));
   for(const [id,e] of current)if(!before.has(id)||!equal(e,before.get(id)))courses.add(course(e));
@@ -183,7 +188,7 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
   for(const id of [...courses].sort()){
     const root=current.get(id);if(!root){directories.push({courseId:id,tree:null,pages:0,maxDepth:0});continue;}
     const notes=studyPreorder([...current.values()].filter(e=>item(e).kind==="study-note"&&course(e)===id).map(e=>({item:item(e) as StudyNote,override:e.override,bodyPosition:e.position??undefined})));
-    for(const [ordinal,note] of notes.entries())current.get(note.id)!.record.evidence.ordinal=ordinal;
+    for(const [ordinal,note] of notes.entries())if(!frozenPageIds.has(note.id))current.get(note.id)!.record.evidence.ordinal=ordinal;
     const tree=studyTree(notes,id)!;
     const depth=(nodes:CourseTree["nodes"],level=1):number=>nodes.reduce((m,n)=>Math.max(m,level,depth(n.children??[],level+1)),0);
     directories.push({courseId:id,tree,pages:notes.length,maxDepth:depth(tree.nodes)});

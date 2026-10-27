@@ -28,6 +28,7 @@ import { createHostBudget, hostAwait, hostFail, IncrementalHostError, type HostB
 import { readHostJson, writeHostJson } from "./host-state.ts";
 import type { RuntimeSources } from "./runtime-sources.ts";
 import { createHostResources, type RegisterHostCleanup } from "./host-resources.ts";
+import { createFreezeStore, type FreezeState } from "../../src/server/database/freeze.ts";
 
 export interface IncrementalBaselineArtifact {
   format: "incremental-baseline-v1"; fullRunId: string; state: PublicationState;
@@ -37,12 +38,15 @@ type Database = Awaited<ReturnType<typeof openIncrementalDatabase>>;
 export interface IncrementalHostOptions extends HostBudgetOptions {
   command: "initialize" | "recover" | "run"; config: unknown; lockDirectory: string; runtimeDirectory: string;
   database: Omit<IncrementalDatabaseOptions, "configDigest">; artifactPath?: string; maxTasks?: number; maxSources?: number;
+  freezeEnabled?: boolean; target?: { sourceKey: string; pageKey: string };
+  refreshFrozenGroup?: string; expectedFreezeGeneration?: string;
+  expectedPublicationRevision?: string;
 }
 export interface IncrementalHostDependencies {
   /** Internal transport seam only. The CLI always opens the reviewed real binding. */
   database?(options: IncrementalDatabaseOptions, signal: AbortSignal): Promise<Database>;
   /** Lazy: never constructed or called during initialize, recovery or blocked startup. */
-  sources(input: { config: WebsiteNotionConfig; store: ContentCacheStore; budget: HostBudget; deniedPageIds: ReadonlySet<string>; registerCleanup: RegisterHostCleanup }): Promise<RuntimeSources>;
+  sources(input: { config: WebsiteNotionConfig; store: ContentCacheStore; budget: HostBudget; deniedPageIds: ReadonlySet<string>; frozenPageIds?: ReadonlySet<string>; registerCleanup: RegisterHostCleanup }): Promise<RuntimeSources>;
 }
 function safeCode(e: unknown): string {
   if (e instanceof WorkerError) return e.code === "BUSY" ? "HOST_BUSY" : "HOST_PRIVATE_STATE_INVALID";
@@ -79,6 +83,9 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
     config.sources.some(s => s.kind === "course" ? s.publication.mode !== "all" : s.kind === "study-note" && s.publication.mode !== "course-descendants") ||
     !Number.isInteger(tasks) || tasks < 1 || tasks > 50 || !Number.isInteger(sourceLimit) || sourceLimit < 1 || sourceLimit > 50 ||
     options.lockDirectory === options.runtimeDirectory) hostFail("HOST_INPUT_INVALID");
+  if (options.target && (options.command !== "run" || !sourceKeys.includes(options.target.sourceKey) ||
+      normalizeId(options.target.pageKey) !== options.target.pageKey) ||
+      options.refreshFrozenGroup && (!options.freezeEnabled || !options.target || !/^[a-f0-9-]{36}$/.test(options.refreshFrozenGroup) || !/^[0-9]+$/.test(options.expectedFreezeGeneration ?? ""))) hostFail("HOST_INPUT_INVALID");
   const budget = createHostBudget({ ...options, durationMs: options.durationMs ?? (options.command === "initialize" ? 899000 : 120000) });
   const report = { format: "incremental-host-report-v1", outcome: "failed", phase: "lock", errorCode: null as string | null,
     startedAt: new Date().toISOString(), finishedAt: "", recovered: 0, published: 0, unchanged: 0, retired: 0,
@@ -143,12 +150,29 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
       if (!ready || Object.keys(ready).length !== 6 || ready.format !== "incremental-host-ready-v1" || ready.configDigest !== digest ||
         ready.schemaDigest !== WEBSITE_SCHEMA_DIGEST || !/^[0-9]+$/.test(ready.policyEpoch) || ready.directorySeeded !== true) hostFail("HOST_BASELINE_MISSING");
       const exclusions = denied(ready.deniedPageIds);
+      const frozenPageIds = new Set<string>();
+      let freezeState: FreezeState | undefined;
+      const loadFrozen = async () => {
+        if (!options.freezeEnabled) return;
+        freezeState = await createFreezeStore(db!.reader).state(); budget.guard();
+        if (!freezeState.enabled || freezeState.configDigest !== digest) hostFail("HOST_FREEZE_DISABLED");
+        if (options.expectedFreezeGeneration !== undefined && freezeState.generation !== options.expectedFreezeGeneration) hostFail("HOST_FREEZE_PREVIEW_STALE");
+        if (options.refreshFrozenGroup && !freezeState.members.some(m => m.groupId === options.refreshFrozenGroup && m.rootId === options.target!.pageKey && m.id === m.rootId)) hostFail("HOST_TARGET_FROZEN");
+        frozenPageIds.clear();
+        for (const member of freezeState.members) if (member.groupId !== options.refreshFrozenGroup) frozenPageIds.add(member.id);
+        queue!.setFrozenPages(frozenPageIds);
+      };
+      await loadFrozen();
       let source: RuntimeSources | undefined;
       const sources = () => { if (!source) hostFail("HOST_SOURCE_PHASE_INVALID"); return source; };
-      const publication = createDatabasePublicationPort(db.writer, db.reader);
+      const publication = createDatabasePublicationPort(db.writer, db.reader, options.refreshFrozenGroup ?
+        () => ({ groupId: options.refreshFrozenGroup!, generation: freezeState!.generation }) : undefined);
       const domain = createStudyDomainPort<QueueTicket>({ store: study, sourceKeys: studyKeys, assertPreparing: ticket => queue!.assertPreparing(ticket),
+        frozenPageIds, maxReads: options.refreshFrozenGroup ? 2000 : undefined,
+        refreshPageIds: options.refreshFrozenGroup ? freezeState!.members.filter(m => m.groupId === options.refreshFrozenGroup).map(m => m.id) : undefined,
         source: (state, signal) => sources().study(state, signal), verify: (receipt, signal) => db!.verify(receipt, signal),
-        incomingLinks: async (changes, state, signal) => { signal.throwIfAborted(); return cache!.incomingLinks(changes, state); },
+        incomingLinks: async (changes, state, signal) => { signal.throwIfAborted(); const links = cache!.incomingLinks(changes, state);
+          return { ...links, records: links.records.filter(r => !frozenPageIds.has(r.detail.item.id)) }; },
         assets: async (records, state, signal) => sources().assets(records, state, signal) });
       const coordinator = createIncrementalCoordinator<QueueTicket>({ scopeDigest: digest, sourceKeys, studySourceKeys: studyKeys, queue,
         publication, checkpoint: study, study: domain, regular: { prepare: (ticket, state, signal) => sources().regular.prepare(ticket, state, signal) } });
@@ -162,17 +186,21 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
       budget.guard();
       const afterRecovery = queue.status();
       if (afterRecovery.awaiting_verification || afterRecovery.retirement_pending || afterRecovery.leased) hostFail("HOST_RECOVERY_BLOCKED");
+      await loadFrozen();
       const state = await hostAwait(budget, () => readerState(budget.signal)); budget.guard();
+      if (options.expectedPublicationRevision !== undefined && options.expectedPublicationRevision !== state.publicationRevision) hostFail("HOST_PUBLICATION_CHANGED");
       cache.assertState(state);
       if (study.load().version !== state.publicationRevision || state.policyEpoch !== ready.policyEpoch) hostFail("HOST_LOCAL_VERSION_CHANGED");
       if (options.command === "recover") report.outcome = "recovered";
       else {
         report.phase = "discovery";
-        source = await hostAwait(budget, () => resources.open(() => dependencies.sources({ config, store: cache!, budget, deniedPageIds: exclusions, registerCleanup: resources.register }))); budget.guard();
+        if (options.target && (frozenPageIds.has(options.target.pageKey) || !cache.readPublished(options.target, state))) hostFail("HOST_TARGET_FROZEN");
+        source = await hostAwait(budget, () => resources.open(() => dependencies.sources({ config, store: cache!, budget, deniedPageIds: exclusions, frozenPageIds, registerCleanup: resources.register }))); budget.guard();
+        if (options.target) queue.enqueue([{ eventId: `console:${randomUUID()}`, ...options.target, reason: "reconcile", observedAt: Date.now() }]);
         const checkpoint = queue.checkpoint(sourceKeys[0], "host-round-robin-v1");
         let offset = checkpoint.cursor === null ? 0 : Number(checkpoint.cursor), revision = checkpoint.revision;
         if (!Number.isInteger(offset) || offset < 0 || offset >= sourceKeys.length) hostFail("HOST_CURSOR_INVALID");
-        for (let step = 0; step < Math.min(sourceLimit, sourceKeys.length); step++) {
+        for (let step = 0; !options.target && step < Math.min(sourceLimit, sourceKeys.length); step++) {
           budget.guard(); const key = sourceKeys[offset], selected = config.sources[offset];
           const discovery = await runDirectoryDiscovery({ queue, sourceKey: key, signal: budget.signal, maxSteps: 2,
             maxDurationMs: Math.max(10, Math.min(30000, budget.remainingMs())) }, source.directory(key, state));
@@ -181,6 +209,7 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
           if (selected.kind === "course" || selected.kind === "study-note") {
             const children = await runStudyChildDiscovery({ queue, store: study, config, sourceKey: key, signal: budget.signal,
               source: (_checkpoint, signal) => source!.children(signal), maxParents: 5, maxChildren: 2000,
+              frozenPageIds,
               maxDurationMs: Math.max(10, Math.min(30000, budget.remainingMs())) });
             report.discoveredHints += children.hints;
             if (!["completed", "limited"].includes(children.outcome)) hostFail(children.outcome === "needs_review" ? "HOST_DISCOVERY_REVIEW" : "HOST_DISCOVERY_PENDING");
@@ -190,7 +219,8 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
         }
         report.phase = "publication";
         const result = await runIncrementalCycle({ queue, schemaDigest: WEBSITE_SCHEMA_DIGEST, signal: budget.signal,
-          maxTasks: tasks, maxDurationMs: Math.max(10, budget.remainingMs()) }, ports);
+          // One target attempt plus its durable local retirement share this budget.
+          maxTasks: options.target ? 2 : tasks, target: options.target, maxDurationMs: Math.max(10, budget.remainingMs()) }, ports);
         report.published = result.published; report.recovered += result.recovered; report.unchanged = result.unchanged; report.retired += result.retired;
         report.outcome = result.outcome; report.errorCode = result.errorCode;
       }

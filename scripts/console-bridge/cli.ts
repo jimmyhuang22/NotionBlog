@@ -12,6 +12,7 @@ import { BridgeError } from "./errors.ts";
 import { ContentReader } from "./content.ts";
 import { readJobs } from "./jobs.ts";
 import { describeSync, type SyncView } from "./sync-status.ts";
+import { managementRequest } from "./management.ts";
 import { Takedown } from "./takedown.ts";
 
 const VERSION = 1;
@@ -50,25 +51,34 @@ export async function handle(request: unknown, config: BridgeConfig, configPath:
   if (version !== VERSION) throw new BridgeError("INVALID_INPUT", "协议版本不对。");
   const takedown = new Takedown(config, configPath, cliPath);
   const args = input ?? {};
+  if (config.management && typeof op === "string" && ["sync.start", "target.resolve", "freeze.preview", "freeze.start", "unfreeze.preview", "unfreeze.start", "content.sections", "content.list"].includes(op))
+    return managementRequest(config, op, args);
 
   switch (op) {
     case "status": {
-      const view = readSync(config);
+      const view = !config.management || existsSync(config.sync.stateFile) ? readSync(config) : describeSync({history: []}, {suspended: false, schedule: config.sync.schedule, now: Date.now()});
+      const management = config.management ? await managementRequest(config, "status", {}) as Partial<SyncStatus> : {};
       const status: SyncStatus = {
         ...view.status,
-        capabilities: { sync: false, jobs: config.jobs !== null, targetedSync: false, freeze: false, takedown: takedown.enabled, contentList: true },
+        ...management,
+        nextScheduledAt: config.management ? null : view.status.nextScheduledAt,
+        capabilities: { sync: management.capabilities?.sync ?? false, jobs: config.jobs !== null, targetedSync: management.capabilities?.targetedSync ?? false,
+          freeze: management.capabilities?.freeze ?? false, takedown: takedown.enabled, contentList: true },
         observedAt: new Date().toISOString(),
       };
       return status;
     }
     case "operation.list": {
       const limit = typeof args.limit === "number" && args.limit > 0 ? Math.min(args.limit, 200) : 50;
-      const ops: Operation[] = [...readSync(config).history, ...(takedown.enabled ? takedown.operations() : [])];
+      const legacy = !config.management || existsSync(config.sync.stateFile) ? readSync(config).history : [];
+      const managed = config.management ? await managementRequest(config, "operation.list", {limit}) as Operation[] : [];
+      const ops: Operation[] = [...legacy, ...managed, ...(takedown.enabled ? takedown.operations() : [])];
       ops.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       return ops.slice(0, limit);
     }
     case "operation.get": {
       const id = text(args.id, 200);
+      if (config.management && id.startsWith("manage-")) return managementRequest(config, "operation.get", {id});
       const found = id.startsWith("takedown-") ? takedown.operation(id) : readSync(config).history.find((op) => op.id === id) ?? null;
       if (!found) throw new BridgeError("NOT_FOUND", "没有这条操作记录。");
       return found;

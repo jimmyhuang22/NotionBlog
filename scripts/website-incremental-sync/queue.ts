@@ -94,6 +94,7 @@ export class IncrementalQueue {
   private db: sqlite.DatabaseSync;
   private sources: Set<string>;
   private clock: () => number;
+  private frozen = new Set<string>();
   constructor(db: sqlite.DatabaseSync, scope: QueueScope, clock: () => number) {
     this.db = db; this.sources = new Set(scope.sourceKeys); this.clock = clock; this.scopeDigest = scope.digest;
     this.transaction(() => {
@@ -119,6 +120,17 @@ export class IncrementalQueue {
     });
   }
   close() { this.db.close(); }
+  /** Per-invocation database-verified exclusions; no durable policy is inferred from local events. */
+  setFrozenPages(ids: ReadonlySet<string>) {
+    if (ids.size > 20000) fail();
+    for (const page of ids) key(page);
+    this.transaction(() => {
+      this.db.exec("CREATE TEMP TABLE IF NOT EXISTS frozen_pages(page TEXT PRIMARY KEY) STRICT; DELETE FROM frozen_pages;");
+      const insert = this.db.prepare("INSERT INTO frozen_pages VALUES(?)");
+      for (const page of ids) insert.run(page);
+    });
+    this.frozen = new Set(ids);
+  }
   private now() { const n = this.clock(); integer(n, 0, 8_640_000_000_000_000); return n; }
   private source(value: string) { key(value); if (!this.sources.has(value)) fail("QUEUE_SCOPE_MISMATCH"); }
   private transaction<T>(fn: () => T): T {
@@ -136,6 +148,7 @@ export class IncrementalQueue {
   private ingest(events: readonly ChangeHint[], now: number, rememberEvents = true) {
     let inserted = 0;
     for (const event of events) {
+      if (this.frozen.has(event.pageKey)) continue;
       const fingerprint = hash([event.sourceKey, event.pageKey, event.reason, event.observedAt]);
       const oldEvent = this.db.prepare("SELECT digest FROM events WHERE id=?").get(event.eventId);
       if (oldEvent) { if (oldEvent.digest !== fingerprint) fail("QUEUE_EVENT_CONFLICT"); continue; }
@@ -353,15 +366,18 @@ export class IncrementalQueue {
     if (state === "preparing" && Number(row.expires_at) <= this.now()) fail("QUEUE_STALE_TICKET");
     return row;
   }
-  claim(limit = 20, leaseMs = 120_000, options: { requireRetirement?: boolean } = {}): QueueTicket[] {
+  claim(limit = 20, leaseMs = 120_000, options: { requireRetirement?: boolean; target?: { sourceKey: string; pageKey: string } } = {}): QueueTicket[] {
     integer(limit, 1, 50); integer(leaseMs, 1_000, 900_000);
     if (options.requireRetirement !== undefined && typeof options.requireRetirement !== "boolean") fail();
+    if (options.target) { this.source(options.target.sourceKey); key(options.target.pageKey); }
     const now = this.now();
     return this.transaction(() => {
       this.expirePreparations(now);
       if (options.requireRetirement && this.db.prepare("SELECT 1 FROM retirements WHERE acknowledged=0 LIMIT 1").get()) return [];
       const jobs = this.db.prepare(`SELECT * FROM jobs WHERE state IN ('pending','retry') AND available_at<=?
-        ORDER BY available_at,source,page LIMIT ?`).all(now, limit) as Row[];
+        ${this.frozen.size ? "AND NOT EXISTS(SELECT 1 FROM temp.frozen_pages f WHERE f.page=jobs.page)" : ""}
+        ${options.target ? "AND source=? AND page=?" : ""}
+        ORDER BY available_at,source,page LIMIT ?`).all(now, ...(options.target ? [options.target.sourceKey, options.target.pageKey] : []), limit) as Row[];
       return jobs.map(job => {
         const id = randomUUID();
         this.db.prepare(`INSERT INTO attempts(id,source,page,generation,reasons,expires_at,state)
@@ -551,7 +567,7 @@ export class IncrementalQueue {
   /** Counts only. Safe for a separate atomic Dashboard summary writer. */
   status() {
     const counts = { pending: 0, leased: 0, retry: 0, awaiting_verification: 0, needs_review: 0, done: 0 };
-    for (const row of this.db.prepare("SELECT state,count(*) AS n FROM jobs GROUP BY state").all()) counts[row.state as keyof typeof counts] = Number(row.n);
+    for (const row of this.db.prepare(`SELECT state,count(*) AS n FROM jobs ${this.frozen.size ? "WHERE state NOT IN ('pending','retry','needs_review') OR NOT EXISTS(SELECT 1 FROM temp.frozen_pages f WHERE f.page=jobs.page)" : ""} GROUP BY state`).all()) counts[row.state as keyof typeof counts] = Number(row.n);
     return { ...counts, events: Number(this.db.prepare("SELECT count(*) AS n FROM events").get()!.n),
       checkpoints: Number(this.db.prepare("SELECT count(*) AS n FROM checkpoints").get()!.n),
       retirement_pending: Number(this.db.prepare("SELECT count(*) AS n FROM retirements WHERE acknowledged=0").get()!.n) };
