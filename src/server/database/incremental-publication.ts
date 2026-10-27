@@ -66,7 +66,7 @@ async function call<T>(db: SqlExecutor, sql: string, values: unknown[] = []): Pr
     // Only PostgreSQL's explicit exception proves rejection. A lost reply can
     // carry the same text after commit and must remain an uncertain result.
     const message = error instanceof Error && (error as {code?: string}).code === "P0001" ? error.message : "";
-    const known = ["NB_DELTA_VERSION_CHANGED", "NB_DELTA_POLICY_CHANGED", "NB_DELTA_OPERATION_CONFLICT", "NB_DELTA_WITHDRAWAL_INVALID", "NB_DELTA_INPUT_INVALID", "NB_DELTA_DEPENDENCY_MISSING", "NB_BUSY"];
+    const known = ["NB_DELTA_VERSION_CHANGED", "NB_DELTA_POLICY_CHANGED", "NB_DELTA_OPERATION_CONFLICT", "NB_DELTA_WITHDRAWAL_INVALID", "NB_DELTA_INPUT_INVALID", "NB_DELTA_DEPENDENCY_MISSING", "NB_FREEZE_PROTECTED", "NB_BUSY"];
     const invalid = ["NB_BATCH_TOO_LARGE", "NB_SCOPE_INVALID", "NB_SCOPE_DENIED", "NB_STUDY_SCOPE_INVALID", "NB_STUDY_ANCESTRY_INVALID",
       "NB_MEDIA_INVALID", "NB_MEDIA_OWNER_INVALID", "NB_ABSENCE_INVALID", "NB_INCOMPLETE", "NB_INCOMPLETE_SCOPE", "NB_BODY_MISSING", "NB_MEDIA_MISSING"];
     throw new PublicationDeltaError(known.includes(message) ? message.replace(/^NB_/, "") : invalid.includes(message) ? "DELTA_INPUT_INVALID" : "DELTA_UNAVAILABLE");

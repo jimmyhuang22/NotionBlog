@@ -19,11 +19,13 @@ import { canonicalJson, mediaIdentity, validateMedia } from "./website-validatio
 import { websiteArchiveColumns, validateWebsiteArchive, archivedWebsiteObjects, WEBSITE_ARCHIVE_MAX_BYTES, type WebsiteDatabaseArchive } from "./website-archive.ts";
 import { createPrivateWebsiteArchiveStore } from "./website-archive-files.ts";
 import type { SqlExecutor } from "./sql.ts";
+import freezeProtocol from "../../../database/freeze-protocol.json" with {type: "json"};
 
 type Row = Record<string, unknown>;
 type Migration = {version: string; digest: string};
 export interface PublicationArchive {
-  format: "notionblog-publication-archive-1";
+  format: "notionblog-publication-archive-1" | "notionblog-publication-archive-2";
+  freeze?: {state: Row[]; groups: Row[]; members: Row[]; operations: Row[]};
   /** PRIVATE: policy, historical bodies, source evidence and operation payloads. */
   core: WebsiteDatabaseArchive;
   migrations: Migration[];
@@ -57,7 +59,8 @@ function migrations(rows: unknown): rows is Migration[] {
 }
 /** Validate complete extension identities before any restore transaction opens. */
 export function validatePublicationArchive(value: unknown): asserts value is PublicationArchive {
-  if (!exact(value, ["format", "core", "migrations", "publication", "incremental", "thumbnails"]) || value.format !== "notionblog-publication-archive-1" ||
+  if (!object(value) || !["notionblog-publication-archive-1", "notionblog-publication-archive-2"].includes(String(value.format)) ||
+      !exact(value, ["format", "core", "migrations", "publication", "incremental", "thumbnails", ...(value.format === "notionblog-publication-archive-2" ? ["freeze"] : [])]) ||
       !migrations(value.migrations) || !Array.isArray(value.publication) || value.publication.length !== 1 ||
       !exact(value.incremental, ["state", "operations"]) || !Array.isArray(value.incremental.state) || value.incremental.state.length !== 1 ||
       !Array.isArray(value.incremental.operations)) fail();
@@ -113,6 +116,36 @@ export function validatePublicationArchive(value: unknown): asserts value is Pub
       seen.add(key);
     }
   }
+  if (a.format === "notionblog-publication-archive-2") {
+    const f = a.freeze;
+    if (!exact(f, ["state", "groups", "members", "operations"]) || ![f.state, f.groups, f.members, f.operations].every(Array.isArray) || f.state.length !== 1) fail();
+    const state = f.state[0];
+    if (!exact(state, ["singleton", "version", "migration_digest", "enabled", "generation"]) || state.singleton !== true || state.version !== 1 ||
+        state.migration_digest !== freezeProtocol.migration.sha256 || typeof state.enabled !== "boolean" || !Number.isSafeInteger(state.generation) || Number(state.generation) < 0) fail();
+    const groups = new Map<string, string>(), members = new Set<string>(), operations = new Set<string>();
+    const snapshots = new Set(a.core.tables.records.map(({run_id: _run, ...record}) => canonicalJson(record)));
+    const mediaSnapshots = new Set([...a.core.tables.media, ...(a.thumbnails?.media ?? [])].map(row => canonicalJson(row.descriptor)));
+    for (const group of f.groups) {
+      if (!exact(group, ["id", "root_id", "created_at"]) || !uuid(group.id) || typeof group.root_id !== "string" || groups.has(group.id) || !timestamp(group.created_at)) fail();
+      groups.set(group.id, group.root_id);
+    }
+    for (const member of f.members) {
+      if (!exact(member, ["page_id", "group_id", "record", "media"]) || typeof member.page_id !== "string" || members.has(member.page_id) ||
+          typeof member.group_id !== "string" || !groups.has(member.group_id) || !object(member.record) || member.record.id !== member.page_id ||
+          !snapshots.has(canonicalJson(member.record)) || !Array.isArray(member.media)) fail();
+      for (const media of member.media) { try { validateMedia(media); } catch { fail(); } if (media.ownerPageId !== member.page_id || !mediaSnapshots.has(canonicalJson(media))) fail(); }
+      members.add(member.page_id);
+    }
+    if ([...groups].some(([group, root]) => !f.members.some(member => member.group_id === group && member.page_id === root))) fail();
+    for (const operation of f.operations) {
+      if (!exact(operation, ["id", "action", "request", "result", "created_at"]) || !uuid(operation.id) || operations.has(operation.id) ||
+          !["freeze", "permanent", "once"].includes(String(operation.action)) || !object(operation.request) || !object(operation.result) ||
+          !timestamp(operation.created_at) || operation.result.operationId !== operation.id ||
+          operation.action === "once" && !a.incremental.operations.some(old => old.operation_id === operation.id)) fail();
+      operations.add(operation.id);
+    }
+    count += f.groups.length + f.members.length + f.operations.length;
+  }
   if (count > 200_000 || Buffer.byteLength(JSON.stringify(a)) > WEBSITE_ARCHIVE_MAX_BYTES) fail();
   archivedPublicationObjects(a);
 }
@@ -125,22 +158,23 @@ export function archivedPublicationObjects(archive: PublicationArchive): StoredM
   }
   return [...objects.values()];
 }
-function supported(hybrid: boolean, study: boolean, thumbnails: boolean) {
+function supported(hybrid: boolean, study: boolean, thumbnails: boolean, freeze: boolean) {
   const names = ["nb_v2", "nb_v2_api", "nb_publication", "nb_publication_api", "nb_delta", "nb_delta_api",
     ...(hybrid ? ["nb_v2_media", "nb_v2_media_api"] : []), ...(study ? ["nb_study", "nb_study_api"] : []),
-    ...(thumbnails ? ["nb_thumbnails", "nb_thumbnail_api"] : [])];
-  return `NOT EXISTS(SELECT FROM pg_namespace WHERE nspname ~ '^nb_(v2|publication|delta|study|thumbnail)' AND nspname NOT IN (${names.map(n => `'${n}'`).join(",")}))`;
+    ...(thumbnails ? ["nb_thumbnails", "nb_thumbnail_api"] : []), ...(freeze ? ["nb_freeze", "nb_freeze_api"] : [])];
+  return `NOT EXISTS(SELECT FROM pg_namespace WHERE nspname ~ '^nb_(v2|publication|delta|study|thumbnail|freeze)' AND nspname NOT IN (${names.map(n => `'${n}'`).join(",")}))`;
 }
 /** Preflight only chooses optional SQL; one statement captures all data and identities. */
 export async function exportPublicationArchive(db: SqlExecutor): Promise<PublicationArchive> {
-  const f = (await db.query<{hybrid: boolean; study: boolean; thumbnails: boolean; publishedThumbnails: boolean; course1600: boolean; body1600: boolean}>(`SELECT
+  const f = (await db.query<{hybrid: boolean; study: boolean; thumbnails: boolean; publishedThumbnails: boolean; course1600: boolean; body1600: boolean; freeze: boolean}>(`SELECT
     to_regnamespace('nb_v2_media') IS NOT NULL AS hybrid,to_regnamespace('nb_study') IS NOT NULL AS study,
     to_regnamespace('nb_thumbnails') IS NOT NULL AS thumbnails,
     (to_regprocedure('nb_publication_api.read_thumbnail(text,integer,text)') IS NOT NULL OR
      to_regprocedure('nb_publication_api.check_thumbnail_capability(text)') IS NOT NULL) AS "publishedThumbnails",
     to_regclass('nb_thumbnails.extensions') IS NOT NULL AS "course1600",
-    to_regclass('nb_thumbnails.body_extensions') IS NOT NULL AS "body1600"`)).rows[0];
-  if (!f || ![f.hybrid, f.study, f.thumbnails, f.publishedThumbnails, f.course1600, f.body1600].every(v => typeof v === "boolean") ||
+    to_regclass('nb_thumbnails.body_extensions') IS NOT NULL AS "body1600",
+    to_regnamespace('nb_freeze') IS NOT NULL AS freeze`)).rows[0];
+  if (!f || ![f.hybrid, f.study, f.thumbnails, f.publishedThumbnails, f.course1600, f.body1600, f.freeze].every(v => typeof v === "boolean") ||
       f.publishedThumbnails && !f.thumbnails || f.body1600 && !f.course1600 || f.course1600 && !f.thumbnails) fail();
   const core = `jsonb_build_object('format','notionblog-website-archive-${f.hybrid ? 2 : 1}',
     'protocol','${WEBSITE_PROTOCOL}','schemaDigest','${WEBSITE_SCHEMA_DIGEST}','migrationDigest','${coreProtocol.migration.sha256}',
@@ -148,7 +182,7 @@ export async function exportPublicationArchive(db: SqlExecutor): Promise<Publica
     ${f.hybrid ? `,'mediaSources',jsonb_build_object('capability','${mediaProtocol.capability}',
       'migrationDigest',CASE WHEN (SELECT count(*) FROM nb_v2_media.migrations)=1 THEN (SELECT digest FROM nb_v2_media.migrations WHERE version='${mediaProtocol.migrations[0].version}') END,
       'sources',(SELECT COALESCE(jsonb_agg(x),'[]') FROM nb_v2_media.sources x))` : ""})`;
-  const {rows} = await db.query<{data: unknown}>(`WITH archive AS(SELECT jsonb_build_object('format','notionblog-publication-archive-1',
+  const {rows} = await db.query<{data: unknown}>(`WITH archive AS(SELECT jsonb_build_object('format','notionblog-publication-archive-${f.freeze ? 2 : 1}',
     'core',${core},'migrations',(SELECT jsonb_agg(jsonb_build_object('version',version,'digest',digest) ORDER BY version) FROM nb_v2.migrations),
     'publication',(SELECT jsonb_agg(x) FROM nb_publication.state x),
     'incremental',jsonb_build_object('state',(SELECT jsonb_agg(x) FROM nb_delta.state x),'operations',(SELECT COALESCE(jsonb_agg(x),'[]') FROM nb_delta.operations x)),
@@ -157,8 +191,12 @@ export async function exportPublicationArchive(db: SqlExecutor): Promise<Publica
       'media',(SELECT COALESCE(jsonb_agg(x),'[]') FROM nb_thumbnails.media x WHERE version='v2')
       ${f.publishedThumbnails ? `,'publishedMigrationDigest',CASE WHEN nb_publication_api.check_thumbnail_capability('${publishedThumbnailProtocol.migration.sha256}') THEN '${publishedThumbnailProtocol.migration.sha256}' END` : ""}
       ${f.course1600 ? `,'course1600MigrationDigest',CASE WHEN (SELECT count(*) FROM nb_thumbnails.extensions)=1 THEN (SELECT digest FROM nb_thumbnails.extensions WHERE version='${courseThumbnailProtocol.migration.version}') END` : ""}
-      ${f.body1600 ? `,'body1600MigrationDigest',CASE WHEN (SELECT count(*) FROM nb_thumbnails.body_extensions)=1 THEN (SELECT digest FROM nb_thumbnails.body_extensions WHERE version='${bodyThumbnailProtocol.migration.version}') END` : ""})` : "NULL"}) AS data)
-    SELECT CASE WHEN ${supported(f.hybrid, f.study, f.thumbnails)} AND octet_length(data::text)<=$1 THEN data ELSE NULL END AS data FROM archive`, [WEBSITE_ARCHIVE_MAX_BYTES]);
+      ${f.body1600 ? `,'body1600MigrationDigest',CASE WHEN (SELECT count(*) FROM nb_thumbnails.body_extensions)=1 THEN (SELECT digest FROM nb_thumbnails.body_extensions WHERE version='${bodyThumbnailProtocol.migration.version}') END` : ""})` : "NULL"}${f.freeze ? `,'freeze',jsonb_build_object(
+      'state',(SELECT jsonb_agg(x) FROM nb_freeze.state x),
+      'groups',(SELECT COALESCE(jsonb_agg(x),'[]') FROM nb_freeze.groups x),
+      'members',(SELECT COALESCE(jsonb_agg(x),'[]') FROM nb_freeze.members x),
+      'operations',(SELECT COALESCE(jsonb_agg(x),'[]') FROM nb_freeze.operations x))` : ""}) AS data)
+    SELECT CASE WHEN ${supported(f.hybrid, f.study, f.thumbnails, f.freeze)} AND octet_length(data::text)<=$1 THEN data ELSE NULL END AS data FROM archive`, [WEBSITE_ARCHIVE_MAX_BYTES]);
   const result = rows[0]?.data; validatePublicationArchive(result);
   if (f.study !== result.migrations.some(m => m.version === studyProtocol.migration.version)) fail();
   return result;
@@ -171,7 +209,8 @@ export async function restorePublicationArchive(db: SqlExecutor, archive: Public
   try {
     await db.query("SET LOCAL lock_timeout='5s'"); await db.query("SELECT pg_advisory_xact_lock(172904,2)");
     await db.query(`LOCK TABLE ${[...coreTables.map(t => `nb_v2.${t}`), "nb_publication.state", "nb_delta.state", "nb_delta.operations",
-      ...(hybrid ? ["nb_v2_media.sources"] : []), ...(thumbnails ? ["nb_thumbnails.media"] : [])].join(",")} IN EXCLUSIVE MODE`);
+      ...(hybrid ? ["nb_v2_media.sources"] : []), ...(thumbnails ? ["nb_thumbnails.media"] : []),
+      ...(archive.freeze ? ["nb_freeze.state", "nb_freeze.groups", "nb_freeze.members", "nb_freeze.operations"] : [])].join(",")} IN EXCLUSIVE MODE`);
     await db.query(`LOCK TABLE ${["nb_v2.migrations", ...(hybrid ? ["nb_v2_media.migrations"] : []), ...(thumbnails ? ["nb_thumbnails.migrations"] : []),
       ...(archive.thumbnails?.course1600MigrationDigest ? ["nb_thumbnails.extensions"] : []),
       ...(archive.thumbnails?.body1600MigrationDigest ? ["nb_thumbnails.body_extensions"] : [])].join(",")} IN SHARE MODE`);
@@ -185,6 +224,8 @@ export async function restorePublicationArchive(db: SqlExecutor, archive: Public
         target.incremental.operations.length || (target.thumbnails?.media.length ?? 0) ||
         (target.core.format === "notionblog-website-archive-2" && target.core.mediaSources.sources.length) ||
         coreTables.some(t => t !== "state" && target.core.tables[t].length)) fail();
+    if (Boolean(target.freeze) !== Boolean(archive.freeze) || target.freeze && (target.freeze.state[0].enabled !== false ||
+        ["groups", "members", "operations"].some(key => target.freeze![key as "groups"].length))) fail();
     const state = target.core.tables.state[0];
     if (["current_run", "lease_run", "lease_until", "config_digest"].some(k => state[k] !== null) ||
         ["revision", "epoch", "fence", "freshness_seconds"].some(k => state[k] !== 0)) fail();
@@ -195,6 +236,12 @@ export async function restorePublicationArchive(db: SqlExecutor, archive: Public
     await db.query("INSERT INTO nb_publication.state SELECT * FROM jsonb_populate_recordset(NULL::nb_publication.state,$1::jsonb)", [JSON.stringify(archive.publication)]);
     await db.query("INSERT INTO nb_delta.operations SELECT * FROM jsonb_populate_recordset(NULL::nb_delta.operations,$1::jsonb)", [JSON.stringify(archive.incremental.operations)]);
     if (archive.thumbnails) await db.query("INSERT INTO nb_thumbnails.media SELECT * FROM jsonb_populate_recordset(NULL::nb_thumbnails.media,$1::jsonb)", [JSON.stringify(archive.thumbnails.media)]);
+    if (archive.freeze) {
+      await db.query("DELETE FROM nb_freeze.state");
+      for (const table of ["state", "groups", "members", "operations"] as const)
+        await db.query(`INSERT INTO nb_freeze.${table} SELECT * FROM jsonb_populate_recordset(NULL::nb_freeze.${table},$1::jsonb)`, [JSON.stringify(archive.freeze[table])]);
+      await db.query("UPDATE nb_freeze.state SET enabled=false,generation=generation+1");
+    }
     await db.query("UPDATE nb_publication.state SET run_id=NULL,published_at=NULL");
     await db.query("UPDATE nb_v2.state SET current_run=NULL,lease_run=NULL,lease_until=NULL,revision=revision+1,epoch=epoch+1,fence=fence+1");
     await db.query("UPDATE nb_v2.runs SET valid_until=statement_timestamp()-interval '1 second',status=CASE WHEN status='staging' THEN 'failed' ELSE status END");

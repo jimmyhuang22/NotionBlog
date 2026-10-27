@@ -20,7 +20,7 @@ import type { NotionRequestScheduler } from "../../src/server/notion/request-sch
 import { createIndependentMediaPort } from "./independent-media.ts";
 import { hostFail, type HostBudget } from "./host-budget.ts";
 
-export function createRuntimeSources(options: { config: WebsiteNotionConfig; store: ContentCacheStore; deniedPageIds: ReadonlySet<string>;
+export function createRuntimeSources(options: { config: WebsiteNotionConfig; store: ContentCacheStore; deniedPageIds: ReadonlySet<string>; frozenPageIds?: ReadonlySet<string>;
   token: string; notionVersion?: string; budget: HostBudget; storage: ObjectStorage; imageCache?: WebsiteImageCache; userAgent?: string;
   convertHeic?: DownloadOptions["convertHeic"]; fetch?: typeof fetch; scheduler?: NotionRequestScheduler }) {
   const { config, budget, store } = options, digest = configDigest(config);
@@ -54,6 +54,7 @@ export function createRuntimeSources(options: { config: WebsiteNotionConfig; sto
   return {
     regular: { async prepare(ticket: QueueTicket, current: PublicationState, signal: AbortSignal) {
       select(current);
+      if (options.frozenPageIds?.has(ticket.pageKey)) return { outcome: "unchanged" as const };
       return createSinglePagePreparationPort({ client: transport(signal).client, config,
         prepareImage: (input, s) => media.prepare(input, s), prepareDelta: preparePublicationDelta,
         readPublished: async (t, v) => store.readPublished(t, v),
@@ -70,8 +71,10 @@ export function createRuntimeSources(options: { config: WebsiteNotionConfig; sto
     directory(sourceKey: string, current: PublicationState): DirectorySource {
       select(current); const source = config.sources.find(s => s.key === sourceKey); if (!source) hostFail("HOST_SOURCE_UNKNOWN");
       if (source.kind === "page" || source.publication.mode === "course-descendants") {
+        const catalog = store.knownPages(sourceKey, current);
         return createKnownPageDirectorySource({ getPage: (id, s) => transport(s).client.getPage(id),
-          getDataSource: (id, s) => transport(s).client.getDataSource(id) }, config, current, store.knownPages(sourceKey, current));
+          getDataSource: (id, s) => transport(s).client.getDataSource(id) }, config, current,
+          { ...catalog, pageKeys: catalog.pageKeys.filter(id => !options.frozenPageIds?.has(id)) });
       }
       return createNotionDirectorySource(transport(budget.signal).directory, config, digest);
     },

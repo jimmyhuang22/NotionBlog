@@ -15,6 +15,8 @@ export type StudyDomainClosure={ticket:StudyDomainTicket;disposition:"never_subm
 export type StudyPreparation={outcome:"unchanged"}|{outcome:"review"|"retry";code:string}|{outcome:"prepared";delta:PreparedPublicationDelta};
 export interface StudyDomainOptions<TTicket extends StudyDomainTicket=StudyDomainTicket> {
   store:StudyCheckpointStore;sourceKeys:readonly string[];maxReads?:number;
+  frozenPageIds?:ReadonlySet<string>;
+  refreshPageIds?:readonly string[];
   /** Synchronous public queue lease/generation check immediately before stage. */
   assertPreparing(ticket:TTicket):void;
   source(state:PublicationState,signal:AbortSignal):StudyChangeSource;
@@ -64,7 +66,7 @@ export function createStudyDomainPort<TTicket extends StudyDomainTicket=StudyDom
       try{
         const id=normalizeId(ticket.pageKey),checkpoint=options.store.load();
         if(checkpoint.version!==state.publicationRevision)return{outcome:"review",code:"STUDY_CHECKPOINT_VERSION_CHANGED"};
-        const delta=await prepareStudyDelta(checkpoint,[id],cancellable(options.source(state,signal),signal),options.maxReads);guard(signal);
+        const delta=await prepareStudyDelta(checkpoint,options.refreshPageIds?[...options.refreshPageIds]:[id],cancellable(options.source(state,signal),signal),options.maxReads,options.frozenPageIds);guard(signal);
         const signalled=delta.upserts.find(e=>e.record.detail.item.id===id)?.record??checkpoint.entries.find(e=>e.record.detail.item.id===id)?.record;
         if(!signalled||signalled.evidence.sourceKey!==ticket.sourceKey)return{outcome:"review",code:"STUDY_SOURCE_MISMATCH"};
         if(delta.withdrawalEvidence.some(w=>w.reason==="denied"))return{outcome:"review",code:"STUDY_POLICY_RECONCILIATION_REQUIRED"};

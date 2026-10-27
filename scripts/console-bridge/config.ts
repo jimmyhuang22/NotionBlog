@@ -18,6 +18,8 @@ export interface BridgeConfig {
   };
   /** Other scheduled jobs to show; null hides the list. */
   jobs: JobsConfig | null;
+  /** Explicit phase-two installation; absent/null preserves the read-only first phase. */
+  management?: { node: string; project: string; envFile: string; configFile: string } | null;
   /** Null keeps takedown switched off. */
   takedown: {
     /** Node binary that runs the takedown tool. */
@@ -72,9 +74,17 @@ export function loadConfig(path: string): BridgeConfig {
     };
   }
 
+  let management: BridgeConfig["management"] = null;
+  if (value.management !== null && value.management !== undefined) {
+    const entry = value.management as Record<string, unknown>;
+    management = { node: absolute(entry.node, "MANAGEMENT_NODE"), project: absolute(entry.project, "MANAGEMENT_PROJECT"),
+      envFile: absolute(entry.envFile, "MANAGEMENT_ENV"), configFile: absolute(entry.configFile, "MANAGEMENT_CONFIG") };
+  }
+
   return {
     stateDir,
     jobs,
+    management,
     siteOrigin: origin.origin,
     sync: {
       stateFile: absolute(sync.stateFile, "SYNC_STATE"),
