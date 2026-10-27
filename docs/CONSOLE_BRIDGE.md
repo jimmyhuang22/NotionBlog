@@ -1,6 +1,6 @@
 # 控制台与后端的对接协议
 
-记录日期：2026-10-25。状态：控制台一侧已实现（`console/lib/bridge-backend.ts`）；桥接命令第一阶段（状态、操作记录、下架）由 Claude 按用户指定实现在 `scripts/console-bridge/`，见下文“第一阶段实现”。冻结等第二阶段仍待新模式上线。背景与功能见[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)，运行方式见 [console/README.md](../console/README.md)。
+记录日期：2026-10-25，更新：2026-10-27。控制台一侧与第一阶段桥接已实现；第二阶段冻结、受限增量触发和备份源码见[实施说明](CONSOLE_BACKEND_PHASE_TWO.md)，实际安装仍待持久发布与独立媒体采用。第一阶段由 Claude 按用户指定实现在 `scripts/console-bridge/`，见下文。背景见[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)，运行方式见 [console/README.md](../console/README.md)。
 
 控制台不直接连接 Notion、数据库、同步运行器或下架工具。它只调用一个由后端提供的**桥接命令**：每次操作启动一次命令，经标准输入写入一个 JSON 请求，从标准输出读取一个 JSON 回复。桥接命令由后端负责实现、安装和授权，控制台不需要知道私有路径、锁目录或凭据。
 
