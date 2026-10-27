@@ -142,7 +142,7 @@ export function SyncPanel({ initial, timeZone }: { initial: SyncStatus; timeZone
 
       {staleDays !== null || status.hold ? (
         <div className="notice notice--warn">
-          {staleDays !== null ? <p>已经 {staleDays} 天没有成功同步了：这段时间在 Notion 里的修改都还没上网站。</p> : null}
+          {staleDays !== null ? <p>已经 {staleDays} 天没有完成整轮同步了，请查看最近一次运行结果。</p> : null}
           {status.hold ? <p>定时同步现在没有在跑：{status.hold}</p> : null}
         </div>
       ) : null}
