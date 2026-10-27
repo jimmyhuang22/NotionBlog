@@ -9,7 +9,9 @@ const node = process.execPath;
 const script = name => [node, [name]];
 const tests = ['test','check'].includes(task) ? readdirSync('tests').filter(name => name.endsWith('.test.ts')).sort().map(name => `tests/${name}`) : [];
 const typecheck = script('node_modules/typescript/bin/tsc'); typecheck[1].push('--noEmit');
-const check = [script('scripts/check-privacy.mjs'), typecheck, script('scripts/check-database-protocol.ts'), script('scripts/check-website-protocol.ts'),
+// React's two classic hook rules block (eslint.config.js); its compiler checks are warnings, left to `npm run lint`.
+const hooks = [node, ['node_modules/eslint/bin/eslint.js', 'src', '--quiet']];
+const check = [script('scripts/check-privacy.mjs'), typecheck, hooks, script('scripts/check-database-protocol.ts'), script('scripts/check-website-protocol.ts'),
   [node, ['scripts/media-thumbnails/cli.ts', 'verify']], [node, ['--test', '--test-concurrency=2', ...tests]]];
 const tasks = {
   test: [[node, ['--test', '--test-concurrency=2', ...args, ...tests]]],

@@ -91,7 +91,10 @@
 - **内容列表**：读网站公开接口（`/api/content/<类型>` 与 `/api/study/<课程>/tree`），即访客已经能看到的内容，结果在 `stateDir` 里缓存 10 分钟；栏目数量只取各列表的 `total`。新模式上线前不知道冻结状态，所有公开页面都报告为 `syncing`。
 - **失败原因**：已知的原因代码附带中文说明，原代码保留在括号里；未知代码原样显示。上次成功那一轮的回执里只读取 `validUntil`，作为 `contentValidUntil`。
 - **下架**：`takedown` 为 `{ "node", "project", "envFile" }` 时启用。`project` 指向已固定的运行副本，命令原样调用其中的 `scripts/public-cache/withdraw-cli.ts`，用 `envFile` 提供受限 operator 账号、缓存设置和锁清单；不修改下架工具。计划同步执行（55 秒内），执行与续办由独立的后台进程完成，进度读自下架工具自己的日志文件（PLANNED → DENIED_PURGE_PENDING → PURGED_VERIFY_PENDING → COMPLETE；DENY_OUTCOME_UNKNOWN 为结果未知）。日志、计划和操作记录都在 `stateDir`，必须位于 `.local` 下。
-- 目前 `takedown` 为 `null`：网站已切换到新数据库，新库的受限 operator 账号与对应 env 文件尚未确认，确认后再开启并用获准测试页验收。
+- `takedown: null` 是未接线配置的安全默认值。现有控制台已接上受限 operator 与固定运行副本，并完成真实只读计划；真实下架与恢复尚未验收，见[接线记录](progress/2026-10-25-console-takedown-acceptance.md)。
+- **发布后未完成**：识别控制器 `PUBLISHED_POST_INCOMPLETE`，报告整轮未完成并明确“内容已发布”，保留安全原因代码，不映射成写入结果未知或整轮成功。上次完整成功时间保持原值；若没有本次实际发布时间及有效期，则当前内容版本时间与有效期报告 `null`，不拿旧成功轮次的值代替。该状态阻止预测下一次定时运行。
+
+后续冻结、解冻、立即同步及备份扩展见[第二阶段后端方案](CONSOLE_BACKEND_PHASE_TWO.md)，方案尚待确认。
 
 ## 验证方式
 
