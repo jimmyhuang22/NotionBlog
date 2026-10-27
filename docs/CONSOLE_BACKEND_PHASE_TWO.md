@@ -1,6 +1,6 @@
 # 控制台第二阶段后端
 
-更新：2026-10-27。用户已确认继续实施，见[冻结决定](decisions/2026-10-27-console-freeze-and-sync.md)。本轮提供源码、隔离验证与安装入口，尚未在实际数据库安装或切换控制台服务。界面与协议沿用[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)和[桥接协议](CONSOLE_BRIDGE.md)。
+更新：2026-10-27。用户已确认继续实施，见[冻结决定](decisions/2026-10-27-console-freeze-and-sync.md)。源码已通过 PR #177 合入 develop，本机控制台已更新并验证真实状态展示；管理扩展与冻结／增量按钮仍未启用，待首次有效持久基线和独立媒体运行采用。界面与协议沿用[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)和[桥接协议](CONSOLE_BRIDGE.md)。
 
 ## 使用效果与边界
 
