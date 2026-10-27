@@ -19,6 +19,8 @@ export interface NotionClientOptions {
   requestTimeoutMs?: number;
   /** Tests with injected transports opt in explicitly. No completed read cache. */
   coalesceReads?: boolean;
+  /** A batch can provide its own bounded read-request retries. */
+  retry?: false;
 }
 
 function unavailable(): ContentServiceError {
@@ -54,6 +56,7 @@ function isMissing(error: unknown): boolean {
 
 /** Read-only SDK boundary. Error text and logs never carry tokens, IDs or raw bodies. */
 export function createNotionClient(options: NotionClientOptions): NotionReadClient & Required<Pick<NotionReadClient, "listPages">> {
+  if (options.retry !== undefined && options.retry !== false) throw new ContentServiceError("MISCONFIGURED", "Invalid Notion retry policy.");
   if (typeof options.token !== "string" || !options.token.trim() || options.token !== options.token.trim() || /[\u0000-\u0020\u007f]/u.test(options.token)) {
     throw new ContentServiceError("MISCONFIGURED", "A valid Notion connection token is required.");
   }
@@ -98,7 +101,7 @@ export function createNotionClient(options: NotionClientOptions): NotionReadClie
     logger: () => {},
     fetch: scheduledFetch,
   };
-  const batchSdk = new Client({ ...sdkOptions, retry: { maxRetries: 2, initialRetryDelayMs: 250, maxRetryDelayMs: 60_000 } });
+  const batchSdk = new Client({ ...sdkOptions, retry: options.retry === false ? false : { maxRetries: 2, initialRetryDelayMs: 250, maxRetryDelayMs: 60_000 } });
   // SDK retry sleeps are not abortable. Public operations already own their complete deadline.
   const boundedSdk = new Client({ ...sdkOptions, retry: false });
   const sdk = () => contentReadBudgetIdentity() ? boundedSdk : batchSdk;
