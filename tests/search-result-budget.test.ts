@@ -51,7 +51,7 @@ test("actual scoped readiness/search/version SQL stays compatible in both opt-in
 });
 
 test("JSONB scalars and SQL NULL retain values and charge the SQL result text size", async () => {
-  for (const value of [null, true, false, 0, ["漢字", 1]]) {
+  for (const value of [null, true, false, 0, "null", "漢字😀\"\\\n", ["漢字", 1]]) {
     const budget = new SearchResultBudget();
     const rows = await query(budget, parts, [[JSON.stringify(value)]]);
     assert.deepEqual(rows, [{ result: value }]);
@@ -60,6 +60,34 @@ test("JSONB scalars and SQL NULL retain values and charge the SQL result text si
   const budget = new SearchResultBudget();
   assert.deepEqual(await query(budget, parts, [["SQL_NULL"]]), [{ result: null }]);
   assert.equal(budget.snapshot().resultTextBytes, 0);
+});
+
+test("guarded transport is serialized text with the same bytes as the original JSONB output", async () => {
+  const value = { text: "漢字😀\"\\\n", items: [null, false, { id: "fixture" }] };
+  const input = [[JSON.stringify(value)]];
+  const original = await db.query<{ text: string }>(`SELECT result::text AS text FROM (${parts}) AS raw`, input);
+  const text = original.rows[0].text, bytes = Buffer.byteLength(text, "utf8");
+  await db.exec("ALTER SEQUENCE fixture_seen RESTART WITH 1");
+  const budget = new SearchResultBudget(bytes), plan = budget.prepare(parts, input);
+  const rows = (await db.query(plan.text, plan.values)).rows;
+  assert.deepEqual(rows, [{ result: text, __nb_result_text_bytes: bytes }]);
+  assert.deepEqual(plan.accept(rows), [{ result: value }]);
+  assert.equal(budget.snapshot().resultTextBytes, bytes);
+  assert.equal((await db.query<{ last_value: number }>("SELECT last_value FROM fixture_seen")).rows[0].last_value, 1);
+});
+
+test("invalid JSON transport, byte mismatches and null mismatches fail safely and stay failed", () => {
+  for (const [result, size] of [["PRIVATE_SENTINEL", 16], ["\"漢字\"", 4], ["null", null], [null, 4], [true, 4], ["", 0]]) {
+    const budget = new SearchResultBudget(), plan = budget.prepare(parts, [[]]);
+    assert.throws(() => plan.accept([{ result, __nb_result_text_bytes: size }]), error => {
+      assert.equal((error as { code: string }).code, "CONTENT_UNAVAILABLE");
+      assert.ok(!String(error).includes("PRIVATE_SENTINEL"));
+      return true;
+    });
+    assert.equal(budget.snapshot().resultTextBytes, 0);
+    assert.equal(budget.snapshot().failed, true);
+    assert.throws(() => budget.prepare(parts, [[]]), { code: "CONTENT_UNAVAILABLE" });
+  }
 });
 
 test("oversized result never appears in the actual SQL response and source evaluates once", async () => {
