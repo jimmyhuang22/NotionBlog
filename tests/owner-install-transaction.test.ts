@@ -12,6 +12,7 @@ import { inOwnerInstallSession, withOwnerInstallTransaction, withPGliteOwnerTran
 import { loadOwnerInstallRecipe, OWNER_INSTALL_RECIPE_DIGEST } from "../scripts/website-sync/owner-install-recipes.ts";
 import isolationManifest from "../database/incremental-reader-isolation.json" with { type: "json" };
 import recoveryManifest from "../database/incremental-withdrawal-recovery.json" with { type: "json" };
+import { installFreeze } from "../scripts/website-sync/freeze-migration.ts";
 
 const code = (text: string) => ({ message: text });
 const state = async (db: Awaited<ReturnType<typeof ownerInstallFixture>>["db"]) => (await db.query<{ installed: boolean; role: boolean }>(`SELECT
@@ -134,6 +135,19 @@ test("inaccessible PUBLIC view grants do not conflict, while usable or direct ac
     finally { await f.db.exec(revoke); }
   }
   await withPGliteOwnerTransaction(f.db, isolation);
+});
+
+test("optional freeze observation preserves reader isolation without permitting previews or mutations", async t => {
+  const f = await ownerInstallFixture(); t.after(() => f.close());
+  await withPGliteOwnerTransaction(f.db, isolation);
+  await installFreeze({query: async <T>(sql: string, values?: unknown[]) => {
+    if (sql.startsWith("-- Opt-in")) {await f.db.exec(sql); return {rows: [] as T[]};} return f.db.query<T>(sql, values);
+  }});
+  assert.equal((await withPGliteOwnerTransaction(f.db, isolation)).outcome, "verified-existing");
+  await f.db.exec("GRANT EXECUTE ON FUNCTION nb_freeze_api.preview(text,text) TO nb_delta_reader");
+  await assert.rejects(withPGliteOwnerTransaction(f.db, isolation), code("OWNER_INSTALL_READER_ROLE_CONFLICT"));
+  await f.db.exec("REVOKE EXECUTE ON FUNCTION nb_freeze_api.preview(text,text) FROM nb_delta_reader");
+  assert.equal((await withPGliteOwnerTransaction(f.db, isolation)).outcome, "verified-existing");
 });
 
 test("verified installs reject missing schema/API capability or reopened private APIs without repairing", async t => {
