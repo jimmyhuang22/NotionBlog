@@ -9,7 +9,7 @@ import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
 
 const directNotionSources: Record<string, string> = {
-  'src/server/notion/client.ts': '784f927df86fc0a48fb2eec2f7b27b8a5395eb6d3448e58b8044a75b097b0647',
+  'src/server/notion/client.ts': '1c3cbae1fa6f16b9d85b70e0a67c7e954e0ca70d13efcdfa4cdaf001f4a7f82f',
   'src/server/notion/runtime.ts': '1e85c7dc9b44f6bee3637243afe594d0dd50614ae5259048b7092164c0439a93',
   'src/server/notion/media.ts': '2c449ec24e117c49ac8097e9fe5960f715b1f69b26c517132ddc63cf10c4824e',
   'src/server/notion/repository.ts': 'd49598f05cb3836e75049bb92b6b4a32e1921cbd7c217d4aa9193fc69f1a8d08',
