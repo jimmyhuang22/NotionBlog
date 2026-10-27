@@ -32,9 +32,13 @@ test("filtered search is opt-in, runtime-guarded and bounded without truncating 
   assert.equal(supportsSearchFilterRuntime(process.versions.unicode, "tr"), false);
   assert.equal(searchFilterPatterns("Java").length, supportsSearchFilterRuntime() ? 1 : 0);
   assert.deepEqual(searchFilterPatterns("ＪＡＶＡ"), searchFilterPatterns("Java"));
-  for (const q of ["Notion page", "Media", "Unavailable page", "jNotion", "eJava", "two words", "x".repeat(128)])
+  for (const q of ["Notion page", "Media", "Unavailable page", "n", "a", "x".repeat(129)])
     assert.deepEqual(searchFilterPatterns(q), [], q);
-  assert.deepEqual(searchFilterPatterns("office"), []); // Full preimage exceeds the bounded regex; no partial rewrite.
+  for (const q of ["python", "office", "jNotion", "eJava", "two words", "x".repeat(128)]) {
+    const patterns = searchFilterPatterns(q);
+    assert.equal(patterns.length, supportsSearchFilterRuntime() ? 1 : 0, q);
+    assert(patterns.every(p => Buffer.byteLength(p) <= 2048), q);
+  }
   const f = await setup();
   try {
     await f.publish([status(0, body("Java"))]);

@@ -18,7 +18,8 @@ export interface SyncView {
   history: Operation[];
 }
 
-const failedStates = new Set(["FAILED", "FAIL"]);
+const publishedPostIncomplete = "PUBLISHED_POST_INCOMPLETE";
+const failedStates = new Set(["FAILED", "FAIL", publishedPostIncomplete]);
 
 function iso(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -48,7 +49,7 @@ export function reasonMessage(code: string | null): string {
   return words ? `${words}（${code}）` : `原因代码：${code}`;
 }
 
-function syncOperation(entry: { state: Operation["state"]; startedAt: string | null; finishedAt: string | null; reason: string | null; id: string }): Operation {
+function syncOperation(entry: { state: Operation["state"]; startedAt: string | null; finishedAt: string | null; reason: string | null; id: string; postIncomplete?: boolean }): Operation {
   const done = entry.state === "succeeded";
   const running = entry.state === "running";
   return {
@@ -61,11 +62,11 @@ function syncOperation(entry: { state: Operation["state"]; startedAt: string | n
     startedAt: entry.startedAt,
     finishedAt: entry.finishedAt,
     // The controller does not report steps; one honest step stands for the whole round.
-    steps: [{ label: running ? "整轮同步（后端不报告分步进度）" : "整轮同步", state: running ? "running" : done ? "done" : "failed" }],
+    steps: [{ label: entry.postIncomplete ? "内容已发布，后续阶段未完成" : running ? "整轮同步（后端不报告分步进度）" : "整轮同步", state: running ? "running" : done ? "done" : "failed" }],
     counts: null,
     error:
       entry.state === "failed"
-        ? { code: "RUN_FAILED", message: reasonMessage(entry.reason) }
+        ? { code: "RUN_FAILED", message: `${entry.postIncomplete ? "内容已发布，后续检查或补全未完成。" : ""}${reasonMessage(entry.reason)}` }
         : null,
     resumePlanId: null,
   };
@@ -89,7 +90,7 @@ export function describeSync(
     const isCurrent = index === rawHistory.length - 1 && iso(record.finishedAtUTC) === finishedAt;
     const reason = reasonCode(entry.reason) ?? reasonCode(entry.failureCategory) ?? (isCurrent ? reasonCode(record.reason) : null);
     const startedAt = iso(entry.startedAtUTC) ?? (isCurrent ? iso(record.startedAtUTC) : null);
-    history.push(syncOperation({ id: `sync-${Date.parse(finishedAt)}`, state, startedAt, finishedAt, reason }));
+    history.push(syncOperation({ id: `sync-${Date.parse(finishedAt)}`, state, startedAt, finishedAt, reason, postIncomplete: status === publishedPostIncomplete }));
   });
   history.sort((a, b) => Date.parse(b.finishedAt ?? b.createdAt) - Date.parse(a.finishedAt ?? a.createdAt));
 
@@ -100,13 +101,20 @@ export function describeSync(
     : null;
 
   const lastSuccess = history.find((op) => op.state === "succeeded")?.finishedAt ?? null;
+  // A partial round may have replaced the publication without supplying its publication time.
+  // Keep the last complete round's success time, but do not label its version as current.
+  const publicationTimeUnknown = record.status === publishedPostIncomplete ||
+    rawHistory.some((entry) => entry.status === publishedPostIncomplete &&
+      iso(entry.finishedAtUTC) !== null && Date.parse(entry.finishedAtUTC as string) > (lastSuccess ? Date.parse(lastSuccess) : -Infinity));
   // The last successful round's receipt says until when its content counts as current.
   const lastPass = [...rawHistory].reverse().find((entry) => entry.status === "PASS");
-  const validUntil = lastPass && typeof lastPass.operation === "string" && options.validUntilFor ? iso(options.validUntilFor(lastPass.operation)) : null;
+  const validUntil = !publicationTimeUnknown && lastPass && typeof lastPass.operation === "string" && options.validUntilFor ? iso(options.validUntilFor(lastPass.operation)) : null;
   const failedNow = typeof record.status === "string" && failedStates.has(record.status);
   // The controller admits no new round while the last one failed or the schedule flag is set.
   const hold =
-    options.suspended && failedNow
+    record.status === publishedPostIncomplete
+      ? `${options.suspended ? "调度开关处于暂停状态。" : ""}内容已发布，后续阶段未完成，要等人工核对后才会继续。`
+      : options.suspended && failedNow
       ? "调度开关处于暂停状态，上一轮也失败了，要等人工核对后才会继续。"
       : options.suspended
         ? "调度开关处于暂停状态。"
@@ -126,7 +134,7 @@ export function describeSync(
       schedule: options.suspended ? "已暂停" : options.schedule,
       queue: null,
       hold,
-      publishedVersionAt: lastSuccess,
+      publishedVersionAt: publicationTimeUnknown ? null : lastSuccess,
       contentValidUntil: validUntil,
     },
     history: running ? [running, ...history] : history,

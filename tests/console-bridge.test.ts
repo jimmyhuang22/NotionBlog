@@ -66,6 +66,49 @@ test("sync state: a running round and the suspend flag", () => {
   assert.ok(suspended.status.hold);
 });
 
+test("sync state: a published round with incomplete follow-up reports a known failure and holds scheduling", () => {
+  const state = {
+    ...fictionalState,
+    status: "PUBLISHED_POST_INCOMPLETE",
+    reason: "EXAMPLE_POST_CHECK_STOPPED",
+    history: [...fictionalState.history.slice(0, -1), { status: "PUBLISHED_POST_INCOMPLETE", finishedAtUTC: fictionalState.finishedAtUTC }],
+  };
+  for (const suspended of [false, true]) {
+    const view = describeSync(state, { suspended, schedule: "每 5 分钟", now: 0, validUntilFor: () => { throw new Error("old publication receipt must not be read"); } });
+    assert.equal(view.status.lastRun?.state, "failed");
+    assert.equal(view.status.lastRun?.error?.code, "RUN_FAILED");
+    assert.match(view.status.lastRun?.error?.message ?? "", /内容已发布.*后续检查或补全未完成.*EXAMPLE_POST_CHECK_STOPPED/);
+    assert.match(view.status.lastRun?.steps[0].label ?? "", /内容已发布/);
+    assert.match(view.status.hold ?? "", /内容已发布.*后续阶段未完成/);
+    assert.equal(view.status.nextScheduledAt, null);
+    assert.equal(view.status.running, null);
+    assert.equal(view.status.lastSuccessAt, "2026-01-01T02:00:00.000Z");
+    assert.equal(view.status.publishedVersionAt, null);
+    assert.equal(view.status.contentValidUntil, null);
+  }
+  const unsafeReason = describeSync({ ...state, reason: "/private/example" }, { suspended: false, schedule: "x", now: 0 });
+  assert.doesNotMatch(JSON.stringify(unsafeReason), /private\/example/);
+  assert.match(unsafeReason.status.lastRun?.error?.message ?? "", /内容已发布/);
+});
+
+test("sync state: an incomplete publication supersedes old version dates until a later complete round", () => {
+  const history = [...fictionalState.history, { status: "PUBLISHED_POST_INCOMPLETE", finishedAtUTC: "2026-01-03T00:00:00Z" }];
+  for (const status of ["FAILED", "RUNNING"]) {
+    const view = describeSync({ ...fictionalState, status, history }, { suspended: true, schedule: "x", now: 0 });
+    assert.equal(view.status.publishedVersionAt, null);
+    assert.equal(view.status.contentValidUntil, null);
+    assert.equal(view.status.lastSuccessAt, "2026-01-01T02:00:00.000Z");
+  }
+  const finishedAtUTC = "2026-01-04T00:00:00Z";
+  const view = describeSync({ ...fictionalState, status: "PASS", finishedAtUTC, history: [...history, { status: "PASS", finishedAtUTC, operation: "/fiction/op-4" }] }, {
+    suspended: false, schedule: "x", now: 0, validUntilFor: () => "2026-01-04T04:00:00Z",
+  });
+  assert.equal(view.status.lastRun?.state, "succeeded");
+  assert.equal(view.status.lastSuccessAt, "2026-01-04T00:00:00.000Z");
+  assert.equal(view.status.publishedVersionAt, "2026-01-04T00:00:00.000Z");
+  assert.equal(view.status.contentValidUntil, "2026-01-04T04:00:00.000Z");
+});
+
 const fakeTool = `
 import { readFileSync, writeFileSync } from "node:fs";
 const behavior = JSON.parse(readFileSync(new URL("../../behavior.json", import.meta.url), "utf8"));
