@@ -116,6 +116,26 @@ test("a core isolation grant without the digest column is rejected as a partial 
   assert.equal((await state(f.db)).installed, false);
 });
 
+test("inaccessible PUBLIC view grants do not conflict, while usable or direct access still does", async t => {
+  const f = await ownerInstallFixture(); t.after(() => f.close());
+  await f.db.exec("CREATE SCHEMA fixture_catalog; REVOKE ALL ON SCHEMA fixture_catalog FROM PUBLIC; CREATE VIEW fixture_catalog.stats AS SELECT 1 AS value; GRANT SELECT ON fixture_catalog.stats TO PUBLIC");
+  await withPGliteOwnerTransaction(f.db, isolation);
+  await assert.rejects(f.db.transaction(async tx => {
+    await tx.exec("SET LOCAL ROLE nb_delta_reader");
+    await tx.query("SELECT * FROM fixture_catalog.stats");
+  }), /permission denied/);
+  for (const [grant, revoke] of [
+    ["GRANT USAGE ON SCHEMA fixture_catalog TO PUBLIC", "REVOKE USAGE ON SCHEMA fixture_catalog FROM PUBLIC"],
+    ["GRANT SELECT ON fixture_catalog.stats TO nb_delta_reader", "REVOKE SELECT ON fixture_catalog.stats FROM nb_delta_reader"],
+    ["GRANT SELECT(value) ON fixture_catalog.stats TO nb_delta_reader", "REVOKE SELECT(value) ON fixture_catalog.stats FROM nb_delta_reader"],
+  ]) {
+    await f.db.exec(grant);
+    try { await assert.rejects(withPGliteOwnerTransaction(f.db, isolation), code("OWNER_INSTALL_READER_ROLE_CONFLICT")); }
+    finally { await f.db.exec(revoke); }
+  }
+  await withPGliteOwnerTransaction(f.db, isolation);
+});
+
 test("verified installs reject missing schema/API capability or reopened private APIs without repairing", async t => {
   const f = await ownerInstallFixture(); t.after(() => f.close());
   await withPGliteOwnerTransaction(f.db, async session => { await isolation(session); await recovery(session); });
