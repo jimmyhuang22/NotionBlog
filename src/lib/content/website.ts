@@ -6,13 +6,13 @@ import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, Search
 import { CONTENT_KINDS, type ContentFeatures } from "../../../config/features.ts";
 import { statusTimeZone, statusPreview } from "./status.ts";
 import { contentYear, supportsYear } from "./years.ts";
-import { gameActivityDate, gameBrowsingDate } from "./game-date.ts";
+import { gameActivityDate, gameBrowsingDate, platformPlayDay } from "./game-date.ts";
 import { validateLibraryYearsQuery } from "./query.ts";
 import type { FeedSnapshot } from "../../../contracts/home-feed.ts";
 
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("base64url");
 // A projection change must invalidate cursors even when the stored snapshot is unchanged.
-const timelineVersion = (version: string, selected: ContentKind[], zone: string) => hash(["completion-dates-v2", version, selected, zone]);
+const timelineVersion = (version: string, selected: ContentKind[], zone: string) => hash(["completion-dates-v3-replay", version, selected, zone]);
 const invalid = (): never => { throw new ContentServiceError("INVALID_QUERY", "Invalid query or changed content. Restart pagination."); };
 const unavailable = (): never => { throw new ContentServiceError("CONTENT_UNAVAILABLE", "The public content snapshot exceeds the supported size."); };
 export function validateCursorQuery(query: CursorQuery, extras: string[] = []): void {
@@ -254,22 +254,34 @@ export function timelineEvents(snapshot: PublicContentSnapshot, zone: string): T
     if (item.kind === "status") { events.set(`status:${item.id}`, { id: `status:${item.id}`, type: "status", occurredAt, entry: statusPreview(item, detail.document) }); continue; }
     let type: Exclude<TimelineEvent, { type: "status" }>["type"] | undefined;
     let rating: Exclude<TimelineEvent, { type: "status" }>["rating"] = null, progressPercent: number | null = null, extra: string | null = null;
+    let replayAt: DateRange | null = null;
     switch (item.kind) {
       case "movie": if (item.status === "watched") { type = "movie-watched"; rating = item.rating; extra = item.mediaType; } break;
       case "book": if (["reading", "read", "given-up"].includes(item.status)) { type = `book-${item.status}` as typeof type; rating = item.personalRating; progressPercent = item.progressPercent; } break;
-      case "game": if (item.status !== "playing" && !occurredAt) break;
-        if (["playing", "clear", "platinumed"].includes(item.status)) { type = item.status === "clear" ? "game-cleared" : `game-${item.status}` as typeof type; rating = item.rating; progressPercent = item.progressPercent; extra = item.platforms.join(" · ") || null; } break;
+      case "game":
+        if (["playing", "clear", "platinumed"].includes(item.status)) {
+          if (item.status === "playing" || occurredAt) type = item.status === "clear" ? "game-cleared" : `game-${item.status}` as typeof type;
+          rating = item.rating; progressPercent = item.progressPercent; extra = item.platforms.join(" · ") || null;
+          if (item.status !== "playing") {
+            const latest = platformPlayDay(item.lastPlayedDate, zone);
+            if (latest && (!occurredAt || latest.start > dayOf(occurredAt))) replayAt = latest;
+          }
+        }
+        break;
       case "album": type = "album-new"; extra = item.photoCount === null ? null : String(item.photoCount); break;
       case "post": type = "post-new"; break;
       case "project": type = "project-new"; extra = item.role; break;
     }
-    if (!type) continue;
-    const id = `${item.kind}:${item.id}:${dayOf(occurredAt)}`;
-    // A snapshot contains the current state of each work; duplicate observations on a day collapse.
-    const previous = events.get(id);
-    if (previous && (previous.occurredAt?.start ?? "") > (occurredAt?.start ?? "")) continue;
-    events.set(id, { id, type, occurredAt, title: item.title, summary: item.summary, cover: item.cover, href: item.href, externalUrl: null, rating, progressPercent, detail: extra,
-      ...(item.kind === "game" ? { playedTime: item.playedTime ? { ...item.playedTime } : null } : {}) });
+    const addEvent = (type: Exclude<TimelineEvent, { type: "status" }>["type"], occurredAt: DateRange | null) => {
+      const id = `${item.kind}:${item.id}:${dayOf(occurredAt)}`;
+      // A snapshot contains the current state of each work; duplicate observations on a day collapse.
+      const previous = events.get(id);
+      if (previous && (previous.occurredAt?.start ?? "") > (occurredAt?.start ?? "")) return;
+      events.set(id, { id, type, occurredAt, title: item.title, summary: item.summary, cover: item.cover, href: item.href, externalUrl: null, rating, progressPercent, detail: extra,
+        ...(item.kind === "game" ? { playedTime: item.playedTime ? { ...item.playedTime } : null } : {}) });
+    };
+    if (type) addEvent(type, occurredAt);
+    if (replayAt) addEvent("game-playing", replayAt);
   }
   return [...events.values()].sort((a, b) => {
     if (!a.occurredAt && b.occurredAt) return 1;
