@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/link-pending";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { SearchResults } from "@/components/search-results";
 import { SearchRetry } from "@/components/search-recovery";
 import { contentRepository } from "@/lib/content";
@@ -8,6 +9,7 @@ import { MAX_QUERY, readQuery, searchHref, searchKinds } from "@/lib/search";
 import { isEnabledContentKind } from "../../../config/features.ts";
 import type { Page } from "../../../contracts/content.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
+import { limitSearch } from "@/server/search-rate-limit";
 import type { SearchHit } from "../../../contracts/website.ts";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +32,8 @@ export default async function SearchPage({ searchParams }: Props) {
   let problem: "busy" | "failed" | null = null;
   if (query) {
     try {
-      results = await contentRepository.search({ q: query, limit: PAGE_SIZE, ...(kind ? { kinds: [kind] } : {}) });
+      // Same per-client and per-instance limits as /api/search; a refusal shows the "busy" retry.
+      results = await limitSearch(await headers(), () => contentRepository.search({ q: query, limit: PAGE_SIZE, ...(kind ? { kinds: [kind] } : {}) }));
     } catch (error) {
       // The form stays usable when the content service is slow or down.
       problem = error instanceof ContentServiceError && error.code === "RATE_LIMITED" ? "busy" : "failed";
