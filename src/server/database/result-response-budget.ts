@@ -43,12 +43,12 @@ export class SearchResultBudget {
     let settled = false;
     const fail = () => { this.failed = true; this.busy = false; settled = true; };
     return {
-      // Materialize the original result and its size once in the same statement.
-      text: `WITH __nb_eval_raw AS MATERIALIZED (${text}),
-        __nb_eval_sized AS MATERIALIZED (
-          SELECT result, pg_catalog.octet_length(result::text) AS result_text_bytes FROM __nb_eval_raw)
-        SELECT CASE WHEN result_text_bytes <= $${values.length + 1}::integer THEN result ELSE NULL END AS result,
-          result_text_bytes AS __nb_result_text_bytes FROM __nb_eval_sized`,
+      // Keep one serialized value for both the size guard and transport. A JSONB
+      // result here would be serialized again by PostgreSQL's output function.
+      text: `WITH __nb_eval_text AS MATERIALIZED (
+          SELECT result::text AS result_text FROM (${text}) AS original)
+        SELECT CASE WHEN pg_catalog.octet_length(result_text) <= $${values.length + 1}::integer THEN result_text ELSE NULL END AS result,
+          pg_catalog.octet_length(result_text) AS __nb_result_text_bytes FROM __nb_eval_text`,
       values: [...values, remaining],
       accept: <T>(rows: unknown[]): T[] => {
         try {
@@ -57,9 +57,14 @@ export class SearchResultBudget {
           const row = rows[0] as Record<string, unknown>, size = row.__nb_result_text_bytes;
           if (!(size === null && row.result === null) &&
               (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0 || size > remaining)) throw unavailable();
+          let result: unknown = null;
+          if (size !== null) {
+            if (typeof row.result !== "string" || Buffer.byteLength(row.result, "utf8") !== size) throw unavailable();
+            try { result = JSON.parse(row.result); } catch { throw unavailable(); }
+          }
           this.bytes += typeof size === "number" ? size : 0;
           this.busy = false; settled = true;
-          return [{ result: row.result }] as T[];
+          return [{ result }] as T[];
         } catch (error) { fail(); throw error; }
       },
       fail,

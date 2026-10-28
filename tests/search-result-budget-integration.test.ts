@@ -11,7 +11,7 @@ import type { ContentRepository } from "../contracts/repository.ts";
 const SQL = "SELECT nb_read_api.read_search_parts('qualified',$1::text[]) AS result";
 class Client extends EventEmitter {
   releases: boolean[] = []; configs: { text: string; values?: unknown[]; query_timeout: number }[] = [];
-  run: (c: { text: string; values?: unknown[]; query_timeout: number }) => Promise<{ rows: unknown[] }> = async () => ({ rows: [{ result: {}, __nb_result_text_bytes: 2 }] });
+  run: (c: { text: string; values?: unknown[]; query_timeout: number }) => Promise<{ rows: unknown[] }> = async () => ({ rows: [{ result: "{}", __nb_result_text_bytes: 2 }] });
   release(destroy = false) { this.releases.push(destroy); }
   query(c: { text: string; values?: unknown[]; query_timeout: number }) { this.configs.push(c); return this.run(c); }
 }
@@ -113,7 +113,7 @@ test("opt-in successive statements keep the original remaining deadline", async 
   let now = 0; const clients: Client[] = [], resultBudget = new SearchResultBudget();
   const pool = { connect: (cb: (e: null, c: PoolClient) => void) => {
     const client = new Client(); clients.push(client);
-    client.run = async () => { now += 40; return { rows: [{ result: true, __nb_result_text_bytes: 4 }] }; };
+    client.run = async () => { now += 40; return { rows: [{ result: "true", __nb_result_text_bytes: 4 }] }; };
     cb(null, client as unknown as PoolClient);
   }, options: { query_timeout: 20000 } } as unknown as Pool;
   await withContentReadBudget(new AbortController().signal, async () => {
