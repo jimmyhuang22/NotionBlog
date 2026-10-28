@@ -341,7 +341,7 @@
 .palette__input::placeholder { color: var(--muted); opacity: 1; }
 .palette__input::-webkit-search-cancel-button { display: none; }
 .palette__close { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer; }
-.palette__close kbd { padding: 3px 8px; border-radius: var(--radius-xs); background: var(--soft); font: 12px var(--font-mono); color: var(--muted); }
+.palette__close kbd { padding: 3px 8px; border-radius: var(--radius-xs); background: var(--soft); font: var(--text-xs) var(--font-mono); color: var(--muted); }
 /* The key name is for keyboards; a touch screen gets the word instead. */
 .palette__close span { display: none; font-size: var(--text-sm); color: var(--accent); }
 .palette__list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 0 8px; list-style: none; overflow-y: auto; }

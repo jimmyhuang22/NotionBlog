@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { isCurrentSection, splitNav, type NavItem } from "../lib/nav.ts";
 import { closeOnLeave, useMenuDismiss } from "./use-dismiss";
 
@@ -22,7 +22,8 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   // The section pressed, shown as current at the press while its page is on its way (F43).
   const [going, setGoing] = useState<string | null>(null);
   const selected = going ?? clientPathname;
-  const { primary, more } = splitNav(items);
+  // Recomputed only when the sections change: `more` is a dependency of the layout effect below.
+  const { more } = useMemo(() => splitNav(items), [items]);
   const currentMore = more.find(item => isCurrentSection(selected, item.href));
   const [open, setOpen] = useState(false);
   const group = useRef<HTMLLIElement>(null);

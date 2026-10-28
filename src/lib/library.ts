@@ -24,7 +24,7 @@ export const librarySections: Record<string, LibrarySection> = {
   games: { kind: "game", label: "游戏", unit: "款", tabs: [["playing", "在玩"], ["completed", "通关"], ["wishlist", "想玩"]], defaultStatus: "completed" },
 };
 
-export type LibraryOrder = "date-asc" | "title-asc";
+export type LibraryOrder = "date-asc";
 
 /** Order value → label; null is the list's own default, newest first. Values must be ones the list endpoint accepts. */
 /** Newest or oldest first (F34): ordering by title was dropped, and an old address asking for it opens on the default. */

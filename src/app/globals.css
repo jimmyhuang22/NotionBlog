@@ -31,8 +31,6 @@
   --warning: #a54a00;
   --sky: #e0e7f1;
   --peach: #f6e5d3;
-  --mint: #e2ead9;
-  --lilac: #e9e2ea;
   --shadow: 0 0 0 1px rgba(70, 55, 25, 0.09), 0 10px 24px -16px rgba(70, 55, 25, 0.32);
   --shadow-lift: 0 0 0 1px rgba(70, 55, 25, 0.1), 0 18px 30px -18px rgba(70, 55, 25, 0.45);
   /* Paper grain behind the page; cards and text stay clean. */
@@ -71,8 +69,6 @@
     --warning: #ffb454;
     --sky: #17202e;
     --peach: #2e241a;
-    --mint: #1c261c;
-    --lilac: #26212c;
     --shadow: 0 0 0 1px rgba(255, 245, 225, 0.07);
     --shadow-lift: 0 0 0 1px rgba(255, 245, 225, 0.16);
     --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.035 0 0 0 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -91,8 +87,6 @@
   --warning: #ffb454;
   --sky: #17202e;
   --peach: #2e241a;
-  --mint: #1c261c;
-  --lilac: #26212c;
   --shadow: 0 0 0 1px rgba(255, 245, 225, 0.07);
   --shadow-lift: 0 0 0 1px rgba(255, 245, 225, 0.16);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.035 0 0 0 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");

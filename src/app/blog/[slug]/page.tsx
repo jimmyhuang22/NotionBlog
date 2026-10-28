@@ -49,7 +49,7 @@ export default async function PostPage({ params }: Props) {
           {item.summary ? <p className="post__summary">{item.summary}</p> : null}
           {item.tags.length ? (
             <p className="reading__tags post__tags">
-              {item.tags.map(name => <Link key={name} className="tag" href={`/blog?tag=${encodeURIComponent(name)}`}>{name}</Link>)}
+              {item.tags.map(name => <Link key={name} className="tag" href={`/blog?tag=${encodeURIComponent(name)}`} prefetch={false}>{name}</Link>)}
             </p>
           ) : null}
           {item.cover ? <CoverImage className="post__cover" image={item.cover} previewWidth={800} label="文章封面" /> : null}
