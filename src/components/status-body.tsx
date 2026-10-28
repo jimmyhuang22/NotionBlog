@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ContentDocument, StatusEntry } from "../../contracts/content.ts";
 import { BrowserDocumentBody } from "./browser-document";
 import { ContentImage } from "./content-image";
 import { LightboxProvider } from "./lightbox";
 import { readingLength, trimRuns } from "../lib/text-runs.ts";
+import { createSizeMotion } from "../lib/size-motion.ts";
 import { RichText } from "./rich-text";
 import { useTypesetInline } from "./typeset-inline";
 
@@ -38,17 +39,16 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   // The opening of the body, typeset. Kept as one object so its formulas are typeset once.
   const preview = useMemo<ContentDocument | null>(() => entry.previewBody?.length ? { blocks: entry.previewBody, toc: [], completeness: "complete" } : null, [entry.previewBody]);
   const clip = useRef<HTMLDivElement>(null);
-  // Closing a long body (M-02, 2026-10-20): it rolls up first, then the reader is brought back to where the entry begins.
+  // Opening and closing ease the card from its old size to its new one, on a press only (2026-10-28, replacing
+  // M-02's roll-up): measured before the change, played once React has drawn the new content (size-motion.ts).
+  // The height moves on the inner body so the card keeps its shadow and the island's tail unclipped.
   const card = useRef<HTMLDivElement>(null);
-  const [folding, setFolding] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  const [motion] = useState(() => createSizeMotion(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches));
   const returning = useRef(false);
-  function close() { setFolding(false); returning.current = true; setOpen(false); }
-  useEffect(() => {
-    if (!folding) return;
-    const timer = window.setTimeout(close, 450);
-    return () => window.clearTimeout(timer);
-  }, [folding]);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    motion.play(card.current, body.current);
+    // Closing a body read past its start brings the reader back to where the entry begins, at the same time as it shrinks.
     if (open || !returning.current) return;
     returning.current = false;
     const entry = card.current?.closest(".entry") ?? card.current;
@@ -58,7 +58,7 @@ export function StatusBody({ entry, titleLevel = 4 }: {
     const top = entry.getBoundingClientRect().top;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (top < covered + 8) window.scrollBy({ top: top - covered - 16, behavior: still ? "instant" : "smooth" });
-  }, [open]);
+  }, [open, loaded, motion]);
   const [clipped, setClipped] = useState(false);
   useEffect(() => {
     const box = clip.current;
@@ -75,22 +75,25 @@ export function StatusBody({ entry, titleLevel = 4 }: {
 
   async function toggle() {
     if (open) {
-      if (folding) return;
-      if (full && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setFolding(true); else close();
+      motion.capture(card.current, body.current, false);
+      returning.current = true;
+      setOpen(false);
       return;
     }
-    if (loaded) { setOpen(true); return; }
+    if (loaded) { motion.capture(card.current, body.current, true); setOpen(true); return; }
     if (pending) return;
     setPending(true);
     setProblem(null);
     try {
       const response = await fetch(`/api/content/status/${encodeURIComponent(entry.slug)}`, { cache: "no-store" });
-      const body = await response.json().catch(() => null);
-      if (response.ok && body?.data) {
-        setLoaded({ document: body.data.document ?? null });
+      const reply = await response.json().catch(() => null);
+      if (response.ok && reply?.data) {
+        // The card stays as it is while "正在加载…" shows; it eases open only once the body is here.
+        motion.capture(card.current, body.current, true);
+        setLoaded({ document: reply.data.document ?? null });
         setOpen(true);
       } else {
-        setProblem(body?.error?.code === "RATE_LIMITED" ? "busy" : "failed");
+        setProblem(reply?.error?.code === "RATE_LIMITED" ? "busy" : "failed");
       }
     } catch {
       setProblem("failed");
@@ -103,17 +106,20 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   const full = open && loaded?.document && (loaded.document.blocks.length > 0 || loaded.document.completeness === "partial") ? loaded.document : null;
   // The control sits on the card's last line, under the pictures, both folded and unfolded (F36).
   const more = canExpand ? (
-    <button type="button" className="entry__more" onClick={toggle} disabled={pending} aria-expanded={open}>
+    <button type="button" className="entry__more" onClick={toggle} aria-disabled={pending} aria-expanded={open}>
       {pending ? "正在加载…" : open ? (full ? "收起" : "没有更多内容") : problem === "busy" ? "暂时加载不出来，稍后再试" : problem === "failed" ? "没有加载成功，重试" : preview && text.length ? `展开全文 · 约 ${readingLength(text)} 字` : "展开完整内容"}
     </button>
   ) : null;
   if (full) {
     return (
-      <div ref={card} className={folding ? "card entry__card entry__card--full is-folding" : "card entry__card entry__card--full"}
-        onAnimationEnd={event => { if (folding && event.target === event.currentTarget) close(); }}>
-        <Title className="entry__card-title">{entry.title}</Title>
-        <BrowserDocumentBody document={full} topHeading={titleLevel + 1} imagePreviewWidth={800} />
-        {more}
+      <div ref={card} className="card entry__card entry__card--full">
+        <div ref={body} className="entry__card-body">
+          <Title className="entry__card-title">{entry.title}</Title>
+          <BrowserDocumentBody document={full} topHeading={titleLevel + 1} imagePreviewWidth={800} />
+          {/* Where the folded card has its pictures, so the control stays the same button and keeps focus. */}
+          {null}
+          {more}
+        </div>
       </div>
     );
   }
@@ -124,19 +130,21 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   return (
     // Every entry is a card as wide as what it says, its pictures inside under the words; one without a body is just its title, as wide as its picture.
     <div ref={card} className={preview ? "card entry__card entry__card--full" : hasBody ? "card entry__card" : "card entry__card entry__card--brief"}>
-      <Title className="entry__card-title">{entry.title}</Title>
-      {preview ? (
-        <div ref={clip} className="entry__preview" data-clipped={clipped ? "" : undefined}>
-          <BrowserDocumentBody document={preview} topHeading={titleLevel + 1} />
-        </div>
-      ) : hasBody ? <p><RichText runs={text} Equation={Equation} /></p> : null}
-      {images.length ? (
-        <LightboxProvider className={`entry__photos entry__photos--${Math.min(images.length, 3)}${tall ? " entry__photos--tall" : ""}`}>
-          {images.map((image, index) => <ContentImage key={`${image.id}:${index}`} image={image} previewWidth={single ? 800 : 400} />)}
-          {tall ? <span className="entry__long" aria-hidden="true">长图</span> : null}
-        </LightboxProvider>
-      ) : null}
-      {more}
+      <div ref={body} className="entry__card-body">
+        <Title className="entry__card-title">{entry.title}</Title>
+        {preview ? (
+          <div ref={clip} className="entry__preview" data-clipped={clipped ? "" : undefined}>
+            <BrowserDocumentBody document={preview} topHeading={titleLevel + 1} />
+          </div>
+        ) : hasBody ? <p><RichText runs={text} Equation={Equation} /></p> : null}
+        {images.length ? (
+          <LightboxProvider className={`entry__photos entry__photos--${Math.min(images.length, 3)}${tall ? " entry__photos--tall" : ""}`}>
+            {images.map((image, index) => <ContentImage key={`${image.id}:${index}`} image={image} previewWidth={single ? 800 : 400} />)}
+            {tall ? <span className="entry__long" aria-hidden="true">长图</span> : null}
+          </LightboxProvider>
+        ) : null}
+        {more}
+      </div>
     </div>
   );
 }
