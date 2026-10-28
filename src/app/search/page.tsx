@@ -41,7 +41,7 @@ export default async function SearchPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="wrap wrap--narrow search">
+    <div className="wrap search">
       <header className="page-head"><h1>搜索</h1></header>
       <form className="search__form" role="search" action="/search" method="get">
         <button type="submit" className="search__submit" aria-label="搜索">
