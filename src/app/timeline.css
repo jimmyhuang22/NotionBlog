@@ -41,6 +41,11 @@
 .entry__card { width: fit-content; min-width: min(280px, 100%); max-width: 100%; margin-top: 8px; padding: 20px 24px; }
 .entry__card--brief { min-width: 0; padding: 14px 24px; }
 .entry__card--full { width: auto; }
+/* The card's contents, whose height eases on opening and closing (size-motion.ts). Its own block context keeps the margins
+   inside it, so nothing moves when the motion sets a height; the control's pull into the bottom padding is the body's own. */
+.entry__card-body { display: flow-root; }
+.entry__card-body > .entry__more { margin-bottom: 0; }
+.entry__card-body:has(> .entry__more) { margin-bottom: -10px; }
 /*
  * The title stands apart from the words under it: larger and heavier; a title-only card keeps its plain weight (F36).
  * The hand font has a single weight, and a bold the browser makes up fills the strokes of dense characters, so the
@@ -52,7 +57,7 @@
 /* Titles stay in the hand font; bodies can run to many lines, so they use the reading font. */
 .entry__card p { margin: 0; font-size: var(--text-body); line-height: 1.75; white-space: pre-wrap; }
 /* The words a shade lighter than the title, still well above 4.5 against every card. */
-.entry__card > p, .entry__card .prose { color: color-mix(in srgb, var(--ink) 78%, var(--card)); }
+.entry__card-body > p, .entry__card .prose { color: color-mix(in srgb, var(--ink) 78%, var(--card)); }
 /* Body images from the list: one shows whole, two or more become an even grid of crops. */
 /* Pictures sit inside the card, under the words. */
 .entry__photos { display: grid; gap: 8px; margin-top: 14px; }
@@ -61,7 +66,7 @@
 .entry__photos--1 { width: 420px; max-width: 100%; }
 .entry__photos--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 520px; max-width: 100%; }
 .entry__photos--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.entry__card:has(> .entry__photos--3) { width: auto; }
+.entry__card:has(> .entry__card-body > .entry__photos--3) { width: auto; }
 .entry__photos img { display: block; width: 100%; height: auto; border-radius: var(--radius-md); background: var(--soft); }
 .entry__photos--2 img, .entry__photos--3 img { aspect-ratio: 1; object-fit: cover; }
 .entry__photos .figure__zoom { border-radius: var(--radius-md); }
@@ -72,7 +77,8 @@
 .entry__long { position: absolute; right: 8px; bottom: 8px; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: var(--text-xs); color: #fff; pointer-events: none; }
 .entry__more { display: block; min-height: 36px; margin: 10px 0 -10px; padding: 0; border: 0; background: none; font-family: var(--font-hand); font-size: var(--text-sm); color: var(--accent); cursor: pointer; }
 .entry__more:hover { text-decoration: underline wavy color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 4px; }
-.entry__more:disabled { cursor: progress; }
+/* Not disabled while it loads, so keyboard focus stays on it; a press then does nothing (toggle). */
+.entry__more[aria-disabled="true"] { cursor: progress; }
 .entry__card .prose { font-size: var(--text-body); line-height: 1.75; }
 /* A long entry's typeset opening, collapsed to about nine lines (status-body.tsx); a mask fades it, so it suits every card colour. */
 .entry__preview { max-height: calc(9 * 1.75 * var(--text-body)); overflow: hidden; }

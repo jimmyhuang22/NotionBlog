@@ -17,12 +17,7 @@
   .library__item.is-appended:nth-child(6n) { animation-delay: 200ms; }
   @keyframes rise-in { from { opacity: 0; transform: translateY(14px); } }
 
-  /* An expanded status entry unfolds from its top edge; the clip is let go at the end so the card keeps its shadow. */
-  .entry__card--full { animation: unfold 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
-  @keyframes unfold { from { opacity: 0.2; clip-path: inset(0 0 55% 0 round 16px); } to { clip-path: inset(0 round 16px); } }
-  /* Closing rolls the same way back up before the short card returns (status-body.tsx). */
-  .entry__card--full.is-folding { animation: fold 0.25s cubic-bezier(0.4, 0, 0.6, 1) forwards; }
-  @keyframes fold { from { clip-path: inset(0 round 16px); } to { opacity: 0.3; clip-path: inset(0 0 70% 0 round 16px); } }
+  /* A status entry opening or closing only eases its size, on a press, in script (size-motion.ts, 2026-10-28); no class-driven curtain. */
 
   /* The image viewer fades in and settles; closing fades it out (lightbox.tsx keeps the picture until then). */
   .lightbox, .lightbox::backdrop { opacity: 0; transition: opacity 0.2s ease, overlay 0.2s allow-discrete, display 0.2s allow-discrete; }
@@ -100,6 +95,7 @@
    */
   .timeline--home [style*="--i"] :is(.timeline__month, .entry) { animation: ink-draw 0.2s linear backwards; animation-delay: calc(350ms + var(--i) * 150ms); }
   .timeline--home [style*="--i"] .entry::before { animation: ring-in 0.25s cubic-bezier(0.3, 1.4, 0.5, 1) backwards; animation-delay: calc(350ms + var(--i) * 150ms); }
+  /* Specificity 0,3,0: it overrides any CSS animation on an entry's direct children (cards, covers) in the first screen; add theirs in script or above this weight. */
   .timeline--home [style*="--i"] .entry > * { animation: arrive 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(430ms + var(--i) * 150ms); }
   @keyframes ink-draw { from { clip-path: inset(0 0 100% -16px); } to { clip-path: inset(0 0 0 -16px); } }
   @keyframes ring-in { from { transform: scale(0); } }
