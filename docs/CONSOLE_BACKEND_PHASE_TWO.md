@@ -45,6 +45,10 @@ node --env-file=.local/owner.env scripts/console-management/admin.ts enable --co
 
 实际采用还需现有持久发布／独立媒体接入完成、指定真实验收课程，并核对运行配置与图片规模。批准覆盖同一任务，不另建执行线重复当前内容恢复。
 
+原恢复程序还使用维护／手动运行／writer session 锁的主机，应在 native 环境设置 `CONSOLE_COORDINATION_LOCKS_FILE`。该 600 文件为 `{"version":1,"locks":["/absolute/recovery/maintenance.lock","/absolute/private/manual-run.lock","/absolute/private/writer-session.lock"]}`，三个父目录须为既有私有目录，顺序固定。实际 worker 先原子取得这三把锁，再由既有 backend／增量 host 取得 canonical `worker.lock`；连接收尾后逆序释放。已有锁时操作记为 BUSY，不清锁、不等待、不开始 SQL／来源工作。未配置的其他主机保持原 canonical 锁行为。维护安装／初始化也须在同一组既有锁下执行。
+
+“新同步”是有界增量，沿用 SQLite 队列尝试、SQL operation 账本及本次请求／字节／时长限制，不增加原完整恢复器的轮次或每日整轮计数，不启动完整恢复入口。采纳新的完整持久版本会使旧本机缓存不再匹配，须复用新批次 capture 建立对应基线；只移动 SQL 指针不等于控制台缓存已完成接续。冻结保护持久发布，qualified 版本仍遵循原完整发布和过期规则；正式站采用 published/storage 是另一个明确的发布步骤。
+
 ## 配套备份恢复
 
 有冻结扩展时数据库使用 `notionblog-publication-archive-2` 保存成员和操作，无扩展保留格式 1。旧工具遇到扩展拒绝，不能遗漏后宣称完整。
