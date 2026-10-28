@@ -94,7 +94,7 @@ export async function runWebsiteSync(options: {client: NotionReadClient;config: 
       if(options.resumeCollection)resumeCheck=await options.resumeCollection.bind(lease);
       check();
       if(lease.configDigest!==digest||!Array.isArray(lease.deniedPageIds))throw new ContentServiceError("CONTENT_UNAVAILABLE","Invalid sync lease.");
-      timer=setInterval(()=>{if(renewal)return;renewal=options.writer!.renew(lease!).catch(()=>{failed=true;}).finally(()=>{renewal=undefined;});},30000);
+      timer=setInterval(()=>{if(renewal||failed)return;renewal=options.writer!.renew(lease!).catch(()=>{failed=true;if(timer)clearInterval(timer);}).finally(()=>{renewal=undefined;});},30000);
     }
     const ownerRepository=createWebsiteNotionRepository({client:options.client,config,timeZone,deniedPageIds:new Set(lease?.deniedPageIds??[])});
     const refreshScope=createMediaRefreshScope(id=>ownerRepository.resolveMediaOwner!(id),check,Date.now,options.revalidateCollectionOwners===true);

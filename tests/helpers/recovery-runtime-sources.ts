@@ -9,11 +9,11 @@ export const recoveryRuntimeSources = [
   },
   {
     "path": "scripts/website-sync/run-private.mjs",
-    "sha256": "fe40de6f33b87e5078ae419a5495dc7018ec99415d1207d4f5d7f15b6a3e4f5b"
+    "sha256": "6843f4a8c29b9977a9d8625792973ecf950377037fa4053bbe82a6d93eb6ec41"
   },
   {
     "path": "scripts/website-sync/run.ts",
-    "sha256": "c236f72b4e7080568998ce95d6d9719f3ff491fdf7ff564c1d6c3cc5193dadd5"
+    "sha256": "bda4cb6557361df1f83bc75e4a248012fe05e40b4c0ebd0ecb7a1dfc7ef54994"
   },
   {
     "path": "scripts/check-website-protocol.ts",
