@@ -21,7 +21,8 @@ export function SocialLinks({ links }: { links: SocialLink[] }) {
     <ul className="socials" aria-label="社交媒体">
       {links.map(link => (
         <li key={`${link.platform}:${link.url}`}>
-          <a href={link.url} target="_blank" rel="noopener noreferrer me" aria-label={link.label} title={link.label} data-platform={link.platform}><Icon platform={link.platform} /></a>
+          {/* A web profile opens beside the site; an email address goes to the mail app and needs no blank tab. */}
+          <a href={link.url} {...(/^https?:/iu.test(link.url) ? { target: "_blank" } : {})} rel="noopener noreferrer me" aria-label={link.label} title={link.label} data-platform={link.platform}><Icon platform={link.platform} /></a>
         </li>
       ))}
     </ul>

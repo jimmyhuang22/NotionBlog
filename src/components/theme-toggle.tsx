@@ -192,7 +192,7 @@ export function ThemeControls() {
   return (
     <>
       <div className="theme-menu" ref={group} onBlur={closeOnLeave(() => setOpen(false))}>
-        <button type="button" ref={menuButton} className="icon-button" aria-label="主题" title="主题" aria-haspopup="true" aria-expanded={open} aria-controls="theme-menu-panel" onClick={() => setOpen(!open)}>
+        <button type="button" ref={menuButton} className="icon-button" aria-label="主题" title="主题" aria-expanded={open} aria-controls="theme-menu-panel" onClick={() => setOpen(!open)}>
           {paletteIcon}
         </button>
         <div id="theme-menu-panel" className="theme-menu__panel" hidden={!open}>

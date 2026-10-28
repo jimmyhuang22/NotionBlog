@@ -12,6 +12,8 @@ test("stylesheets take font sizes from the type scale", () => {
     for (const [declaration, value] of css.matchAll(/font-size:\s*([^;}]+)/gu)) {
       assert.match(value!.trim(), /^(var\(--text-[a-z0-9]+\)|clamp\(.+\)|[\d.]+em|inherit)( !important)?$/u, `${name}: ${declaration}`);
     }
+    // The `font` shorthand carries a size too: no pixel size may slip in through it.
+    for (const [declaration] of css.matchAll(/(?<![-\w])font:[^;}]*\d+px[^;}]*/gu)) assert.fail(`${name}: ${declaration}`);
   }
 });
 

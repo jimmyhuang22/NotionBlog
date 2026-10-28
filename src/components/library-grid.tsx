@@ -118,7 +118,7 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
   return (
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>列表有更新，已从头重新加载。</p> : null}
-      {groupByYear(items, timeZone, order === "title-asc" || year !== null).map(group => (
+      {groupByYear(items, timeZone, year !== null).map(group => (
         <section key={`${group.key}:${group.items[0]?.id}`} className="library__group">
           {group.label ? <h2 className="section-title">{group.label}</h2> : null}
           <div className={`library__grid library__grid--${kind}`}>
