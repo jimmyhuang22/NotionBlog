@@ -22,6 +22,10 @@ import { installIncrementalPublication } from "../scripts/website-sync/increment
 import { installIncrementalReaderIsolation } from "../scripts/website-sync/incremental-reader-isolation.ts";
 import { installIncrementalWithdrawalRecovery } from "../scripts/website-sync/incremental-withdrawal-recovery.ts";
 import { installIncrementalReader } from "../scripts/website-sync/incremental-reader-migration.ts";
+import { installFreeze } from "../scripts/website-sync/freeze-migration.ts";
+import { createFreezeStore } from "../src/server/database/freeze.ts";
+import { verifyMediaBytes } from "../src/server/database/storage.ts";
+import { ManagementBackend } from "../scripts/console-management/backend.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 import core from "../database/website-protocol.json" with {type: "json"};
 import study from "../database/website-study-protocol.json" with {type: "json"};
@@ -82,6 +86,52 @@ async function sample(s: Awaited<ReturnType<typeof setup>>) {
   return {archive: await exportPublicationArchive(s.owner), receipt, records, media, thumbnail, bytes: new Map([[media.objectKey, image], [thumbnail.objectKey, derivative]])};
 }
 const sorted = (rows: Record<string, unknown>[]) => rows.map(r => JSON.stringify(r, Object.keys(r).sort())).sort();
+test("frozen archive preserves membership and audit history while restore disables publication and freezing", async () => {
+  const source = await setup(), target = await setup(), root = await realpath(await mkdtemp(join(tmpdir(), "frozen-media-")));
+  try {
+    const snapshot = await sample(source);
+    await source.db.exec("UPDATE nb_v2.runs SET status='failed' WHERE id=(SELECT lease_run FROM nb_v2.state); UPDATE nb_v2.state SET lease_run=NULL,lease_until=NULL;");
+    await installFreeze(source.owner); await installFreeze(target.owner);
+    await source.db.query("UPDATE nb_freeze.state SET enabled=true");
+    const plan = await createFreezeStore(source.owner).preview(snapshot.records[0].detail.item.id, "freeze");
+    assert.equal(plan.images, 2); assert.deepEqual(plan.thumbnailIds, [snapshot.thumbnail.assetId]);
+    let corrupt = true, verified = 0;
+    const backend = new ManagementBackend({version: 1, enabled: true, stateDir: join(root, ".local", "management"),
+      lockDirectory: join(root, "lock"), runtimeDirectory: join(root, "runtime"), sourceConfigPath: join(root, "config.json"), siteOrigin: "https://example.test", durationMs: 120000, mediaBytes: 1048576}, {
+      database: async () => source.owner, verifyMedia: async media => {verifyMediaBytes(media, corrupt ? Buffer.from("invalid image") : snapshot.bytes.get(media.objectKey)!); verified++;},
+      inspectSource: async () => assert.fail("Freeze must not read Notion"), enqueue: async () => {}, assertIdle: async () => {}, dispatch: async () => {}, latestReport: async () => null,
+      runSync: async () => assert.fail("Freeze must not sync"),
+    });
+    const preview = await backend.preview(plan.rootId, "freeze"), bad = await backend.start("freeze.start", {target: plan.rootId, digest: preview.digest});
+    await backend.work(bad.operationId); assert.equal((await backend.operation(bad.operationId)).state, "failed");
+    assert.equal((await createFreezeStore(source.owner).state()).members.length, 0);
+    corrupt = false;
+    const good = await backend.start("freeze.start", {target: plan.rootId, digest: preview.digest}); await backend.work(good.operationId);
+    assert.equal((await backend.operation(good.operationId)).state, "succeeded"); assert.equal(verified, 2);
+    await assert.rejects(source.db.query("DELETE FROM nb_thumbnails.media WHERE descriptor->>'assetId'=$1", [snapshot.thumbnail.assetId]), /NB_FREEZE_PROTECTED/);
+    const archive = await exportPublicationArchive(source.owner);
+    assert.equal(archive.format, "notionblog-publication-archive-2");
+    assert.equal(archive.freeze?.members.length, 1);
+    assert.equal(archive.freeze?.operations.length, 1);
+    await assert.rejects(exportWebsiteArchive(source.owner));
+    for (const change of [
+      (a: PublicationArchive) => { (a.freeze!.members[0].record as { item: { title: string } }).item.title = "Tampered"; },
+      (a: PublicationArchive) => { a.freeze!.groups = []; },
+      (a: PublicationArchive) => { a.format = "notionblog-publication-archive-1"; },
+      (a: PublicationArchive) => { a.freeze!.state[0].migration_digest = "0".repeat(64); },
+    ]) {
+      const copy = structuredClone(archive); change(copy); assert.throws(() => validatePublicationArchive(copy));
+    }
+    await restorePublicationArchive(target.owner, archive);
+    const restored = await exportPublicationArchive(target.owner);
+    assert.deepEqual(restored.freeze!.members, archive.freeze!.members);
+    assert.deepEqual(restored.freeze!.groups, archive.freeze!.groups);
+    assert.deepEqual(restored.freeze!.operations, archive.freeze!.operations);
+    assert.equal(restored.freeze!.state[0].enabled, false);
+    assert.equal(restored.publication[0].run_id, null);
+    await assert.rejects(createWebsiteDatabaseRepository(publicationReader(target.role("nb_reader"), "published")).list("post"));
+  } finally { await source.db.close(); await target.db.close(); await rm(root, {recursive: true, force: true}); }
+});
 test("complete publication recovery preserves history while disabling all publication and leases", async () => {
   const source = await setup(), target = await setup();
   try {

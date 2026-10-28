@@ -24,6 +24,7 @@ export interface IncrementalPorts<T extends PreparedDelta> {
 export interface CycleOptions {
   queue: IncrementalQueue; schemaDigest: string; signal?: AbortSignal;
   maxTasks?: number; maxDurationMs?: number; retryDelayMs?: number;
+  target?: { sourceKey: string; pageKey: string };
 }
 class Cancelled extends Error {}
 function guard(signal: AbortSignal) { if (signal.aborted) throw new Cancelled(); }
@@ -113,7 +114,7 @@ async function runCycle<T extends PreparedDelta>(options: CycleOptions, ports: I
     let retirementReady = await retireClosed();
     while (!recoveryOnly && retirementReady && steps < maxTasks && queue.status().awaiting_verification === 0) {
       guard(signal);
-      const [ticket] = queue.claim(1, duration + 1000, { requireRetirement: !!ports.retire });
+      const [ticket] = queue.claim(1, duration + 1000, { requireRetirement: !!ports.retire, target: options.target });
       if (!ticket) {
         if (ports.retire && queue.status().retirement_pending) { retirementReady = await retireClosed(); continue; }
         break;

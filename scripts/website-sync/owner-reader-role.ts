@@ -4,7 +4,7 @@ const required = ["nb_publication_api.check_capability(text)", "nb_publication_a
   "nb_delta_api.check_capability(text)", "nb_delta_api.read_state()", "nb_delta_api.check_reader(text)",
   "nb_delta_api.read_page(text,text,text)", "nb_delta_api.verify_operation(uuid,text,text)"];
 const optional = ["nb_publication_api.check_thumbnail_capability(text)", "nb_publication_api.read_thumbnail(text,integer,text)",
-  "nb_delta_api.check_withdrawal_recovery(text)"];
+  "nb_delta_api.check_withdrawal_recovery(text)", "nb_freeze_api.check_capability(text)", "nb_freeze_api.read_state()"];
 const app = "n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'";
 /** Inspect effective data access and ownership, plus explicit grants even without schema USAGE.
  * PUBLIC catalog/basic access is not confused with new application capabilities. */
@@ -19,11 +19,15 @@ SELECT NOT (r.rolcanlogin OR r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.
  AND NOT EXISTS(SELECT FROM pg_catalog.pg_default_acl d, LATERAL pg_catalog.aclexplode(d.defaclacl) a WHERE a.grantee=r.oid)
  AND NOT EXISTS(SELECT FROM pg_catalog.pg_namespace n WHERE ${app} AND
    (pg_catalog.has_schema_privilege(r.oid,n.oid,'CREATE') OR EXISTS(SELECT FROM pg_catalog.aclexplode(COALESCE(n.nspacl,pg_catalog.acldefault('n',n.nspowner))) a
-    WHERE a.grantee=r.oid AND (a.is_grantable OR a.privilege_type<>'USAGE' OR n.nspname NOT IN ('nb_publication_api','nb_delta_api')))))
+    WHERE a.grantee=r.oid AND (a.is_grantable OR a.privilege_type<>'USAGE' OR n.nspname NOT IN ('nb_publication_api','nb_delta_api','nb_freeze_api')))))
  AND NOT EXISTS(SELECT FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE ${app} AND
-   ((c.relkind IN ('r','p','v','m','f') AND (pg_catalog.has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR
+   ((pg_catalog.has_schema_privilege(r.oid,n.oid,'USAGE') AND
+    ((c.relkind IN ('r','p','v','m','f') AND (pg_catalog.has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR
     pg_catalog.has_any_column_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))) OR
-    (c.relkind='S' AND pg_catalog.has_sequence_privilege(r.oid,c.oid,'USAGE,SELECT,UPDATE'))))
+    (c.relkind='S' AND pg_catalog.has_sequence_privilege(r.oid,c.oid,'USAGE,SELECT,UPDATE')))) OR
+    EXISTS(SELECT FROM pg_catalog.aclexplode(c.relacl) a WHERE a.grantee=r.oid) OR
+    EXISTS(SELECT FROM pg_catalog.pg_attribute col CROSS JOIN LATERAL pg_catalog.aclexplode(col.attacl) a
+      WHERE col.attrelid=c.oid AND col.attnum>0 AND NOT col.attisdropped AND a.grantee=r.oid)))
  AND NOT EXISTS(SELECT FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE ${app} AND
    ((NOT EXISTS(SELECT FROM allowed WHERE allowed.oid=p.oid) AND
       ((pg_catalog.has_schema_privilege(r.oid,n.oid,'USAGE') AND pg_catalog.has_function_privilege(r.oid,p.oid,'EXECUTE')) OR

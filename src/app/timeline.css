@@ -84,7 +84,9 @@
 .timeline__more { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-left: 38px; }
 .timeline__more span { font-size: var(--text-sm); color: var(--muted); }
 .timeline__notice { margin: 0 0 20px 38px; }
-.status-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 24px; }
+/* The status page lines its timeline up with the title and the year row, as the library sections line up their grids (F48, 2026-10-28): no inset before the line. The home timeline keeps its inset. */
+.status-page .entry, .status-page .timeline__month { margin-left: 0; }
+.status-page .timeline__more, .status-page .timeline__notice { margin-left: 30px; }
 /* Updates from other sections: a hollow dot, a plain label and a compact linked card. */
 .entry--event::before { border-color: var(--muted); }
 .entry__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
@@ -333,6 +335,7 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
   .entry { padding-left: 22px; }
   .timeline__month { padding-left: 22px; }
   .timeline__more, .timeline__notice { margin-left: 30px; }
+  .status-page .timeline__more, .status-page .timeline__notice { margin-left: 22px; }
 }
 
 /* While the timeline loads, its line and dots are already there; faint bars stand in for the entries. */

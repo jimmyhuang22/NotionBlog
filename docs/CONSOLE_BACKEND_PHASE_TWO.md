@@ -1,49 +1,67 @@
-# 控制台第二阶段后端方案
+# 控制台第二阶段后端
 
-更新：2026-10-27。状态：待确认的实现方案；未安装迁移、启用功能或改变内容公开规则。界面与操作协议沿用[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)和[桥接协议](CONSOLE_BRIDGE.md)。
+更新：2026-10-27。用户已确认继续实施，见[冻结决定](decisions/2026-10-27-console-freeze-and-sync.md)。源码已通过 PR #177 合入 develop，本机控制台已更新并验证真实状态展示；管理扩展与冻结／增量按钮仍未启用，待首次有效持久基线和独立媒体运行采用。界面与协议沿用[控制台方案](ADMIN_CONSOLE_PROPOSAL.md)和[桥接协议](CONSOLE_BRIDGE.md)。
 
-## 当前能力与边界
+## 使用效果与边界
 
-状态、操作记录、其他定时任务、公开内容列表和下架桥接已有实现；控制台已支持独立运行。真实下架与恢复仍需完整验收，不能因为按钮已接线就记为验收通过。
+立即同步执行一个有界增量周期；单页按钮只领取指定页面及必要依赖，`resume` 仍只解除人工检查。控制台从真实发布状态、队列和操作记录区分完成、待办、失败和结果不明。
 
-现有[原子增量提交与结果查询](../src/server/database/incremental-publication.ts)、[单页内容准备](../scripts/website-incremental-sync/source.ts)、[提交及读取核验](../scripts/website-incremental-sync/publication-port.ts)、图片交付检查和 [worker 锁](../scripts/website-incremental-sync/host.ts)可以复用。当前桥接仍将 `sync`、`targetedSync`、`freeze` 报告为关闭，尚无冻结数据库协议。增量 CLI 的 `resume --source/--page` 是解除人工检查，不是执行单页同步。
+冻结保留当前发布的目标及后代、正文、原图和当时已登记的小图。不再单独轮询冻结成员的元数据、正文和图片；共享来源目录仍可能返回这些条目，发现器忽略对应提示。新的 Notion 子页面不自动加入。永久解冻把原成员放回队列；“同步一次”在新内容原子提交成功后更新冻结版本，失败保留旧版。中央 deny、祖先 deny、栏目关闭及来源授权撤销继续优先。
 
-## 冻结与解冻
+独立冻结扩展记录组、成员快照、版本与操作账本。预览绑定发布版本、成员、媒体、中央 deny 和冻结版本；解冻另绑定来源身份、编辑时间和归属，变化后须重新预览。PostgreSQL 发布指针触发器防止旧 publisher／完整同步覆盖或遗漏冻结记录，可选小图触发器保护被冻结的派生对象。网站仍从同一个持久发布版本读取列表、搜索、内部链接与媒体。
 
-建议新增独立冻结扩展，保存冻结组、冻结时已发布成员、所选内容及媒体版本、冻结版本号和操作记录。冻结状态不写进来源配置，不改变来源摘要；冻结后新增的 Notion 子页面不自动加入。
+同步一次复用原增量事务、独立 reader 和 checkpoint 恢复。回执丢失先查询原 operation，不重放写入。沿用每次最多 100 条变更记录／媒体／撤回，学习组最多 2,000 次准备读取，还受本轮时长与字节预算限制，超限要求人工检查。未冻结祖先被删除而其后代已冻结时，当前实现拒绝该准备操作，需先处理冻结组。
 
-冻结预览从当前发布版本解析目标及后代，核对原图与需要的小图均已独立交付。预览标识绑定发布版本、成员集合、媒体版本、冻结版本及中央 deny；确认时在现有锁内重新检查，任何变化都要求重新预览。不能只核对图片地址存在。
+原图和已登记小图都核验实际字节；缺档或损坏不冻结。冻结不负责生成尚未登记的小图，图片变更后的派生图仍由既有媒体流程准备。重叠冻结组拒绝。
 
-重叠的冻结组先拒绝并指出已有范围，避免不同组为同一成员选择不同版本；后续是否支持合并另议。
+## 本机接线
 
-冻结提交后，增量发现、目录核对、正文和媒体采集跳过该成员集合，发布候选同时保留其已有版本，避免把“未重新采集”当作删除。网站读取、目录、搜索、内部链接和媒体资格也要识别冻结版本；仅在 worker 跳过读取不足以实现冻结。中央 deny、祖先 deny、栏目关闭与明确撤销来源授权继续优先于冻结。
+桥接配置增加可空的 `management`，含固定 Node 24 `node`、代码目录 `project`、私有 `envFile` 和 `configFile`，全部使用绝对路径。未配置时保留第一阶段。桥接子进程只继承 PATH、HOME、NODE_ENV，浏览器不能指定命令、SQL、凭据或文件路径。
 
-永久解冻把原成员集合重新加入同步队列，按 Notion 当前内容及资格更新或撤回；解冻预览列出覆盖和撤回影响。新增后代仍走正常的授权发现规则。
+管理配置示例（替换路径，文件权限 600）：
 
-“同步一次”保持旧冻结版本对外有效，在同一把锁下准备新内容、提交并核验，成功后更新冻结版本，失败保留旧版本。写入确认丢失先查询操作结果；禁止直接重新提交，也不能在执行前先让旧版失去冻结保护。
+```json
+{
+  "version": 1,
+  "enabled": true,
+  "stateDir": "/absolute/project/.local/console-management",
+  "lockDirectory": "/absolute/private/canonical-worker-state",
+  "runtimeDirectory": "/absolute/private/incremental-runtime",
+  "sourceConfigPath": "/absolute/private/source-config.json",
+  "siteOrigin": "https://example.test",
+  "durationMs": 120000,
+  "mediaBytes": 67108864
+}
+```
 
-这会使冻结范围不再随 Notion 的删除、移动或权限变化自动撤回，属于公开语义变化，须先确认本方案。不得在旧 qualified 模式上先打开冻结按钮。
+执行环境要求 `SYNC_PUBLICATION_MODE=published`、`SYNC_MEDIA_PROVIDER=storage`、`SYNC_FREEZE_ENABLED=1`，独立增量 reader／writer，以及 `CONSOLE_OPERATOR_DATABASE_URL`。管理 LOGIN 只加入 `nb_freeze_operator`，不能兼任 writer、reader 或 owner、持私表权限；运行时核对实际身份及来源摘要。owner 凭据只供显式维护命令。
 
-## 立即同步
+```sh
+node --env-file=.local/owner.env scripts/console-management/admin.ts install --config /absolute/private/management.json
+node --env-file=.local/owner.env scripts/console-management/admin.ts enable --config /absolute/private/management.json
+```
 
-新增受限触发适配器，调用既有增量执行器，复用定时任务的锁、运行记录、预算与队列。控制台只传入目标身份和预览标识，不传 SQL、命令行、凭据或任意文件路径。启动返回操作编号，状态从实际运行记录取得。
+`install` 默认停用，不创建 LOGIN、发布内容或恢复定时任务。若之后才安装可选小图扩展，再运行一次 `install` 补装保护；保护缺失时能力检查拒绝启动。`enable` 要求已有持久发布、匹配的本机增量基线、独立媒体及没有未确认工作，使用同一 worker 锁。按现有隔离流程配置管理 LOGIN，不把凭据传到浏览器。
 
-整轮按钮执行一个有界增量周期，区分已更新、无变化、仍有待办及失败，不以退出码 0 推断全部工作完成。单页同步需要新增目标过滤入口及依赖检查；不能用现有 `resume` 命令替代，也不能为它再启动一个并发 writer。
+实际采用还需现有持久发布／独立媒体接入完成、指定真实验收课程，并核对运行配置与图片规模。批准覆盖同一任务，不另建执行线重复当前内容恢复。
 
-沿用现有 `sync.start`、`freeze.*`、`unfreeze.*` 和 `operation.*` 桥接请求。内容列表只补真实冻结状态；已完成的公开列表和任务状态不重建。
+原恢复程序还使用维护／手动运行／writer session 锁的主机，应在 native 环境设置 `CONSOLE_COORDINATION_LOCKS_FILE`。该 600 文件为 `{"version":1,"locks":["/absolute/recovery/maintenance.lock","/absolute/private/manual-run.lock","/absolute/private/writer-session.lock"]}`，三个父目录须为既有私有目录，顺序固定。实际 worker 先原子取得这三把锁，再由既有 backend／增量 host 取得 canonical `worker.lock`；连接收尾后逆序释放。已有锁时操作记为 BUSY，不清锁、不等待、不开始 SQL／来源工作。未配置的其他主机保持原 canonical 锁行为。维护安装／初始化也须在同一组既有锁下执行。
 
-## 备份与恢复
+“新同步”是有界增量，沿用 SQLite 队列尝试、SQL operation 账本及本次请求／字节／时长限制，不增加原完整恢复器的轮次或每日整轮计数，不启动完整恢复入口。采纳新的完整持久版本会使旧本机缓存不再匹配，须复用新批次 capture 建立对应基线；只移动 SQL 指针不等于控制台缓存已完成接续。冻结保护持久发布，qualified 版本仍遵循原完整发布和过期规则；正式站采用 published/storage 是另一个明确的发布步骤。
 
-复用[发布恢复工具](PUBLICATION_RECOVERY.md)及[现有归档实现](../src/server/database/publication-archive.ts)的数据库与媒体归档；补入冻结成员、版本与操作历史，并为本机队列和 checkpoint 提供配套恢复。归档版本须显式区分新增结构，旧恢复器遇到不认识的冻结数据应拒绝，不能静默丢弃。
+## 配套备份恢复
 
-先在隔离数据库和本机虚构媒体上完成“冻结、修改来源、同步一次失败、成功更新、下架优先、备份、恢复”的闭环。恢复后仍需当前公开资格核验与明确发布，不自动重新公开已撤回的内容。
+有冻结扩展时数据库使用 `notionblog-publication-archive-2` 保存成员和操作，无扩展保留格式 1。旧工具遇到扩展拒绝，不能遗漏后宣称完整。
 
-## 实施顺序与确认点
+owner 命令在原 worker 锁内将[发布归档](PUBLICATION_RECOVERY.md)与本机 SQLite 队列、学习 checkpoint、正文 cache、ready 配套保存。本机部分上限 192 MiB，只接受来源／版本一致且没有未确认提交或未完成收尾的文件。配置和凭据另行保管。
 
-1. 确认冻结语义和数据库扩展设计，包括第一门真实验收课程。
-2. 实现冻结存储、读取资格与增量跳过逻辑，并完成隔离验证。
-3. 接入整轮及单页触发、预览与操作状态，保持实际安装前能力关闭。
-4. 扩展备份并完成隔离恢复演练。
-5. 持久发布、增量运行和独立媒体实际采用后，安装并用选定课程验收。
+```sh
+node --env-file=.local/owner.env scripts/console-management/admin.ts export --config /absolute/private/management.json --path /absolute/project/.local/backups/new
+node --env-file=.local/owner.env scripts/console-management/admin.ts export --config /absolute/private/management.json --path /absolute/project/.local/backups/new-with-media --media
+node scripts/console-management/admin.ts verify --path /absolute/project/.local/backups/new-with-media
+node --env-file=.local/restore-owner.env scripts/console-management/admin.ts restore --config /absolute/private/empty-target-management.json --path /absolute/project/.local/backups/new-with-media
+```
 
-本机方案与兼容修复可以继续。共享数据库协议与公开语义先确认再实现；真实迁移安装、冻结/解冻、触发同步、备份及模式切换按项目规则取得任务授权后执行，一次批准覆盖对应任务，不增设签收或按窗口重复批准。
+`verify` 完全离线，验证数据库结构、SQLite、文件摘要及包含的图片字节。`--media` 可读 Supabase、COS 或本机副本中的原图和派生图；历史 Notion-only 图仍使用原归档定位器。缺档或损坏使备份失败，真实批量备份按实际规模批准。
+
+恢复要求匹配的空数据库和全新 runtime 目录，先准备本机文件，再原子恢复数据库。SQL 结果不明时保留停用的本机目录供核对，不自动重试。恢复清空发布指针、关闭冻结，ready 改存为 `restored-ready.json` 并标记需要重建基线，旧队列不能自动重放。重新核对当前授权、建立基线并明确发布；该命令不上传图片、不安装调度。

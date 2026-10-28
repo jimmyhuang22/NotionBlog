@@ -71,7 +71,7 @@ export function validateStudyBaselineCollection(collection: WebsiteStudyCollecti
         !equal(baseline.sourceKeys, sources.map(s => s.key).sort()) ||
         baseline.deniedDigest !== configDigest([...new Set([...deniedPageIds].map(normalizeId))].sort())) fail("STUDY_BASELINE_SCOPE_MISMATCH");
     if (!Array.isArray(collection.records) || collection.records.length > 20000 ||
-        Buffer.byteLength(JSON.stringify(collection)) > 32 * 1024 * 1024 || configDigest(collection.records) !== baseline.recordsDigest) fail("STUDY_BASELINE_INVALID");
+        Buffer.byteLength(JSON.stringify(collection)) > 64 * 1024 * 1024 || configDigest(collection.records) !== baseline.recordsDigest) fail("STUDY_BASELINE_INVALID");
     const records = new Map<string, WebsiteRecord>();
     const denied = new Set([...deniedPageIds].map(normalizeId));
     for (const record of collection.records) {

@@ -11,7 +11,7 @@ import { Cover } from "@/components/library-grid";
 import { PlatformChips } from "@/components/platform-chips";
 import { contentRepository } from "@/lib/content";
 import { dateParts, rangeLabel, ratingLabel } from "@/lib/format";
-import { librarySections, progressWidth, ratingDots, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
+import { libraryHref, librarySections, progressWidth, ratingDots, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
 import { getSiteConfig } from "@/lib/site";
 import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
@@ -176,7 +176,7 @@ export default async function LibraryDetailPage(props: Props) {
   return (
     <div className="wrap">
       <nav className="crumbs" aria-label="面包屑">
-        <Link href={`/library/${type}`}>{section.label}</Link><span aria-hidden="true">›</span><span aria-current="page">{item.title}</span>
+        <Link href={libraryHref(type, null, null)}>{section.label}</Link><span aria-hidden="true">›</span><span aria-current="page">{item.title}</span>
       </nav>
       <div className={`work work--${item.kind}`}>
         <div className="work__cover"><Cover image={item.cover} title={item.title} previewWidth={800} /></div>

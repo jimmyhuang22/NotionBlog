@@ -23,7 +23,10 @@ export default function nextConfig(phase: string): NextConfig {
   return { ...config, ...(publicCaching ? {
     // A hard one-day ISR bound, rather than the default long SWR period.
     expireTime: 86400,
-    experimental: { ...config.experimental, staleTimes: { dynamic: 0, static: 0 } },
+    // A page seen in this tab comes back at once for five minutes, cached pages included (the user's
+    // choice, 2026-10-28, S13-6). A takedown still clears the server and CDN at once; only a tab that
+    // already showed the page can keep it up to five minutes.
+    experimental: { ...config.experimental, staleTimes: { dynamic: 300, static: 300 } },
   } : {}), ...(mode === 'production' ? {} : {
     // Pin demo choices in Preview middleware too, independently of its lifecycle.
     // These are non-secret constants; credentials are never part of next.env.
