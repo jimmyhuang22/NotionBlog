@@ -127,17 +127,18 @@ export class ManagementBackend {
     catch { record.operation.state = "failed"; record.operation.error = {code: "UNAVAILABLE", message: "操作未启动。"}; await this.save("operations", id, record); throw new FreezeError("FREEZE_UNAVAILABLE"); }
     return { operationId: id };
   }
-  async work(id: string) {
+  async work(id: string, coordinate?: () => Promise<() => Promise<void>>) {
     const record = await this.load<SavedOperation>("operations", id);
     if (record.operation.state !== "queued") throw new FreezeError("FREEZE_OPERATION_CONFLICT");
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), this.config.durationMs);
     const abort = () => controller.abort(); process.on("SIGTERM", abort); process.on("SIGINT", abort);
     const signal = controller.signal;
-    let release: (() => Promise<void>) | undefined, confirmedWrite = false;
+    let release: (() => Promise<void>) | undefined, releaseCoordination: (() => Promise<void>) | undefined, confirmedWrite = false;
     record.pid = process.pid;
     record.operation.state = "running"; record.operation.startedAt = new Date().toISOString(); record.operation.steps[0].state = "running";
     await this.save("operations", id, record);
     try {
+      releaseCoordination = await coordinate?.(); signal.throwIfAborted();
       const db = await this.database(), store = createFreezeStore(db), request = record.request;
       const preview = request.digest ? await this.load<SavedPreview>("plans", request.digest) : null;
       if (preview && preview.expiresAt < Date.now()) throw new FreezeError("FREEZE_PREVIEW_STALE");
@@ -198,7 +199,8 @@ export class ManagementBackend {
       try { await this.ports.closeDatabase?.(); }
       catch { record.operation.state = record.submitted ? "unknown" : "failed"; record.operation.error = {code: "OUTCOME_UNKNOWN", message: "数据库连接收尾未确认，请先核对记录。"}; }
       record.operation.finishedAt = new Date().toISOString();
-      try { await this.save("operations", id, record); } finally { await release?.(); }
+      try { await this.save("operations", id, record); }
+      finally { try { await release?.(); } finally { await releaseCoordination?.(); } }
     }
   }
   async operation(id: string): Promise<Operation> {

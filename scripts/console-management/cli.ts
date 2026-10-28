@@ -20,6 +20,7 @@ import { createHostBudget } from "../website-incremental-sync/host-budget.ts";
 import { createIncrementalNotionTransport } from "../website-incremental-sync/notion-transport.ts";
 import { readHostJson, validateHostReport } from "../website-incremental-sync/host-state.ts";
 import { closeOwnerPool } from "../cleanup.ts";
+import { acquireManagementCoordination } from "./coordination.ts";
 
 export async function loadManagementConfig(path: string): Promise<ManagementConfig> {
   if (!isAbsolute(path) || resolve(path) !== path) throw new FreezeError("FREEZE_INPUT_INVALID");
@@ -145,7 +146,9 @@ export async function managementMain(args: string[], env: NodeJS.ProcessEnv = pr
     closeDatabase: close,
   });
   try {
-    if (args[2] === "--worker") { await backend.work(args[3]); return; }
+    if (args[2] === "--worker") {
+      await backend.work(args[3], () => acquireManagementCoordination(env.CONSOLE_COORDINATION_LOCKS_FILE)); return;
+    }
     let body = "";
     for await (const chunk of process.stdin) { body += chunk; if (Buffer.byteLength(body) > 65536) throw new FreezeError("FREEZE_INPUT_INVALID"); }
     const request = JSON.parse(body);
