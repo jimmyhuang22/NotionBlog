@@ -1,0 +1,1 @@
+export function deliveryStatus(result: {status?: string; published?: boolean; readerVerified?: boolean; websiteAndImagesVerified?: boolean; outcomeUnknown?: boolean; pendingMutation?: unknown}): string;
