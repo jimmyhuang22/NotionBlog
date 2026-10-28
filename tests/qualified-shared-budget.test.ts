@@ -138,7 +138,7 @@ async function hostFixture(t: TestContext, probe: string) {
   for (const path of [project, inputs, state, cache, join(inputs, "bin")]) await mkdir(path, { mode: 0o700 });
   await copyFile(await realpath(process.execPath), node, constants.COPYFILE_FICLONE); await chmod(node, 0o700);
   const tracked = execFileSync("git", ["ls-files"], { cwd: rootProject, encoding: "utf8" }).trim().split("\n");
-  const extras = ["shared-budget.ts", "shared-budget-transport.ts", "shared-budget-preload.ts", "qualified-budget-cli.ts", "release.d.mts", "run-private.d.mts", "collection-source-proof.ts", "collection-resume-plan.ts", "capture-release-compatibility.ts"].map(n => "scripts/website-sync/" + n);
+  const extras = ["shared-budget.ts", "shared-budget-transport.ts", "shared-budget-preload.ts", "qualified-budget-cli.ts", "release.d.mts", "run-private.d.mts", "collection-source-proof.ts", "collection-resume-plan.ts", "capture-release-compatibility.ts", "full-collection.ts", "full-collection-control.ts", "full-collection-owner.ts"].map(n => "scripts/website-sync/" + n);
   const files = [...new Set([...tracked.filter(p => /^(scripts|src|contracts|database|config|fixtures|adapters)\//.test(p) || /^package(-lock)?\.json$/.test(p)), ...extras, "database/fresh-qualification-protocol.json", "database/capture-requalification-compatibility.json"])];
   for (const path of files) { await mkdir(dirname(join(project, path)), { recursive: true }); await copyFile(join(rootProject, path), join(project, path)); await chmod(join(project, path), 0o644); }
   await symlink(join(rootProject, "node_modules"), join(project, "node_modules"), "dir");
@@ -174,8 +174,8 @@ for (const [name, probe] of Object.entries({
 test("budget input rejects absent counters, unknown keys and cleanup outside reviewed maximum", () => {
   const input = { format: "qualified-budget-input-v1", runtimeSha256: "a".repeat(64), storageOrigin: "https://storage.test", durationMs: 1000, cleanupMs: 200, limits };
   assert.equal(parseQualifiedBudgetInput(input).durationMs, 1000);
-  assert.equal(parseQualifiedBudgetInput({...input,durationMs:7200000}).durationMs,7200000);
-  assert.throws(()=>parseQualifiedBudgetInput({...input,durationMs:7200001}),/SHARED_BUDGET_INPUT_INVALID/);
+  assert.equal(parseQualifiedBudgetInput({...input,durationMs:10800000}).durationMs,10800000);
+  assert.throws(()=>parseQualifiedBudgetInput({...input,durationMs:10800001}),/SHARED_BUDGET_INPUT_INVALID/);
   assert.throws(() => parseQualifiedBudgetInput({ ...input, hidden: 1 }), /SHARED_BUDGET_INPUT_INVALID/);
   assert.throws(() => parseQualifiedBudgetInput({ ...input, limits: { ...limits, cleanupSqlRequests: 5 } }), /SHARED_BUDGET_INPUT_INVALID/);
   assert.throws(() => parseQualifiedBudgetInput({ ...input, limits: { httpRequests: 1 } }), /SHARED_BUDGET_INPUT_INVALID/);

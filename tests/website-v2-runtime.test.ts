@@ -227,8 +227,8 @@ test("v2 rejects a separate business-lock namespace, permissive private files, a
   const f = await fixture(t); await chmod(f.nodePath, 0o720); assert.equal((await invoke([...f.args, "--check"])).code, 1); await chmod(f.nodePath, 0o700);
   await chmod(f.config.sourcesFile, 0o644); assert.equal((await invoke([...f.args, "--check"])).code, 1); await chmod(f.config.sourcesFile, 0o600);
   f.config.stateDir = f.cache; await f.saveConfig(); assert.equal((await invoke([...f.args, "--check"])).code, 1);
-  f.config.stateDir = f.state; f.config.timeoutSeconds = 7200; await f.saveConfig(); assert.equal((await invoke([...f.args, "--check"])).code, 0);
-  f.config.timeoutSeconds = 7201; await f.saveConfig(); assert.equal((await invoke([...f.args, "--check"])).code, 1); await clean(f);
+  f.config.stateDir = f.state; f.config.timeoutSeconds = 10800; await f.saveConfig(); assert.equal((await invoke([...f.args, "--check"])).code, 0);
+  f.config.timeoutSeconds = 10801; await f.saveConfig(); assert.equal((await invoke([...f.args, "--check"])).code, 1); await clean(f);
 });
 test("v2 cancellation reaches child cleanup and releases only the host's own locks", async t => {
   const f = await fixture(t); f.config.timeoutSeconds = 30; await f.saveConfig();
