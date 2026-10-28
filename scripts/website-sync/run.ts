@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
 import { createDatabasePool, sqlExecutor } from "../../src/server/database/connection.ts";
+import { syncPublicReaderRole, verifySyncPublicReader } from "../../src/server/database/sync-public-reader.ts";
 import { publicationMode, publicationReader, publicationWriter } from "../../src/server/database/publication.ts";
 import { createWebsiteMediaSourceWriter } from "../../src/server/database/website-media-sources.ts";
 import { createSupabaseStorage } from "../../src/server/database/storage.ts";
@@ -26,6 +27,10 @@ import { configDigest } from "../../src/server/database/website-validation.ts";
 import { exportPublicationHandoff } from "./publication-handoff.ts";
 import { prepareHostCaptureRecovery } from "./capture-recovery-compatibility.ts";
 import { PublicationRevalidationError, type PublicationRevalidationProgress } from "./publication-revalidation.ts";
+import { runFullCollection } from "./full-collection.ts";
+import { bindFullCollection, prepareFullCollection, type FullCollectionPrepared } from "./full-collection-control.ts";
+import { fullCollectionOwnerClient } from "./full-collection-owner.ts";
+import { createBoundedWriterSessionInvocations } from "./writer-session-invocation.ts";
 
 /** Release-admission errors are already fixed codes; never echo arbitrary provider codes. */
 function runtimeErrorCode(error: unknown): string {
@@ -42,7 +47,7 @@ async function main() {
   const root = env.WEBSITE_PRIVATE_ROOT ?? "", state = env.WEBSITE_STATE_DIR ?? "", output = env.WEBSITE_OUTPUT_DIR ?? "", runId = env.WEBSITE_RUN_ID ?? "";
   const seconds = Number(env.WEBSITE_TIMEOUT_SECONDS), maxMediaBytes = Number(env.WEBSITE_MEDIA_MAX_BYTES), maxCollectionBytes = Number(env.WEBSITE_COLLECTION_MAX_BYTES ?? 16777216);
   if (args.length !== 2 || args[0] !== "--mode" || !["dry-run", "stage", "publish"].includes(mode) ||
-      !/^[a-f0-9-]{36}$/.test(runId) || !Number.isInteger(seconds) || seconds < 1 || seconds > 7200 ||
+      !/^[a-f0-9-]{36}$/.test(runId) || !Number.isInteger(seconds) || seconds < 1 || seconds > 10800 ||
       !Number.isSafeInteger(maxCollectionBytes) || maxCollectionBytes < 1 || maxCollectionBytes > 67108864 ||
       !Number.isSafeInteger(maxMediaBytes) || maxMediaBytes < 1 || maxMediaBytes > 2147483648 ||
       state !== join(root, "state") || output !== join(state, "website-v2", runId)) throw new WorkerError("MISCONFIGURED");
@@ -65,6 +70,7 @@ async function main() {
   let terminalImageFailure: WebsiteImageFailure | undefined;
   let closeImageTransport: (() => void) | undefined;
   let runtimeSql: ReturnType<typeof createRuntimeWriterSql> | undefined;
+  let fullCollection: FullCollectionPrepared | undefined;
   try {
     guard();
     for (const path of [join(root, "manual-run.lock"), join(state, "worker.lock")]) {
@@ -74,6 +80,19 @@ async function main() {
     const sourceBytes = await readPrivateFile(env.NOTION_SOURCES_CONFIG ?? "");
     if (createHash("sha256").update(sourceBytes).digest("hex") !== env.WEBSITE_SOURCE_SHA256) throw new WorkerError("MISCONFIGURED");
     const config = JSON.parse(sourceBytes); parseWebsiteNotionConfig(config);
+    if ((env.WEBSITE_FULL_COLLECTION_PREPARED === undefined) !== (env.WEBSITE_FULL_COLLECTION_OWNER_NONCE === undefined)) throw new WorkerError("MISCONFIGURED");
+    if (env.WEBSITE_FULL_COLLECTION_PREPARED !== undefined) {
+      const text = env.WEBSITE_FULL_COLLECTION_PREPARED;
+      if (text.length > 8192 || !/^[A-Za-z0-9_-]+$/.test(text) || publication !== "qualified" || mediaProvider !== "notion" || mode === "dry-run" ||
+          Object.keys(env).some(k => k.startsWith("WEBSITE_RESUME_")) || !process.connected) throw new WorkerError("MISCONFIGURED");
+      const saved = JSON.parse(Buffer.from(text, "base64url").toString("utf8"));
+      if (saved?.format !== "website-full-collection-prepared-v1") throw new WorkerError("MISCONFIGURED");
+      const { format: _format, ...input } = saved;
+      fullCollection = prepareFullCollection(input, configDigest(parseWebsiteNotionConfig(config)));
+      if (fullCollection.runId !== runId || fullCollection.timeoutSeconds !== seconds || fullCollection.sourceSha256 !== env.WEBSITE_SOURCE_SHA256 ||
+          fullCollection.releaseCommit !== env.WEBSITE_RELEASE_COMMIT || fullCollection.runtimeSha256 !== env.WEBSITE_SHARED_BUDGET_RUNTIME_SHA256) throw new WorkerError("MISCONFIGURED");
+    }
+    if (fullCollection) Object.assign(report, { businessRetryPolicy: "writes-zero-reads-bounded-v1", writeRetryPolicy: "zero-v1", notionReadRetryPolicy: "transient-request-v1", imageReadRetryPolicy: "transient-get-v1" });
     if ((env.WEBSITE_RESUME_SOURCE_FILE === undefined) !== (env.WEBSITE_RESUME_SOURCE_SHA256 === undefined)) throw new WorkerError("MISCONFIGURED");
     if ((env.WEBSITE_RESUME_SOURCE_FILE !== undefined || env.WEBSITE_RESUME_SOURCE_SHA256 !== undefined || env.WEBSITE_RESUME_CONSUMER_MANIFEST_SHA256 !== undefined) &&
         !env.WEBSITE_RESUME_RECOVERY_ID) throw new WorkerError("MISCONFIGURED");
@@ -88,7 +107,10 @@ async function main() {
         file: env.WEBSITE_RESUME_SOURCE_FILE, sha256: env.WEBSITE_RESUME_SOURCE_SHA256 ?? "" },
     });
     if (recovery && recovery.admission.consumerReleaseCommit !== env.WEBSITE_RELEASE_COMMIT) throw new WorkerError("CHECKPOINT_FAILED");
-    notion = createRuntimeNotionReader({ token: env.NOTION_TOKEN ?? "", notionVersion: env.NOTION_API_VERSION }, signal,
+    // A full collection has one request opportunity per operation at every layer.
+    // No environment flag can silently opt this entry back into business retries.
+    const retryPolicy = fullCollection ? { retry: false as const } : {};
+    notion = createRuntimeNotionReader({ token: env.NOTION_TOKEN ?? "", notionVersion: env.NOTION_API_VERSION, ...retryPolicy, ...(fullCollection ? { readRetry: "transient-request-v1" as const } : {}) }, signal,
       { intervalMs: env.WEBSITE_NOTION_INTERVAL_MS === undefined ? undefined : Number(env.WEBSITE_NOTION_INTERVAL_MS) });
     guard();
     if (env.WEBSITE_CAPTURE_COLLECTION !== undefined && !["true", "false"].includes(env.WEBSITE_CAPTURE_COLLECTION)) throw new WorkerError("MISCONFIGURED");
@@ -97,8 +119,8 @@ async function main() {
     });
     const cache = await createWebsiteImageCache({ directory: env.SYNC_IMAGE_CACHE_DIRECTORY ?? "", originalsDirectory: env.SYNC_IMAGE_ORIGINALS_DIRECTORY });
     const converterRoot = join(output, "conversion-tmp"); await privateDirectory(converterRoot);
-    const download = createWebsiteImageDownloader({ userAgent: env.SYNC_IMAGE_USER_AGENT,
-      wikimediaUserAgent: env.SYNC_WIKIMEDIA_USER_AGENT, timeoutMs: 60000, headerTimeoutMs: 10000,
+    const download = createWebsiteImageDownloader({ ...retryPolicy, ...(fullCollection ? { imageRetry: "transient-get-v1" as const } : {}), userAgent: env.SYNC_IMAGE_USER_AGENT,
+      wikimediaUserAgent: env.SYNC_WIKIMEDIA_USER_AGENT, timeoutMs: 60000, headerTimeoutMs: 60000,
       convertHeic: createHeicConverter({ executable: env.SYNC_HEIC_CONVERTER_PATH ?? "", temporaryRoot: converterRoot }) }, { cache });
     imageStatistics = download.statistics;
     imageFailure = download.failure;
@@ -125,6 +147,8 @@ async function main() {
             if (!Number.isFinite(exp) || exp - Date.now() < 120000) throw new WorkerError("MISCONFIGURED");
             storageEnv = next; report.sessionRefreshes = Number(report.sessionRefreshes) + 1;
           };
+          if (fullCollection) refresh = createBoundedWriterSessionInvocations({ directory: join(output, "writer-session-refresh"), runId, maximumInvocations: 3,
+            moduleSha256: env.WEBSITE_REFRESH_SHA256!, runtimeSha256: env.WEBSITE_SHARED_BUDGET_RUNTIME_SHA256! }, refresh, guard);
         }
         refreshing ??= refresh().finally(() => { refreshing = undefined; }); await refreshing;
       }
@@ -143,9 +167,12 @@ async function main() {
     if (mode !== "dry-run") {
       await token(); guard();
       pool = createDatabasePool(env.SYNC_DATABASE_URL, "verify", env.DATABASE_CA_CERT);
+      // The sync reads its public projection through its own isolated reader login.
+      syncPublicReaderRole(env.DATABASE_READER_URL);
       readerPool = createDatabasePool(env.DATABASE_READER_URL, "verify", env.READER_DATABASE_CA_CERT);
-      await verifyIdentity(pool, "nb_macmini_writer"); await verifyIdentity(readerPool, "nb_website_reader"); guard();
-      runtimeSql = createRuntimeWriterSql(sqlExecutor(pool), signal);
+      await verifySyncPublicReader(sqlExecutor(readerPool), env.DATABASE_READER_URL!); guard();
+      await verifyIdentity(pool, "nb_macmini_writer"); guard();
+      runtimeSql = createRuntimeWriterSql(sqlExecutor(pool), signal, undefined, retryPolicy);
       const base = publicationWriter(runtimeSql.executor, publication);
       writer = { ...base,
         begin: async (_id, digest) => { guard(); const lease = await base.begin(runId, digest); report.cloudRunId = lease.runId; await save("receipt-private.json", report); guard(); return lease; },
@@ -199,8 +226,9 @@ async function main() {
       if(resumeBudget.plan.limits.notionRequests-resumeBudget.read().counters.notionRequests<reserve)throw new WorkerError("LIMIT_EXCEEDED");
     }
     const publicationChecks: PublicationRevalidationProgress[] = [];
-    const result = await runWebsiteSync({resumeCollection,
-      publicationRepair: capture ? { maxPages: 32, maxPasses: 2 } : undefined,
+    const workerOptions: Parameters<typeof runWebsiteSync>[0] = {resumeCollection,
+      // Keep freshness checks; a changed revision stops instead of recollecting.
+      publicationRepair: capture && !fullCollection ? { maxPages: 32, maxPasses: 2 } : undefined,
       onPublicationRevalidation: async value => {
         guard();
         // Private identities are kept out of the normal progress/console DTO.
@@ -226,7 +254,20 @@ async function main() {
             .catch(() => { report.discoveryProgressWriteFailed = true; });
         }
       },
-      download: async url => { guard(); const image = await download(url, signal); guard(); return image; } });
+      download: async url => { guard(); const image = await download(url, signal); guard(); return image; } };
+    const run = async () => {
+      if (!fullCollection) return runWebsiteSync(workerOptions);
+      const { resumeCollection: _resume, onResumePlan: _plan, onResumeProgress: _progress, onIncrementalBaseline: _baseline, ...full } = workerOptions;
+      return runFullCollection({ ...full, mode: mode as "stage" | "publish", publicationMode: "qualified", writer: writer!,
+        owner: fullCollectionOwnerClient(runId, env.WEBSITE_FULL_COLLECTION_OWNER_NONCE!, signal), expectation: fullCollection.plan.expectation,
+        onQualified: async receipt => {
+          report.fullCollectionQualification = receipt;
+          report.fullCollectionBinding = bindFullCollection(fullCollection!, receipt);
+          await save("full-collection-qualification-private.json", report.fullCollectionBinding);
+          await save("receipt-private.json", report);
+        } });
+    };
+    const result = await run();
     Object.assign(report, result);
     if (mode === "publish") {
       const publishedDb = publicationReader(sqlExecutor(readerPool!), publication);
@@ -279,10 +320,12 @@ async function main() {
       report.code ??= runtimeErrorCode(error);
       process.exitCode = 1;
     }
+    if (fullCollection && process.connected) process.disconnect?.();
   }
   console.log(JSON.stringify({ adapter: report.adapter, outcome: report.outcome, published: report.published, readerVerified: report.readerVerified,
     thumbnailHandoffStatus: report.thumbnailHandoffStatus, seconds: report.seconds, code: report.code, receiptWriteFailed: report.receiptWriteFailed }));
 }
 if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
-  main().catch(error => { console.error(JSON.stringify({ adapter: "private-host-v2", outcome: "preparation-failed", code: runtimeErrorCode(error) })); process.exitCode = 1; });
+  main().catch(error => { console.error(JSON.stringify({ adapter: "private-host-v2", outcome: "preparation-failed", code: runtimeErrorCode(error) })); process.exitCode = 1;
+    if (process.connected) process.disconnect?.(); });
 }

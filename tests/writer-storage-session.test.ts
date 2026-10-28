@@ -18,6 +18,22 @@ const media: StoredMedia = { assetId: mediaIdentity("fiction-page", "cover", sha
   sha256: sha, byteSize: bytes.length, mime: "image/png", width: null, height: null };
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 
+test("writer sessions accept only a project-matched legacy public anon key", async () => {
+  const legacy = (claims: Record<string, unknown>) => `e30.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.fixture`;
+  const base = {...expected, STORAGE_URL: "https://fixture.supabase.co/storage/v1", STORAGE_API_KEY: legacy({role: "anon", ref: "fixture"})};
+  const token = jwt(Date.now() / 1000 + 3600, {iss: "https://fixture.supabase.co/auth/v1"});
+  let requests = 0;
+  const session = createWriterStorageSession({expected: base, read: async () => ({...base, STORAGE_WRITE_TOKEN: token}), guard: () => {},
+    refresh: async () => assert.fail("A valid writer token does not need Auth")});
+  const storage = createSupabaseStorage({url: base.STORAGE_URL, bucket: base.STORAGE_BUCKET, apiKey: base.STORAGE_API_KEY, role: "writer", token: session.token,
+    fetch: async () => {requests++; return new Response(null, {status: 200});}});
+  await storage.put(media, bytes); assert.equal(requests, 1); await session.close();
+  for (const key of [legacy({role: "service_role", ref: "fixture"}), legacy({role: "authenticated", ref: "fixture"}),
+    legacy({role: "anon", ref: "different"}), legacy({role: "anon"}), "sb_secret_fixture", "invalid-key"]) {
+    assert.throws(() => createWriterStorageSession({expected: {...base, STORAGE_API_KEY: key}, read: async () => assert.fail(), guard: () => {}, refresh: async () => assert.fail()}), /STORAGE_SESSION_INPUT_INVALID/);
+  }
+});
+
 test("parallel immutable uploads renew once and use the persisted token", async () => {
   const now = Date.now(); let current = { ...expected, STORAGE_WRITE_TOKEN: jwt(now / 1000 + 60) }, refreshes = 0, requests = 0;
   const session = createWriterStorageSession({ expected, read: async () => current, guard: () => {}, refresh: async () => {

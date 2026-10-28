@@ -12,6 +12,7 @@ import { inOwnerInstallSession, withOwnerInstallTransaction, withPGliteOwnerTran
 import { loadOwnerInstallRecipe, OWNER_INSTALL_RECIPE_DIGEST } from "../scripts/website-sync/owner-install-recipes.ts";
 import isolationManifest from "../database/incremental-reader-isolation.json" with { type: "json" };
 import recoveryManifest from "../database/incremental-withdrawal-recovery.json" with { type: "json" };
+import { installFreeze } from "../scripts/website-sync/freeze-migration.ts";
 
 const code = (text: string) => ({ message: text });
 const state = async (db: Awaited<ReturnType<typeof ownerInstallFixture>>["db"]) => (await db.query<{ installed: boolean; role: boolean }>(`SELECT
@@ -114,6 +115,39 @@ test("a core isolation grant without the digest column is rejected as a partial 
   await f.db.exec("CREATE ROLE nb_delta_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; GRANT EXECUTE ON FUNCTION nb_delta_api.check_reader(text) TO nb_delta_reader");
   await assert.rejects(withPGliteOwnerTransaction(f.db, isolation), code("OWNER_INSTALL_READER_PARTIAL"));
   assert.equal((await state(f.db)).installed, false);
+});
+
+test("inaccessible PUBLIC view grants do not conflict, while usable or direct access still does", async t => {
+  const f = await ownerInstallFixture(); t.after(() => f.close());
+  await f.db.exec("CREATE SCHEMA fixture_catalog; REVOKE ALL ON SCHEMA fixture_catalog FROM PUBLIC; CREATE VIEW fixture_catalog.stats AS SELECT 1 AS value; GRANT SELECT ON fixture_catalog.stats TO PUBLIC");
+  await withPGliteOwnerTransaction(f.db, isolation);
+  await assert.rejects(f.db.transaction(async tx => {
+    await tx.exec("SET LOCAL ROLE nb_delta_reader");
+    await tx.query("SELECT * FROM fixture_catalog.stats");
+  }), /permission denied/);
+  for (const [grant, revoke] of [
+    ["GRANT USAGE ON SCHEMA fixture_catalog TO PUBLIC", "REVOKE USAGE ON SCHEMA fixture_catalog FROM PUBLIC"],
+    ["GRANT SELECT ON fixture_catalog.stats TO nb_delta_reader", "REVOKE SELECT ON fixture_catalog.stats FROM nb_delta_reader"],
+    ["GRANT SELECT(value) ON fixture_catalog.stats TO nb_delta_reader", "REVOKE SELECT(value) ON fixture_catalog.stats FROM nb_delta_reader"],
+  ]) {
+    await f.db.exec(grant);
+    try { await assert.rejects(withPGliteOwnerTransaction(f.db, isolation), code("OWNER_INSTALL_READER_ROLE_CONFLICT")); }
+    finally { await f.db.exec(revoke); }
+  }
+  await withPGliteOwnerTransaction(f.db, isolation);
+});
+
+test("optional freeze observation preserves reader isolation without permitting previews or mutations", async t => {
+  const f = await ownerInstallFixture(); t.after(() => f.close());
+  await withPGliteOwnerTransaction(f.db, isolation);
+  await installFreeze({query: async <T>(sql: string, values?: unknown[]) => {
+    if (sql.startsWith("-- Opt-in")) {await f.db.exec(sql); return {rows: [] as T[]};} return f.db.query<T>(sql, values);
+  }});
+  assert.equal((await withPGliteOwnerTransaction(f.db, isolation)).outcome, "verified-existing");
+  await f.db.exec("GRANT EXECUTE ON FUNCTION nb_freeze_api.preview(text,text) TO nb_delta_reader");
+  await assert.rejects(withPGliteOwnerTransaction(f.db, isolation), code("OWNER_INSTALL_READER_ROLE_CONFLICT"));
+  await f.db.exec("REVOKE EXECUTE ON FUNCTION nb_freeze_api.preview(text,text) FROM nb_delta_reader");
+  assert.equal((await withPGliteOwnerTransaction(f.db, isolation)).outcome, "verified-existing");
 });
 
 test("verified installs reject missing schema/API capability or reopened private APIs without repairing", async t => {

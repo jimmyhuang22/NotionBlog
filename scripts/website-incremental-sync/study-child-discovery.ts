@@ -27,6 +27,7 @@ export interface StudyChildDiscoveryOptions {
   maxChildren?: number;
   maxDurationMs?: number;
   now?: () => number;
+  frozenPageIds?: ReadonlySet<string>;
 }
 export interface StudyChildDiscoveryResult {
   outcome: "completed" | "limited" | "retry" | "needs_review" | "cancelled";
@@ -121,7 +122,7 @@ export async function runStudyChildDiscovery(options: StudyChildDiscoveryOptions
     if (!configured || !rootSource || rootSource.publication.mode !== "all" ||
         (configured.kind !== "course" && (configured.kind !== "study-note" || configured.publication.mode !== "course-descendants")) ||
         !config.sources.some(source => source.kind === "study-note" && source.dataSourceId === rootSource.dataSourceId && source.publication.mode === "course-descendants")) fail("STUDY_DISCOVERY_SOURCE_UNSUPPORTED");
-    const catalog = before.entries.filter(entry => entry.record.evidence.sourceKey === options.sourceKey).sort((a, b) => identity(a).localeCompare(identity(b)));
+    const catalog = before.entries.filter(entry => entry.record.evidence.sourceKey === options.sourceKey && !options.frozenPageIds?.has(identity(entry))).sort((a, b) => identity(a).localeCompare(identity(b)));
     if (catalog.some(entry => entry.record.detail.item.kind !== configured.kind)) fail("STUDY_DISCOVERY_SCOPE_CHANGED");
     const control = options.queue.checkpoint(options.sourceKey, NAME), afterKey = position(control.cursor);
     const start = afterKey === null ? 0 : catalog.findIndex(entry => identity(entry) > afterKey);

@@ -31,9 +31,17 @@ export function createWriterStorageSession(options: WriterStorageSessionOptions)
   let origin: string;
   try {
     const url = new URL(expected.STORAGE_URL ?? "");
+    const key = expected.STORAGE_API_KEY ?? "";
+    let publicKey = key.startsWith("sb_publishable_");
+    if (!publicKey && key && !key.startsWith("sb_secret_")) {
+      const parts = key.split(".");
+      const claims = parts.length === 3 && parts.every(Boolean) ? JSON.parse(Buffer.from(parts[1], "base64url").toString()) : null;
+      publicKey = claims?.role === "anon" && url.hostname.endsWith(".supabase.co") &&
+        claims.ref === url.hostname.slice(0, -".supabase.co".length);
+    }
     if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
       url.pathname.replace(/\/$/, "") !== "/storage/v1" || !expected.SYNC_DATABASE_URL ||
-      !expected.STORAGE_BUCKET || !expected.STORAGE_API_KEY?.startsWith("sb_publishable_") || !expected.STORAGE_WRITER_USER_ID) throw new Error();
+      !expected.STORAGE_BUCKET || !publicKey || !expected.STORAGE_WRITER_USER_ID) throw new Error();
     origin = url.origin;
   } catch { fail("STORAGE_SESSION_INPUT_INVALID"); }
   let pending: Promise<string> | undefined, closed = false, failure: WriterStorageSessionError | undefined, refreshes = 0;

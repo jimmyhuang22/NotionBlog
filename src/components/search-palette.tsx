@@ -71,6 +71,8 @@ export function SearchPalette() {
       const target = event.target as HTMLElement | null;
       const typing = !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
       if (!isSearchShortcut(event, typing)) return;
+      // Another dialog is open (the image viewer, the about card): the shortcut does not lay the palette over it.
+      if (document.querySelector("dialog[open]")) return;
       event.preventDefault();
       // On the search page its own field is the search; there is nothing to lay over it.
       const pageField = document.querySelector<HTMLInputElement>(".search__input");

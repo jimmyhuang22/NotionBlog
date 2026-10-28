@@ -20,8 +20,10 @@ import { useToday } from "./use-today";
 
 /**
  * A game on the home timeline, as one line (the owner's choice, 2026-10-18): a small square of its
- * cover, then "在玩 {title}" whatever its status (the entry stands on the day it was last played; a
- * platinum or cleared one reads the same, no mark), then its platforms in their makers' colours. The
+ * cover, then "在玩 {title}" whatever its status (a playing entry stands on the day it was last played;
+ * a platinum or cleared one stands on its hand-written completion day and reads the same, no mark — and
+ * if it was played again later, a separate playing entry stands on that day, F47), then its platforms in
+ * their makers' colours. The
  * line wraps as a whole, chips and all, never through a word.
  */
 function GameLine({ event }: { event: WorkEvent }) {

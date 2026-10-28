@@ -42,11 +42,11 @@ test("every library order is accepted by the list endpoint and addresses keep bo
   }
   assert.equal(libraryHref("games", null, null), "/library/games");
   assert.equal(libraryHref("games", "playing", null), "/library/games?status=playing");
-  assert.equal(libraryHref("books", null, "title-asc"), "/library/books?order=title-asc");
+  assert.equal(libraryHref("books", null, "date-asc"), "/library/books?order=date-asc");
   assert.equal(libraryHref("books", "given-up", "date-asc"), "/library/books?status=given-up&order=date-asc");
   assert.equal(libraryHref("movies", null, null, 2025), "/library/movies?year=2025");
   // A section's default status is its plain address, so each status has one address.
-  assert.equal(libraryHref("movies", "watched", "title-asc", "undated"), "/library/movies?year=undated&order=title-asc");
+  assert.equal(libraryHref("movies", "watched", "date-asc", "undated"), "/library/movies?year=undated&order=date-asc");
   assert.equal(libraryHref("movies", "wishlist", null), "/library/movies?status=wishlist");
   assert.equal(libraryHref("books", "read", null), "/library/books");
   assert.equal(libraryHref("games", "completed", null), "/library/games");

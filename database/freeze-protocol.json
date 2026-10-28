@@ -1,0 +1,8 @@
+{
+  "capability": "notionblog-frozen-publication-v1",
+  "migration": {
+    "version": 1,
+    "file": "20261027001140_console_freeze.sql",
+    "sha256": "60631ad3b5998913331f9f33290b2f50f71028bac7120dcf6d5403766ed38c99"
+  }
+}

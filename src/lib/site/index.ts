@@ -1,11 +1,15 @@
 import "server-only";
 import { readFileSync } from "node:fs";
+import { cache } from "react";
 import { parseSiteConfig, type SiteConfig } from "./parse.ts";
 
 export type { SiteConfig, SocialLink, SocialPlatform } from "./parse.ts";
 
-/** Read on every request so replacing the avatar or a link needs no rebuild. */
-export function getSiteConfig(): SiteConfig {
+/**
+ * Read on every request so replacing the avatar or a link needs no rebuild; within one request it is read
+ * and parsed once (React's `cache`), however many parts of the page ask for it.
+ */
+export const getSiteConfig = cache(function getSiteConfig(): SiteConfig {
   let input: unknown = {};
   try {
     // Private file or hosting secret; never traced into a deployment bundle.
@@ -14,4 +18,4 @@ export function getSiteConfig(): SiteConfig {
     // A missing or unreadable private file means the generic identity, not an error page.
   }
   return parseSiteConfig(input, process.env.SITE_NAME);
-}
+});

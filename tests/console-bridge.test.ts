@@ -266,6 +266,37 @@ test("bridge: refuses a state directory outside .local", () => {
   }
 });
 
+test("management bridge uses fixed native commands, isolates credentials and keeps uncertain starts unresolved", async () => {
+  const bridge = setup({plan: "ok", execute: "complete"});
+  const project = path.join(bridge.root, "project"), config = JSON.parse(readFileSync(bridge.configPath, "utf8"));
+  mkdirSync(path.join(project, "scripts/console-management"), {recursive: true});
+  const entry = path.join(project, "scripts/console-management/cli.ts");
+  writeFileSync(entry, `let text=''; for await (const chunk of process.stdin) text+=chunk;
+const request=JSON.parse(text);
+if(process.env.NOTION_TOKEN || process.env.DATABASE_MIGRATION_URL || process.env.NODE_OPTIONS) throw Error('leaked');
+if(process.env.EXAMPLE!=='1' || !process.argv.includes('--config')) throw Error('private env missing');
+if(request.op==='sync.start') process.exit(1);
+process.stdout.write(JSON.stringify({version:1,ok:request.op!=='freeze.preview',
+data:request.op==='status'?{mode:'published',capabilities:{sync:true,targetedSync:true,freeze:true,contentList:true,jobs:false,takedown:false}}:[],
+error:{code:'PREVIEW_STALE',message:'SECRET /private/path'}}));`);
+  config.management = {node: process.execPath, project, envFile: path.join(bridge.root, "operator.env"), configFile: path.join(bridge.root, "management.json")};
+  writeFileSync(bridge.configPath, JSON.stringify(config));
+  const before = {notion: process.env.NOTION_TOKEN, owner: process.env.DATABASE_MIGRATION_URL};
+  process.env.NOTION_TOKEN = "example"; process.env.DATABASE_MIGRATION_URL = "example";
+  try {
+    const loaded = loadConfig(bridge.configPath), call = (op: string, input = {}) => handle({version: 1, op, input}, loaded, bridge.configPath);
+    const status = await call("status") as SyncStatus;
+    assert.equal(status.mode, "published"); assert.equal(status.capabilities.freeze, true); assert.equal(status.capabilities.takedown, true);
+    assert.deepEqual(await call("content.sections"), []);
+    await rejectsWith(call("sync.start"), "OUTCOME_UNKNOWN");
+    await assert.rejects(call("freeze.preview", {target: "example"}), error => error instanceof BridgeError && error.code === "PREVIEW_STALE" && !error.message.includes("SECRET"));
+  } finally {
+    if (before.notion === undefined) delete process.env.NOTION_TOKEN; else process.env.NOTION_TOKEN = before.notion;
+    if (before.owner === undefined) delete process.env.DATABASE_MIGRATION_URL; else process.env.DATABASE_MIGRATION_URL = before.owner;
+    bridge.cleanup();
+  }
+});
+
 test("bridge: the command speaks the protocol over stdin and stdout", async () => {
   const bridge = setup({ plan: "ok", execute: "complete" });
   try {

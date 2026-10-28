@@ -10,7 +10,14 @@ import { imageCacheKey, imageCacheVary, strongImageEtag, type WebsiteImageCache,
 
 const NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ABORT_ERR"]);
 interface Observation { network: boolean; status?: number; url?: string; host?: string; transportCode?: string; phase?: string; retryAfterMs?: number; timeoutKind?: "image" | "headers" }
-interface WebsiteDownloadOptions extends DownloadOptions { wikimediaUserAgent?: string }
+interface WebsiteDownloadOptions extends DownloadOptions {
+  wikimediaUserAgent?: string;
+  /** Only with retry:false: re-send the same read-only GET after a network
+   * error, its own timeout or HTTP 500/502/503/504. At most three attempts with
+   * 2 s/5 s waits; every attempt keeps all URL/IP/TLS/type/size guards, is
+   * counted in the same statistics, and denials or rate limits never retry. */
+  imageRetry?: "transient-get-v1";
+}
 export interface WebsiteImageContext {
   ownerPageId: string;
   locator: { kind: "cover" } | { kind: "property"; name: string } | { kind: "block"; id: string };
@@ -88,7 +95,11 @@ function pinned(url: URL, address: Address, signal: AbortSignal, headers: Readon
 
 /** v2 only: three attempts, with every attempt retaining the v1 URL/IP/TLS/byte guards. */
 export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {}, ports: RetryPorts = {}) {
-  createImageDownloader(options); // Preserve immediate option/header validation.
+  const { imageRetry, ...baseOptions } = options;
+  if (imageRetry !== undefined && (imageRetry !== "transient-get-v1" || options.retry !== false)) throw new WorkerError("MISCONFIGURED");
+  const boundedGet = imageRetry === "transient-get-v1";
+  const maxAttempts = options.retry === false && !boundedGet ? 1 : 3;
+  createImageDownloader(baseOptions); // Preserve immediate option/header validation.
   if (options.wikimediaUserAgent !== undefined) createImageDownloader({ ...options, userAgent: options.wikimediaUserAgent });
   const agent = new Agent({ keepAlive: true, maxSockets: 4, maxFreeSockets: 1, maxTotalSockets: 4, timeout: 5000 });
   const requester = options.request ?? ((url, address, signal, headers) => pinned(url, address, signal, headers, agent));
@@ -109,7 +120,7 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
   const performDownload = async (input: string, parentSignal?: AbortSignal) => {
     checkSignal(parentSignal);
     const started = now();
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const attemptStarted = now();
       // A slow TLS/header handshake should get a longer bounded opportunity
       // on retry. The existing total per-image deadline still caps each round.
@@ -117,7 +128,7 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
         (options.headerTimeoutMs ?? Math.min(5000, options.timeoutMs ?? 20_000)) * 2 ** attempt);
       let last: Observation = { network: false };
       let reused = false, receipt: Omit<ImageCacheReceipt, "sha256" | "byteSize" | "mime"> | undefined;
-      const download = createImageDownloader({ ...options, headerTimeoutMs,
+      const download = createImageDownloader({ ...baseOptions, headerTimeoutMs,
         convertHeic: options.convertHeic ? async (bytes, signal) => {
           last.phase = "conversion";
           try { return await options.convertHeic!(bytes, signal); }
@@ -202,8 +213,11 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
         const denied = last.status !== undefined && last.status >= 400 && last.status < 500;
         const limited = [429, 529].includes(last.status ?? 0) && last.retryAfterMs !== undefined;
         const transient = !denied && (ownDeadline || last.network || [502, 503, 504].includes(last.status ?? 0));
-        if (attempt === 2 || limited && last.retryAfterMs! > MAX_RATE_LIMIT_WAIT_MS || !(error instanceof WorkerError) ||
-            !(limited && error.code === "RATE_LIMITED" || transient && ["IMAGE_UNAVAILABLE", "CANCELLED"].includes(error.code))) {
+        const boundedTransient = !denied && (ownDeadline || last.network || last.timeoutKind !== undefined || [500, 502, 503, 504].includes(last.status ?? 0));
+        const retryable = error instanceof WorkerError && (boundedGet ?
+          boundedTransient && ["IMAGE_UNAVAILABLE", "CANCELLED"].includes(error.code) :
+          limited && error.code === "RATE_LIMITED" || transient && ["IMAGE_UNAVAILABLE", "CANCELLED"].includes(error.code));
+        if (attempt === maxAttempts - 1 || !boundedGet && limited && last.retryAfterMs! > MAX_RATE_LIMIT_WAIT_MS || !retryable) {
           const detail: WebsiteImageFailure = { inputUrl: input, requestUrl: last.url, requestHost: last.host,
             attempt: attempt + 1, httpStatus: last.status,
             transportCode: last.transportCode, phase: last.phase ?? "validation-or-dns",
@@ -219,7 +233,7 @@ export function createWebsiteImageDownloader(options: WebsiteDownloadOptions = {
           throw terminal;
         }
         ports.onRetry?.({ attempt: attempt + 1, networkFailure: last.network, httpStatus: last.status });
-        try { await wait(limited ? last.retryAfterMs! : attempt === 0 ? 2000 : 5000, parentSignal); }
+        try { await wait(!boundedGet && limited ? last.retryAfterMs! : attempt === 0 ? 2000 : 5000, parentSignal); }
         catch (error) {
           checkSignal(parentSignal);
           // A broken wait port is not evidence that the operator cancelled.
