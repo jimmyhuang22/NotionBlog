@@ -51,23 +51,27 @@ async function readStatusPage({ searchParams }: Props) {
   const total = years ? yearTotal(years, year) : null;
   const tabs = years ? yearTabs(years) : [];
   const selected = year === null ? null : String(year);
+  // Laid out like the library sections (F48, 2026-10-28): the title where every section has it, the year row under
+  // it on the left, and the timeline across the full width with its line on the same left edge.
   return (
-    <>
-      <header className="wrap wrap--narrow page-head status-head">
+    <div className="wrap status-page">
+      <header className="page-head status-head">
         <h1>动态</h1>
-        {tabs.length > 2 ? (
+      </header>
+      {tabs.length > 2 ? (
+        <div className="library__filters status-filters">
           <ScrollingSegments label="按年份浏览" current={selected}>
             {tabs.map(tab => (
               <Link key={tab.value ?? "all"} href={tab.value ? `/status?year=${tab.value}` : "/status"} aria-current={tab.value === selected ? "true" : undefined} title={`${tab.count} 条`} transitionTypes={FILTER_TRANSITION}>{tab.label}<LinkPending /></Link>
             ))}
           </ScrollingSegments>
-        ) : null}
-      </header>
-      <section className="wrap wrap--narrow timeline" aria-label="动态时间线">
+        </div>
+      ) : null}
+      <section className="timeline" aria-label="动态时间线">
         {focus ? <p className="notice timeline__notice">已定位到这条动态。<Link href="/status" prefetch={false}>查看全部动态</Link></p> : null}
         {/* Keyed by year so switching starts a fresh list instead of reusing the old cursor. */}
         <StatusFeed key={focus ? `focus:${focus}` : selected ?? "all"} initial={page} pageSize={PAGE_SIZE} timeZone={getSiteConfig().timeZone} year={selected} total={focus ? 1 : total} />
       </section>
-    </>
+    </div>
   );
 }

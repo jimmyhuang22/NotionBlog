@@ -285,6 +285,8 @@
 .search__kinds .tag:hover { color: var(--accent); }
 /* At least as tall as the loading state that stands in for it (page-loading, 100vh): the footer, below the first screen while the results are read, then stays put when they arrive instead of rising into view (S13-5). */
 .search { min-height: 100vh; }
+/* The title sits where every section has it (F48, 2026-10-28); the field, sections and results keep their reading width on the left. */
+.search > :not(.page-head) { max-width: 704px; }
 .search__body { padding-top: 24px; }
 .search-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; color: var(--muted); }
 /* The action follows its message, and when it wraps its word lines up with the message: its own padding is pulled back. */
@@ -385,10 +387,10 @@
 .segmented a:has(.link-pending[data-pending]) { color: var(--ink); }
 /* Search sections are tags: the pressed one takes the chosen look at once. */
 .search__kinds a:has(.link-pending[data-pending]) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
-.wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-head:has(.link-pending[data-pending]) + .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { opacity: 0.45; }
+.wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-page:has(.status-filters .link-pending[data-pending]) .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { opacity: 0.45; }
 @media (prefers-reduced-motion: no-preference) {
   /* Dims after a short delay, so a list that arrives quickly never flickers. It comes back at once: the new rows take over from 45% (round four, M-12). */
-  .wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-head:has(.link-pending[data-pending]) + .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { transition: opacity 0.2s 0.1s; }
+  .wrap:has(.link-pending[data-pending]) :is(.library__group, .library__more, .library__filters ~ .state), .status-page:has(.status-filters .link-pending[data-pending]) .timeline, .search__kinds:has(.link-pending[data-pending]) ~ .search__body { transition: opacity 0.2s 0.1s; }
 }
 
 /* A work's page on its way: the same layout, quiet bars in place of the words. */
