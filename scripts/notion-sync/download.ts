@@ -12,6 +12,8 @@ export interface ImageResponse {
   cancel(): void;
 }
 export interface DownloadOptions {
+  /** Disable alternate-address retries as well as runtime retry loops. */
+  retry?: false;
   /** Identify the sync bot; operators can include a public contact URL. */
   userAgent?: string;
   /** HEIC is converted only by an explicitly configured bounded local decoder. */
@@ -111,6 +113,7 @@ async function resolving<T>(pending: Promise<T>, signal: AbortSignal): Promise<T
 }
 
 export function createImageDownloader(options: DownloadOptions = {}) {
+  if (options.retry !== undefined && options.retry !== false) throw new WorkerError("MISCONFIGURED");
   const userAgent = options.userAgent ?? "NotionBlogSyncBot/1.0";
   if (typeof userAgent !== "string" || userAgent.length < 1 || userAgent.length > 512 ||
       userAgent.trim() !== userAgent || /[^\x20-\x7e]/u.test(userAgent)) throw new WorkerError("MISCONFIGURED");
@@ -150,7 +153,7 @@ export function createImageDownloader(options: DownloadOptions = {}) {
         }
         // Try at most two already validated addresses when no headers arrive.
         // HTTP denials, rate limits and body errors never trigger another request.
-        for (const address of addresses.slice(0, 2)) {
+        for (const address of addresses.slice(0, options.retry === false ? 1 : 2)) {
           checkSignal(signal);
           const attempt = new AbortController();
           const timer = setTimeout(() => attempt.abort(), headerTimeoutMs);

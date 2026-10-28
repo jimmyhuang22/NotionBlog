@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { SqlExecutor } from "../../src/server/database/sql.ts";
-import { checkSignal } from "../notion-sync/errors.ts";
+import { WorkerError, checkSignal } from "../notion-sync/errors.ts";
 
 const RENEW = "SELECT nb_v2_api.renew_run($1,$2,$3) AS result";
 const transientCodes = new Set(["ECONNRESET", "EPIPE", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN", "08000", "08001", "08003", "08006", "57P01", "57P02", "57P03", "53300", "40001", "40P01", "57014"]);
@@ -22,12 +22,16 @@ function transient(error: unknown): boolean {
 
 /** Retry only the fenced renewal RPC; staging and promotion are never replayed. */
 export function createRuntimeWriterSql(db: SqlExecutor, signal: AbortSignal,
-  wait: (ms: number, signal: AbortSignal) => Promise<void> = async (ms, signal) => { await delay(ms, undefined, { signal }); }) {
+  wait: (ms: number, signal: AbortSignal) => Promise<void> = async (ms, signal) => { await delay(ms, undefined, { signal }); },
+  options: { retry?: false } = {}) {
+  if (options.retry !== undefined && options.retry !== false) throw new WorkerError("MISCONFIGURED");
   const metrics = { renewalAttempts: 0, renewalRetries: 0, recoveredRenewals: 0 };
   let failure: { code: string; leaseRejected: boolean; transient: boolean; reason: string } | undefined;
   const executor: SqlExecutor = { query: async <T>(text: string, values?: unknown[]) => {
     if (text !== RENEW) return db.query<T>(text, values);
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // A later timer tick must not replay an uncertain renewal either.
+    if (options.retry === false && failure) throw new WorkerError("CONTENT_UNAVAILABLE");
+    for (let attempt = 0; attempt < (options.retry === false ? 1 : 3); attempt++) {
       checkSignal(signal); metrics.renewalAttempts++;
       try { const result = await db.query<T>(text, values); checkSignal(signal);
         if (attempt) metrics.recoveredRenewals++; return result;
@@ -36,7 +40,7 @@ export function createRuntimeWriterSql(db: SqlExecutor, signal: AbortSignal,
         const e = error as { code?: string; message?: string }, recoverable = transient(error);
         // SQL lease, fencing, auth and policy errors are terminal. The server
         // continues checking the same run/fence and its actual deadline.
-        if (attempt === 2 || !recoverable) {
+        if (options.retry === false || attempt === 2 || !recoverable) {
           failure = { code: /^[A-Z0-9_]{1,32}$/.test(e.code ?? "") ? e.code! : "OTHER",
             leaseRejected: e.message === "NB_LEASE_INVALID", transient: recoverable,
             // Private receipts retain only a fixed category, never raw messages,

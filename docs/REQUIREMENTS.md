@@ -50,6 +50,8 @@ N08 后端收尾（2026-10-25）：用户批准 v2 页面提及可选语义标�
 
 源码公开与 CI（2026-10-23）：用户明确要求公开干净新仓库并把 CI 转到 GitHub。新仓库已公开，旧归档保持私人；PR 与手动检查采用标准 GitHub 托管 Ubuntu、Node 24、双锁文件、完整 check／build 和只读 Token，保持离线 fixtures。启用 main／develop 分支保护、外部贡献者工作流审批与私密漏洞报告。此决定取代下方此前“暂不公开”和“平台检查另行约定”的当前状态；私人 CI 历史结果仍如实保留，develop 本机验证合并规则、发布期间暂停及 main 逐次发布授权继续有效，见[决定](decisions/2026-10-23-public-github-hosted-ci.md)与[执行记录](progress/2026-10-23-public-github-hosted-ci.md)。
 
+完整新采集host接线（2026-10-23）：用户批准默认关闭的fullCollection源码候选，与resume互斥；父进程固定owner元数据旁路限一次／10秒／4KiB，子进程不持owner凭据，独立回执绑定新批次及完整同批后置。只做离线验证与草稿PR，不安装、读取真实凭据或数据库、修改真实配置或策略、同步、合并或部署。实际owner／TLS、新预算和停止／回退窗口另审，见[本次决定](decisions/2026-10-23-full-collection-host-wiring.md)。
+
 搜索上下文（2026-10-23）：用户选定“来源行”，批准兼容的最小搜索显示字段、provider 投影及虚构样本。两个搜索入口显示当前获准课程编号（缺失时课程名）与有序物理父级，仅作文字；不改匹配、排序或阅读目标。数据库能力独立、默认关闭，真实安装、启用、合并及发布不包含在本项授权，见[决定](decisions/2026-10-23-search-result-context.md)及[实现边界](SEARCH_RESULT_CONTEXT.md)。
 
 生产仓库接续（2026-10-23）：现有 Vercel 项目已接到干净新仓库，用户明确指定代合本次发布 PR 后，已普通合入 main 并晋升同一已验 Production 构建。现有域名、环境配置、数据库、媒体及独立业务运行根保留；生产分支保持 main，日常 develop 不自动部署。用户选择的本次 Vercel 云端完整 check／build 已实际通过，GitHub 私人 CI 仍停用；以后发布仍须逐次授权并明确平台验收，见[本次决定](decisions/2026-10-23-production-repository-rebind.md)和[执行记录](progress/2026-10-23-production-repository-rebind.md)。
@@ -125,6 +127,8 @@ qualified v2 小图可独立选择受限 COS reader，转换原图保留既有�
 本文件记录可提交到仓库的产品范围与协作约定。个人来源配置、身份信息和完整开发记忆保存在被 Git 忽略的本地文件中。用户后续明确指令优先；需求变化时先同步本文件、决策记录和本地项目记忆，再推进实现。
 
 影视公共评分来源（2026-10-22）：用户批准Movie新增可选 `publicRating` 与 `ratingSource`，保留旧 `doubanRating` 兼容；详情原排版显示实际来源，来源未知使用通用标签，0与缺失区分，新字段明确为空不恢复旧值。真实来源配置、运行包安装、任务状态、合并与部署独立处理，见[决定](decisions/2026-10-22-movie-rating-source.md)和[接入说明](MOVIE_PUBLIC_RATING.md)。
+
+影视运行映射源码（2026-10-23）：用户批准严格两键新增校验、显式独占owner策略事务及精确回退的离线候选，保留旧成功批次与公开范围；未来采用完整新采集，不复用旧正文捕获。本轮仅源码、离线验证与草稿PR，不新增迁移、不安装、不改真实配置或策略、不触发同步、不合并或部署，见[本次决定](decisions/2026-10-23-movie-rating-policy-transition.md)。
 
 ## 产品目标
 
