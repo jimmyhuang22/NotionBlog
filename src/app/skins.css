@@ -91,6 +91,8 @@
  */
 :root[data-skin="island"] {
   color-scheme: light;
+  /* Its titles are already weight 800; the hand-font stroke on top only thickened them (user's choice 甲, 2026-10-29). */
+  --title-stroke: 0px;
   --bg: #f8f8f0; --card: #fffdf2; --soft: #f1ead2; --code: #fbf7e6;
   --ink: #5b3c1c; --muted: #7d6648; --rule: #e2d7b9; --accent: #08706a;
   --sky: #e2f4f1; --peach: #fbe7d4;
@@ -161,6 +163,8 @@
 [data-skin="island"] .timeline { --line: var(--rule); }
 [data-skin="island"] .entry::before { background: var(--island-pick); border-color: var(--card); }
 [data-skin="island"] .entry__card { position: relative; border-radius: var(--radius-lg); }
+/* The newest card has no ink spine here: the bubble's tail covers its top, and the yellow label and bead already mark it (甲, 2026-10-29). */
+[data-skin="island"] .entry--lead .entry__card { box-shadow: var(--shadow); }
 [data-skin="island"] .entry__card::after { content: ""; position: absolute; left: -8px; top: 22px; width: 18px; height: 18px; border-radius: 0 0 0 3px; background: var(--card); transform: rotate(45deg); pointer-events: none; }
 [data-skin="island"] .reading__article { border-radius: var(--radius-lg); }
 /* Pictures and the portrait sit on the same solid ledge as the buttons. */

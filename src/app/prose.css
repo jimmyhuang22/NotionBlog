@@ -21,6 +21,8 @@
 .prose blockquote { margin: 0 0 18px; padding: 4px 0 4px 20px; border-left: 2px solid var(--accent); font-family: var(--font-hand); font-size: var(--text-lg); }
 
 .rt-code { padding: 2px 7px; border-radius: var(--radius-xs); background: var(--soft); font-family: var(--font-mono); font-size: 0.84em; }
+/* On a grey callout or the contents box, both --soft themselves, code takes the card's colour to stay visible (甲, 2026-10-29). */
+:is(.callout--default, .prose__toc) .rt-code { background: var(--card); }
 .rt-link { color: var(--accent); text-decoration: underline wavy 1px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 4px; }
 .rt-link:hover { text-decoration-color: currentColor; }
 .rt-unavailable { color: var(--muted); border-bottom: 1px dashed var(--rule); cursor: not-allowed; }
