@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { SocialPlatform } from "../../contracts/social.ts";
 
@@ -154,6 +154,9 @@ export function WorksShell({ current, choices, sort, children }: { current: Soci
                   setPressed(choice.value);
                 }}>
                 {choice.icon}{choice.label}
+                {/* Another move pressed while this platform was on its way (the order, the header's 作品, a search) takes
+                    its place, and this platform will never come: the switch goes back to what is on screen. */}
+                <MoveEnded onEnd={() => { if (choice.value === pressed && current !== pressed) setPressed(current); }} />
               </Link>
             ))}
           </nav>
@@ -166,6 +169,22 @@ export function WorksShell({ current, choices, sort, children }: { current: Soci
       </div>
     </>
   );
+}
+
+/**
+ * Calls `onEnd` once the move its link started is over: the page arrived, or another move took its place.
+ * A move that arrives ends in the same render as the new page, so the switch already reads the platform as arrived.
+ */
+function MoveEnded({ onEnd }: { onEnd: () => void }) {
+  const { pending } = useLinkStatus();
+  const latest = useRef(onEnd);
+  useEffect(() => { latest.current = onEnd; });
+  const was = useRef(false);
+  useEffect(() => {
+    if (was.current && !pending) latest.current();
+    was.current = pending;
+  }, [pending]);
+  return null;
 }
 
 /** Faint cards in a platform's shape and row, while its list is on the way. */
