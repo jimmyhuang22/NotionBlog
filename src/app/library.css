@@ -383,7 +383,8 @@
 .link-pending { display: none; }
 /* A pressed work card answers before its page arrives. */
 .library__item:has(.link-pending[data-pending]) { cursor: progress; }
-.library__item:has(.link-pending[data-pending]) :is(.cover, .cover-slot) { opacity: 0.55; transition: opacity 0.15s; }
+.library__item:has(.link-pending[data-pending]) :is(.cover, .cover-slot) { opacity: 0.55; }
+@media (prefers-reduced-motion: no-preference) { .library__item:has(.link-pending[data-pending]) :is(.cover, .cover-slot) { transition: opacity 0.15s; } }
 .segmented a:has(.link-pending[data-pending]) { color: var(--ink); }
 /* Search sections are tags: the pressed one takes the chosen look at once. */
 .search__kinds a:has(.link-pending[data-pending]) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }

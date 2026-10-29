@@ -30,7 +30,7 @@ export function StatusFeed({ initial, pageSize, timeZone, year = null, total = n
     window.addEventListener("hashchange", locate);
     return () => window.removeEventListener("hashchange", locate);
   }, [router, items]);
-  if (!items.length) return <div className="state"><p>{year ? "这一年没有动态。" : "还没有动态。"}</p></div>;
+  if (!items.length) return <div className="state"><p>{year === "undated" ? "没有未记日期的动态。" : year ? "这一年没有动态。" : "还没有动态。"}</p></div>;
   return (
     <>
       {restarted ? <p className="notice timeline__notice" role="status">动态有更新，已从最新一条重新加载。</p> : null}

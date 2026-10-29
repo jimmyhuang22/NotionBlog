@@ -83,6 +83,8 @@ test("focus keys and legacy hashes cannot inject a path, repeated query, or malf
   assert.equal(readStatusHash("#%2Fprivate"), null);
   assert.equal(readStatusHash("#%broken"), null);
   assert.equal(readStatusHash(""), null);
+  // The footer's "回到顶部" on the status page must not be read as a status to find (it led to /status?focus=top, a 404).
+  assert.equal(readStatusHash("#top"), null);
 });
 
 test("an excerpt folds a Markdown table into （表格） and leaves a stray bar alone", () => {

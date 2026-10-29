@@ -183,7 +183,6 @@ function start(from: string, target: string) {
     const now = element.getBoundingClientRect();
     element.style.top = `${was.top - now.top}px`;
   }
-  document.documentElement.dataset.pageSwitch = "";
   const entry: Switch = { target, column, dimmed: performance.now(), overlay, copies, bar, slow: false, slowTimer: 0, frame: 0, started: performance.now() };
   current = entry;
   for (const part of copies) {
@@ -218,10 +217,7 @@ function finish(entry: Switch) {
   cancelAnimationFrame(entry.frame);
   clearTimeout(entry.slowTimer);
   current = null;
-  const done = () => {
-    entry.overlay.remove();
-    if (!current) delete document.documentElement.dataset.pageSwitch;
-  };
+  const done = () => entry.overlay.remove();
   if (entry.slow && !still()) {
     const width = getComputedStyle(entry.bar).width;
     entry.bar.getAnimations().forEach(animation => animation.cancel());

@@ -16,7 +16,8 @@ export function bookmarkLabel(url: string, title: string): BookmarkLabel {
   try { parsed = new URL(url); } catch { return { kind: "link", title: title || url, address: url }; }
   const host = parsed.hostname.replace(/^www\./u, "");
   const video = videoHosts[host];
-  const named = title.trim() !== "" && ![url, parsed.hostname, host].includes(title.trim());
+  // A video embed with no caption comes from the source as "视频 · host": that is the source's stand-in, not a name.
+  const named = title.trim() !== "" && ![url, parsed.hostname, host, `视频 · ${parsed.hostname}`, `视频 · ${host}`].includes(title.trim());
   const address = `${host}${parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/u, "")}${parsed.search}`;
   return { kind: video ? "video" : "link", title: named ? title.trim() : video ?? host, address };
 }

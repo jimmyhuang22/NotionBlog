@@ -21,7 +21,7 @@ test("stylesheets take corner radii from the radius scale", () => {
   for (const { name, css } of sheets) {
     for (const [declaration, value] of css.matchAll(/border-radius:\s*([^;}]+)/gu)) {
       // One of the four steps, a pill, a circle, the parent's radius, or a shape built from several values.
-      const single = /^(var\(--radius-(xs|sm|md|lg)\)|999px|50%|22%|30%|inherit|0)$/u.test(value!.trim());
+      const single = /^(var\(--radius-(xs|sm|md|lg)\)|999px|50%|inherit|0)$/u.test(value!.trim());
       assert.ok(single || value!.trim().includes(" "), `${name}: ${declaration}`);
     }
   }

@@ -13,6 +13,7 @@ import { studyProjectForCourse } from "@/lib/study-projects";
 import { courseQuickLinks } from "@/lib/study-overview";
 import { getSiteConfig } from "@/lib/site";
 import type { ContentBlock } from "../../../../contracts/content.ts";
+import { ContentServiceError } from "../../../../contracts/repository.ts";
 import { contentMetadata } from "@/lib/seo/metadata";
 import { alwaysFresh } from "@/lib/page-freshness";
 
@@ -30,7 +31,10 @@ async function Materials({ course, quickLinks }: { course: string; quickLinks: s
   try {
     const tree = await getCourseTree(course);
     return tree ? <StudyOverview nodes={tree.nodes} quickLinks={quickLinks} timeZone={getSiteConfig().timeZone} /> : <DirectoryRetry />;
-  } catch { return <DirectoryRetry />; }
+  } catch (error) {
+    // Busy says "try again in a moment", as the notes layout does, rather than inviting repeated retries.
+    return <DirectoryRetry busy={error instanceof ContentServiceError && error.code === "RATE_LIMITED"} />;
+  }
 }
 
 /** The custom overview replaces the embedded database; preserve any other course introduction. */

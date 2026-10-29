@@ -58,7 +58,8 @@
 .toggle summary { min-height: 44px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: var(--text-md); font-weight: 500; color: var(--muted); list-style: none; }
 .toggle summary:hover, .toggle[open] > summary { color: var(--ink); }
 .toggle summary::-webkit-details-marker { display: none; }
-.toggle summary::before { content: "›"; content: "›" / ""; flex: 0 0 auto; color: var(--muted); transition: transform 0.15s; }
+.toggle summary::before { content: "›"; content: "›" / ""; flex: 0 0 auto; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .toggle summary::before { transition: transform 0.15s; } }
 .toggle[open] summary::before { transform: rotate(90deg); }
 .toggle__body { margin-left: 4px; padding: 2px 0 6px 18px; border-left: 1px solid var(--rule); font-size: var(--text-md); }
 .toggle__body > :not(.prose__blank):not(:has(~ :not(.prose__blank))) { margin-bottom: 0; }
