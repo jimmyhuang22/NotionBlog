@@ -63,3 +63,18 @@ export function createSizeMotion(reduced: () => boolean) {
     },
   };
 }
+
+/**
+ * Closing a full entry (F52, the user's choice 乙 on 2026-10-30): the body shrinks to the folded height while it still
+ * shows the full text, clipped from below, and the control rides the shrinking lower edge, so it never leaves the place
+ * it was pressed. Both hold their last frame until the caller swaps in the folded content, which then sits at the same
+ * height with the control in the same place, and cancels them. Nothing is returned when the height does not change.
+ */
+export function closeLate(body: Sizable, control: Sizable | null, from: number, to: number): readonly Running[] {
+  const height = heightKeyframes(from, to);
+  if (!height) return [];
+  const options = { duration: CLOSE_MS, easing: EASE, fill: "forwards" as const };
+  const motions = [body.animate(height, options)];
+  if (control) motions.push(control.animate([{ transform: "translateY(0)" }, { transform: `translateY(${to - from}px)` }], options));
+  return motions;
+}
