@@ -99,6 +99,10 @@
    loads) and on short pages. `scrollbar-gutter: stable` alone did not hold the room in Chrome (F20,
    reopened), so the bar is always there; overlay scroll bars (trackpads, phones) take no room either way. */
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: var(--header-h, 0px); overflow-y: scroll; scrollbar-gutter: stable; }
+/* While a modal is open (the image viewer, quick search, the about card, the course directory drawer) the page
+   behind it stays still: wheel and touch over the backdrop no longer scroll it. The bar's room becomes padding,
+   measured when the hold starts (holdPage in use-dismiss.ts), so nothing moves sideways. */
+html[data-held] { overflow-y: hidden; scrollbar-gutter: auto; padding-right: var(--held-bar, 0px); }
 body {
   margin: 0;
   min-height: 100vh;

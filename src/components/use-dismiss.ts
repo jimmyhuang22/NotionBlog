@@ -11,10 +11,39 @@ import { useEffect, useRef, type FocusEvent, type MouseEvent, type RefObject } f
  * them, and when focus leaves them.
  */
 
-/** Shows the dialog as a modal whenever `open` turns true; closing stays with the dialog itself. */
+let holds = 0;
+
+/**
+ * Keeps the page behind a modal still (globals.css, `html[data-held]`): wheel and touch over the backdrop no
+ * longer scroll it. Where the scroll bar takes room, that room is kept as padding, so nothing moves sideways
+ * (the gutter alone does not hold it in Chrome). Nested modals share one hold. Returns the release, safe to call twice.
+ */
+export function holdPage(): () => void {
+  const root = document.documentElement;
+  if (holds++ === 0) {
+    root.style.setProperty("--held-bar", `${Math.max(0, window.innerWidth - root.clientWidth)}px`);
+    root.dataset.held = "";
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--holds > 0) return;
+    delete root.dataset.held;
+    root.style.removeProperty("--held-bar");
+  };
+}
+
+/** Shows the dialog as a modal whenever `open` turns true, holding the page still until it closes; closing stays with the dialog itself. */
 export function useModal(dialog: RefObject<HTMLDialogElement | null>, open: boolean) {
   useEffect(() => {
-    if (open && dialog.current && !dialog.current.open) dialog.current.showModal();
+    const element = dialog.current;
+    if (!open || !element) return;
+    // Development runs the effect twice; the second run finds the dialog open and only takes the hold again.
+    const release = holdPage();
+    if (!element.open) element.showModal();
+    element.addEventListener("close", release, { once: true });
+    return () => { element.removeEventListener("close", release); release(); };
   }, [dialog, open]);
 }
 
