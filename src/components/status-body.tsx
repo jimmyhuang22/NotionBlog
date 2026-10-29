@@ -8,6 +8,7 @@ import { LightboxProvider } from "./lightbox";
 import { readingLength, trimRuns } from "../lib/text-runs.ts";
 import { createSizeMotion } from "../lib/size-motion.ts";
 import { holdScrollAnchor, releaseAfter } from "../lib/scroll-anchor.ts";
+import { scrollAlong, type Timed } from "../lib/scroll-along.ts";
 import { RichText } from "./rich-text";
 import { useTypesetInline } from "./typeset-inline";
 
@@ -50,27 +51,38 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   // While the content swaps and the card eases to its new size, the page keeps its scroll position instead of
   // the browser holding the button still (F51): released once the motion ends (scroll-anchor.ts).
   const anchor = useRef<(() => void) | null>(null);
+  // The scroll back to the entry's start while it closes, if one is still moving (F52).
+  const back = useRef<(() => void) | null>(null);
   const change = (opening: boolean) => {
+    back.current?.();
+    back.current = null;
     anchor.current?.();
     anchor.current = holdScrollAnchor();
     motion.capture(card.current, body.current, opening);
   };
-  useEffect(() => () => anchor.current?.(), []);
+  useEffect(() => () => { back.current?.(); anchor.current?.(); }, []);
   useLayoutEffect(() => {
     const moving = motion.play(card.current, body.current);
     const release = anchor.current;
     anchor.current = null;
-    if (release) releaseAfter(release, moving);
-    // Closing a body read past its start brings the reader back to where the entry begins, at the same time as it shrinks.
-    if (open || !returning.current) return;
+    // Closing a body read past its start brings the reader back to where the entry begins, on the same timeline
+    // as it shrinks: set every frame from the shrinking's own progress, so both end together (F52).
+    const entry = !open && returning.current ? card.current?.closest(".entry") ?? card.current : null;
     returning.current = false;
-    const entry = card.current?.closest(".entry") ?? card.current;
-    if (!entry) return;
-    const header = document.querySelector(".site-header");
-    const covered = header && getComputedStyle(header).position === "sticky" ? header.getBoundingClientRect().bottom : 0;
-    const top = entry.getBoundingClientRect().top;
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (top < covered + 8) window.scrollBy({ top: top - covered - 16, behavior: still ? "instant" : "smooth" });
+    let scrolling: Promise<void> | null = null;
+    if (entry) {
+      const header = document.querySelector(".site-header");
+      const covered = header && getComputedStyle(header).position === "sticky" ? header.getBoundingClientRect().bottom : 0;
+      const top = entry.getBoundingClientRect().top;
+      if (top < covered + 8) {
+        // With reduced motion nothing shrinks (no motion is returned), so the page is set at once.
+        const along = scrollAlong(moving[0] as Timed | undefined, window.scrollY, top - covered - 16);
+        back.current = along.stop;
+        scrolling = along.finished;
+      }
+    }
+    // Scroll anchoring stays off until both the shrinking and the scroll back have ended.
+    if (release) releaseAfter(release, scrolling ? [...moving, { finished: scrolling }] : moving);
   }, [open, loaded, motion]);
   const [clipped, setClipped] = useState(false);
   useEffect(() => {
