@@ -23,7 +23,19 @@ function EntryDate({ date, timeZone }: { date: DateRange | null | undefined; tim
 export function StudyOverview({ nodes, timeZone, quickLinks = [] }: { nodes: StudyNode[]; timeZone: string; quickLinks?: string[] }) {
   const search = useSearchParams();
   const view = studyView(search.get("view"));
-  const query = search.get("q") ?? "";
+  // The field keeps its own text and the address follows it. Read back from the address, each keystroke would come
+  // back a transition late: the field would flick to the old text, the caret would jump to the end, and an input
+  // method's composition would break.
+  const addressed = search.get("q") ?? "";
+  const [query, setQuery] = useState(addressed);
+  // What the field wrote that the address has not shown yet, oldest first. The address shows those in order; any other
+  // word came from a move elsewhere (a link to this course with no word, or another one) and the field takes it.
+  const unshown = useRef<string[]>([]);
+  useEffect(() => {
+    const at = unshown.current.indexOf(addressed);
+    if (at >= 0) unshown.current.splice(0, at + 1);
+    else setQuery(addressed);
+  }, [addressed]);
   const ordered = useMemo(() => studyReadingNodes(nodes, quickLinks), [nodes, quickLinks]);
   const entries = studyOverviewEntries(ordered, view, query);
   function update(key: "view" | "q", value: string) {
@@ -78,7 +90,7 @@ export function StudyOverview({ nodes, timeZone, quickLinks = [] }: { nodes: Stu
   return <section className="study-overview" aria-label="课程纵览">
     <div className="study-overview__toolbar">
       <nav ref={nav} className="study-views segmented" aria-label="按材料类型筛选"><span ref={pill} className="study-views__pill" aria-hidden="true" />{views.map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => choose(key)}>{label}</button>)}</nav>
-      <input className="study-overview__find" type="search" aria-label="在本课程目录中查找" placeholder="在本课程里查找" value={query} onChange={event => update("q", event.target.value)} />
+      <input className="study-overview__find" type="search" aria-label="在本课程目录中查找" placeholder="在本课程里查找" value={query} onChange={event => { setQuery(event.target.value); unshown.current.push(event.target.value); update("q", event.target.value); }} />
     </div>
     <p className="visually-hidden" role="status" aria-live="polite">{entries.length} 个目录项</p>
     {entries.length ? <ul ref={list} key={switched ? `${view}:${switched}` : "first"} className="study-entries">{entries.map(({ node, path }, index) => {

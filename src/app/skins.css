@@ -41,7 +41,7 @@
 [data-skin="apple"] .site-header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
 [data-skin="apple"] .site-header__brand { padding: 10px 0; font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; }
 @media (max-width: 380px) { [data-skin="apple"] .site-header__brand { font-size: var(--text-base); } }
-[data-skin="apple"] .site-nav__list a, [data-skin="apple"] .site-nav__more > button { min-height: 40px; font-size: var(--text-sm); color: var(--ink); opacity: 0.8; }
+[data-skin="apple"] .site-nav__list > li > a, [data-skin="apple"] .site-nav__more > button { min-height: 40px; font-size: var(--text-sm); color: var(--ink); opacity: 0.8; }
 [data-skin="apple"] .site-nav__list > li > a[aria-current="page"], [data-skin="apple"] .site-nav__more > button.is-current { color: var(--accent); opacity: 1; background: none; }
 [data-skin="apple"] .page-head h1, [data-skin="apple"] .hero h1, [data-skin="apple"] .timeline__head h2, [data-skin="apple"] .section-title, [data-skin="apple"] .reading__title, [data-skin="apple"] .course-head h1, [data-skin="apple"] .work__info h1, [data-skin="apple"] .album-head h1, [data-skin="apple"] .reading__side-name, [data-skin="apple"] .state--center h1 { font-weight: 600; letter-spacing: -0.025em; }
 [data-skin="apple"] .hero h1 { font-size: clamp(34px, 4.8vw, 56px); }
@@ -141,8 +141,10 @@
 [data-skin="island"] .entry__card--brief .entry__card-title { font-weight: 700; }
 /* The app bar: mint by day, deep teal by night, sitting on a solid ledge. */
 [data-skin="island"] .site-header { background: var(--island-bar); box-shadow: 0 4px 0 var(--island-bar-edge); border-bottom: 0; }
-[data-skin="island"] .site-header :is(.site-header__brand, .site-nav__list a, .site-nav__more > button) { color: var(--island-bar-ink); }
+[data-skin="island"] .site-header :is(.site-header__brand, .site-nav__list > li > a, .site-nav__more > button) { color: var(--island-bar-ink); }
 [data-skin="island"] .site-header .icon-button { background: var(--island-bar-button); color: var(--island-bar-button-ink); border: 2px solid var(--island-bar-button); box-shadow: 0 4px 0 var(--island-bar-button-edge); }
+/* A focus ring on the bar is drawn in the bar's ink: the accent is too faint on the daytime mint (2.8:1, under 3:1). */
+[data-skin="island"] .site-header :is(.site-header__brand, .site-nav__list > li > a, .site-nav__more > button, .icon-button):focus-visible { outline-color: var(--island-bar-ink); }
 /* The bar's chunky white buttons need air between them, as Y2K's do (F50, 2026-10-28): 8 on desktop, 6 on phones, 2 below 360 so 320 keeps the name and the three buttons on one row. */
 [data-skin="island"] .site-header__tools { gap: 8px; }
 @media (max-width: 540px) { [data-skin="island"] .site-header__tools { gap: 6px; } }
@@ -227,20 +229,20 @@
   [data-skin="y2k"] .site-header__inner:has(.site-nav__list > li:nth-child(5 of :not(.site-nav__wide))) .site-nav { order: 3; flex-basis: 100%; margin: -6px 0 6px -9px; }
 }
 [data-skin="y2k"] .site-nav__list { gap: 6px; }
-[data-skin="y2k"] .site-nav__list a, [data-skin="y2k"] .site-nav__more > button { min-height: 36px; margin: 4px 0; padding: 0 14px; border-radius: 999px; font-weight: 600; font-size: var(--text-sm); color: var(--ink); }
+[data-skin="y2k"] .site-nav__list > li > a, [data-skin="y2k"] .site-nav__more > button { min-height: 36px; margin: 4px 0; padding: 0 14px; border-radius: 999px; font-weight: 600; font-size: var(--text-sm); color: var(--ink); }
 /* Six entries fit a phone only with a little less padding each, and the narrowest ones with less still. */
 /* Six padded pills need the two-row header a little past the usual 760. */
 @media (min-width: 761px) and (max-width: 800px) {
   [data-skin="y2k"] .site-header__inner:has(.site-nav__list > li:nth-child(6 of :not(.site-nav__wide))) .site-header__tools { order: 2; margin-left: auto; }
   [data-skin="y2k"] .site-header__inner:has(.site-nav__list > li:nth-child(6 of :not(.site-nav__wide))) .site-nav { order: 3; flex-basis: 100%; margin: -6px 0 6px -9px; }
 }
-@media (max-width: 540px) { [data-skin="y2k"] .site-nav__list a, [data-skin="y2k"] .site-nav__more > button { padding: 0 11px; } }
+@media (max-width: 540px) { [data-skin="y2k"] .site-nav__list > li > a, [data-skin="y2k"] .site-nav__more > button { padding: 0 11px; } }
 @media (max-width: 360px) {
   [data-skin="y2k"] .site-nav__list { gap: 4px; }
-  [data-skin="y2k"] .site-nav__list a, [data-skin="y2k"] .site-nav__more > button { padding: 0 8px; }
+  [data-skin="y2k"] .site-nav__list > li > a, [data-skin="y2k"] .site-nav__more > button { padding: 0 8px; }
 }
 [data-skin="y2k"] .site-nav__list > li > a[aria-current="page"], [data-skin="y2k"] .site-nav__more > button.is-current { background: var(--y2k-button) #1a6ace; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 6px 14px -6px rgba(22, 103, 199, 0.7); }
-[data-skin="y2k"] .site-nav__list a:hover, [data-skin="y2k"] .site-nav__more > button:hover { color: var(--accent); }
+[data-skin="y2k"] .site-nav__list > li > a:hover, [data-skin="y2k"] .site-nav__more > button:hover { color: var(--accent); }
 [data-skin="y2k"] .site-nav__list > li > a[aria-current="page"]:hover, [data-skin="y2k"] .site-nav__more > button.is-current:hover { color: #fff; }
 [data-skin="y2k"] .icon-button, [data-skin="y2k"] .socials a { background: linear-gradient(180deg, #fff, #e6f1fb); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #cfe2f4, 0 4px 10px -4px rgba(30, 110, 205, 0.35); color: var(--accent); }
 /* The bubble buttons need room between them (F35): 8 on a computer, 6 on a phone, and the old 2 below 360 so the three keep the name's row at 320. */

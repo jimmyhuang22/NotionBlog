@@ -52,6 +52,9 @@ export function LightboxProvider({ className, children }: { className?: string; 
   const dialog = useRef<HTMLDialogElement>(null);
   // The photos in reading order when the viewer opened, and the one on show (by key, not position, so it stays put when another one goes).
   const [view, setView] = useState<{ order: string[]; key: string } | null>(null);
+  // Whether the dialog is open, apart from `view`: the picture outlives the close by the fade, and a photo pressed
+  // during that fade must still open the dialog again (with `view` alone the modal never saw it close).
+  const [opened, setOpened] = useState(false);
   // Closing fades the dialog out; the picture stays in place until that has finished.
   const clearing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -71,10 +74,11 @@ export function LightboxProvider({ className, children }: { className?: string; 
       if (!order.includes(key)) return;
       clearTimeout(clearing.current);
       setView({ order, key });
+      setOpened(true);
     },
   }), []);
 
-  useModal(dialog, view !== null);
+  useModal(dialog, opened);
 
   // Only photos still on the page can be shown. One that left while on show (a picture that failed to load
   // gives up its place) hands over to the next one still there, else the one before; with none left the viewer closes.
@@ -262,7 +266,7 @@ export function LightboxProvider({ className, children }: { className?: string; 
         ref={dialog}
         className="lightbox"
         aria-label="查看大图"
-        onClose={() => { clearing.current = setTimeout(() => setView(null), CLOSE_MS); }}
+        onClose={() => { setOpened(false); clearing.current = setTimeout(() => setView(null), CLOSE_MS); }}
         onClick={closeOnBackdrop}
         onKeyDown={event => {
           if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomBy(1.5); }
