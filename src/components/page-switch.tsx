@@ -183,7 +183,6 @@ function start(from: string, target: string) {
     const now = element.getBoundingClientRect();
     element.style.top = `${was.top - now.top}px`;
   }
-  document.documentElement.dataset.pageSwitch = "";
   const entry: Switch = { target, column, dimmed: performance.now(), overlay, copies, bar, slow: false, slowTimer: 0, frame: 0, started: performance.now() };
   current = entry;
   for (const part of copies) {
@@ -218,10 +217,7 @@ function finish(entry: Switch) {
   cancelAnimationFrame(entry.frame);
   clearTimeout(entry.slowTimer);
   current = null;
-  const done = () => {
-    entry.overlay.remove();
-    if (!current) delete document.documentElement.dataset.pageSwitch;
-  };
+  const done = () => entry.overlay.remove();
   if (entry.slow && !still()) {
     const width = getComputedStyle(entry.bar).width;
     entry.bar.getAnimations().forEach(animation => animation.cancel());
@@ -254,6 +250,17 @@ function followed(event: MouseEvent): string | null {
   // The same address with other filters, sorts or a fragment is not another page, unless another page is on its way.
   if (url.origin !== location.origin || (url.pathname === location.pathname && !current)) return null;
   return url.pathname;
+}
+
+/**
+ * For a move made in code (router.push) rather than by a click on a link, such as Enter in quick search:
+ * the same still copy and bar as a followed link. Call it just before the push. Another address with the
+ * same path (other filters, a fragment) is not another page, as for a click.
+ */
+export function announceMove(href: string) {
+  const url = new URL(href, location.href);
+  if (url.origin !== location.origin || (url.pathname === location.pathname && !current)) return;
+  start(location.pathname, url.pathname);
 }
 
 export function PageSwitch() {

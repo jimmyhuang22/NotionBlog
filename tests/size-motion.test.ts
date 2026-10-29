@@ -81,3 +81,14 @@ test("no motion when the size does not change", () => {
   motion.play(card, body);
   assert.equal(card.calls.length + body.calls.length, 0);
 });
+
+test("play hands back the motions it started, and nothing when it starts none", () => {
+  const motion = createSizeMotion(() => false);
+  const card = element(320, 220), body = element(272, 180);
+  motion.capture(card, body, true);
+  card.box.width = 600; body.box.height = 640;
+  assert.equal(motion.play(card, body).length, 2);
+  motion.capture(card, body, false);
+  assert.equal(motion.play(card, body).length, 0);
+  assert.equal(createSizeMotion(() => true).play(card, body).length, 0);
+});

@@ -10,10 +10,15 @@ const metricLabels: [SocialMetric, string][] = [
   ["views", "播放"], ["likes", "点赞"], ["coins", "投币"], ["collections", "收藏"], ["comments", "评论"], ["danmaku", "弹幕"], ["shares", "转发"],
 ];
 
-/** Counts read the way the platforms write them: plain below ten thousand, then in 万 with one decimal. */
+/**
+ * Counts read the way the platforms write them: plain below ten thousand, then in 万, then in 亿, each with
+ * one decimal. A count that rounds up to 10000万 is written 1亿, not as ten thousand 万.
+ */
 function countText(value: number): string {
   if (value < 10000) return String(value);
-  return `${Math.round(value / 1000) / 10}万`;
+  const wan = Math.round(value / 1000) / 10;
+  if (wan < 10000) return `${wan}万`;
+  return `${Math.round(value / 10_000_000) / 10}亿`;
 }
 
 type Counts = Record<SocialMetric, number | null>;

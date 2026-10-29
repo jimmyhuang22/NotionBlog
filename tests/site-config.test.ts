@@ -49,7 +49,9 @@ test("dates keep their precision and render in the configured zone", () => {
   assert.equal(rangeLabel({ start: "2025-12-29", end: "2026-01-04", precision: "date" }, "UTC"), "2025 年 12 月 29 日 至 2026 年 1 月 4 日");
   // A range on a single day reads as that day; two times on one day are still a range.
   assert.equal(rangeLabel({ start: "2023-08-26", end: "2023-08-26", precision: "date" }, "UTC"), "2023 年 8 月 26 日");
-  assert.equal(rangeLabel({ start: "2026-08-17T01:00:00Z", end: "2026-08-17T03:00:00Z", precision: "datetime" }, "UTC"), "2026 年 8 月 17 日 01:00 至 8 月 17 日 03:00");
+  assert.equal(rangeLabel({ start: "2026-08-17T01:00:00Z", end: "2026-08-17T03:00:00Z", precision: "datetime" }, "UTC"), "2026 年 8 月 17 日 01:00 至 03:00");
+  // Same day and the same minute: one moment, written once.
+  assert.equal(rangeLabel({ start: "2026-08-17T01:00:00Z", end: "2026-08-17T01:00:30Z", precision: "datetime" }, "UTC"), "2026 年 8 月 17 日 01:00");
 });
 
 test("missing semester and ratings are stated, never shown as zero", () => {

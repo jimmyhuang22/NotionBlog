@@ -233,7 +233,12 @@ export function usePagedList<T extends { id: string }>(endpoint: string, query: 
     // Only a list that went past its first page has anything worth putting back; nothing while it starts again for a new version.
     if (resyncing) return;
     if (reuseOnNavigation && listIdentity !== desiredIdentity) return;
-    if (!reuseOnNavigation && appendedFrom === null && !restored) return;
+    if (!reuseOnNavigation && appendedFrom === null && !restored) {
+      // On its first page again, by a fresh visit or a restart after the list changed: what an earlier visit (or this one
+      // before the restart) left under this key is no longer this list, and going back here must not bring it back.
+      if (snapshots.get(key)?.address === address()) snapshots.delete(key);
+      return;
+    }
     remember(key, { address: address(), initialPage: firstPage, items, cursor, hasMore, total, scrollY: window.scrollY });
     owns.current = true;
   }, [key, items, cursor, hasMore, total, appendedFrom, restored, firstPage, reuseOnNavigation, listIdentity, desiredIdentity, resyncing]);

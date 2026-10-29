@@ -11,6 +11,7 @@ import type { Course } from "../contracts/content.ts";
 import * as format from "../src/lib/format.ts";
 import * as projects from "../src/lib/study-projects.ts";
 import * as overview from "../src/lib/study-overview.ts";
+import * as repository from "../contracts/repository.ts";
 
 // Render the actual TSX views. Next navigation, images and the asynchronous directory are
 // unrelated boundaries, replaced with explicit local ports; no application environment is loaded.
@@ -57,6 +58,8 @@ test("course page headers and breadcrumbs render nullable DTOs without guessing 
       "@/lib/study-projects": projects, "@/lib/study-overview": overview,
       "@/lib/site": { getSiteConfig: () => ({ studyProjects: undefined }) },
       "@/lib/seo/metadata": { contentMetadata: () => ({}) }, "@/lib/page-freshness": { alwaysFresh: async () => {} },
+      // The directory tells a busy service from a failure by the content service's own error class.
+      "../../../../contracts/repository.ts": repository,
     });
     const html = renderToStaticMarkup(await CoursePage({ params: Promise.resolve({ course: item.slug }) }));
     assert.ok(html.includes(`<h1>${code ? "Source title" : item.title}</h1>`));

@@ -17,8 +17,11 @@ export function WorkStrip({ label, children }: { label: string; children: ReactN
     // Observing reports the first size as well, so nothing is measured during render.
     const sizes = new ResizeObserver(read);
     sizes.observe(element);
+    // Cards joining from the next page leave the row's own size as it is and only make it run further.
+    const cards = new MutationObserver(read);
+    cards.observe(element, { childList: true });
     element.addEventListener("scroll", read, { passive: true });
-    return () => { sizes.disconnect(); element.removeEventListener("scroll", read); };
+    return () => { sizes.disconnect(); cards.disconnect(); element.removeEventListener("scroll", read); };
   }, []);
   const step = (direction: 1 | -1) => list.current?.scrollBy({ left: direction * list.current.clientWidth * 0.8 });
   return (

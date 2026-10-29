@@ -46,6 +46,8 @@ export function AboutDialog({ timeZone, avatar = null, name = "" }: { timeZone: 
   function close() { dialog.current?.close(); }
   /** A link in the text leads away from the home page, so the dialog goes first; a link within the text does not. */
   function onPanelClick(event: MouseEvent<HTMLDivElement>) {
+    // A link opened in another tab or window (a modifier, or not the main button) leaves this page and the card as they are.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = (event.target as Element).closest("a[href]");
     if (link && link.getAttribute("target") !== "_blank" && !link.getAttribute("href")!.startsWith("#")) close();
   }

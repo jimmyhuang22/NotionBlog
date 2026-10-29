@@ -8,7 +8,7 @@ import { CodeWrapButton } from "./code-wrap-button";
 import { LightboxProvider } from "./lightbox";
 import { StudyChildPageLink } from "./study-child-page-link";
 import { RichText, plainText, type InlineEquation } from "./rich-text";
-import { hiddenPageLabel, unsupportedDetail } from "../lib/placeholder-labels.ts";
+import { foldSummary, hiddenPageLabel, unsupportedDetail } from "../lib/placeholder-labels.ts";
 import { bookmarkLabel } from "../lib/bookmark.ts";
 
 type Toc = TableOfContentsEntry[];
@@ -109,7 +109,7 @@ function Block({ block, toc, shift, extensions, imagePreviewWidth }: { block: Co
     case "toggle":
       return (
         <details className="toggle">
-          <summary><RichText runs={block.title} Equation={extensions?.InlineEquation} /></summary>
+          <summary>{foldSummary(block.id, plainText(block.title)) ?? <RichText runs={block.title} Equation={extensions?.InlineEquation} />}</summary>
           <div className="toggle__body">{block.children.length ? <Blocks blocks={block.children} toc={toc} shift={shift} extensions={extensions} imagePreviewWidth={imagePreviewWidth} /> : <p className="prose__muted">这个折叠块没有内容。</p>}</div>
         </details>
       );

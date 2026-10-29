@@ -23,6 +23,8 @@
   --bg: #f2eee4;
   --card: #fbf8f0;
   --soft: #e9e3d5;
+  /* The chosen segment of a filter. The card by day; at night a step lighter than its track, which the card is darker than (user's choice 甲, 2026-10-29). */
+  --picked: var(--card);
   --code: #f4f0e6;
   --ink: #20242c;
   --muted: #625f55;
@@ -61,6 +63,7 @@
     --bg: #0c0d10;
     --card: #262a35;
     --soft: #2e323e;
+    --picked: color-mix(in srgb, var(--ink) 12%, var(--soft));
     --code: #23272e;
     --ink: #e8e4da;
     --muted: #9d9b91;
@@ -79,6 +82,7 @@
   --bg: #0c0d10;
   --card: #262a35;
   --soft: #2e323e;
+  --picked: color-mix(in srgb, var(--ink) 12%, var(--soft));
   --code: #23272e;
   --ink: #e8e4da;
   --muted: #9d9b91;
@@ -99,6 +103,10 @@
    loads) and on short pages. `scrollbar-gutter: stable` alone did not hold the room in Chrome (F20,
    reopened), so the bar is always there; overlay scroll bars (trackpads, phones) take no room either way. */
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: var(--header-h, 0px); overflow-y: scroll; scrollbar-gutter: stable; }
+/* While a modal is open (the image viewer, quick search, the about card, the course directory drawer) the page
+   behind it stays still: wheel and touch over the backdrop no longer scroll it. The bar's room becomes padding,
+   measured when the hold starts (holdPage in use-dismiss.ts), so nothing moves sideways. */
+html[data-held] { overflow-y: hidden; scrollbar-gutter: auto; padding-right: var(--held-bar, 0px); }
 body {
   margin: 0;
   min-height: 100vh;
@@ -160,8 +168,8 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
 .site-header__brand { padding: 14px 0; font-family: var(--font-hand); font-size: var(--text-xl); white-space: nowrap; }
 .site-nav { margin-left: auto; font-family: var(--font-hand); font-size: var(--text-base); }
 .site-nav__list { display: flex; gap: 0 4px; margin: 0; padding: 0; list-style: none; }
-.site-nav__list a, .site-nav__more > button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; background: none; font: inherit; color: var(--muted); white-space: nowrap; cursor: pointer; }
-.site-nav__list a:hover, .site-nav__more > button:hover { color: var(--accent); }
+.site-nav__list > li > a, .site-nav__more > button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; background: none; font: inherit; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.site-nav__list > li > a:hover, .site-nav__more > button:hover { color: var(--accent); }
 /* The current section is marked with an ink dot under its name. */
 .site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current { color: var(--accent); background: radial-gradient(circle, var(--accent) 2px, transparent 2.6px) 50% calc(100% - 3px) / 7px 7px no-repeat; }
 /* In ink (no skin) the mark is one short stroke of the pen, the line under the owner's name made small (H-06, 2026-10-20). */
@@ -186,10 +194,6 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
  * the menu does not. Rules that count the row's entries count only the ones that are not these.
  */
 .site-nav__wide { display: none; }
-@media (min-width: 1024px) {
-  .site-nav__wide { display: list-item; }
-  .site-nav__more { display: none; }
-}
 /*
  * Tablets (R-03, 2026-10-20): measured with the 18-character live name, all seven sections fit beside the name and
  * the tools from 801 in ink and the island (at 9px apart), from 807 in apple and 887 in y2k. So from 820 (an
@@ -200,7 +204,7 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
   :root:not([data-skin="y2k"]) .site-nav__more { display: none; }
 }
 @media (min-width: 820px) and (max-width: 1023px) {
-  :root:not([data-skin]) .site-nav__list a, [data-skin="island"] .site-nav__list a { padding: 0 9px; }
+  :root:not([data-skin]) .site-nav__list > li > a, [data-skin="island"] .site-nav__list > li > a { padding: 0 9px; }
 }
 @media (min-width: 900px) {
   [data-skin="y2k"] .site-nav__wide { display: list-item; }
@@ -214,7 +218,7 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
   .site-nav__menu { transition: opacity 0.16s, transform 0.16s; }
   @starting-style { .site-nav__menu { opacity: 0; transform: translateY(-4px); } }
 }
-.site-nav__menu a { display: flex; min-height: 42px; padding: 0 14px; border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--ink); }
+.site-nav__menu a { display: flex; align-items: center; white-space: nowrap; min-height: 42px; padding: 0 14px; border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--ink); }
 .site-nav__menu a:hover { background: var(--soft); color: var(--ink); }
 .site-nav__menu a[aria-current="page"] { color: var(--accent); }
 .site-nav__menu a[aria-current="page"]::after { content: ""; width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--accent); }
@@ -224,14 +228,14 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
   .site-header__tools { order: 2; margin-left: auto; }
   .site-nav { order: 3; flex-basis: 100%; margin: -6px 0 6px -9px; }
   .site-nav__list { gap: 0; }
-  .site-nav__list a, .site-nav__more > button { padding: 0 9px; }
+  .site-nav__list > li > a, .site-nav__more > button { padding: 0 9px; }
 }
 @media (max-width: 760px) {
   .site-header__inner:has(.site-nav__list > li:nth-child(4 of :not(.site-nav__wide))) .site-header__tools { order: 2; margin-left: auto; }
   .site-header__inner:has(.site-nav__list > li:nth-child(4 of :not(.site-nav__wide))) .site-nav { order: 3; flex-basis: 100%; margin: -6px 0 6px -9px; }
 }
 @media (max-width: 360px) {
-  .site-nav__list a, .site-nav__more > button { padding: 0 7px; }
+  .site-nav__list > li > a, .site-nav__more > button { padding: 0 7px; }
 }
 /*
  * Three tools beside the name on a phone (search, theme, light/dark): the buttons narrow to 40 and
@@ -274,6 +278,14 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: no-preference) { .theme-menu__switch::after { transition: left 0.15s, background-color 0.15s; } }
 /* The light/dark button switches at once; under a skin with one scheme it only shows a note beneath itself. */
 .scheme-toggle { position: relative; }
+/* The moon offers dark and the sun offers light; which shows follows the scheme on the page, so it is right before the script has run. */
+.scheme-toggle__icon { display: contents; }
+.scheme-toggle__icon--sun, :root[data-theme="dark"] .scheme-toggle__icon--moon { display: none; }
+:root[data-theme="dark"] .scheme-toggle__icon--sun { display: contents; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .scheme-toggle__icon--moon { display: none; }
+  :root:not([data-theme]) .scheme-toggle__icon--sun { display: contents; }
+}
 .scheme-toggle__hint { position: absolute; right: 0; top: calc(100% + 4px); z-index: 13; padding: 6px 10px; border-radius: var(--radius-xs); background: var(--ink); color: var(--bg); font-size: var(--text-xs); white-space: nowrap; pointer-events: none; }
 .scheme-toggle__hint:empty { display: none; }
 /* Each skin's swatch is a small sample of it, drawn here so it looks the same whichever skin is on. */
@@ -381,7 +393,7 @@ main { flex: 1 0 auto; }
 /* Linked cards lift a little, like a sheet of paper picked up by one corner. */
 a.card:hover { box-shadow: var(--shadow-lift); }
 /* Pressing gives a little: the control dims at once and, where motion is welcome, sinks or settles back. */
-.pill-button:active, .icon-button:active, a.card:active, .pager a:active, .segmented :is(a, button):active, .socials a:active, .site-nav__list a:active, .site-nav__more > button:active { opacity: 0.82; }
+.pill-button:active, .icon-button:active, a.card:active, .pager a:active, .segmented :is(a, button):active, .socials a:active, .site-nav__list > li > a:active, .site-nav__menu a:active, .site-nav__more > button:active { opacity: 0.82; }
 @media (prefers-reduced-motion: no-preference) {
   a.card { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), box-shadow 0.3s; }
   a.card:hover { transform: translateY(-2px) rotate(-0.25deg); }

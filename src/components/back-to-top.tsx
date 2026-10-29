@@ -8,6 +8,15 @@ import { useEffect, useState } from "react";
  * reaches under the button (a phone, a narrow window) it would sit on the right-hand end of whatever
  * is being read, so there it only shows once the reader starts back up.
  */
+/**
+ * Up to the top, and the keyboard with it: this button hides once the page is at the top, and focus left on it
+ * would carry on from the end of the page. The site's name is the first thing in the header after the skip link.
+ */
+function backToTop() {
+  window.scrollTo({ top: 0 });
+  document.querySelector<HTMLElement>(".site-header__brand")?.focus({ preventScroll: true });
+}
+
 export function BackToTop() {
   const [deep, setDeep] = useState(false);
   // The footer has its own way back up, and this would sit on its text.
@@ -37,7 +46,7 @@ export function BackToTop() {
     return () => { window.removeEventListener("scroll", update); window.removeEventListener("resize", update); cancelAnimationFrame(frame); observer?.disconnect(); };
   }, []);
   return (
-    <button type="button" className="to-top" hidden={!deep || atFooter || (covers && !rising)} aria-label="回到顶部" onClick={() => window.scrollTo({ top: 0 })}>
+    <button type="button" className="to-top" hidden={!deep || atFooter || (covers && !rising)} aria-label="回到顶部" onClick={backToTop}>
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14.5v-11M4.5 8 9 3.5 13.5 8" /></svg>
     </button>
   );

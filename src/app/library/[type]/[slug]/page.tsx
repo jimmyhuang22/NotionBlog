@@ -194,7 +194,10 @@ export default async function LibraryDetailPage(props: Props) {
       {document && (document.blocks.length > 0 || document.completeness === "partial")
         ? <article className="reading__article card" aria-label="我的记录"><RichDocumentBody document={document} imagePreviewWidth={800} /></article>
         // Where a write-up would be, a quiet slip says there is none yet (W-05, 2026-10-20); a wish has nothing to write.
-        : item.status === "wishlist" ? null : <p className="work__record-empty">还没有写下{recordWords[item.kind]}。</p>}
+        // A body that was not loaded (null, unlike an empty one) is not "none yet": the slip says it did not load.
+        : item.status === "wishlist" ? null
+        : document === null ? <p className="work__record-empty">{recordWords[item.kind]}暂时没有加载，稍后刷新再试。</p>
+        : <p className="work__record-empty">还没有写下{recordWords[item.kind]}。</p>}
       <Suspense fallback={<div className="work__neighbours-pending" aria-hidden="true" />}>
         <Neighbours item={item} timeZone={getSiteConfig().timeZone} />
       </Suspense>

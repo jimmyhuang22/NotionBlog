@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { holdPage } from "./use-dismiss";
 
 /** Where the directory stands beside the note instead of waiting behind its button (study.css says the same). */
 const COLUMN = "(min-width: 1100px)";
@@ -37,8 +38,8 @@ export function StudyReadingDirectory({ children }: { children: ReactNode }) {
     if (!open || !drawer) return;
     // The button that opened the drawer, kept for the cleanup: focus goes back to it when the drawer closes.
     const opener = trigger.current;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // The page behind stays still while the drawer is open, as behind the site's modal dialogs.
+    const release = holdPage();
     // Out of reach while the drawer is open, as behind a modal dialog: every branch of the page beside the drawer's own path.
     const outside: HTMLElement[] = [];
     for (let node: HTMLElement | null = drawer; node && node !== document.body; node = node.parentElement) {
@@ -64,7 +65,7 @@ export function StudyReadingDirectory({ children }: { children: ReactNode }) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
+      release();
       for (const element of outside) element.inert = false;
       if (drawer.contains(document.activeElement)) opener?.focus({ preventScroll: true });
     };

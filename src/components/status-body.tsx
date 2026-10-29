@@ -7,6 +7,7 @@ import { ContentImage } from "./content-image";
 import { LightboxProvider } from "./lightbox";
 import { readingLength, trimRuns } from "../lib/text-runs.ts";
 import { createSizeMotion } from "../lib/size-motion.ts";
+import { holdScrollAnchor, releaseAfter } from "../lib/scroll-anchor.ts";
 import { RichText } from "./rich-text";
 import { useTypesetInline } from "./typeset-inline";
 
@@ -46,8 +47,20 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   const body = useRef<HTMLDivElement>(null);
   const [motion] = useState(() => createSizeMotion(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches));
   const returning = useRef(false);
+  // While the content swaps and the card eases to its new size, the page keeps its scroll position instead of
+  // the browser holding the button still (F51): released once the motion ends (scroll-anchor.ts).
+  const anchor = useRef<(() => void) | null>(null);
+  const change = (opening: boolean) => {
+    anchor.current?.();
+    anchor.current = holdScrollAnchor();
+    motion.capture(card.current, body.current, opening);
+  };
+  useEffect(() => () => anchor.current?.(), []);
   useLayoutEffect(() => {
-    motion.play(card.current, body.current);
+    const moving = motion.play(card.current, body.current);
+    const release = anchor.current;
+    anchor.current = null;
+    if (release) releaseAfter(release, moving);
     // Closing a body read past its start brings the reader back to where the entry begins, at the same time as it shrinks.
     if (open || !returning.current) return;
     returning.current = false;
@@ -75,12 +88,12 @@ export function StatusBody({ entry, titleLevel = 4 }: {
 
   async function toggle() {
     if (open) {
-      motion.capture(card.current, body.current, false);
+      change(false);
       returning.current = true;
       setOpen(false);
       return;
     }
-    if (loaded) { motion.capture(card.current, body.current, true); setOpen(true); return; }
+    if (loaded) { change(true); setOpen(true); return; }
     if (pending) return;
     setPending(true);
     setProblem(null);
@@ -89,7 +102,7 @@ export function StatusBody({ entry, titleLevel = 4 }: {
       const reply = await response.json().catch(() => null);
       if (response.ok && reply?.data) {
         // The card stays as it is while "正在加载…" shows; it eases open only once the body is here.
-        motion.capture(card.current, body.current, true);
+        change(true);
         setLoaded({ document: reply.data.document ?? null });
         setOpen(true);
       } else {

@@ -5,6 +5,8 @@
  */
 const HIDDEN_PAGE = "Unavailable page";
 const UNSUPPORTED_BLOCK = "Unsupported Notion block";
+/** A collapsible heading arrives as the heading and a toggle the source names `<id>-content` and titles "Details". */
+const COLLAPSED_HEADING = "Details";
 
 /** The name to show for a page that is not open to visitors. */
 export function hiddenPageLabel(title: string): string {
@@ -14,4 +16,9 @@ export function hiddenPageLabel(title: string): string {
 /** What to add in brackets after "this part cannot be shown"; nothing when the service only says so in general. */
 export function unsupportedDetail(label: string): string | null {
   return !label.trim() || label === UNSUPPORTED_BLOCK ? null : label;
+}
+
+/** What a collapsible heading's own fold says: the source's fixed English title, read in the page's language. */
+export function foldSummary(blockId: string, title: string): string | null {
+  return blockId.endsWith("-content") && title.trim() === COLLAPSED_HEADING ? "展开内容" : null;
 }
