@@ -1,18 +1,28 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ContentDocument, StatusEntry } from "../../contracts/content.ts";
 import { BrowserDocumentBody } from "./browser-document";
 import { ContentImage } from "./content-image";
 import { LightboxProvider } from "./lightbox";
 import { readingLength, trimRuns } from "../lib/text-runs.ts";
-import { createSizeMotion } from "../lib/size-motion.ts";
+import { closeLate, createSizeMotion } from "../lib/size-motion.ts";
 import { holdScrollAnchor, releaseAfter } from "../lib/scroll-anchor.ts";
 import { scrollAlong, type Timed } from "../lib/scroll-along.ts";
 import { RichText } from "./rich-text";
 import { useTypesetInline } from "./typeset-inline";
 
 type Problem = "busy" | "failed" | null;
+
+/** How far the page scrolls to bring an entry's start back under the header, or null when it is already on screen. */
+function backTo(card: HTMLElement): number | null {
+  const entry = card.closest(".entry") ?? card;
+  const header = document.querySelector(".site-header");
+  const covered = header && getComputedStyle(header).position === "sticky" ? header.getBoundingClientRect().bottom : 0;
+  const top = entry.getBoundingClientRect().top;
+  return top < covered + 8 ? top - covered - 16 : null;
+}
 
 /**
  * The list carries the extracted text and up to nine body images, and for a longer or structured entry
@@ -53,7 +63,19 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   const anchor = useRef<(() => void) | null>(null);
   // The scroll back to the entry's start while it closes, if one is still moving (F52).
   const back = useRef<(() => void) | null>(null);
+  const control = useRef<HTMLButtonElement>(null);
+  // Closing keeps the full text while the card shrinks to its folded height, the control riding the lower edge, and
+  // swaps to the folded opening only when the shrink ends (F52, the user's choice 乙 on 2026-10-30). The folded size
+  // is taken as the entry opens; if the card has changed width since (a resize, a short entry that widened), the
+  // remembered height no longer holds and the entry closes as before: folded content at once, then the size eases.
+  const folded = useRef<{ height: number; width: number; cardWidth: number } | null>(null);
+  const late = useRef<{ from: number; to: number } | null>(null);
+  const [closing, setClosing] = useState(false);
   const change = (opening: boolean) => {
+    if (opening && body.current && card.current) {
+      const box = body.current.getBoundingClientRect();
+      folded.current = { height: box.height, width: box.width, cardWidth: card.current.getBoundingClientRect().width };
+    }
     back.current?.();
     back.current = null;
     anchor.current?.();
@@ -67,23 +89,33 @@ export function StatusBody({ entry, titleLevel = 4 }: {
     anchor.current = null;
     // Closing a body read past its start brings the reader back to where the entry begins, on the same timeline
     // as it shrinks: set every frame from the shrinking's own progress, so both end together (F52).
-    const entry = !open && returning.current ? card.current?.closest(".entry") ?? card.current : null;
+    const distance = !open && returning.current && card.current ? backTo(card.current) : null;
     returning.current = false;
     let scrolling: Promise<void> | null = null;
-    if (entry) {
-      const header = document.querySelector(".site-header");
-      const covered = header && getComputedStyle(header).position === "sticky" ? header.getBoundingClientRect().bottom : 0;
-      const top = entry.getBoundingClientRect().top;
-      if (top < covered + 8) {
-        // With reduced motion nothing shrinks (no motion is returned), so the page is set at once.
-        const along = scrollAlong(moving[0] as Timed | undefined, window.scrollY, top - covered - 16);
-        back.current = along.stop;
-        scrolling = along.finished;
-      }
+    if (distance !== null) {
+      // With reduced motion nothing shrinks (no motion is returned), so the page is set at once.
+      const along = scrollAlong(moving[0] as Timed | undefined, window.scrollY, distance);
+      back.current = along.stop;
+      scrolling = along.finished;
     }
     // Scroll anchoring stays off until both the shrinking and the scroll back have ended.
     if (release) releaseAfter(release, scrolling ? [...moving, { finished: scrolling }] : moving);
   }, [open, loaded, motion]);
+  // Closing late: the full text shrinks with the scroll back on one timeline, then the folded opening takes its place
+  // in the same frame the shrink ends, at the same height and with the control where it already is.
+  useLayoutEffect(() => {
+    const plan = late.current;
+    late.current = null;
+    if (!closing || !plan || !body.current || !card.current) return;
+    const moving = closeLate(body.current, control.current, plan.from, plan.to) as readonly Animation[];
+    const distance = backTo(card.current);
+    if (distance !== null) back.current = scrollAlong(moving[0], window.scrollY, distance).stop;
+    void Promise.allSettled(moving.map(motion => motion.finished)).then(() => {
+      // Scroll anchoring stays off through the swap: the [open] effect above releases it two frames later.
+      flushSync(() => { setClosing(false); setOpen(false); });
+      for (const motion of moving) motion.cancel();
+    });
+  }, [closing]);
   const [clipped, setClipped] = useState(false);
   useEffect(() => {
     const box = clip.current;
@@ -99,7 +131,20 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   const canExpand = entry.hasMoreBody !== false || (preview !== null && (entry.previewBodyTruncated === true || clipped));
 
   async function toggle() {
+    if (closing) return;
     if (open) {
+      const box = body.current?.getBoundingClientRect(), cardWidth = card.current?.getBoundingClientRect().width;
+      const was = folded.current;
+      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (box && was && !still && Math.abs(box.width - was.width) < 0.5 && Math.abs((cardWidth ?? 0) - was.cardWidth) < 0.5 && Math.abs(box.height - was.height) > 0.5) {
+        back.current?.();
+        back.current = null;
+        anchor.current?.();
+        anchor.current = holdScrollAnchor();
+        late.current = { from: box.height, to: was.height };
+        setClosing(true);
+        return;
+      }
       change(false);
       returning.current = true;
       setOpen(false);
@@ -131,7 +176,7 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   const full = open && loaded?.document && (loaded.document.blocks.length > 0 || loaded.document.completeness === "partial") ? loaded.document : null;
   // The control sits on the card's last line, under the pictures, both folded and unfolded (F36).
   const more = canExpand ? (
-    <button type="button" className="entry__more" onClick={toggle} aria-disabled={pending} aria-expanded={open}>
+    <button ref={control} type="button" className={closing ? "entry__more entry__more--riding" : "entry__more"} onClick={toggle} aria-disabled={pending} aria-expanded={open}>
       {pending ? "正在加载…" : open ? (full ? "收起" : "没有更多内容") : problem === "busy" ? "暂时加载不出来，稍后再试" : problem === "failed" ? "没有加载成功，重试" : preview && text.length ? `展开全文 · 约 ${readingLength(text)} 字` : "展开完整内容"}
     </button>
   ) : null;

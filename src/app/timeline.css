@@ -79,6 +79,10 @@
 .entry__more:hover { text-decoration: underline wavy color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 4px; }
 /* Not disabled while it loads, so keyboard focus stays on it; a press then does nothing (toggle). */
 .entry__more[aria-disabled="true"] { cursor: progress; }
+/* While a full entry closes, the control rides the shrinking lower edge over a fade as tall as the folded opening's
+   (status-body.tsx, F52): it covers the line it passes, so the words end in the same fade they will have folded. */
+.entry__more--riding { position: relative; z-index: 1; width: 100%; text-align: start; background: var(--card); }
+.entry__more--riding::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: calc(4.5 * var(--text-body)); background: linear-gradient(to bottom, transparent, var(--card)); pointer-events: none; }
 .entry__card .prose { font-size: var(--text-body); line-height: 1.75; }
 /* A long entry's typeset opening, collapsed to about nine lines (status-body.tsx); a mask fades it, so it suits every card colour. */
 .entry__preview { max-height: calc(9 * 1.75 * var(--text-body)); overflow: hidden; }
