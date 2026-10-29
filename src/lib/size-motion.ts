@@ -49,15 +49,17 @@ export function createSizeMotion(reduced: () => boolean) {
       running = [];
       from = { width, height, opening };
     },
-    play(card: Sizable | null, body: Sizable | null) {
+    /** Returns the motions it started (none when nothing moves), so a caller can wait for them to end. */
+    play(card: Sizable | null, body: Sizable | null): readonly Running[] {
       const start = from;
       from = null;
-      if (!start || !card || !body || reduced()) return;
+      if (!start || !card || !body || reduced()) return [];
       const options = { duration: start.opening ? OPEN_MS : CLOSE_MS, easing: EASE };
       const height = heightKeyframes(start.height, body.getBoundingClientRect().height);
       const width = widthKeyframes(start.width, card.getBoundingClientRect().width);
       if (height) running.push(body.animate(height, options));
       if (width) running.push(card.animate(width, options));
+      return [...running];
     },
   };
 }
