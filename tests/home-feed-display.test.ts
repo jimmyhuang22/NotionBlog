@@ -22,6 +22,13 @@ test("a figure is an exact count, else the platform's own display, else nothing"
   assert.equal(metricText(counted, "likes"), "9999");
   assert.equal(metricText(counted, "coins"), "1万");
   assert.equal(metricText(counted, "danmaku"), "123.5万");
+  // From a hundred million on, in 亿; a count that would round to 10000万 is 1亿.
+  const large = (views: number) => metricText({ ...bilibili, metrics: { ...bilibili.metrics, views } }, "views");
+  assert.equal(large(99_940_000), "9994万");
+  assert.equal(large(99_999_999), "1亿");
+  assert.equal(large(100_000_000), "1亿");
+  assert.equal(large(123_456_789), "1.2亿");
+  assert.equal(large(1_050_000_000), "10.5亿");
   // A count that cannot be a count is treated as unknown, and the display is used if there is one.
   assert.equal(metricText({ ...bilibili, metrics: { ...bilibili.metrics, views: -1 }, metricDisplay: { ...bilibili.metricDisplay, views: "3" } }, "views"), "3");
   assert.equal(metricText({ ...bilibili, metrics: { ...bilibili.metrics, views: Number.NaN } }, "views"), null);

@@ -94,7 +94,7 @@ export function spanMoment(items: readonly { occurredAt: DateRange | null }[], t
   }).sort((a, b) => a.at - b.at);
   if (!days.length) return null;
   const earliest = days[0]!, latest = days.at(-1)!;
-  if (earliest.at !== latest.at) return { relative: null, rest: `${dayLabel(earliest.parts)}至 ${dayLabel(latest.parts)}` };
+  if (earliest.at !== latest.at) return { relative: null, rest: `${dayLabel(earliest.parts)} 至 ${dayLabel(latest.parts)}` };
   const moment = momentLabel(earliest.parts, today);
   // Today has no time of day to follow it here, so the date stays for the line not to be one bare word among tags.
   return moment.relative === "今天" ? { relative: moment.relative, rest: dayLabel(earliest.parts) } : moment;

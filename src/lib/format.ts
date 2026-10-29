@@ -72,8 +72,11 @@ export function rangeLabel(range: DateRange | null, timeZone: string): string | 
   if (!start) return null;
   const end = range.end ? dateParts(range.end, range.precision, timeZone) : null;
   const first = `${start.year} 年 ${dayLabel(start)}`;
-  // A range that starts and ends at the same moment is that one day, not "from it to itself".
-  if (!end || (end.year === start.year && end.month === start.month && end.day === start.day && end.time === start.time)) return first;
+  const sameDay = !!end && end.year === start.year && end.month === start.month && end.day === start.day;
+  // A range that starts and ends at the same moment is that one day, not "from it to itself"; within one day
+  // only the end's time of day follows, so the date is not written twice. Every range reads " 至 ".
+  if (!end || (sameDay && end.time === start.time)) return first;
+  if (sameDay) return end.time ? `${first} 至 ${end.time}` : first;
   return `${first} 至 ${end.year === start.year ? "" : `${end.year} 年 `}${dayLabel(end)}`;
 }
 

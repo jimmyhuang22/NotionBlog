@@ -147,5 +147,8 @@ test("overview dates read as site words: a year only across years, the month onl
   assert.deepEqual(studyDateText(day(2025, 12, 29), day(2026, 1, 4)), ["2025 年 12 月 29 日", "2026 年 1 月 4 日"]);
   assert.deepEqual(studyDateText(day(2025, 5, 12), null), ["5 月 12 日", null]);
   assert.deepEqual(studyDateText(day(2025, 5, 12, "09:00"), day(2025, 5, 12, "11:30")), ["5 月 12 日 09:00", "11:30"]);
+  // Same day, same time: the end adds nothing, so "09:00 – 09:00" is not written.
+  assert.deepEqual(studyDateText(day(2025, 5, 12, "09:00"), day(2025, 5, 12, "09:00")), ["5 月 12 日 09:00", null]);
+  assert.deepEqual(studyDateText(day(2025, 5, 12), day(2025, 5, 12)), ["5 月 12 日", null]);
   assert.deepEqual(Object.values(studyTypeLabels).map(label => label.mark), ["课", "记", "作", "作"]);
 });
