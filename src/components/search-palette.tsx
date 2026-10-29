@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Page } from "../../contracts/content.ts";
 import type { SearchHit } from "../../contracts/website.ts";
 import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, readableExcerpt, searchHref, searchResultHref, searchResultLabel, stepOption } from "../lib/search.ts";
+import { announceMove } from "./page-switch";
 import { Marked } from "./search-results";
 import { SearchContextLine } from "./search-context-line";
 import { closeOnBackdrop, useModal } from "./use-dismiss";
@@ -115,7 +116,8 @@ export function SearchPalette() {
   }, [open, query, composing, attempt]);
 
   function close() { dialog.current?.close(); }
-  function go(href: string) { close(); router.push(href); }
+  // Enter moves in code, which no click announces: the page change shows the same as a pressed result (review leftover, 2026-10-28).
+  function go(href: string) { close(); announceMove(href); router.push(href); }
   function hrefOf(index: number): string | null {
     if (!showingResults || !results.query || index < 0 || index >= count) return null;
     return index < results.hits.length ? searchResultHref(results.hits[index]!) : searchHref(results.query, null);

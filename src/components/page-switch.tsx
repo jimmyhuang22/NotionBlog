@@ -256,6 +256,17 @@ function followed(event: MouseEvent): string | null {
   return url.pathname;
 }
 
+/**
+ * For a move made in code (router.push) rather than by a click on a link, such as Enter in quick search:
+ * the same still copy and bar as a followed link. Call it just before the push. Another address with the
+ * same path (other filters, a fragment) is not another page, as for a click.
+ */
+export function announceMove(href: string) {
+  const url = new URL(href, location.href);
+  if (url.origin !== location.origin || (url.pathname === location.pathname && !current)) return;
+  start(location.pathname, url.pathname);
+}
+
 export function PageSwitch() {
   // The page last shown: on Back the address has already changed when the browser says so.
   const shown = useRef("");

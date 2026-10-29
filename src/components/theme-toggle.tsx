@@ -15,13 +15,16 @@ const markers = skins.map(skin => markerOf(skin.transition));
 
 /**
  * The tab icons follow the system theme through their media queries. Once the visitor has chosen
- * a scheme by hand, both point at that scheme's icon instead, whichever one the browser picks.
+ * a scheme by hand, both point at that scheme's icon instead, whichever one the browser picks. Back
+ * to following the system, each points at its own scheme's icon again, so the tab changes at once.
  */
 function syncIcons() {
-  const theme = document.documentElement.dataset.theme;
-  if (theme !== "light" && theme !== "dark") return;
+  const chosen = document.documentElement.dataset.theme;
+  const fixed = chosen === "light" || chosen === "dark" ? chosen : null;
   for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"][href^="/site-icon/"]')) {
-    if (link.getAttribute("href") !== `/site-icon/${theme}`) link.href = `/site-icon/${theme}`;
+    const own = link.media.includes("dark") ? "dark" : link.media.includes("light") ? "light" : null;
+    const scheme = fixed ?? own;
+    if (scheme && link.getAttribute("href") !== `/site-icon/${scheme}`) link.href = `/site-icon/${scheme}`;
   }
 }
 
