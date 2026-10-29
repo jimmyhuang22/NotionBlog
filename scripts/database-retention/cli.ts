@@ -4,14 +4,14 @@ import {Pool} from "pg";
 import {databasePoolConfig} from "../../src/server/database/connection.ts";
 import {createArchiveStore, verifyOfflineRestore} from "./archive.ts";
 import {CLEAN_STOP_REASONS, dailyRetention, RetentionStop, RolledBackError, sha256, type RetentionPort} from "./daily.ts";
-import {RETENTION_DEFERRED_EXIT_CODE, retentionChunkRows, retentionDeleteTimeout} from "./schedule.ts";
+import {ADMITTED_SYNC_STATES, RETENTION_DEFERRED_EXIT_CODE, retentionChunkRows, retentionDeleteTimeout} from "./schedule.ts";
 import {retentionRunLimit} from "./limits.ts";
 import {verifyRetentionReadiness} from "./readiness.ts";
 import type {ReadinessSample} from "../../src/server/content-readiness/protocol.ts";
 import {RetentionResponseBudget} from "./response-budget.ts";
 
 interface Window {
- format:"retention-daily-window-v4";maximumRuns:number;chunkRows:number;deleteTimeoutSeconds:number;runId:string;deadline:number;syncState:string;operation:string;
+ format:"retention-daily-window-v5";maximumRuns:number;chunkRows:number;deleteTimeoutSeconds:number;runId:string;deadline:number;syncState:string;operation:string;
  locks:{path:string;ino:number;dev:number;sha256:string}[];absentLocks:string[];
  proofs:{path:string;sha256:string}[];archiveDirectory:string;readinessURL:string;readinessSample:ReadinessSample;
  programFiles:{path:string;sha256:string}[];
@@ -26,7 +26,7 @@ async function main(){
  const [flag,path,...extra]=process.argv.slice(2);if(flag!=="--window"||!path||extra.length)throw Error("RETENTION_EXPLICIT_WINDOW_REQUIRED");
  const initial=await privateFile(path),window=JSON.parse(initial.raw) as Window;
  const maximumRuns=retentionRunLimit(window.maximumRuns);
- if(window.format!=="retention-daily-window-v4"||window.locks.length!==4||window.proofs.length<5||window.absentLocks.length<1||
+ if(window.format!=="retention-daily-window-v5"||window.locks.length!==4||window.proofs.length<2||window.absentLocks.length<1||
   !window.programFiles?.length||!Number.isFinite(window.deadline)||window.deadline>Date.now()+30*60*1000||window.deadline<Date.now()+60_000)throw Error("RETENTION_WINDOW_INVALID");
  const chunkRows=retentionChunkRows(window.chunkRows),deleteTimeoutSeconds=retentionDeleteTimeout(window.deleteTimeoutSeconds);
  const stop=new AbortController();
@@ -38,7 +38,7 @@ async function main(){
   for(const lock of window.locks){const {raw,s}=await privateFile(lock.path);if(s.ino!==lock.ino||s.dev!==lock.dev||sha256(raw)!==lock.sha256)throw Error("RETENTION_LOCK_CHANGED");}
   for(const absent of window.absentLocks){try{await lstat(absent);}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")continue;throw e;}throw Error("RETENTION_WORKER_BUSY");}
   const state=JSON.parse((await privateFile(window.syncState)).raw);
-  if(state.status!=="PASS"||state.runId!==window.runId||state.operation!==window.operation)throw Error("RETENTION_SUCCESS_CHANGED");
+  if(!ADMITTED_SYNC_STATES.has(state.status)||state.runId!==window.runId||state.operation!==window.operation)throw Error("RETENTION_SUCCESS_CHANGED");
   for(const proof of window.proofs)if(sha256((await privateFile(proof.path)).raw)!==proof.sha256)throw Error("RETENTION_PROOF_CHANGED");
   for(const proof of window.programFiles){const s=await lstat(proof.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(proof.path,"utf8"))!==proof.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  }

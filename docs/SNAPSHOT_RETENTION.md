@@ -20,21 +20,20 @@
 
 ## 显式窗口与成本
 
-新配置使用 `retention-daily-config-v4`，窗口使用 `retention-daily-window-v4`，两者均须有数字 `maximumRuns`，只接受 `1` 或 `2`。旧格式及缺失值不自动升级；现有冻结运行包保持独立。调度入口为：
+新配置使用 `retention-daily-config-v5`，窗口使用 `retention-daily-window-v5`，两者均须有数字 `maximumRuns`，只接受 `1` 或 `2`。旧格式及缺失值不自动升级；现有冻结运行包保持独立。调度入口为：
 
 ```sh
 node --conditions=react-server scripts/database-retention/scheduled-cli.ts --check /absolute/private/config.json
 ```
 
-`--check` 只核对本机状态及已绑定程序，不取得锁、不读凭据、不启动子进程或业务连接。实际运行入口 `--config` 仅供已审安装使用。配置需要固定绝对路径、私有环境文件、原共享锁和同一批内容／小图／访客／正文后置的完整成功证明；上次维护待核账时继续拒绝准入。
+`--check` 只核对本机状态及已绑定程序，不取得锁、不读凭据、不启动子进程或业务连接。实际运行入口 `--config` 仅供已审安装使用。配置需要固定绝对路径、私有环境文件和原共享锁；准入证明见下文 v5。上次维护待核账时继续拒绝准入。
 
 ## v4：对齐 10-24 迁库后的手动轮次（2026-10-29）
 
 迁库后内容同步改为手动轮次，旧网站同步暂停标记一直保留，正文后置也移进每轮自己的操作目录。v3 因此永远等待，v4 只改准入与停止方式：
 
 - 不再读取网站同步暂停标记；轮次运行时持有共享锁，清理以 `O_EXCL` 取得同一组锁，轮次在途时返回 `WRITER_BUSY`。需要暂停清理时，在清理状态目录放 `PAUSED_PRIVATE.json`。
-- 正文后置回执改读 `<operation>/body-post/CATALOG_PRIVATE.json` 与 `<operation>/body-post/runs/<runId>/<唯一子目录>/RECEIPT_PRIVATE.json`；回执须属于同一 run、同一操作目录、同一目录摘要，且无在途或未知写入。子目录缺失时等待，多于一个时停止。
-- `settleMinutes`（0–1440）：同步状态 PASS 后至少等待该时长再准入（`SETTLING`），留给发布指针接管、交付等收尾步骤。
+- `settleMinutes`（0–1440）：轮次结束后至少等待该时长再准入（`SETTLING`）。
 - `deleteTimeoutSeconds`（8–30）：删除事务的语句超时。每次删除都在表锁内重新计算完整计划，计划耗时随库增大；读取仍为 30 秒。共享行排他锁不阻挡网站读取。
 - `chunkRows`（1–500）：每次受保护删除的行数。10-23 两次一次性清理都在 `nb_v2.records` 上触发 8 秒语句超时，即便每块 25 行；块大小只是缓解，真实耗时须在获准的只读检查中测量。
 - 干净停止：服务器在 COMMIT 发出之前返回的错误（含客户端在 COMMIT 前失败）证明事务未提交，不再记为未知意图。语句超时、锁等待、序列化冲突或死锁、删除前的计划／候选变化、窗口用尽、预算拒绝，以及首次私有就绪检查失败，记为干净停止：CLI 以 75 退出，调度写 `DEFERRED` 并在二十四小时后重试；连续三次后转为 `REQUIRES_REVIEW`。删除之后的核验或后置就绪失败、服务器拒绝（如 `RETENTION_GUARD_CHANGED`）、COMMIT 期间失败及其他未知结果仍立即停止待审，不自动重试。
@@ -86,3 +85,15 @@ try {
 后续安装候选应固定源码、依赖、路径、前后像、权限及回退。保持旧暂停／失败／费用与删除回执，先核账未知意图，再对当前元数据和候选成本作有限复核。结构摘要重绑不能只执行无条件赋值；须在无在途删除时验证精确受审前后值，并按具体批准处理。
 
 清理开始前仍须新的同批完整成功证明和原共享锁空档。来源恢复、自然发布刷新、真实撤回验收以及每日维护分别记录结果。缓存刷新失败不得把来源或清理的实际提交状态改写；维护失败只停止自身。
+
+## v5：已发布并收尾的轮次即可准入（2026-10-30）
+
+迁库后只有第 60 轮完整 PASS，多数轮次以 `PUBLISHED_POST_INCOMPLETE` 收尾，且常缺快照／访客／正文后置等验收回执；v4 因此几乎永远等待。v5 改为：
+
+- 同步状态为 `PASS` 或 `PUBLISHED_POST_INCOMPLETE`，且 runId 与操作目录有效。
+- 本轮 `SOURCE_DRIVER_PRIVATE.json`：PASS、同一 run、`published` 与 `readerVerified` 均为 true；否则停止待审。
+- 收尾：PASS 轮次要求 `PIPELINE_FINISHED_PRIVATE.json` 通过；`PUBLISHED_POST_INCOMPLETE` 轮次要求 `CLOSE_PUBLISHED_PRIVATE.json` 通过、同一 run、状态一致且已释放 maintenance.lock，缺失时等待（`WAITING_FOR_CLOSE`）。
+- S13：`adoptionReceipt`（adopt-once 的 latest.json）为同一 run 的 `ADOPTED_VERIFIED` 才立即准入；否则等到轮次结束后 `adoptionWaitMinutes`（0–1440，建议 240）再准入，期间为 `WAITING_FOR_ADOPTION`。
+- 不再要求访客、快照、缩略图后置或正文后置回执。清理从不删除当前或持久发布的批次，这些回执只证明发布后的附加验收。
+- 上述文件连同摘要写入窗口，删除期间任一变化即停止。
+
