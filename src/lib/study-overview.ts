@@ -49,7 +49,8 @@ export function studyDateText(start: StudyDay, end: StudyDay | null): [string, s
   const last = crossesYear ? `${end.year} 年 ${end.month} 月 ${end.day} 日`
     : end.month !== start.month ? `${end.month} 月 ${end.day} 日`
     : end.day !== start.day ? `${end.day} 日` : "";
-  const text = `${last}${last ? time(end) : end.time ?? ""}`;
+  // Within one day only a different time of day follows; the same time again would read "14:00 – 14:00".
+  const text = last ? `${last}${time(end)}` : end.time && end.time !== start.time ? end.time : "";
   return [first, text || null];
 }
 
