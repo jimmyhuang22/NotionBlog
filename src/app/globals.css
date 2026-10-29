@@ -23,6 +23,8 @@
   --bg: #f2eee4;
   --card: #fbf8f0;
   --soft: #e9e3d5;
+  /* The chosen segment of a filter. The card by day; at night a step lighter than its track, which the card is darker than (user's choice 甲, 2026-10-29). */
+  --picked: var(--card);
   --code: #f4f0e6;
   --ink: #20242c;
   --muted: #625f55;
@@ -61,6 +63,7 @@
     --bg: #0c0d10;
     --card: #262a35;
     --soft: #2e323e;
+    --picked: color-mix(in srgb, var(--ink) 12%, var(--soft));
     --code: #23272e;
     --ink: #e8e4da;
     --muted: #9d9b91;
@@ -79,6 +82,7 @@
   --bg: #0c0d10;
   --card: #262a35;
   --soft: #2e323e;
+  --picked: color-mix(in srgb, var(--ink) 12%, var(--soft));
   --code: #23272e;
   --ink: #e8e4da;
   --muted: #9d9b91;

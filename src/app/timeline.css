@@ -301,7 +301,7 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
  */
 .works__platforms { position: relative; isolation: isolate; }
 .works__platforms > a { position: relative; z-index: 1; }
-.works__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); pointer-events: none; }
+.works__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
 .works__tools .works__platforms.segmented[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
 [data-skin="apple"] .works__pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
 [data-skin="y2k"] .works__pill { background: var(--y2k-button) #1a6ace; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px -4px rgba(22, 103, 199, 0.7); }
