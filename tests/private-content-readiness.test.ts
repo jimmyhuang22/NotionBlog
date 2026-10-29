@@ -121,7 +121,9 @@ test("actual maintenance CLI requires private pre/post proofs and never records 
       stdout = (await promisify(execFile)(process.execPath, ["tests/helpers/retention-readiness-cli.ts", mode], { timeout: 30000 })).stdout;
       assert.equal(mode, "pass");
     } catch (error: any) {
-      assert.notEqual(mode, "pass"); assert.equal(error.code, 1); assert.match(error.stderr, /RETENTION_READINESS_FAILED/); stdout = error.stdout;
+      assert.notEqual(mode, "pass"); assert.match(error.stderr, /RETENTION_READINESS_FAILED/); stdout = error.stdout;
+      // Before anything is read the stop is clean (deferred to the next day); after deleting it needs review.
+      assert.equal(error.code, mode === "pre-failure" ? 75 : 1); assert.match(error.stderr, mode === "pre-failure" ? /"cleanStop":true/ : /"cleanStop":false/);
     }
     const receipt = JSON.parse(stdout!.trim().split("\n").at(-1)!);
     if (mode === "pre-failure") { assert.equal(receipt.queries, 0); assert.equal(receipt.archiveFiles, 0); assert.equal(receipt.nonces.length, 1); }

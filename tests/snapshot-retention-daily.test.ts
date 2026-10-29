@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {PGlite} from "@electric-sql/pglite";
 import {retentionMigrationSQL} from "../scripts/database-retention/migration.ts";
-import {dailyRetention, sha256, hashesDigest, type ArchiveStore, type DailyContext, type RetentionPort, type RetentionPlan} from "../scripts/database-retention/daily.ts";
+import {dailyRetention, sha256, hashesDigest, RolledBackError, RetentionStop, type ArchiveStore, type DailyContext, type RetentionPort, type RetentionPlan} from "../scripts/database-retention/daily.ts";
 import {verifyOfflineRestore} from "../scripts/database-retention/archive.ts";
 import {PAYLOAD_TABLES, type PayloadTable, type DeleteGuard} from "../scripts/database-retention/plan.ts";
 import {retentionRunLimit} from "../scripts/database-retention/limits.ts";
@@ -124,6 +124,55 @@ test("missing archive and unknown write outcomes cannot trigger another delete",
    const stop=JSON.parse([...files.entries()].find(([k])=>k.endsWith("/stopped"))![1]);
    assert.equal(stop.automaticRetry,false);assert.equal(Boolean(stop.inFlightIntent),fail==="unknown");
   }
+ }finally{await db.close();}
+});
+
+const stoppedReceipt=(files:Map<string,string>)=>JSON.parse([...files.entries()].find(([name])=>name.endsWith("/stopped"))![1]);
+test("a smaller chunk size splits each guarded delete without changing what is deleted",async()=>{
+ const {db,port}=await fixture(),{store,files}=memoryStore();
+ try{
+  await db.query("INSERT INTO nb_v2.records SELECT $1::uuid,'extra-'||n,'{}'::jsonb FROM generate_series(1,6) n",[id(1)]);
+  const result=await dailyRetention({db:port,store,maximumRuns:1,chunkRows:3,now:()=>0,assertWindow:async()=>{},restore:verifyOfflineRestore,health:async()=>{}});
+  assert.equal(result.status,"PASS");assert.equal(result.deletedRows,9);
+  // One source and one media row take a call each (no thumbnails here); seven records take three.
+  assert.equal(result.deleteCalls,5);
+  const intents=[...files.entries()].filter(([name])=>name.includes("/intents/")).map(([,v])=>JSON.parse(v));
+  assert.ok(intents.length===5&&intents.every(intent=>intent.limit===3));
+  assert.equal((await db.query("SELECT * FROM nb_v2.records WHERE run_id=$1",[id(1)])).rows.length,0);
+  for(const value of [0,501,1.5])await assert.rejects(dailyRetention({db:port,store,maximumRuns:1,chunkRows:value,now:()=>0,assertWindow:async()=>{},restore:verifyOfflineRestore,health:async()=>{}}),/RETENTION_CHUNK_ROWS_INVALID/);
+ }finally{await db.close();}
+});
+test("a delete the server rolled back is a clean stop; a server rejection or unknown outcome needs review",async()=>{
+ for(const [failure,reason,clean,inFlight] of [
+  [new RolledBackError("57014"),"RETENTION_DELETE_ROLLED_BACK",true,false],
+  [new RolledBackError("55P03"),"RETENTION_DELETE_ROLLED_BACK",true,false],
+  [new RolledBackError("P0001","RETENTION_GUARD_CHANGED"),"RETENTION_GUARD_CHANGED",false,false],
+  [new RolledBackError(""),"RETENTION_DELETE_NOT_COMMITTED",false,false],
+  [Error("TRANSPORT_OUTCOME_UNKNOWN"),"TRANSPORT_OUTCOME_UNKNOWN",false,true],
+ ] as const){
+  const {db,port}=await fixture(),{store,files}=memoryStore();let calls=0;
+  try{
+   const error=await dailyRetention({db:{...port,deleteChunk:async()=>{calls++;throw failure;}},store,maximumRuns:2,now:()=>0,
+    assertWindow:async()=>{},restore:verifyOfflineRestore,health:async()=>{throw Error("must not reach readiness");}}).then(()=>null,e=>e);
+   assert.ok(error instanceof RetentionStop,reason);assert.equal(error.message,reason);assert.equal(error.cleanStop,clean,reason);assert.equal(calls,1);
+   const stop=stoppedReceipt(files);
+   assert.equal(stop.cleanStop,clean,reason);assert.equal(Boolean(stop.inFlightIntent),inFlight,reason);assert.equal(Boolean(stop.rolledBackIntent),!inFlight,reason);
+   assert.equal((await db.query("SELECT * FROM nb_v2.records")).rows.length,5);
+  }finally{await db.close();}
+ }
+});
+test("a read timeout before any delete is clean; a failed proof after deleting is not",async()=>{
+ const {db,port}=await fixture();
+ try{
+  const read=memoryStore();
+  const error=await dailyRetention({db:{...port,plan:async()=>{throw new RolledBackError("57014");}},store:read.store,maximumRuns:2,now:()=>0,
+   assertWindow:async()=>{},restore:verifyOfflineRestore,health:async()=>{}}).then(()=>null,e=>e);
+  assert.ok(error instanceof RetentionStop);assert.equal(error.message,"RETENTION_READ_ROLLED_BACK");assert.equal(error.cleanStop,true);
+  const after=memoryStore();
+  const late=await dailyRetention({db:port,store:after.store,maximumRuns:2,now:()=>0,assertWindow:async()=>{},restore:verifyOfflineRestore,
+   health:async()=>{throw Error("RETENTION_READINESS_FAILED");}}).then(()=>null,e=>e);
+  assert.ok(late instanceof RetentionStop);assert.equal(late.cleanStop,false);assert.equal(stoppedReceipt(after.files).deletedRows,6);
+  assert.equal(stoppedReceipt(after.files).cleanStop,false);
  }finally{await db.close();}
 });
 

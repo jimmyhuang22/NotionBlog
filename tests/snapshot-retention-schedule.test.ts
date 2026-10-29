@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {mkdtemp,writeFile,readFile,lstat,unlink,rm,chmod,symlink,mkdir,readdir} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {acquireRetentionLocks,dailyDecision,scheduledTick,inspectScheduledReadiness,verifyVisitorAcceptance,type ScheduledConfig} from "../scripts/database-retention/schedule.ts";
+import {acquireRetentionLocks,dailyDecision,scheduledTick,inspectScheduledReadiness,verifyVisitorAcceptance,MAXIMUM_CONSECUTIVE_DEFERRALS,RETENTION_DEFERRED_EXIT_CODE,type ScheduledConfig} from "../scripts/database-retention/schedule.ts";
 import {createArchiveStore} from "../scripts/database-retention/archive.ts";
 import {sha256} from "../scripts/database-retention/daily.ts";
 
@@ -30,24 +30,163 @@ test("lock release leaves a replacement owned by another process untouched",asyn
   await assert.rejects(lstat(paths[1]),{code:"ENOENT"});
  }finally{await rm(dir,{recursive:true,force:true});}
 });
-test("a busy website round does not read credentials, write state, pause sync or create an archive",async()=>{
+const readiness={readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"}};
+const runId="00000000-0000-0000-0000-000000000001";
+async function privateWrite(path:string,value:unknown){
+ await mkdir(path.slice(0,path.lastIndexOf("/")),{recursive:true,mode:0o700});
+ await writeFile(path,typeof value==="string"?value:JSON.stringify(value),{mode:0o600});
+}
+/** A finished round folder as the coordinator writes it, including the body tail inside the round. */
+async function roundFixture(dir:string,{tail=true,tailFolders=1,finishedAtUTC="2026-01-01T00:00:00Z",receipt={} as Record<string,unknown>}={}){
+ const operation=join(dir,"operation"),sync=join(dir,"sync.json");
+ for(const name of ["PIPELINE_FINISHED_PRIVATE.json",`thumbnail-post/runs/${runId}/receipt-private.json`,"proved-thumbnail-post/RECEIPT_PRIVATE.json",
+  "acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json","acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json"])
+  await privateWrite(join(operation,name),{status:"PASS",runId});
+ await privateWrite(sync,{status:"PASS",runId,operation,finishedAtUTC});
+ await privateWrite(join(operation,"body-post/CATALOG_PRIVATE.json"),"{}");
+ if(tail)for(let n=0;n<tailFolders;n++)await privateWrite(join(operation,"body-post/runs",runId,String(n).repeat(64),"RECEIPT_PRIVATE.json"),
+  {status:"PASS",runId,operation,catalogSHA256:sha256("{}"),connectionsClosed:true,ownLocksReleased:true,inFlight:null,unknownWriteGroup:null,acknowledgedUnverifiedGroup:null,...receipt});
+ return {operation,sync};
+}
+function configFor(dir:string,sync:string,extra:Partial<ScheduledConfig>={}):ScheduledConfig{
+ return {format:"retention-daily-config-v4",maximumRuns:2,chunkRows:100,deleteTimeoutSeconds:20,settleMinutes:0,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
+  lockFiles:[0,1,2,3].map(n=>join(dir,`lock${n}`)),absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),...readiness,cli:join(dir,"missing.ts"),
+  programFiles:[{path:join(dir,"missing.ts"),sha256:"a".repeat(64)}],...extra};
+}
+/** A stand-in CLI that records its window and exits with the given code. */
+async function fakeCli(dir:string,code:number){
+ const cli=join(dir,"fake-cli.mjs"),envFile=join(dir,"empty.env");
+ const program=`import {readFile,writeFile} from 'node:fs/promises';import {dirname,join} from 'node:path';
+  const path=process.argv.at(-1),window=JSON.parse(await readFile(path,'utf8'));
+  await writeFile(join(dirname(path),'OBSERVED_PRIVATE.json'),JSON.stringify(window),{mode:0o600});process.exitCode=${code};`;
+ await privateWrite(cli,program);await privateWrite(envFile,"");
+ return {cli,envFile,programFiles:[{path:cli,sha256:sha256(program)}]};
+}
+
+test("v4 admission settles after a passed round and only retries clean stops a bounded number of times",()=>{
+ const sync={status:"PASS",finishedAtUTC:"2026-01-01T00:00:00Z"},finished=Date.parse(sync.finishedAtUTC);
+ assert.equal(dailyDecision(null,sync,finished+179*60_000,180),"SETTLING");
+ assert.equal(dailyDecision(null,sync,finished+180*60_000,180),"READY");
+ assert.equal(dailyDecision(null,{status:"PASS"},finished,180),"WAITING_FOR_SYNC");
+ assert.equal(dailyDecision(null,{status:"PUBLISHED_POST_INCOMPLETE",finishedAtUTC:sync.finishedAtUTC},finished+1e9,180),"WAITING_FOR_SYNC");
+ assert.equal(dailyDecision({status:"DEFERRED",finishedAt:0,deferrals:1},sync,86_399_999),"NOT_DUE");
+ assert.equal(dailyDecision({status:"DEFERRED",finishedAt:0,deferrals:MAXIMUM_CONSECUTIVE_DEFERRALS-1},sync,86_400_000),"READY");
+ for(const deferrals of [MAXIMUM_CONSECUTIVE_DEFERRALS,undefined,1.5,-1,0])
+  assert.equal(dailyDecision({status:"DEFERRED",finishedAt:0,deferrals},sync,1e12),"REQUIRES_REVIEW");
+});
+
+test("a busy website round does not read credentials, write state or create an archive",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"retention-schedule-"));
  try{
-  const sync=join(dir,"sync.json"),pause=join(dir,"pause"),locks=[0,1,2,3].map(n=>join(dir,`lock${n}`));
-  const program=join(dir,"program.ts");await writeFile(program,"// frozen test fixture",{mode:0o600});
-  await writeFile(sync,JSON.stringify({status:"RUNNING"}),{mode:0o600});await writeFile(locks[1],"writer",{mode:0o600});
-  const config:ScheduledConfig={format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,websitePause:pause,
-   lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"missing.ts"),
-   tailCatalog:join(dir,"missing.json"),tailRunsDirectory:join(dir,"runs"),programFiles:[{path:program,sha256:sha256("// frozen test fixture")}]};
+  const sync=join(dir,"sync.json"),program=join(dir,"program.ts");await privateWrite(program,"// frozen test fixture");
+  await privateWrite(sync,{status:"RUNNING"});
+  const config=configFor(dir,sync,{programFiles:[{path:program,sha256:sha256("// frozen test fixture")}]});await privateWrite(config.lockFiles[1],"writer");
   assert.deepEqual(await inspectScheduledReadiness(config),{status:"WAITING_FOR_SYNC",syncStatus:"RUNNING",sql:0,writes:0,credentialsRead:false,childProcesses:0});
   assert.deepEqual(await scheduledTick(config),{status:"WAITING_FOR_SYNC"});
-  await writeFile(sync,JSON.stringify({status:"PASS"}),{mode:0o600});assert.deepEqual(await scheduledTick(config),{status:"WRITER_BUSY"});
-  for(const p of [pause,config.archiveDirectory,join(config.directory,"STATE_PRIVATE.json")])await assert.rejects(lstat(p),{code:"ENOENT"});
-  assert.equal(await readFile(locks[1],"utf8"),"writer");
+  await privateWrite(sync,{status:"PASS",runId,operation:join(dir,"operation")});assert.deepEqual(await scheduledTick(config),{status:"WRITER_BUSY"});
+  for(const p of [config.archiveDirectory,join(config.directory,"STATE_PRIVATE.json")])await assert.rejects(lstat(p),{code:"ENOENT"});
+  assert.equal(await readFile(config.lockFiles[1],"utf8"),"writer");
   await writeFile(join(config.directory,"PAUSED_PRIVATE.json"),"{}",{mode:0o600});
   assert.deepEqual(await scheduledTick(config),{status:"MANUALLY_PAUSED"});
+  assert.equal((await inspectScheduledReadiness(config)).status,"MANUALLY_PAUSED");
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test("the body tail is read from the round's own folder and waits without marking cleanup failed",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"retention-tail-gap-"));
+ try{
+  const {sync}=await roundFixture(dir,{tail:false}),config=configFor(dir,sync);
+  assert.deepEqual(await scheduledTick(config),{status:"WAITING_FOR_TAIL"});
+  for(const p of [...config.lockFiles,join(dir,"maintenance/STATE_PRIVATE.json")])await assert.rejects(lstat(p),{code:"ENOENT"});
+ }finally{await rm(dir,{recursive:true,force:true});}
+ for(const [options,label] of [[{tailFolders:2},"two tail folders"],[{receipt:{operation:"/elsewhere"}},"another round's receipt"],
+  [{receipt:{catalogSHA256:"b".repeat(64)}},"another catalog"],[{receipt:{unknownWriteGroup:0}},"an unknown write group"]] as const){
+  const dir=await mkdtemp(join(tmpdir(),"retention-tail-bad-"));
+  try{
+   const {sync}=await roundFixture(dir,options),result=await scheduledTick(configFor(dir,sync));
+   assert.equal(result.status,"STOPPED",label);assert.equal(result.reason,"RETENTION_TAIL_NOT_VERIFIED",label);
+  }finally{await rm(dir,{recursive:true,force:true});}
+ }
+});
+
+test("invalid scheduler limits fail before filesystem admission or credential access",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"retention-invalid-limit-"));
+ try{
+  const config=configFor(dir,join(dir,"missing-sync"),{directory:join(dir,"not-created")});
+  for(const [field,values,error] of [["maximumRuns",[undefined,null,0,-1,3,8,1.5,"2"],/RETENTION_RUN_LIMIT_INVALID/],
+   ["chunkRows",[undefined,0,501,2.5,"100"],/RETENTION_CHUNK_ROWS_INVALID/],["deleteTimeoutSeconds",[undefined,7,31,8.5,"20"],/RETENTION_DELETE_TIMEOUT_INVALID/],["settleMinutes",[undefined,-1,1441,0.5],/RETENTION_SETTLE_INVALID/]] as const){
+   for(const value of values){
+    const invalid={...config,[field]:value} as ScheduledConfig;
+    await assert.rejects(inspectScheduledReadiness(invalid),error);await assert.rejects(scheduledTick(invalid),error);
+   }
+  }
+  await assert.rejects(scheduledTick({...config,format:"retention-daily-config-v3"} as unknown as ScheduledConfig),/RETENTION_CONFIG_INVALID/);
+  await assert.rejects(lstat(config.directory),{code:"ENOENT"});
+  for(const lock of config.lockFiles)await assert.rejects(lstat(lock),{code:"ENOENT"});
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test("the run limit, chunk size and round proofs reach the spawned window unchanged",async()=>{
+ for(const maximumRuns of [1,2]){
+  const dir=await mkdtemp(join(tmpdir(),"retention-window-limit-"));
+  try{
+   const {operation,sync}=await roundFixture(dir);
+   const visitor=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json");
+   const continuation=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_CONTINUATION_RECEIPT_PRIVATE.json");
+   if(maximumRuns===2){
+    await privateWrite(join(operation,"PIPELINE_FINISHED_PRIVATE.json"),{status:"PASS",runId,firstAttemptStatus:"FAIL",firstAttemptReason:"PRODUCTION-VISITOR_FAILED",visitorContinuationReceipt:continuation,finishedAtUTC:"2026-01-01T00:02:00Z"});
+    await privateWrite(visitor,{status:"FAIL",runId,errorCode:"VISITOR_CACHE_HEADERS",planSHA256:"a".repeat(64),origin:"https://example.org",finishedAtUTC:"2026-01-01T00:00:00Z"});
+    await privateWrite(continuation,{status:"PASS",runId,planSHA256:"a".repeat(64),origin:"https://example.org",priorFailure:"VISITOR_CACHE_HEADERS",continuationPolicy:"nb-public-cache-v1",failure:null,finishedAtUTC:"2026-01-01T00:01:00Z"});
+   }
+   const config=configFor(dir,sync,{maximumRuns,chunkRows:25,...await fakeCli(dir,0)});
+   const result=await scheduledTick(config);assert.equal(result.status,"PASS");assert.ok(result.operation);
+   const observed=JSON.parse(await readFile(join(config.directory,result.operation,"OBSERVED_PRIVATE.json"),"utf8"));
+   assert.equal(observed.maximumRuns,maximumRuns);assert.equal(observed.chunkRows,25);assert.equal(observed.deleteTimeoutSeconds,20);assert.equal(observed.format,"retention-daily-window-v4");
+   assert.equal(observed.readinessURL,config.readinessURL);assert.deepEqual(observed.readinessSample,config.readinessSample);
+   assert.equal(Object.hasOwn(observed,"healthURL"),false);assert.equal(Object.hasOwn(observed,"RETENTION_READINESS_SECRET"),false);
+   const bound=[...(maximumRuns===2?[visitor,continuation]:[visitor]),join(operation,"body-post/CATALOG_PRIVATE.json"),
+    join(operation,"body-post/runs",runId,"0".repeat(64),"RECEIPT_PRIVATE.json")];
+   for(const path of bound){
+    const expected=sha256(await readFile(path,"utf8"));
+    assert.ok(observed.proofs.some((p:{path:string;sha256:string})=>p.path===path&&p.sha256===expected),path);
+   }
+   assert.equal((await readdir(config.directory)).filter(name=>name!=="STATE_PRIVATE.json").length,1);
+   for(const lock of config.lockFiles)await assert.rejects(lstat(lock),{code:"ENOENT"});
+  }finally{await rm(dir,{recursive:true,force:true});}
+ }
+});
+
+test("the retired website-sync suspend flag no longer blocks a passed round",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"retention-suspend-"));
+ try{
+  const {sync}=await roundFixture(dir);await privateWrite(join(dir,"notionblog-website-sync.suspend"),"qualified maintenance paused");
+  const result=await scheduledTick(configFor(dir,sync,await fakeCli(dir,0)));assert.equal(result.status,"PASS");
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test("a clean stop defers to the next day and turns into review after repeated deferrals",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"retention-deferred-"));
+ try{
+  const {sync}=await roundFixture(dir),config=configFor(dir,sync,await fakeCli(dir,RETENTION_DEFERRED_EXIT_CODE));
+  const stateFile=join(config.directory,"STATE_PRIVATE.json");
+  for(let n=1;n<=MAXIMUM_CONSECUTIVE_DEFERRALS;n++){
+   const result=await scheduledTick(config);assert.equal(result.status,"DEFERRED");assert.equal(result.deferrals,n);
+   const state=JSON.parse(await readFile(stateFile,"utf8"));assert.equal(state.deferrals,n);
+   // The last allowed clean stop asks for review at once instead of waiting another day.
+   assert.deepEqual(await scheduledTick(config),{status:n<MAXIMUM_CONSECUTIVE_DEFERRALS?"NOT_DUE":"REQUIRES_REVIEW"});
+   for(const lock of config.lockFiles)await assert.rejects(lstat(lock),{code:"ENOENT"});
+   // Move the last attempt back a day, as if the next daily window had arrived.
+   await writeFile(stateFile,JSON.stringify({...state,finishedAt:state.finishedAt-86_400_000}),{mode:0o600});
+  }
+  assert.deepEqual(await scheduledTick(config),{status:"REQUIRES_REVIEW"});
+ }finally{await rm(dir,{recursive:true,force:true});}
+ const failed=await mkdtemp(join(tmpdir(),"retention-failed-"));
+ try{
+  const {sync}=await roundFixture(failed),config=configFor(failed,sync,await fakeCli(failed,1));
+  assert.equal((await scheduledTick(config)).status,"STOPPED");assert.deepEqual(await scheduledTick(config),{status:"REQUIRES_REVIEW"});
+ }finally{await rm(failed,{recursive:true,force:true});}
+});
+
 test("archives enforce private permissions, immutable readback and exact content hashes",async()=>{
  const dir=await mkdtemp(join(tmpdir(),"retention-archive-"));
  try{
@@ -59,94 +198,6 @@ test("archives enforce private permissions, immutable readback and exact content
   const bad=join(dir,"wide");await mkdir(bad);await chmod(bad,0o755);await assert.rejects(createArchiveStore(bad),/PERMISSIONS/);
   await symlink(join(dir,"archive"),join(dir,"symlink"));await assert.rejects(createArchiveStore(join(dir,"symlink")),/PERMISSIONS/);
  }finally{await rm(dir,{recursive:true,force:true});}
-});
-
-test("the gap between successful acceptance and the 1600 tail waits without marking cleanup failed",async()=>{
- const dir=await mkdtemp(join(tmpdir(),"retention-tail-gap-"));
- try{
-  const runId="00000000-0000-0000-0000-000000000001",operation=join(dir,"operation"),sync=join(dir,"sync.json"),catalog=join(dir,"catalog.json");
-  for(const name of ["PIPELINE_FINISHED_PRIVATE.json",`thumbnail-post/runs/${runId}/receipt-private.json`,"proved-thumbnail-post/RECEIPT_PRIVATE.json",
-   "acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json","acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json"]){
-   const path=join(operation,name);await mkdir(path.slice(0,path.lastIndexOf("/")),{mode:0o700,recursive:true});
-   await writeFile(path,JSON.stringify({status:"PASS",runId}),{mode:0o600});
-  }
-  await writeFile(sync,JSON.stringify({status:"PASS",runId,operation}),{mode:0o600});await writeFile(catalog,"{}",{mode:0o600});
-  const locks=[0,1,2,3].map(n=>join(dir,`lock${n}`));
-  const result=await scheduledTick({format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
-   websitePause:join(dir,"pause"),lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"missing.ts"),
-   tailCatalog:catalog,tailRunsDirectory:join(dir,"tail-runs"),programFiles:[{path:join(dir,"missing.ts"),sha256:"a".repeat(64)}]});
-  assert.deepEqual(result,{status:"WAITING_FOR_TAIL"});
-  for(const p of [...locks,join(dir,"maintenance/STATE_PRIVATE.json")])await assert.rejects(lstat(p),{code:"ENOENT"});
-  const tailDirectory=join(dir,"tail-runs",runId,sha256("{}"));await mkdir(tailDirectory,{recursive:true,mode:0o700});
-  await writeFile(join(tailDirectory,"RECEIPT_PRIVATE.json"),JSON.stringify({status:"PASS",runId,catalogSHA256:sha256("{}"),connectionsClosed:true,ownLocksReleased:true,
-   inFlight:null,unknownWriteGroup:0,acknowledgedUnverifiedGroup:null}),{mode:0o600});
-  const rejected=await scheduledTick({format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),syncState:sync,
-   websitePause:join(dir,"pause"),lockFiles:locks,absentLocks:[join(dir,"native")],envFile:join(dir,"missing.env"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"missing.ts"),
-   tailCatalog:catalog,tailRunsDirectory:join(dir,"tail-runs"),programFiles:[{path:join(dir,"missing.ts"),sha256:"a".repeat(64)}]});
-  assert.equal(rejected.status,"STOPPED");assert.equal(rejected.reason,"RETENTION_TAIL_NOT_VERIFIED");
- }finally{await rm(dir,{recursive:true,force:true});}
-});
-
-test("invalid scheduler limits fail before filesystem admission or credential access",async()=>{
- const dir=await mkdtemp(join(tmpdir(),"retention-invalid-limit-"));
- try{
-  const config:ScheduledConfig={format:"retention-daily-config-v3",maximumRuns:2,directory:join(dir,"not-created"),archiveDirectory:join(dir,"archive"),
-   syncState:join(dir,"missing-sync"),websitePause:join(dir,"pause"),lockFiles:[0,1,2,3].map(n=>join(dir,`lock${n}`)),
-   absentLocks:[join(dir,"native")],envFile:join(dir,"missing-secret"),readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli:join(dir,"cli.ts"),
-   tailCatalog:join(dir,"catalog"),tailRunsDirectory:join(dir,"runs"),programFiles:[{path:join(dir,"missing-program"),sha256:"a".repeat(64)}]};
-  for(const value of [undefined,null,0,-1,3,8,1.5,"2"]){
-   const invalid={...config,maximumRuns:value as number};
-   await assert.rejects(inspectScheduledReadiness(invalid),/RETENTION_RUN_LIMIT_INVALID/);
-   await assert.rejects(scheduledTick(invalid),/RETENTION_RUN_LIMIT_INVALID/);
-  }
-  await assert.rejects(lstat(config.directory),{code:"ENOENT"});
-  for(const lock of config.lockFiles)await assert.rejects(lstat(lock),{code:"ENOENT"});
- }finally{await rm(dir,{recursive:true,force:true});}
-});
-
-test("the selected one-or-two run limit reaches the actual spawned window unchanged",async()=>{
- for(const maximumRuns of [1,2]){
-  const dir=await mkdtemp(join(tmpdir(),"retention-window-limit-"));
-  try{
-   const runId="00000000-0000-0000-0000-000000000001",operation=join(dir,"operation"),sync=join(dir,"sync.json"),catalog=join(dir,"catalog.json");
-   for(const name of ["PIPELINE_FINISHED_PRIVATE.json",`thumbnail-post/runs/${runId}/receipt-private.json`,"proved-thumbnail-post/RECEIPT_PRIVATE.json",
-    "acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json","acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json"]){
-    const path=join(operation,name);await mkdir(path.slice(0,path.lastIndexOf("/")),{recursive:true,mode:0o700});
-    await writeFile(path,JSON.stringify({status:"PASS",runId}),{mode:0o600});
-   }
-   await writeFile(sync,JSON.stringify({status:"PASS",runId,operation}),{mode:0o600});await writeFile(catalog,"{}",{mode:0o600});
-   const visitor=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json");
-   const continuation=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_CONTINUATION_RECEIPT_PRIVATE.json");
-   if(maximumRuns===2){
-    await writeFile(join(operation,"PIPELINE_FINISHED_PRIVATE.json"),JSON.stringify({status:"PASS",runId,firstAttemptStatus:"FAIL",firstAttemptReason:"PRODUCTION-VISITOR_FAILED",visitorContinuationReceipt:continuation,finishedAtUTC:"2026-01-01T00:02:00Z"}),{mode:0o600});
-    await writeFile(visitor,JSON.stringify({status:"FAIL",runId,errorCode:"VISITOR_CACHE_HEADERS",planSHA256:"a".repeat(64),origin:"https://example.org",finishedAtUTC:"2026-01-01T00:00:00Z"}),{mode:0o600});
-    await writeFile(continuation,JSON.stringify({status:"PASS",runId,planSHA256:"a".repeat(64),origin:"https://example.org",priorFailure:"VISITOR_CACHE_HEADERS",continuationPolicy:"nb-public-cache-v1",failure:null,finishedAtUTC:"2026-01-01T00:01:00Z"}),{mode:0o600});
-   }
-   const tail=join(dir,"tail",runId,sha256("{}"));await mkdir(tail,{recursive:true,mode:0o700});
-   await writeFile(join(tail,"RECEIPT_PRIVATE.json"),JSON.stringify({status:"PASS",runId,catalogSHA256:sha256("{}"),connectionsClosed:true,
-    ownLocksReleased:true,inFlight:null,unknownWriteGroup:null,acknowledgedUnverifiedGroup:null}),{mode:0o600});
-   const envFile=join(dir,"empty.env"),cli=join(dir,"inspect-window.mjs");await writeFile(envFile,"",{mode:0o600});
-   const program=`import {readFile,writeFile} from 'node:fs/promises';import {dirname,join} from 'node:path';
-    const path=process.argv.at(-1),window=JSON.parse(await readFile(path,'utf8'));
-    await writeFile(join(dirname(path),'OBSERVED_PRIVATE.json'),JSON.stringify({maximumRuns:window.maximumRuns,format:window.format,proofs:window.proofs}),{mode:0o600});`;
-   await writeFile(cli,program,{mode:0o600});
-   const config:ScheduledConfig={format:"retention-daily-config-v3",maximumRuns,directory:join(dir,"maintenance"),archiveDirectory:join(dir,"archive"),
-    syncState:sync,websitePause:join(dir,"pause"),lockFiles:[0,1,2,3].map(n=>join(dir,`lock${n}`)),absentLocks:[join(dir,"native")],envFile,
-    readinessURL:"https://example.org/api/internal/content-readiness",readinessSample:{id:"synthetic-status-id",slug:"synthetic-status"},cli,tailCatalog:catalog,tailRunsDirectory:join(dir,"tail"),programFiles:[{path:cli,sha256:sha256(program)}]};
-   const result=await scheduledTick(config);assert.equal(result.status,"PASS");assert.ok(result.operation);
-   const observed=JSON.parse(await readFile(join(config.directory,result.operation,"OBSERVED_PRIVATE.json"),"utf8"));
-   assert.equal(observed.maximumRuns,maximumRuns);assert.equal(observed.format,"retention-daily-window-v3");
-   const actualWindow=JSON.parse(await readFile(join(config.directory,result.operation,"WINDOW_PRIVATE.json"),"utf8"));
-   assert.equal(actualWindow.readinessURL,config.readinessURL);assert.deepEqual(actualWindow.readinessSample,config.readinessSample);
-   assert.equal(Object.hasOwn(actualWindow,"healthURL"),false);assert.equal(Object.hasOwn(actualWindow,"RETENTION_READINESS_SECRET"),false);
-   for(const path of maximumRuns===2?[visitor,continuation]:[visitor]){
-    const expected=sha256(await readFile(path,"utf8"));
-    assert.ok(observed.proofs.some((p:{path:string;sha256:string})=>p.path===path&&p.sha256===expected));
-   }
-   assert.equal((await readdir(config.directory)).filter(name=>name!=="STATE_PRIVATE.json").length,1);
-   for(const lock of config.lockFiles)await assert.rejects(lstat(lock),{code:"ENOENT"});
-  }finally{await rm(dir,{recursive:true,force:true});}
- }
 });
 
 test("cache-header continuation binds the original failure and the exact same-plan success",async()=>{
