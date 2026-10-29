@@ -147,10 +147,15 @@
 [data-skin="island"] .site-header .icon-button { background: var(--island-bar-button); color: var(--island-bar-button-ink); border: 2px solid var(--island-bar-button); box-shadow: 0 4px 0 var(--island-bar-button-edge); }
 /* A focus ring on the bar is drawn in the bar's ink: the accent is too faint on the daytime mint (2.8:1, under 3:1). */
 [data-skin="island"] .site-header :is(.site-header__brand, .site-nav__list > li > a, .site-nav__more > button, .icon-button):focus-visible { outline-color: var(--island-bar-ink); }
-/* The bar's chunky white buttons need air between them, as Y2K's do (F50, 2026-10-28): 8 on desktop, 6 on phones, 2 below 360 so 320 keeps the name and the three buttons on one row. */
+/*
+ * The bar's chunky white buttons need air between them, as Y2K's do (F50, 2026-10-28): 8 on desktop, 6 on phones.
+ * The 2 that 320–360 once had left their ledges touching; the owner chose on 2026-10-29 to keep 6 all the way
+ * down. Below 330 three 40 buttons with 6 between no longer fit beside the name, so there they shrink to 36
+ * square (icon, ledge and press unchanged) and the name and the tools keep one row at 320.
+ */
 [data-skin="island"] .site-header__tools { gap: 8px; }
 @media (max-width: 540px) { [data-skin="island"] .site-header__tools { gap: 6px; } }
-@media (max-width: 360px) { [data-skin="island"] .site-header__tools { gap: 2px; } }
+@media (max-width: 329px) { [data-skin="island"] .site-header__tools .icon-button { width: 36px; height: 36px; } }
 /* The current section is picked out like a selection on the island phone: a yellow pill on a ledge. */
 [data-skin="island"] :is(.site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current) { background: var(--island-pick); color: var(--island-pick-ink); border-radius: 999px; font-weight: 800; box-shadow: 0 3px 0 var(--island-pick-edge); }
 [data-skin="island"] .site-nav__menu a[aria-current="page"] { color: var(--ink); background: var(--marker); }
