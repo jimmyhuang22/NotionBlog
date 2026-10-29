@@ -190,10 +190,6 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
  * the menu does not. Rules that count the row's entries count only the ones that are not these.
  */
 .site-nav__wide { display: none; }
-@media (min-width: 1024px) {
-  .site-nav__wide { display: list-item; }
-  .site-nav__more { display: none; }
-}
 /*
  * Tablets (R-03, 2026-10-20): measured with the 18-character live name, all seven sections fit beside the name and
  * the tools from 801 in ink and the island (at 9px apart), from 807 in apple and 887 in y2k. So from 820 (an
@@ -278,6 +274,14 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: no-preference) { .theme-menu__switch::after { transition: left 0.15s, background-color 0.15s; } }
 /* The light/dark button switches at once; under a skin with one scheme it only shows a note beneath itself. */
 .scheme-toggle { position: relative; }
+/* The moon offers dark and the sun offers light; which shows follows the scheme on the page, so it is right before the script has run. */
+.scheme-toggle__icon { display: contents; }
+.scheme-toggle__icon--sun, :root[data-theme="dark"] .scheme-toggle__icon--moon { display: none; }
+:root[data-theme="dark"] .scheme-toggle__icon--sun { display: contents; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .scheme-toggle__icon--moon { display: none; }
+  :root:not([data-theme]) .scheme-toggle__icon--sun { display: contents; }
+}
 .scheme-toggle__hint { position: absolute; right: 0; top: calc(100% + 4px); z-index: 13; padding: 6px 10px; border-radius: var(--radius-xs); background: var(--ink); color: var(--bg); font-size: var(--text-xs); white-space: nowrap; pointer-events: none; }
 .scheme-toggle__hint:empty { display: none; }
 /* Each skin's swatch is a small sample of it, drawn here so it looks the same whichever skin is on. */

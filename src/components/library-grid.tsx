@@ -114,7 +114,7 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
   // After a filter, the first rows come in one after another (motion.css); first visits draw at once.
   const arriving = useFilterArrival();
   const firstRows = new Map(items.slice(0, ARRIVING_ROWS).map((item, index) => [item.id, index]));
-  if (!items.length) return <div className="state"><p>{year ? "这一年在这个分类下没有内容。" : "这个分类下还没有内容。"}</p></div>;
+  if (!items.length) return <div className="state"><p>{year === "undated" ? "这个分类下没有未记日期的内容。" : year ? "这一年在这个分类下没有内容。" : "这个分类下还没有内容。"}</p></div>;
   return (
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>列表有更新，已从头重新加载。</p> : null}

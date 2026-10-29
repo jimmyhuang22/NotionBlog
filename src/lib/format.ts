@@ -8,6 +8,19 @@ export interface DateParts {
   time: string | null;
 }
 
+// One formatter per time zone: making one costs several times the formatting, and a long list formats hundreds of dates a render.
+const formatters = new Map<string, Intl.DateTimeFormat>();
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  let formatter = formatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    });
+    formatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 /** Numeric parts only, so server and browser output cannot drift with locale data. */
 export function dateParts(value: string, precision: DateRange["precision"], timeZone: string): DateParts | null {
   if (precision === "date") {
@@ -16,9 +29,7 @@ export function dateParts(value: string, precision: DateRange["precision"], time
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-  }).formatToParts(date);
+  const parts = formatterFor(timeZone).formatToParts(date);
   const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   return { year: Number(pick("year")), month: Number(pick("month")), day: Number(pick("day")), time: `${pick("hour")}:${pick("minute")}` };
 }

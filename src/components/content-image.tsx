@@ -6,8 +6,15 @@ import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { useLightbox } from "./lightbox";
 import { useFadeIn } from "./use-fade-in";
 
+type Props = { image: ImageAsset; caption?: string; previewWidth?: 400 | 800 };
+
 /** Plain img on purpose: media paths are re-authorised per request and must not pass through an optimiser cache. */
-export function ContentImage({ image, caption = "", previewWidth }: { image: ImageAsset; caption?: string; previewWidth?: 400 | 800 }) {
+export function ContentImage(props: Props) {
+  // A new address is a new picture (as in cover-image.tsx): a failure or a fallback to the original stays with the old one.
+  return <ContentImagePicture key={props.image.src} {...props} />;
+}
+
+function ContentImagePicture({ image, caption = "", previewWidth }: Props) {
   const [failed, setFailed] = useState(false);
   // A preview that cannot be read gives way to src once (the original, or the largest display version); only src failing too is a failure.
   const [original, setOriginal] = useState(false);

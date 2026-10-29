@@ -220,7 +220,10 @@ export function ThemeControls() {
       </div>
       <div className="scheme-toggle">
         <button type="button" ref={schemeButton} className="icon-button" aria-label={schemeLabel} title={schemeLabel} onClick={toggleScheme}>
-          {shown === "dark" ? sunIcon : moonIcon}
+          {/* Both are drawn and the page's own scheme picks one (globals.css): the scheme is set before the first paint, this
+              component's state only after it mounts, and until then the icon would show the opposite of the page. */}
+          <span className="scheme-toggle__icon scheme-toggle__icon--moon">{moonIcon}</span>
+          <span className="scheme-toggle__icon scheme-toggle__icon--sun">{sunIcon}</span>
         </button>
         <span className="scheme-toggle__hint" role="status">{hint ? `${current.label}只有${schemeLabels[current.schemes[0]!]}` : ""}</span>
       </div>

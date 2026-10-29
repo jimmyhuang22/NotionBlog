@@ -10,7 +10,8 @@ export function statusFocusHref(id: string): string {
 
 /** Older stored DTOs retain fragment links; a bookmark can upgrade without rewriting the snapshot. */
 export function readStatusHash(hash: string): string | null {
-  if (!hash.startsWith("#")) return null;
+  // "#top" is the page's own way back up (the footer's link); it names the top of the page, never a status.
+  if (!hash.startsWith("#") || hash === "#top") return null;
   try { return readStatusFocus(decodeURIComponent(hash.slice(1))); }
   catch { return null; }
 }
