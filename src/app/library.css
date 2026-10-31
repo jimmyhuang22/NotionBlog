@@ -230,6 +230,8 @@
 /* Consecutive photos flow into a grid; text, headings and the author's own columns span the full width. */
 .album .prose { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
 .album .prose > * { grid-column: 1 / -1; margin: 0; }
+/* Photos placed on their own take the same two columns as the author's column blocks, so one album has one photo size (S15-4). */
+@media (min-width: 640px) { .album .prose { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; } }
 .album .prose > .figure { grid-column: auto; }
 /*
  * An album laid out in Notion columns: each column keeps its own order, but the pictures line up in rows across
