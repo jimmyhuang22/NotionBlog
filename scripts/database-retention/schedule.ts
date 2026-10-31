@@ -8,16 +8,48 @@ import {retentionReadinessURL} from "./readiness.ts";
 import {validReadinessSample,type ReadinessSample} from "../../src/server/content-readiness/protocol.ts";
 import {retentionRunLimit} from "./limits.ts";
 
+/** v5 admits a round once it is published and closed: a full PASS, or a published round closed out as
+ * PUBLISHED_POST_INCOMPLETE (most rounds since the 10-24 move). Post-publish acceptance proofs are not
+ * required because those rounds often lack them; retention never deletes the published run anyway. */
 export interface ScheduledConfig {
- format:"retention-daily-config-v3";maximumRuns:number;directory:string;archiveDirectory:string;syncState:string;websitePause:string;
+ format:"retention-daily-config-v5";maximumRuns:number;chunkRows:number;deleteTimeoutSeconds:number;settleMinutes:number;directory:string;archiveDirectory:string;syncState:string;
  lockFiles:string[];absentLocks:string[];envFile:string;readinessURL:string;readinessSample:ReadinessSample;cli:string;
- tailCatalog:string;tailRunsDirectory:string;programFiles:{path:string;sha256:string}[];
+ /** S13 adopt-once latest.json; retention waits for it to verify this run, or for adoptionWaitMinutes after the round. */
+ adoptionReceipt:string;adoptionWaitMinutes:number;
+ programFiles:{path:string;sha256:string}[];
 }
-interface LastAttempt {status:"PASS"|"STOPPED"|"RUNNING";finishedAt?:number;startedAt?:number;operation?:string}
-export function dailyDecision(last:LastAttempt|null,sync:{status:string},at:number){
- if(last&&last.status!=="PASS")return "REQUIRES_REVIEW";
+/** Round states that mean "published and closed". */
+export const ADMITTED_SYNC_STATES: ReadonlySet<string> = new Set(["PASS","PUBLISHED_POST_INCOMPLETE"]);
+/** A clean stop left no in-flight or unknown write, so the next day may try again. */
+export const MAXIMUM_CONSECUTIVE_DEFERRALS=3;
+/** The child exits with EX_TEMPFAIL only for a clean stop. */
+export const RETENTION_DEFERRED_EXIT_CODE=75;
+interface LastAttempt {status:"PASS"|"STOPPED"|"RUNNING"|"DEFERRED";finishedAt?:number;startedAt?:number;operation?:string;deferrals?:number}
+export function retentionChunkRows(value:unknown){
+ if(typeof value!=="number"||!Number.isSafeInteger(value)||value<1||value>500)throw Error("RETENTION_CHUNK_ROWS_INVALID");
+ return value;
+}
+/** Each guarded delete recomputes the whole plan under table locks, so its timeout must cover plan time. Reads keep 30 s. */
+export function retentionDeleteTimeout(value:unknown){
+ if(typeof value!=="number"||!Number.isSafeInteger(value)||value<8||value>30)throw Error("RETENTION_DELETE_TIMEOUT_INVALID");
+ return value;
+}
+function settleLimit(value:unknown,reason="RETENTION_SETTLE_INVALID"){
+ if(typeof value!=="number"||!Number.isSafeInteger(value)||value<0||value>24*60)throw Error(reason);
+ return value;
+}
+export function dailyDecision(last:LastAttempt|null,sync:{status:string;finishedAtUTC?:unknown},at:number,settleMinutes=0){
+ if(last&&last.status!=="PASS"&&last.status!=="DEFERRED")return "REQUIRES_REVIEW";
+ if(last?.status==="DEFERRED"&&!(Number.isSafeInteger(last.deferrals)&&last.deferrals!>=1&&last.deferrals!<MAXIMUM_CONSECUTIVE_DEFERRALS))return "REQUIRES_REVIEW";
  if(last?.finishedAt!==undefined&&at<last.finishedAt+24*60*60*1000)return "NOT_DUE";
- return sync.status==="PASS"?"READY":"WAITING_FOR_SYNC";
+ if(!ADMITTED_SYNC_STATES.has(sync.status))return "WAITING_FOR_SYNC";
+ if(settleMinutes>0){
+  // Let post-round steps (pointer adoption, delivery) finish before taking the shared locks.
+  const finished=typeof sync.finishedAtUTC==="string"?Date.parse(sync.finishedAtUTC):NaN;
+  if(!Number.isFinite(finished))return "WAITING_FOR_SYNC";
+  if(at<finished+settleMinutes*60*1000)return "SETTLING";
+ }
+ return "READY";
 }
 async function privateText(path:string){
  const file=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW);
@@ -26,41 +58,17 @@ async function privateText(path:string){
  }finally{await file.close();}
 }
 async function exists(path:string){try{await lstat(path);return true;}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return false;throw e;}}
-/** A successful pipeline may explicitly preserve a cache-header failure and bind its
- * same-plan continuation. Both immutable receipts remain window proofs. */
-export async function verifyVisitorAcceptance(operation:string,runId:string,pipeline:Record<string,unknown>,proof:(path:string)=>Promise<Record<string,unknown>>){
- const reject=()=>{throw Error("RETENTION_VISITOR_NOT_VERIFIED");};
- if(!operation.startsWith("/")||resolve(operation)!==operation)reject();
- const originalPath=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_RECEIPT_PRIVATE.json");
- const original=await proof(originalPath);
- if(original.runId!==runId||pipeline.status!=="PASS"||pipeline.runId!==runId)reject();
- if(!Object.hasOwn(pipeline,"visitorContinuationReceipt")){
-  if(original.status!=="PASS")reject();return {continued:false,receipt:originalPath};
- }
- const path=join(operation,"acceptance-operation-private/PRODUCTION_VISITOR_CONTINUATION_RECEIPT_PRIVATE.json");
- if(pipeline.visitorContinuationReceipt!==path||pipeline.firstAttemptStatus!=="FAIL"||pipeline.firstAttemptReason!=="PRODUCTION-VISITOR_FAILED"||
-  original.status!=="FAIL"||original.errorCode!=="VISITOR_CACHE_HEADERS"||typeof original.planSHA256!=="string"||!/^[a-f0-9]{64}$/.test(original.planSHA256))reject();
- let canonicalOrigin=false;
- try{const url=new URL(original.origin as string);canonicalOrigin=url.protocol==="https:"&&url.origin===original.origin;}catch{}
- if(!canonicalOrigin)reject();
- const continuation=await proof(path);
- const first=Date.parse(original.finishedAtUTC as string),last=Date.parse(continuation.finishedAtUTC as string),finished=Date.parse(pipeline.finishedAtUTC as string);
- if(continuation.status!=="PASS"||continuation.runId!==runId||continuation.planSHA256!==original.planSHA256||continuation.origin!==original.origin||
-  continuation.priorFailure!==original.errorCode||continuation.continuationPolicy!=="nb-public-cache-v1"||continuation.failure!==null||
-  ![first,last,finished].every(Number.isFinite)||last<first||last>finished)reject();
- return {continued:true,receipt:path};
-}
 /** Read-only operator inspection. No locks, credential access, child process or database calls. */
 export async function inspectScheduledReadiness(config:ScheduledConfig){
- if(config.format!=="retention-daily-config-v3")throw Error("RETENTION_CONFIG_INVALID");
- retentionRunLimit(config.maximumRuns);
+ if(config.format!=="retention-daily-config-v5")throw Error("RETENTION_CONFIG_INVALID");
+ retentionRunLimit(config.maximumRuns);retentionChunkRows(config.chunkRows);retentionDeleteTimeout(config.deleteTimeoutSeconds);const settle=settleLimit(config.settleMinutes);
+ settleLimit(config.adoptionWaitMinutes,"RETENTION_ADOPTION_WAIT_INVALID");
  retentionReadinessURL(config.readinessURL);if(!validReadinessSample(config.readinessSample))throw Error("RETENTION_READINESS_INPUT_INVALID");
  for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
  const stateFile=join(config.directory,"STATE_PRIVATE.json"),last=await exists(stateFile)?JSON.parse(await privateText(stateFile)):null;
  const sync=JSON.parse(await privateText(config.syncState));
- let status:string=dailyDecision(last,sync,Date.now());
+ let status:string=dailyDecision(last,sync,Date.now(),settle);
  if(await exists(join(config.directory,"PAUSED_PRIVATE.json")))status="MANUALLY_PAUSED";
- else if(await exists(config.websitePause))status="WEBSITE_PAUSED";
  return {status,syncStatus:sync.status,sql:0,writes:0,credentialsRead:false,childProcesses:0};
 }
 /** Never unlinks a busy lock or a replaced lock, including when partial acquisition fails. */
@@ -88,24 +96,25 @@ export async function acquireRetentionLocks(paths:readonly string[],nonce:string
 }
 /** Separate scheduler: a failed cleanup never changes website sync state or its suspend flag. */
 export async function scheduledTick(config:ScheduledConfig){
- if(config.format!=="retention-daily-config-v3"||config.lockFiles.length!==4||new Set(config.lockFiles).size!==4||
+ if(config.format!=="retention-daily-config-v5"||config.lockFiles.length!==4||new Set(config.lockFiles).size!==4||
   !config.absentLocks.length||!config.programFiles.length)throw Error("RETENTION_CONFIG_INVALID");
- const maximumRuns=retentionRunLimit(config.maximumRuns);
+ const maximumRuns=retentionRunLimit(config.maximumRuns),chunkRows=retentionChunkRows(config.chunkRows),deleteTimeoutSeconds=retentionDeleteTimeout(config.deleteTimeoutSeconds),settle=settleLimit(config.settleMinutes),
+  adoptionWait=settleLimit(config.adoptionWaitMinutes,"RETENTION_ADOPTION_WAIT_INVALID");
  retentionReadinessURL(config.readinessURL);if(!validReadinessSample(config.readinessSample))throw Error("RETENTION_READINESS_INPUT_INVALID");
- for(const p of [config.directory,config.archiveDirectory,config.syncState,config.websitePause,...config.lockFiles,...config.absentLocks,config.envFile,config.cli,config.tailCatalog,config.tailRunsDirectory])
+ for(const p of [config.directory,config.archiveDirectory,config.syncState,...config.lockFiles,...config.absentLocks,config.envFile,config.cli,config.adoptionReceipt])
   if(!p.startsWith("/")||resolve(p)!==p)throw Error("RETENTION_CONFIG_PATH_INVALID");
  await mkdir(config.directory,{mode:0o700,recursive:true});const dir=await lstat(config.directory);
  if(!dir.isDirectory()||dir.isSymbolicLink()||(dir.mode&0o077))throw Error("RETENTION_DIRECTORY_INVALID");
  const stateFile=join(config.directory,"STATE_PRIVATE.json");
  if(await exists(join(config.directory,"PAUSED_PRIVATE.json")))return {status:"MANUALLY_PAUSED"};
  let last:LastAttempt|null=null;if(await exists(stateFile))last=JSON.parse(await privateText(stateFile));
- const syncRaw=await privateText(config.syncState),sync=JSON.parse(syncRaw),decision=dailyDecision(last,sync,Date.now());
+ const syncRaw=await privateText(config.syncState),sync=JSON.parse(syncRaw),decision=dailyDecision(last,sync,Date.now(),settle);
  if(decision!=="READY")return {status:decision};
- if(await exists(config.websitePause))return {status:"WEBSITE_PAUSED"};
+ if(typeof sync.operation!=="string"||!sync.operation.startsWith("/")||resolve(sync.operation)!==sync.operation)throw Error("RETENTION_SYNC_OPERATION_INVALID");
  if([...config.lockFiles,...config.absentLocks].some(p=>!p.startsWith("/")))throw Error("RETENTION_LOCK_PATH_INVALID");
  for(const p of config.absentLocks)if(await exists(p))return {status:"WRITER_BUSY"};
  const operation=randomUUID(),locks=await acquireRetentionLocks(config.lockFiles,operation);if(!locks)return {status:"WRITER_BUSY"};
- let result:{status:string;operation?:string;finishedAt?:number;reason?:string}={status:"STOPPED",operation};
+ let result:{status:string;operation?:string;finishedAt?:number;reason?:string;deferrals?:number}={status:"STOPPED",operation};
  let stateWritten=false;
  const save=async(path:string,value:unknown)=>{
   const tmp=path+"."+randomUUID();const f=await open(tmp,"wx",0o600);
@@ -115,30 +124,33 @@ export async function scheduledTick(config:ScheduledConfig){
  try{
   // Close the gap between reading PASS and acquiring the shared admission lock.
   if(await privateText(config.syncState)!==syncRaw)throw Error("RETENTION_SKIP_SYNC_CHANGED");
-  if(await exists(config.websitePause))throw Error("RETENTION_SKIP_WEBSITE_PAUSED");
   for(const p of config.absentLocks)if(await exists(p))throw Error("RETENTION_SKIP_WRITER_BUSY");
   const proofs:{path:string;sha256:string}[]=[];
   async function proof(path:string){const raw=await privateText(path);proofs.push({path,sha256:sha256(raw)});return JSON.parse(raw);}
-  const pipeline=await proof(join(sync.operation,"PIPELINE_FINISHED_PRIVATE.json"));
-  if(pipeline.status!=="PASS"||pipeline.runId!==sync.runId)throw Error("RETENTION_PIPELINE_NOT_VERIFIED");
-  for(const path of [
-   `thumbnail-post/runs/${sync.runId}/receipt-private.json`,"proved-thumbnail-post/RECEIPT_PRIVATE.json",
-   "acceptance-operation-private/SNAPSHOT_RECEIPT_PRIVATE.json",
-  ]){const r=await proof(join(sync.operation,path));if(r.status!=="PASS"||r.runId!==sync.runId)throw Error("RETENTION_SAME_BATCH_PROOF_MISSING");}
-  await verifyVisitorAcceptance(sync.operation,sync.runId,pipeline,proof);
-  const catalogRaw=await privateText(config.tailCatalog),catalogSHA=sha256(catalogRaw);
-  proofs.push({path:config.tailCatalog,sha256:catalogSHA});
-  let tail;
-  try{tail=await proof(join(config.tailRunsDirectory,sync.runId,catalogSHA,"RECEIPT_PRIVATE.json"));}
-  catch(error){if((error as NodeJS.ErrnoException).code==="ENOENT")throw Error("RETENTION_SKIP_WAITING_FOR_TAIL");throw error;}
-  if(["PENDING","RUNNING"].includes(tail.status)||(tail.status==="PASS"&&(!tail.connectionsClosed||!tail.ownLocksReleased)))throw Error("RETENTION_SKIP_WAITING_FOR_TAIL");
-  if(tail.status!=="PASS"||tail.runId!==sync.runId||tail.catalogSHA256!==catalogSHA||!tail.connectionsClosed||!tail.ownLocksReleased||
-   [tail.inFlight,tail.unknownWriteGroup,tail.acknowledgedUnverifiedGroup].some(value=>value!==null&&value!==undefined))throw Error("RETENTION_TAIL_NOT_VERIFIED");
+  const missing=async<T>(work:()=>Promise<T>,skip:string)=>{
+   try{return await work();}catch(error){if((error as NodeJS.ErrnoException).code==="ENOENT")throw Error(skip);throw error;}};
+  // Published and reader-verified by the round's own source driver.
+  const source=await missing(()=>proof(join(sync.operation,"SOURCE_DRIVER_PRIVATE.json")),"RETENTION_PUBLICATION_NOT_VERIFIED");
+  if(source.status!=="PASS"||source.runId!==sync.runId||source.published!==true||source.readerVerified!==true)throw Error("RETENTION_PUBLICATION_NOT_VERIFIED");
+  // Closed: a full pipeline PASS, or the close-out of a published round whose post steps stopped.
+  if(sync.status==="PASS"){
+   const pipeline=await missing(()=>proof(join(sync.operation,"PIPELINE_FINISHED_PRIVATE.json")),"RETENTION_PIPELINE_NOT_VERIFIED");
+   if(pipeline.status!=="PASS"||pipeline.runId!==sync.runId)throw Error("RETENTION_PIPELINE_NOT_VERIFIED");
+  }else{
+   const close=await missing(()=>proof(join(sync.operation,"CLOSE_PUBLISHED_PRIVATE.json")),"RETENTION_SKIP_WAITING_FOR_CLOSE");
+   if(close.status!=="PASS"||close.publishedRunId!==sync.runId||close.state!==sync.status||close.maintenanceLockReleased!==true)throw Error("RETENTION_CLOSE_NOT_VERIFIED");
+  }
+  // S13 moves the persistent pointer after publish; wait for it so the plan cannot change mid-run.
+  let adoption:Record<string,unknown>|null=null;
+  try{adoption=JSON.parse(await privateText(config.adoptionReceipt));}catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}
+  const adopted=adoption?.status==="ADOPTED_VERIFIED"&&adoption.runId===sync.runId;
+  if(adopted)await proof(config.adoptionReceipt);
+  else if(Date.now()<Date.parse(sync.finishedAtUTC)+adoptionWait*60*1000||!Number.isFinite(Date.parse(sync.finishedAtUTC)))throw Error("RETENTION_SKIP_WAITING_FOR_ADOPTION");
   for(const p of config.programFiles){const s=await lstat(p.path);if(!s.isFile()||s.isSymbolicLink()||(s.mode&0o022)||sha256(await readFile(p.path,"utf8"))!==p.sha256)throw Error("RETENTION_PROGRAM_CHANGED");}
   await privateText(config.envFile); // Check permissions without logging or copying values.
   const folder=join(config.directory,operation);await mkdir(folder,{mode:0o700});
   const windowPath=join(folder,"WINDOW_PRIVATE.json"),deadline=Date.now()+30*60*1000;
-  await save(windowPath,{format:"retention-daily-window-v3",maximumRuns,runId:sync.runId,deadline,syncState:config.syncState,operation:sync.operation,
+  await save(windowPath,{format:"retention-daily-window-v5",maximumRuns,chunkRows,deleteTimeoutSeconds,adopted,runId:sync.runId,deadline,syncState:config.syncState,operation:sync.operation,
    locks:locks.owned,absentLocks:config.absentLocks,proofs,archiveDirectory:config.archiveDirectory,readinessURL:config.readinessURL,readinessSample:config.readinessSample,programFiles:config.programFiles});
   await save(stateFile,{status:"RUNNING",operation,startedAt:Date.now(),runId:sync.runId});stateWritten=true;
   const log=await open(join(folder,"PROCESS_PRIVATE.log"),"wx",0o600);
@@ -155,7 +167,10 @@ export async function scheduledTick(config:ScheduledConfig){
     child.once("error",e=>{clean();reject(e);});child.once("exit",c=>{clean();resolveCode(c);});
    });
   }finally{await log.close();}
-  result={status:code===0?"PASS":"STOPPED",operation,finishedAt:Date.now()};
+  if(code===0)result={status:"PASS",operation,finishedAt:Date.now()};
+  else if(code===RETENTION_DEFERRED_EXIT_CODE)
+   result={status:"DEFERRED",operation,finishedAt:Date.now(),deferrals:(last?.status==="DEFERRED"&&Number.isSafeInteger(last.deferrals)?last.deferrals!:0)+1};
+  else result={status:"STOPPED",operation,finishedAt:Date.now()};
   await save(join(folder,"COMPLETION_PRIVATE.json"),{...result,runId:sync.runId,automaticRetry:false});
  }catch(error){
   if(!stateWritten&&error instanceof Error&&error.message.startsWith("RETENTION_SKIP_"))result={status:error.message.slice("RETENTION_SKIP_".length)};

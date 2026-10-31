@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CLOSE_MS, EASE, OPEN_MS, createSizeMotion, heightKeyframes, widthKeyframes, type Sizable } from "../src/lib/size-motion.ts";
+import { CLOSE_MS, EASE, OPEN_MS, closeLate, createSizeMotion, heightKeyframes, widthKeyframes, type Sizable } from "../src/lib/size-motion.ts";
 
 /** A stand-in element: a size that tests change between capture and play, and a record of animate calls. */
 function element(width: number, height: number) {
@@ -91,4 +91,19 @@ test("play hands back the motions it started, and nothing when it starts none", 
   motion.capture(card, body, false);
   assert.equal(motion.play(card, body).length, 0);
   assert.equal(createSizeMotion(() => true).play(card, body).length, 0);
+});
+
+test("closing late shrinks the body to the folded height, clipped, and moves the control with its lower edge, both held at the end", () => {
+  const body = element(552, 2400), control = element(552, 36);
+  const motions = closeLate(body, control, 2400, 600);
+  assert.equal(motions.length, 2);
+  assert.deepEqual(body.calls[0]!.keyframes, [{ height: "2400px", overflow: "clip" }, { height: "600px", overflow: "clip" }]);
+  assert.deepEqual(control.calls[0]!.keyframes, [{ transform: "translateY(0)" }, { transform: "translateY(-1800px)" }]);
+  for (const call of [body.calls[0]!, control.calls[0]!]) assert.deepEqual(call.options, { duration: CLOSE_MS, easing: EASE, fill: "forwards" });
+});
+
+test("closing late starts nothing when the height does not change", () => {
+  const body = element(552, 600), control = element(552, 36);
+  assert.equal(closeLate(body, control, 600, 600.2).length, 0);
+  assert.equal(body.calls.length + control.calls.length, 0);
 });

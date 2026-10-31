@@ -14,7 +14,7 @@ const locks = [];
 for (let i = 0; i < 4; i++) { const raw = `synthetic-lock-${i}`, path = await write(`lock-${i}`, raw), s = await stat(path); locks.push({ path, ino: s.ino, dev: s.dev, sha256: sha256(raw) }); }
 const proof = await write("proof", "synthetic-proof"), program = await write("program", "synthetic-program");
 const syncState = await write("state", JSON.stringify({ status: "PASS", runId, operation: "synthetic-operation" }));
-const window = await write("window", JSON.stringify({ format: "retention-daily-window-v3", maximumRuns: 1, runId,
+const window = await write("window", JSON.stringify({ format: "retention-daily-window-v5", maximumRuns: 1, chunkRows: 100, deleteTimeoutSeconds: 20, runId,
   operation: "synthetic-operation", deadline: Date.now() + 180000, syncState, locks, absentLocks: [join(dir, "absent")],
   proofs: Array.from({ length: 5 }, () => ({ path: proof, sha256: sha256("synthetic-proof") })), archiveDirectory: join(dir, "archive"),
   readinessURL: `https://example.test${READINESS_PATH}`, readinessSample: { id: "synthetic-status", slug: "synthetic-status" },

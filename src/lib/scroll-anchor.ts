@@ -29,9 +29,14 @@ export function holdScrollAnchor(): () => void {
   };
 }
 
-/** Releases once the given motions have ended and the next frame is drawn, or after `fallbackMs` at the latest. */
+/**
+ * Releases once the given motions have ended and the frame after them is drawn, or after `fallbackMs` at the
+ * latest. Two frames, not one: frame callbacks run before that frame's layout, so with nothing moving (reduced
+ * motion) a release in the next frame would turn anchoring back on just before the new content is laid out,
+ * and the page would jump after all (F52).
+ */
 export function releaseAfter(release: () => void, motions: readonly unknown[], fallbackMs = 1000): void {
   const finished = motions.map(motion => (motion as { finished?: Promise<unknown> }).finished).filter(Boolean) as Promise<unknown>[];
   const timer = setTimeout(release, fallbackMs);
-  void Promise.allSettled(finished).then(() => requestAnimationFrame(() => { clearTimeout(timer); release(); }));
+  void Promise.allSettled(finished).then(() => requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(timer); release(); })));
 }
