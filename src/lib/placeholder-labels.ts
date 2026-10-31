@@ -13,9 +13,13 @@ export function hiddenPageLabel(title: string): string {
   return !title.trim() || title === HIDDEN_PAGE ? "未开放的页面" : title;
 }
 
-/** What to add in brackets after "this part cannot be shown"; nothing when the service only says so in general. */
+/**
+ * What to add in brackets after "this part cannot be shown". The service explains its own limits in fixed English
+ * ("Nested content is not supported for this block", "Image unavailable" …), which is not for visitors (S15-3,
+ * 2026-10-31), so only a label in the page's language is kept.
+ */
 export function unsupportedDetail(label: string): string | null {
-  return !label.trim() || label === UNSUPPORTED_BLOCK ? null : label;
+  return !label.trim() || label === UNSUPPORTED_BLOCK || !/[\u3400-\u9fff]/.test(label) ? null : label;
 }
 
 /** What a collapsible heading's own fold says: the source's fixed English title, read in the page's language. */
