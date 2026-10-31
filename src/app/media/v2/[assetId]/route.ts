@@ -12,13 +12,16 @@ import { thumbnailMediaResponse, thumbnailWidth, thumbnailsEnabled, thumbnailQua
 import { publishedThumbnailResponse } from "../../../../server/media/published-thumbnail.ts";
 import { withMediaReadBudget } from "../../../../server/media/read-budget.ts";
 import { displayMediaResponse, displayWidth } from "../../../../server/self-hosted-media/response.ts";
+import { databaseDisplayResponse } from "../../../../server/media/display.ts";
+import { DisplayError } from "../../../../server/database/display.ts";
 export const runtime="nodejs";
 async function readMedia(request:Request,context:{params:Promise<{assetId:string}>}) {
   if(process.env.CONTENT_PROVIDER!=="database"||process.env.DATABASE_CONTENT_VERSION!=="2")return new Response(null,{status:404,headers:{"Cache-Control":"private, no-store"}});
   try {
     return await withMediaReadBudget(request.signal, async () => {
       const {assetId}=await context.params;
-      const {db,storage,thumbnailStorage,publishedThumbnail,displayStore}=getDatabaseRuntime();
+      const {db,storage,thumbnailStorage,publishedThumbnail,displayStore,cloudDisplay}=getDatabaseRuntime();
+      if(cloudDisplay)return await databaseDisplayResponse(assetId,displayWidth(request.url),{read:cloudDisplay.read,storage});
       if(displayStore)return await displayMediaResponse(assetId,displayWidth(request.url),{
         qualify:id=>readThumbnail(db,"v2",id,400),store:displayStore,
       });
@@ -42,7 +45,7 @@ async function readMedia(request:Request,context:{params:Promise<{assetId:string
       }
       return await websiteMediaResponse(assetId,db,storage);
     });
-  }catch(error){return contentErrorResponse(error);}
+  }catch(error){return contentErrorResponse(error instanceof DisplayError?new ContentServiceError("CONTENT_UNAVAILABLE","The display image is unavailable."):error);}
 }
 
 export const GET = withPublicHttp("media", readMedia);
