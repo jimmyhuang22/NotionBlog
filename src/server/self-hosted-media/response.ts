@@ -33,8 +33,8 @@ export async function displayMediaResponse(assetId: string, width: 400 | 800 | 1
   checkContentReadBudget(); const first = await ports.qualify(assetId); if (!first) return missing();
   const manifest = await ports.store.manifest(first.runId), asset = manifest.assets.find(asset => asset.assetId === assetId);
   if (!asset || !matches(asset, first)) return missing();
-  const descriptor = selectDisplayFile(asset, width), bytes = await ports.store.read(descriptor);
-  verifyDisplayBytes(descriptor, bytes); checkContentReadBudget();
+  const descriptor = selectDisplayFile(asset, width), bytes = await ports.store.read(descriptor, manifest.recipe);
+  verifyDisplayBytes(descriptor, bytes, manifest.recipe); checkContentReadBudget();
   const current = await ports.qualify(assetId);
   if (!current || !matches(asset, current) || JSON.stringify(binding(current)) !== JSON.stringify(binding(first))) return missing();
   return new Response(Buffer.from(bytes), { headers: { ...headers, "Content-Type": descriptor.mime, "Content-Length": String(bytes.length) } });

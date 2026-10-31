@@ -9,6 +9,8 @@ import { mediaIdentity } from "../../src/server/database/validation.ts";
 
 const version = process.argv[2];
 assert.ok(version === "1" || version === "2");
+const delivery = process.argv[3];
+assert.ok(delivery === undefined || delivery === "legacy");
 const bytes = Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
 const sha256 = createHash("sha256").update(bytes).digest("hex"), owner = "0".repeat(31) + "1";
 const assetId = mediaIdentity(owner, "cover", sha256);
@@ -22,6 +24,8 @@ let started!: () => void;
 const releases: boolean[] = [];
 const originalConnect = Pool.prototype.connect, originalQuery = Pool.prototype.query, originalFetch = globalThis.fetch;
 try {
+  if (delivery === undefined) delete process.env.MEDIA_DELIVERY_MODE;
+  else process.env.MEDIA_DELIVERY_MODE = delivery;
   Object.assign(process.env, {DATABASE_READER_ISOLATION: "enforce",  CONTENT_PROVIDER: "database", DATABASE_CONTENT_VERSION: version,
     DATABASE_PUBLICATION_MODE: "qualified", DATABASE_READ_PROJECTION: "legacy", DATABASE_SEARCH_CONTEXT: "off",
     DATABASE_READER_URL: "postgres://fixture:fixture@localhost/db", DATABASE_TLS: "disable",
@@ -52,6 +56,8 @@ try {
     return new Response(bytes);
   };
   const { GET } = version === "1" ? await import("../../src/app/media/[assetId]/route.ts") : await import("../../src/app/media/v2/[assetId]/route.ts");
+  assert.equal(connects, 0, "importing a media route does not connect to the database");
+  assert.equal(objects, 0, "importing a media route does not read Storage");
   process.env.DATABASE_CONTENT_VERSION = version === "1" ? "2" : "1";
   const mismatch = await GET(new Request(path), context);
   assert.equal(mismatch.status, 404); assert.match(mismatch.headers.get("Cache-Control")!, /no-store/);

@@ -4,12 +4,19 @@ import { join, resolve, isAbsolute, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { checkContentReadBudget } from "../content-read-budget.ts";
 import { displayRunId, displayUnavailable, MAX_DISPLAY_MANIFEST_BYTES, validateDisplayFile, validateDisplayManifest, type DisplayFile, type DisplayManifest } from "./manifest.ts";
+import { DISPLAY_V2_RECIPE, validateDisplayRecipe } from "./manifest.ts";
+import { verifyDisplayAnimation } from "./animation.ts";
 
 /** Header validation only; no image decoding, resizing or remote transport in the website. */
-export function verifyDisplayBytes(file: DisplayFile, input: Uint8Array): void {
+export function verifyDisplayBytes(file: DisplayFile, input: Uint8Array, recipe?: string): void {
+  if (recipe !== undefined) validateDisplayRecipe(recipe);
   validateDisplayFile(file); const b = Buffer.from(input);
   if (b.length !== file.byteSize || createHash("sha256").update(b).digest("hex") !== file.sha256 ||
       b.length < 20 || b.toString("ascii", 0, 4) !== "RIFF" || b.toString("ascii", 8, 12) !== "WEBP" || b.readUInt32LE(4) + 8 !== b.length) displayUnavailable();
+  if (b.toString("ascii", 12, 16) === "VP8X" && b.length >= 30 && b[20] & 2) {
+    if (recipe !== DISPLAY_V2_RECIPE) displayUnavailable();
+    verifyDisplayAnimation(file, b); return;
+  }
   let width = 0, height = 0, canvas: [number, number] | undefined;
   for (let offset = 12; offset < b.length;) {
     if (offset + 8 > b.length) displayUnavailable();
@@ -33,10 +40,11 @@ export function verifyDisplayBytes(file: DisplayFile, input: Uint8Array): void {
 export interface DisplayStore {
   verifyRoot(): Promise<void>;
   manifest(runId: string): Promise<DisplayManifest>;
-  read(file: DisplayFile): Promise<Uint8Array>;
+  read(file: DisplayFile, recipe?: string): Promise<Uint8Array>;
 }
 /** Immutable operator-installed objects, mounted read-only; no writer method or URL fallback. */
-export function createDisplayStore(directory: string): DisplayStore {
+export function createDisplayStore(directory: string, expectedRecipe?: string): DisplayStore {
+  if (expectedRecipe !== undefined) validateDisplayRecipe(expectedRecipe);
   const publicDirectory = resolve(process.cwd(), "public");
   const within = (value: string, folder: string) => value === folder || value.startsWith(folder + sep);
   if (!isAbsolute(directory) || resolve(directory) !== directory || within(directory, publicDirectory)) displayUnavailable();
@@ -69,12 +77,13 @@ export function createDisplayStore(directory: string): DisplayStore {
       if (!displayRunId(runId)) displayUnavailable();
       try {
         const value: unknown = JSON.parse((await read(runId + ".json", "runs", MAX_DISPLAY_MANIFEST_BYTES)).toString("utf8"));
-        validateDisplayManifest(value); if (value.runId !== runId) displayUnavailable(); return value;
+        validateDisplayManifest(value, expectedRecipe); if (value.runId !== runId) displayUnavailable(); return value;
       } catch { return displayUnavailable(); }
     },
-    async read(descriptor) {
+    async read(descriptor, recipe = expectedRecipe) {
+      if (recipe !== undefined) validateDisplayRecipe(recipe, expectedRecipe);
       validateDisplayFile(descriptor);
-      try { const bytes = await read(descriptor.sha256 + ".webp", "objects", descriptor.byteSize); verifyDisplayBytes(descriptor, bytes); return bytes; }
+      try { const bytes = await read(descriptor.sha256 + ".webp", "objects", descriptor.byteSize); verifyDisplayBytes(descriptor, bytes, recipe); return bytes; }
       catch { return displayUnavailable(); }
     },
   };

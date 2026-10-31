@@ -145,9 +145,9 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
-        ? "252c86f9b024439d08db7579926f51d9806c997ebce67103709e8535f507ff84"
+        ? "46b6e467e40d8155f13327731029f68fe7cbff850442f4dd70b4ca368ee4dbc1"
       : pair.path === "src/server/database/runtime.ts"
-        ? "e3268ce8fdf64f109c4bacc105491b266988cf581910e2b6cc7844e392c5d194"
+        ? "e98d2b78346d9ef89b4b530e5be45fc70260b61592813a1be32d850d313e0bc8"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "3d7a448f5f1603ef1a66aab74975c043f06a78be83ef390cad603b128a3d44eb"
         : null;

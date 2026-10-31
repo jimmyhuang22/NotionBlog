@@ -23,6 +23,12 @@ export interface DisplayManifest {
 }
 export const MAX_DISPLAY_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_DISPLAY_MANIFEST_BYTES = 16 * 1024 * 1024;
+/** Exact reviewed encoder, policy and toolchain identity. New recipes require a new review. */
+export const DISPLAY_V2_RECIPE = "display-webp-v2:4adf9c0a89fe1f690c07a43576721c82b550e32ee3239ad9fd4711c342a5cb62";
+export function validateDisplayRecipe(recipe: unknown, expected?: string): asserts recipe is string {
+  if (typeof recipe !== "string" || (!/^display-webp-v1:[a-f0-9]{64}$/.test(recipe) && recipe !== DISPLAY_V2_RECIPE) ||
+      expected !== undefined && recipe !== expected) displayUnavailable();
+}
 export const displayAssetId = (value: unknown): value is string => typeof value === "string" && value.length === 67 && /^a1\.[a-f0-9]{64}$/.test(value);
 export const displayHash = (value: unknown): value is string => typeof value === "string" && value.length === 64 && /^[a-f0-9]{64}$/.test(value);
 export const displayRunId = (value: unknown): value is string => typeof value === "string" && value.length === 36 && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
@@ -37,11 +43,11 @@ export function validateDisplayFile(value: unknown): asserts value is DisplayFil
       value.mime !== "image/webp" || !integer(value.byteSize, MAX_DISPLAY_FILE_BYTES) ||
       !integer(value.width, 1600) || !integer(value.height, 16383)) displayUnavailable();
 }
-export function validateDisplayManifest(value: unknown): asserts value is DisplayManifest {
+export function validateDisplayManifest(value: unknown, expectedRecipe?: string): asserts value is DisplayManifest {
   if (!exact(value, ["format", "runId", "recipe", "assets"]) || value.format !== "notionblog-display-v1" ||
       !displayRunId(value.runId) || typeof value.recipe !== "string" ||
-      !/^display-webp-v1:[a-f0-9]{64}$/.test(value.recipe) || value.recipe.length !== 80 ||
       !Array.isArray(value.assets) || value.assets.length > 20000) displayUnavailable();
+  validateDisplayRecipe(value.recipe, expectedRecipe);
   const assets = new Set<string>(), objects = new Map<string, string>();
   let total = 0;
   for (const asset of value.assets) {
