@@ -84,6 +84,8 @@
 .entry__more--riding { position: relative; z-index: 1; width: 100%; text-align: start; background: var(--card); }
 .entry__more--riding::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: calc(4.5 * var(--text-body)); background: linear-gradient(to bottom, transparent, var(--card)); pointer-events: none; }
 .entry__card .prose { font-size: var(--text-body); line-height: 1.75; }
+/* Entries are written a sentence to a line, each line its own paragraph; the reading gap of 18 drew them apart as a list (S15-1, owner 2026-10-31). */
+.entry__card .prose p { margin-bottom: 8px; }
 /* A long entry's typeset opening, collapsed to about nine lines (status-body.tsx); a mask fades it, so it suits every card colour. */
 .entry__preview { max-height: calc(9 * 1.75 * var(--text-body)); overflow: hidden; }
 .entry__preview[data-clipped] { mask-image: linear-gradient(to bottom, #000 calc(100% - 4.5em), transparent); }

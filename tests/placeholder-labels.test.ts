@@ -13,6 +13,10 @@ test("the service's fixed placeholders are said in the page's own language, anyt
   assert.equal(unsupportedDetail("Unsupported Notion block"), null);
   assert.equal(unsupportedDetail(""), null);
   assert.equal(unsupportedDetail("同步块"), "同步块");
+  // The service's own English reasons are not for visitors either (S15-3).
+  assert.equal(unsupportedDetail("Nested content is not supported for this block"), null);
+  assert.equal(unsupportedDetail("Image unavailable"), null);
+  assert.equal(unsupportedDetail("Content block limit reached"), null);
 });
 
 test("a collapsible heading's fold is named in the page's language; an author's own fold title is kept", () => {
