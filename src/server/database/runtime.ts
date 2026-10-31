@@ -18,6 +18,8 @@ import { budgetedContentSql } from "../content-read-budget.ts";
 import { readSearchContextMode } from "./search-context.ts";
 import { selfHostedDisplayStore } from "../self-hosted-media/runtime.ts";
 import { displayProjectionSql } from "../self-hosted-media/projection.ts";
+import { displayDeliveryMode, readDisplayMedia } from "./display.ts";
+import { databaseDisplayProjectionSql } from "../media/display.ts";
 
 let runtime: ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -36,7 +38,11 @@ function createRuntime() {
   const rawDb=isolatedWebsiteReader(budgetedContentSql(sqlExecutor(pool)),isolationMode);
   const db=publicationReader(rawDb,mode);
   const displayStore=selfHostedDisplayStore();
-  const contentDb=displayStore?displayProjectionSql(db,displayStore):db;
+  const cloudDisplay=displayDeliveryMode(process.env.MEDIA_DELIVERY_MODE);
+  if(cloudDisplay&&(displayStore||process.env.DATABASE_CONTENT_VERSION!=="2"||process.env.MEDIA_PROVIDER!=="storage"||storageProvider(process.env)!=="supabase"))
+    throw new ContentServiceError("MISCONFIGURED","Cloud display delivery requires the explicit v2 Supabase media profile.");
+  const project=(input: typeof db)=>displayStore?displayProjectionSql(input,displayStore):cloudDisplay?databaseDisplayProjectionSql(input,rawDb,mode):input;
+  const contentDb=project(db);
   let token: ReturnType<typeof createStorageReaderToken> | undefined;
   const objectProvider=storageProvider(process.env);
   const variantProvider=thumbnailStorageProvider(process.env);
@@ -53,6 +59,6 @@ function createRuntime() {
     });
   }
   const storage=()=>storageFor(objectProvider), thumbnailStorage=()=>storageFor(variantProvider);
-  return {db,displayStore,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(displayStore?displayProjectionSql(rawDb,displayStore):rawDb,mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})}),storage};
+  return {db,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(project(rawDb),mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})}),storage};
 }
 export function getDatabaseRuntime() { return measureContentRead("database-runtime", () => runtime??=createRuntime()); }
