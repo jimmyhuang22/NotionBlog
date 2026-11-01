@@ -1,6 +1,9 @@
 export interface NavItem { href: string; label: string; more?: boolean }
 
-/** The most sections the header row holds at phone widths in every skin; see docs/FRONTEND_GUIDE.md. */
+/**
+ * Past this many sections the hobby ones are also written as a "更多" menu. The stylesheet decides which shows: the
+ * menu only where the row is too short (the narrowest phones, and 761–819 beside the name); see docs/FRONTEND_GUIDE.md.
+ */
 export const NAV_ROW_LIMIT = 6;
 
 /** Whether a pathname is the section's own page or one beneath it. */
