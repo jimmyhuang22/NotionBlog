@@ -1,3 +1,4 @@
+import { readerControlResponse } from "./reader-controls.ts";
 // Explicit built-app fixture preload. Never used by the production CLI.
 import pg from "pg";
 import { readFile } from "node:fs/promises";
@@ -17,6 +18,14 @@ pg.Client.prototype.connect = function (this: pg.Client, callback?: (error: unkn
   return Promise.resolve(this);
 } as any;
 pg.Client.prototype.query = function (text: string, values?: unknown[], callback?: (e: unknown, r: unknown) => void) {
+  if (typeof text === "object" && text !== null) {
+    const config = text as { text: string; values?: unknown[] }; text = config.text; values = config.values;
+  }
+  const control = readerControlResponse(text);
+  if (control) {
+    if (callback) { queueMicrotask(() => callback(null, control)); return; }
+    return Promise.resolve(control);
+  }
   const id = ++sequence, promise = new Promise((ok, reject) => { pending.set(id, { ok, reject }); process.send?.({ type: "fixture-sql", id, text, values }); });
   if (callback) { void promise.then(r => callback(null, r), e => callback(e, null)); return; }
   return promise;

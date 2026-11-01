@@ -47,7 +47,9 @@ export async function privateContentReadinessResponse(request: Request, env: Rec
       const repository = await load(); checkContentReadBudget();
       await probeContentReadiness(repository, body.runId, body.sample);
     },
-      { timeoutMs: 8000, maxQueries: 8, maxResponseBytes: 256 * 1024 });
+      // Preserve eight content/permission statements; each now needs at most
+      // BEGIN + SET LOCAL + COMMIT/ROLLBACK on the same reader checkout.
+      { timeoutMs: 8000, maxContentQueries: 8, maxQueries: 32, maxResponseBytes: 256 * 1024 });
     return Response.json({ data: { format: READINESS_FORMAT, status: "ready", runId: body.runId, nonce: body.nonce } }, { headers });
   } catch { return new Response(null, { status: 503, headers }); }
   })();

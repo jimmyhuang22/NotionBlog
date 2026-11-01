@@ -1,7 +1,7 @@
 import "server-only";
 import { isolatedWebsiteReader, websiteReaderIsolationMode } from "./website-reader-isolation.ts";
 import { createLocalMediaStorage } from "./local-storage.ts";
-import { sqlExecutor } from "./connection.ts";
+import { readerSqlExecutor } from "./connection.ts";
 import { createWebsiteDatabaseRepository } from "./website-repository.ts";
 import { createDatabaseRepository } from "./repository.ts";
 import { createSupabaseStorage, type ObjectStorage } from "./storage.ts";
@@ -14,7 +14,6 @@ import { configuredCosStorage, storageProvider, thumbnailStorageProvider } from 
 import { measureContentRead } from "../content-read-timing.ts";
 import { readProjectionMode, scopedReader } from "./scoped-reads.ts";
 import { sharedContentReaderPool } from "./shared-reader-pool.ts";
-import { budgetedContentSql } from "../content-read-budget.ts";
 import { readSearchContextMode } from "./search-context.ts";
 import { selfHostedDisplayStore } from "../self-hosted-media/runtime.ts";
 import { displayProjectionSql } from "../self-hosted-media/projection.ts";
@@ -35,7 +34,7 @@ function createRuntime() {
   if(projection==="scoped"&&process.env.DATABASE_CONTENT_VERSION!=="2")
     throw new ContentServiceError("MISCONFIGURED","Scoped reads require database v2.");
   const pool=sharedContentReaderPool(process.env.DATABASE_READER_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
-  const rawDb=isolatedWebsiteReader(budgetedContentSql(sqlExecutor(pool)),isolationMode);
+  const rawDb=isolatedWebsiteReader(readerSqlExecutor(pool),isolationMode);
   const db=publicationReader(rawDb,mode);
   const displayStore=selfHostedDisplayStore();
   const cloudDisplay=displayDeliveryMode(process.env.MEDIA_DELIVERY_MODE);

@@ -3,7 +3,7 @@ import { ContentServiceError } from "../../../contracts/repository.ts";
 import { socialReaderPoolConfig, verifySocialReader } from "./reader.ts";
 import { readSocialSnapshot } from "./repository.ts";
 import { Pool } from "pg";
-import { sqlExecutor } from "../database/connection.ts";
+import { readerSqlExecutor } from "../database/connection.ts";
 import { readSocialTimelineSnapshot, verifyCollectionReader } from "./timeline-repository.ts";
 import { readRetainedSocialSnapshot, socialDisplayMode } from "./retained-repository.ts";
 import { attachSocialReaderPool, monitoredSocialReaderSql } from "./pool.ts";
@@ -39,7 +39,7 @@ function readerPool() {
   return pool;
 }
 async function readerSql() {
-  const sql = monitoredSocialReaderSql(sqlExecutor(readerPool()));
+  const sql = monitoredSocialReaderSql(readerSqlExecutor(readerPool()));
   await measureContentReadAsync("social-reader-check", () => verifySocialReader(sql));
   return sql;
 }

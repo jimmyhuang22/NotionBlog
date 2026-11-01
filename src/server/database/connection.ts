@@ -2,7 +2,7 @@ import { Pool, type PoolConfig } from "pg";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { SqlExecutor } from "./sql.ts";
 import { contentReadTimingActive, measureContentRead, measureContentReadAsync, recordContentPoolState } from "../content-read-timing.ts";
-import { contentReadBudgetIdentity } from "../content-read-budget.ts";
+import { budgetedContentSql, contentReadBudgetIdentity, withContentReadBudget } from "../content-read-budget.ts";
 import { requestPoolQuery } from "./request-query.ts";
 
 /** Explicit TLS; connection strings cannot silently override certificate verification. */
@@ -46,4 +46,17 @@ export function sqlExecutor(pool: Pool): SqlExecutor {
     }
     const result=await pool.query(text,values); return {rows:result.rows as T[]};
   }};
+}
+
+/** Website readers also run outside an HTTP budget (rendering, media and startup).
+ * Keep their SQL and controls bounded there too; writers retain sqlExecutor. */
+export function readerSqlExecutor(pool: Pool): SqlExecutor {
+  const sql = budgetedContentSql({ async query<T>(text: string, values?: unknown[]) {
+    recordContentPoolState({ total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount });
+    return requestPoolQuery<T>(pool, contentReadBudgetIdentity()!, text, values, true);
+  } });
+  return { query<T>(text: string, values?: unknown[]) {
+    const read = () => sql.query<T>(text, values);
+    return contentReadBudgetIdentity() ? read() : withContentReadBudget(new AbortController().signal, read);
+  } };
 }

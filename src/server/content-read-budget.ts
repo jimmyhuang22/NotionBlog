@@ -4,7 +4,7 @@ import { ContentServiceError } from "../../contracts/repository.ts";
 import type { SqlExecutor } from "./database/sql.ts";
 import type { SearchResultBudget } from "./database/result-response-budget.ts";
 
-export interface ReadBudget { signal: AbortSignal; deadline: number; now(): number; sql?: { maxQueries: number; maxResponseBytes: number; queries: number; responseBytes: number }; resultBudget?: SearchResultBudget }
+export interface ReadBudget { signal: AbortSignal; deadline: number; now(): number; sql?: { maxQueries: number; maxResponseBytes: number; queries: number; responseBytes: number; maxContentQueries?: number; contentQueries?: number }; resultBudget?: SearchResultBudget }
 const scope = new AsyncLocalStorage<ReadBudget>();
 export const contentReadBudgetIdentity = () => scope.getStore();
 export function checkContentReadBudget(): void {
@@ -15,12 +15,12 @@ export function checkContentReadBudget(): void {
 /** Check before/after work and propagate cancellation to request-aware drivers.
  * Generic executors still drain their current call; the website pg executor also
  * bounds checkout/query and destroys cancelled clients before running more SQL. */
-export function withContentReadBudget<T>(signal: AbortSignal, read: () => Promise<T>, options: { timeoutMs?: number; now?: () => number; maxQueries?: number; maxResponseBytes?: number; resultBudget?: SearchResultBudget } = {}): Promise<T> {
+export function withContentReadBudget<T>(signal: AbortSignal, read: () => Promise<T>, options: { timeoutMs?: number; now?: () => number; maxQueries?: number; maxContentQueries?: number; maxResponseBytes?: number; resultBudget?: SearchResultBudget } = {}): Promise<T> {
   const timeout = options.timeoutMs ?? 30_000, now = options.now ?? (() => performance.now());
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error("Invalid content deadline.");
-  const { maxQueries = Infinity, maxResponseBytes = Infinity } = options;
-  for (const limit of [maxQueries, maxResponseBytes]) if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit < 1)) throw new Error("Invalid content SQL budget.");
-  const sql = { maxQueries, maxResponseBytes, queries: 0, responseBytes: 0 };
+  const { maxQueries = Infinity, maxContentQueries = Infinity, maxResponseBytes = Infinity } = options;
+  for (const limit of [maxQueries, maxContentQueries, maxResponseBytes]) if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit < 1)) throw new Error("Invalid content SQL budget.");
+  const sql = { maxQueries, maxContentQueries, maxResponseBytes, queries: 0, contentQueries: 0, responseBytes: 0 };
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
@@ -34,7 +34,11 @@ export function budgetedContentSql(db: SqlExecutor): SqlExecutor {
   return { async query<T>(text: string, values?: unknown[]) {
     checkContentReadBudget();
     const sql = scope.getStore()?.sql;
-    if (sql && (sql.responseBytes > sql.maxResponseBytes || ++sql.queries > sql.maxQueries)) throw new ContentServiceError("CONTENT_UNAVAILABLE", "The content SQL budget was exceeded.");
+    if (sql) {
+      sql.contentQueries = (sql.contentQueries ?? 0) + 1;
+      if (sql.responseBytes > sql.maxResponseBytes || sql.contentQueries > (sql.maxContentQueries ?? Infinity) || ++sql.queries > sql.maxQueries)
+        throw new ContentServiceError("CONTENT_UNAVAILABLE", "The content SQL budget was exceeded.");
+    }
     const result = await db.query<T>(text, values);
     if (sql && sql.maxResponseBytes !== Infinity) {
       sql.responseBytes += Buffer.byteLength(JSON.stringify(result.rows));

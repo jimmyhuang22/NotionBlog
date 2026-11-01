@@ -6,6 +6,7 @@ import protocol from "../database/protocol.json" with {type:"json"};
 import readerProtocol from "../database/reader-protocol.json" with {type:"json"};
 import mediaProtocol from "../database/media-protocol.json" with {type:"json"};
 import { createDatabasePool } from "../src/server/database/connection.ts";
+import { createOwnerArchivePool, configureOwnerArchive, ownerArchiveSql, startOwnerArchiveDeadline } from "./owner-archive.ts";
 import type { PublicationPolicy } from "../contracts/sync.ts";
 import { exportDatabaseArchive,restoreDatabaseArchive,archivedObjects,type DatabaseArchive } from "../src/server/database/archive.ts";
 import { createSupabaseStorage } from "../src/server/database/storage.ts";
@@ -23,11 +24,15 @@ const storage=(role:"reader"|"writer")=>createSupabaseStorage({url:process.env.S
 async function main() {
   const [command,input]=process.argv.slice(2);
   if(!["migrate","migrate-reader","migrate-media","policy","deny","allow","verify","export","restore"].includes(command??""))throw new Error("Unsupported database command.");
-  const pool=createDatabasePool(process.env.DATABASE_MIGRATION_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
+  const archiveOperation = command === "export" || command === "restore" ? command : undefined;
+  const pool = archiveOperation
+    ? createOwnerArchivePool(archiveOperation, process.env.DATABASE_MIGRATION_URL, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT)
+    : createDatabasePool(process.env.DATABASE_MIGRATION_URL, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
   let client;
   let failed = false;
   try {
     client = await pool.connect();
+    if (archiveOperation) await configureOwnerArchive(client, archiveOperation);
     await client.query("SELECT pg_advisory_lock(172904,1)");
     if(command==="migrate") {
       for(const migration of protocol.migrations) {
@@ -87,7 +92,7 @@ async function main() {
       console.log(JSON.stringify({exported:true,mediaFiles:objects}));
     } else if(command==="restore") {
       const dir=privatePath(input),archive=JSON.parse(await readFile(resolve(dir,"content.json"),"utf8")) as DatabaseArchive;
-      await restoreDatabaseArchive(client,archive);let objects=0;
+      await restoreDatabaseArchive(ownerArchiveSql(client),archive);let objects=0;
       if(process.argv.includes("--media")) {
         const adapter=storage("writer");for(const media of archivedObjects(archive)){validateMedia(media);await adapter.put(media,await readFile(resolve(dir,media.objectKey)));objects++;}
       }
@@ -107,4 +112,9 @@ async function main() {
     if (unlockFailed && !failed) throw Error("DATABASE_CLOSE_FAILED");
   }
 }
-main().catch(()=>{console.error("Database operation failed. Check private configuration, migration version and operator permissions; provider exceptions are withheld.");process.exitCode=1;});
+const deadlineOperation = process.argv[2];
+const finish = deadlineOperation === "export" || deadlineOperation === "restore" ? startOwnerArchiveDeadline(deadlineOperation) : () => {};
+main().catch(error => {
+  if (error?.code === "OWNER_ARCHIVE_OUTCOME_UNKNOWN") { console.error("OWNER_ARCHIVE_OUTCOME_UNKNOWN"); process.exitCode = 2; return; }
+  console.error("Database operation failed. Check private configuration, migration version and operator permissions; provider exceptions are withheld."); process.exitCode = 1;
+}).finally(finish);
