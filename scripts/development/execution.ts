@@ -4,7 +4,7 @@ import { platformProduction, preservePlatformMetadata } from './platform-environ
 import { configureSelfHostedEnvironment } from '../self-hosted/context.cjs';
 
 /** Also called by instrumentation in fresh serverless workers, before requests. */
-export function configureExecutionEnvironment(env: NodeJS.ProcessEnv, phase = 'runtime'): 'production' | 'offline' | 'cloud' | 'self-hosted' | 'self-hosted-build' {
+export function configureExecutionEnvironment(env: NodeJS.ProcessEnv, phase = 'runtime'): 'production' | 'offline' | 'cloud' | 'self-hosted' | 'self-hosted-build' | 'self-hosted-public' | 'self-hosted-public-build' {
   const selfHosted = configureSelfHostedEnvironment(env);
   if (selfHosted) return selfHosted;
   const development = phase === 'phase-development-server' || env.NODE_ENV === 'development';

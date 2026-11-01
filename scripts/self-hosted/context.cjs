@@ -22,6 +22,7 @@ function install(phase, root, environment) {
   const values = Object.freeze({ ...environment });
   const value = Object.freeze({
     version: 1, root, phase,
+    publicWebsite: values.SELF_HOSTED_DEPLOYMENT === 'public-website',
     apply(env) {
       refusePlatform(env);
       for (const name of Object.keys(env)) if (prefix.test(name)) env[name] = '';
@@ -46,6 +47,7 @@ function configureSelfHostedEnvironment(env) {
   const value = context();
   if (!value) return undefined;
   value.apply(env);
+  if (value.publicWebsite) return value.phase === 'build' ? 'self-hosted-public-build' : 'self-hosted-public';
   return value.phase === 'build' ? 'self-hosted-build' : 'self-hosted';
 }
 function registerSelfHostedPool(pool) {

@@ -1,9 +1,11 @@
 import { createDatabasePool } from '../../src/server/database/connection.ts';
 import { verifySocialReader } from '../../src/server/social/reader.ts';
 import { sqlExecutor } from '../../src/server/database/connection.ts';
+import { readerLogin } from './profile.cjs';
 
 /** One bounded startup check; the website never receives an owner/writer login. */
 export async function verifySelfHostedReaders(env: NodeJS.ProcessEnv): Promise<void> {
+  const login = readerLogin(env.DATABASE_READER_URL ?? '', 'nb_website_reader', env.SELF_HOSTED_DEPLOYMENT === 'public-website');
   const pool = createDatabasePool(env.DATABASE_READER_URL, env.DATABASE_TLS, env.DATABASE_CA_CERT);
   try {
     const row = (await pool.query<{ role: string; login: string; safe: boolean; execute: boolean; private_read: boolean }>(`WITH RECURSIVE reader_roles(oid) AS (
@@ -12,7 +14,7 @@ export async function verifySelfHostedReaders(env: NodeJS.ProcessEnv): Promise<v
     ) SELECT current_user AS role,session_user AS login,
       NOT (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication OR
         EXISTS (SELECT 1 FROM reader_roles i JOIN pg_roles r ON r.oid=i.oid
-          WHERE r.rolname NOT IN ('nb_website_reader','nb_reader') OR r.rolsuper OR r.rolbypassrls OR
+          WHERE r.rolname NOT IN ($1,'nb_reader') OR r.rolsuper OR r.rolbypassrls OR
             r.rolcreatedb OR r.rolcreaterole OR r.rolreplication) OR
         EXISTS (SELECT 1 FROM pg_auth_members m JOIN reader_roles r ON m.member=r.oid WHERE m.admin_option) OR
         EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,
@@ -25,8 +27,8 @@ export async function verifySelfHostedReaders(env: NodeJS.ProcessEnv): Promise<v
       has_function_privilege(current_user,'nb_v2_api.read_snapshot(text[],boolean)','EXECUTE') AS execute,
       has_table_privilege(current_user,(SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='nb_v2' AND c.relname='records'),'SELECT') AS private_read
-      FROM pg_roles WHERE rolname=current_user`)).rows;
-    if (row.length !== 1 || row[0].role !== 'nb_website_reader' || row[0].login !== 'nb_website_reader' ||
+      FROM pg_roles WHERE rolname=current_user`, [login])).rows;
+    if (row.length !== 1 || row[0].role !== login || row[0].login !== login ||
         row[0].safe !== true || row[0].execute !== true || row[0].private_read !== false) throw Error();
   } catch { throw Error('SELF_HOSTED_READER_VERIFICATION'); }
   finally { await pool.end(); }

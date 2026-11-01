@@ -250,6 +250,8 @@ Mac mini 增加独立的游戏平台 → Notion 程序，与现有 Notion → �
 
 ## 部署与访问目标
 
+公开自托管（2026-11-02）：用户确认迁移现有网站运行层到 AWS，沿用现有 Supabase 数据库及 COS 图片读取，保留旧原图兼容路径；不搬图片或数据库，不扩大公开来源，不随网站安装后台同步／维护程序。显式公开构建、受保护 reader 配置、独立端口和上线验收边界见[决定](decisions/2026-11-02-public-self-hosted-runtime.md)。
+
 自托管准备（2026-10-25）：用户同意先离线实现独立构建/启动入口，以运行时PostgreSQL、严格TLS、受限reader及连接池关闭流程验证同一网站。普通开发隔离和Vercel行为保持，初始自托管关闭共享公开缓存，媒体另项接续；不包含真实数据迁移、项目访问、服务器配置或域名发布。见[决定](decisions/2026-10-25-self-hosted-runtime.md)和[入口说明](SELF_HOSTED.md)。
 
 公开资格预检应在数据区域查询，保持逐请求资格、撤回、所属关系及HTML 404／503语义。真实计时已确认，给全球Routing Middleware添加地区配置并未把其SQL执行锁到数据区域；后续采用普通区域函数执行原有资格检查，中间层只请求固定结果，无需查库的列表／关闭栏目仍本地判断。不缓存跨请求正资格，不在失败时回退直连数据库；通信超时、版本不符或异常响应一律503。地区通过vercel.json约束普通函数，不新增已弃用的preferredRegion配置；本机打包不能证明线上执行位置，真实平台构建、实际日志地域和前后耗时仍需另行验收，见[区域资格查询决策](decisions/2026-10-19-regional-route-qualification.md)。Preview的中间层只在项目地区运行，Production才全球部署，Preview地域和响应耗时不能作为Production等价证明；正式性能验收须覆盖Production调度，不切换正式域名的Production候选也须另行获准，见[验收边界](decisions/2026-10-19-preview-production-middleware-boundary.md)。middleware文件名兼容债务仍保留，不再以更名作为地域修复。

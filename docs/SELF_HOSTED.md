@@ -2,6 +2,23 @@
 
 专用入口为同一 Next.js 工程提供常驻 Node 服务。普通开发、检查、构建、启动和 Preview 继续使用[离线隔离](DEVELOPMENT_ISOLATION.md)，Vercel Production 保持现有行为。本入口不安装数据库、不加载线上配置、不迁移数据或切换域名。
 
+## 复用现有云端数据库的公开网站
+
+原入口默认保持不收录、关闭媒体的独立配置。公开网站须显式使用另一份构建和配置，不能在普通启动命令中伪装 Vercel 环境：
+
+```sh
+npm run build:self-hosted -- --public-website
+npm run start:self-hosted -- --config /etc/notionblog/website.json --port 3100
+```
+
+配置使用[公开网站示例](../config/self-hosted-public.example.json)的 `deployment: "public-website"`，仍须为当前运行用户所有、0600、无符号链接及硬链接。它支持现有 Supabase 连接池地址、符合命名规则的轮换后网站只读账号，以及网站已使用的媒体、Notion 读取和社交配置；不接受数据库管理员、同步写入账号、Storage writer 或迁移变量。启动检查按配置中的实际 LOGIN 核对权限，连接池附加的项目后缀不会被当成数据库角色名。不会为迁移自动创建角色或修改权限。
+
+公开构建仍用虚构数据并阻断外部连接，不加载真实配置；产物标记将公开和原独立构建分开，不能互换启动。公开模式不再附加开发浏览器 CSP 或统一 noindex 响应头，搜索引擎收录仍由受保护的 `SITE_INDEXING_ENABLED` 决定。所有栏目、来源与媒体公开边界沿用现有正式配置，不通过该模式增加来源。
+
+公开模式默认关闭共享内容缓存；已安装的 `tagged-v1` 可显式沿用原站点键与签名密钥，并提供固定 `PUBLIC_CACHE_ORIGIN`。单进程部署可将网站内部资格请求固定到回环 Origin，消费者继续使用原有公开 Origin，两者不信任访客 Host。原 Next 数据／页面标签硬失效保持；已安装的 Vercel SDK 在非平台环境无 CDN purge 上下文时直接完成，不因此声称清除了 Vercel 或 Cloudflare 缓存。Cloudflare 动态页面保持不共享缓存；不要擅自启用页面缓存或改动现有消费者调度。验收需验证签名清理接口、内容读取与媒体；不在部署中制造数据发布或撤回。Node 堆上限为768 MiB，Linux 原生分配器 arena 上限为2；这不等于整个进程的内存上限。[systemd 示例](../deploy/self-hosted/notionblog.service)另给出整组进程的 CPU/内存限制，须根据目标机实测调整。
+
+网站只监听回环端口，通过 HTTPS 入口对外提供服务。[Nginx 示例](../deploy/self-hosted/nginx.conf.example)将网站放在8443，保留现有443服务；Cloudflare 使用 Full (strict) 和只匹配网站域名的 Origin Rule，将源站目标端口覆盖为8443，安全组只允许 Cloudflare 当前网段访问该端口。不要覆盖已有服务或开放 Node 回环端口。构建必须在目标操作系统/架构对应的 Linux 环境完成，不能携带 Mac 的原生依赖。安装、扩容、DNS、真实连接及正式发布仍依照用户对该次部署的授权执行。
+
 ## 构建与配置
 
 ```sh
