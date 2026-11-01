@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "deployment": "public-website",
+  "environment": {
+    "DATABASE_READER_URL": "postgresql://nb_website_reader.abcdefghijklmnopqrst:replace-me@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres",
+    "DATABASE_TLS": "verify",
+    "DATABASE_CA_CERT": "Replace with the PEM CA certificate for the database hostname",
+    "SITE_URL": "https://blog.example.invalid",
+    "SITE_INDEXING_ENABLED": "false",
+    "SITE_CONFIG_JSON": "{}",
+    "CONTENT_FEATURES_JSON": "{}",
+    "MEDIA_PROVIDER": "storage",
+    "MEDIA_THUMBNAILS": "enabled",
+    "STORAGE_URL": "https://abcdefghijklmnopqrst.supabase.co",
+    "STORAGE_BUCKET": "replace-with-existing-private-bucket",
+    "STORAGE_API_KEY": "replace-me",
+    "STORAGE_READER_EMAIL": "reader@example.invalid",
+    "STORAGE_READER_PASSWORD": "replace-me",
+    "STORAGE_READER_USER_ID": "00000000-0000-4000-8000-000000000001"
+  }
+}

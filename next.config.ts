@@ -19,7 +19,9 @@ const config: NextConfig = {
 
 export default function nextConfig(phase: string): NextConfig {
   const mode = configureExecutionEnvironment(process.env, phase);
-  const publicCaching = mode === 'production' && process.env.PUBLIC_CONTENT_CACHE === 'tagged-v1';
+  const publicWebsite = mode === 'production' || mode === 'self-hosted-public' || mode === 'self-hosted-public-build';
+  const publicCaching = mode === 'production' && process.env.PUBLIC_CONTENT_CACHE === 'tagged-v1' ||
+    mode === 'self-hosted-public' || mode === 'self-hosted-public-build';
   return { ...config, ...(publicCaching ? {
     // A hard one-day ISR bound, rather than the default long SWR period.
     expireTime: 86400,
@@ -41,8 +43,8 @@ export default function nextConfig(phase: string): NextConfig {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'Content-Security-Policy', value: mode === 'production' ? "frame-ancestors 'self'" : isolatedBrowserPolicy },
-          ...(mode === 'production' ? [] : [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]),
+          { key: 'Content-Security-Policy', value: publicWebsite ? "frame-ancestors 'self'" : isolatedBrowserPolicy },
+          ...(publicWebsite ? [] : [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]),
         ] },
         // Keep every media response, including redirects and errors, at its existing stricter policy.
         { source: '/media/:path*', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },

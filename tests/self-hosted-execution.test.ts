@@ -77,3 +77,42 @@ test('Preview and CI reject the self-hosted bootstrap before opening a profile; 
     assert.throws(() => files.buildMarker(dir), /SELF_HOSTED_COMPILED_ENV/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('public headers require the dedicated public build and cannot be activated by inherited environment flags', async () => {
+  const code = `const {default:c}=await import(${JSON.stringify(config)});const r=c('phase-production-build');const h=await r.headers();let blocked=false;try{await import('node:net').then(n=>n.connect(443,'fixture.invalid'))}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}console.log(JSON.stringify({provider:process.env.CONTENT_PROVIDER,reader:!!process.env.DATABASE_READER_URL,compiled:r.env?.CONTENT_PROVIDER??null,noindex:h[0].headers.some(x=>x.key==='X-Robots-Tag'),blocked}));`;
+  const explicit = await execute(process.execPath, ['--require', bootstrap, '--input-type=module', '-e', code], { cwd: root,
+    env: environment({ NB_SELF_HOST_PHASE: 'build', NB_SELF_HOST_ROOT: root, NB_SELF_HOST_PUBLIC_BUILD: '1', DATABASE_READER_URL: 'must-not-load' }) });
+  assert.deepEqual(JSON.parse(explicit.stdout), { provider: 'mock', reader: false, compiled: null, noindex: false, blocked: true });
+  // Only inspect configuration here; an ordinary process must never attempt a network connection.
+  const ordinary = await execute(process.execPath, ['--input-type=module', '-e', `const {default:c}=await import(${JSON.stringify(config)});const r=c('phase-production-build');console.log(JSON.stringify({provider:process.env.CONTENT_PROVIDER,noindex:(await r.headers())[0].headers.some(x=>x.key==='X-Robots-Tag')}));`],
+    { cwd: root, env: environment({ NB_SELF_HOST_PUBLIC_BUILD: '1', SELF_HOSTED_DEPLOYMENT: 'public-website' }) });
+  assert.deepEqual(JSON.parse(ordinary.stdout), { provider: 'mock', noindex: true });
+});
+
+test('public runtime requires a matching public artifact and reasserts the protected cloud profile', async () => {
+  const dir = await fixture();
+  try {
+    await writeFile(join(dir, 'reader.json'), JSON.stringify({ version: 1, deployment: 'public-website', environment: {
+      DATABASE_READER_URL: 'postgresql://nb_website_reader:fixture@localhost/example',
+      DATABASE_CA_CERT: '-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----',
+      SITE_URL: 'https://blog.example.invalid', SITE_INDEXING_ENABLED: 'true',
+    } }), { mode: 0o600 });
+    const args = ['--require', bootstrap, '--input-type=module', '-e', `const {configureExecutionEnvironment:c}=await import(${JSON.stringify(execution)});console.log(JSON.stringify({mode:c(process.env),cache:process.env.PUBLIC_CONTENT_CACHE,indexing:process.env.SITE_INDEXING_ENABLED,vercel:!!process.env.VERCEL}));`];
+    const env = environment({ NB_SELF_HOST_ROOT: dir, NB_SELF_HOST_PHASE: 'runtime', NB_SELF_HOST_PROFILE: join(dir, 'reader.json') });
+    await assert.rejects(execute(process.execPath, args, { cwd: dir, env }), /SELF_HOSTED_BUILD_MISMATCH/);
+    await writeFile(join(dir, '.next/notionblog-self-hosted.json'), JSON.stringify(files.buildMarker(dir, true)));
+    files.verifyBuild(dir, true);
+    assert.throws(() => files.verifyBuild(dir, false), /SELF_HOSTED_BUILD_MISMATCH/);
+    const result = await execute(process.execPath, args, { cwd: dir, env });
+    assert.deepEqual(JSON.parse(result.stdout), { mode: 'self-hosted-public', cache: 'disabled', indexing: 'true', vercel: false });
+    // Exercise the actual server's context gate as well as Next's config gate.
+    // The synthetic reader must fail closed before the server can listen.
+    const server = fileURLToPath(new URL('../scripts/self-hosted/server.mjs', import.meta.url));
+    await assert.rejects(execute(process.execPath, ['--require', bootstrap, server], { cwd: dir,
+      env: { ...env, HOSTNAME: '127.0.0.1', PORT: '3100' } }), error => {
+      assert.match((error as { stderr: string }).stderr, /SELF_HOSTED_START_FAILED/);
+      assert.doesNotMatch((error as { stderr: string }).stderr, /SELF_HOSTED_CONTEXT_REQUIRED/);
+      return true;
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

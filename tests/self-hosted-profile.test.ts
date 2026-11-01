@@ -4,6 +4,8 @@ import { mkdtemp, writeFile, chmod, symlink, link, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import files from '../scripts/self-hosted/profile.cjs';
+import { socialCollectionPlaybackEnabled } from '../src/server/social/collection-members.ts';
+import { collectionDayAdditionsEnabled } from '../src/server/social/collection-day-additions.ts';
 
 const certificate = '-----BEGIN CERTIFICATE-----\nsynthetic-not-a-live-ca\n-----END CERTIFICATE-----\n';
 function profile(extra = {}) {
@@ -50,5 +52,41 @@ test('bad identity, TLS overrides, provider/cache/writer credentials and nonloop
     }
     await writeFile(path, '{"fixture":invalid');
     assert.throws(() => files.readProfile(path), error => { assert.equal((error as Error).message, 'SELF_HOSTED_PROFILE_INVALID'); return true; });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('public website profile accepts the rotated reader through the Supabase pooler without enabling shared cache or writer access', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'public-host-profile-')), path = join(root, 'reader.json');
+  const publicProfile = (extra = {}) => ({ ...profile({
+    DATABASE_READER_URL: 'postgresql://nb_website_reader_r20260101.abcdefghijklmnopqrst:example@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres',
+    SITE_URL: 'https://blog.example.invalid', SITE_INDEXING_ENABLED: 'true',
+    MEDIA_PROVIDER: 'notion', MEDIA_THUMBNAILS: 'enabled', NOTION_TOKEN: 'fixture',
+    ...extra,
+  }), deployment: 'public-website' });
+  try {
+    await writeFile(path, JSON.stringify(publicProfile()), { mode: 0o600 });
+    const env = files.readProfile(path);
+    assert.equal(env.SELF_HOSTED_DEPLOYMENT, 'public-website');
+    assert.equal(env.SITE_INDEXING_ENABLED, 'true'); assert.equal(env.MEDIA_THUMBNAILS, 'enabled');
+    assert.equal(env.PUBLIC_CONTENT_CACHE, 'disabled'); assert.equal(env.DATABASE_READER_ISOLATION, 'enforce');
+    assert.equal(socialCollectionPlaybackEnabled(env.SOCIAL_COLLECTION_PLAYBACK), false);
+    assert.equal(collectionDayAdditionsEnabled(env.SOCIAL_COLLECTION_DAY_ADDITIONS), false);
+    assert.equal(files.readerLogin(env.DATABASE_READER_URL, 'nb_website_reader', true), 'nb_website_reader_r20260101');
+    assert.throws(() => files.readProfile(path, true), /SELF_HOSTED_PROFILE_INVALID/);
+    await writeFile(path, JSON.stringify(publicProfile({ PUBLIC_CONTENT_CACHE: 'tagged-v1',
+      PUBLIC_CACHE_SITE_KEY: 'example-site', CACHE_PURGE_SECRET: 'a'.repeat(64),
+      PUBLIC_CACHE_ORIGIN: 'http://127.0.0.1:3100' })), { mode: 0o600 });
+    assert.equal(files.readProfile(path).PUBLIC_CONTENT_CACHE, 'tagged-v1');
+    for (const extra of [
+      { DATABASE_READER_URL: 'postgresql://postgres.abcdefghijklmnopqrst:example@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres' },
+      { DATABASE_READER_URL: 'postgresql://nb_website_reader_r20260101.abcdefghijklmnopqrst:fixture@other.example.invalid:5432/postgres' },
+      { DATABASE_READER_URL: 'postgresql://nb_website_reader_r20260101.abcdefghijklmnopqrst:example@aws-0-ap-northeast-1.pooler.supabase.com:1234/postgres' },
+      { DATABASE_TLS: 'disable' }, { DATABASE_MIGRATION_URL: 'fixture' }, { STORAGE_WRITER_PASSWORD: 'fixture' },
+      { PUBLIC_CONTENT_CACHE: 'tagged-v1' }, { SITE_URL: 'http://localhost:3100' },
+      { SELF_HOSTED_MEDIA_MODE: 'display-only', SELF_HOSTED_MEDIA_ROOT: '/run/notionblog-media' },
+    ]) {
+      await writeFile(path, JSON.stringify(publicProfile(extra)), { mode: 0o600 });
+      assert.throws(() => files.readProfile(path), /SELF_HOSTED_PROFILE_INVALID/);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
