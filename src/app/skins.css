@@ -246,6 +246,8 @@
   [data-skin="y2k"] .site-header__inner:has(.site-nav__list > li:nth-child(6 of :not(.site-nav__wide))) .site-nav { order: 3; flex-basis: 100%; margin: -6px 0 6px -9px; }
 }
 @media (max-width: 540px) { [data-skin="y2k"] .site-nav__list > li > a, [data-skin="y2k"] .site-nav__more > button { padding: 0 11px; } }
+/* All seven sections fit a 376–403 phone only at 9 apart (F53). */
+@media (min-width: 361px) and (max-width: 403px) { [data-skin="y2k"] .site-nav__list > li > a, [data-skin="y2k"] .site-nav__more > button { padding: 0 9px; } }
 @media (max-width: 360px) {
   [data-skin="y2k"] .site-nav__list { gap: 4px; }
   [data-skin="y2k"] .site-nav__list > li > a, [data-skin="y2k"] .site-nav__more > button { padding: 0 8px; }
