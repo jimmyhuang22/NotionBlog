@@ -205,6 +205,8 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
 }
 @media (min-width: 820px) and (max-width: 1023px) {
   :root:not([data-skin]) .site-nav__list > li > a, [data-skin="island"] .site-nav__list > li > a { padding: 0 9px; }
+  /* With its heavier name in the real font, the island at 9 apart wrapped the sections to a second row at 820–821 (an iPad Air upright); 8 leaves 44px beside the name (2026-11-01). */
+  [data-skin="island"] .site-nav__list > li > a { padding: 0 8px; }
 }
 @media (min-width: 900px) {
   [data-skin="y2k"] .site-nav__wide { display: list-item; }
