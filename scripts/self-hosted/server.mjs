@@ -5,7 +5,7 @@ import { verifySelfHostedReaders } from './reader.ts';
 import { drainSelfHostedServer } from './lifecycle.mjs';
 import { selfHostedDisplayStore } from '../../src/server/self-hosted-media/runtime.ts';
 
-if (context.configureSelfHostedEnvironment(process.env) !== 'self-hosted') throw Error('SELF_HOSTED_CONTEXT_REQUIRED');
+if (!['self-hosted', 'self-hosted-public'].includes(context.configureSelfHostedEnvironment(process.env))) throw Error('SELF_HOSTED_CONTEXT_REQUIRED');
 let app, server, stopping;
 try {
   await verifySelfHostedReaders(process.env);
@@ -22,7 +22,7 @@ try {
   });
   server.on('upgrade', app.getUpgradeHandler());
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(Number(process.env.PORT), process.env.HOSTNAME, resolve); });
-  console.log('self_hosted_ready', JSON.stringify({ host: process.env.HOSTNAME, port: Number(process.env.PORT), indexing: false }));
+  console.log('self_hosted_ready', JSON.stringify({ host: process.env.HOSTNAME, port: Number(process.env.PORT), indexing: process.env.SITE_INDEXING_ENABLED === 'true' }));
   const stop = () => {
     if (stopping) return;
     const timer = setTimeout(() => { server.closeAllConnections(); console.error('SELF_HOSTED_DRAIN_TIMEOUT'); process.exit(1); }, 30000);

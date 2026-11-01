@@ -8,12 +8,13 @@ if (root !== process.cwd() || !['build', 'runtime'].includes(phase)) throw Error
 if (phase === 'build' || process.env.NB_SELF_HOST_LOCAL_ONLY === '1') require('../development/offline-network.cjs').installOfflineNetworkGuard();
 let env;
 if (phase === 'runtime') {
-  verifyBuild(root);
   env = readProfile(process.env.NB_SELF_HOST_PROFILE, process.env.NB_SELF_HOST_LOCAL_ONLY === '1');
+  verifyBuild(root, env.SELF_HOSTED_DEPLOYMENT === 'public-website');
 } else {
   env = { CONTENT_PROVIDER: 'mock', SOCIAL_PROVIDER: 'mock', CONTENT_FEATURES_JSON: '{}', SITE_CONFIG_JSON: '{}',
     SITE_URL: 'http://127.0.0.1:3000', SITE_INDEXING_ENABLED: 'false', PUBLIC_CONTENT_CACHE: 'disabled',
     MEDIA_THUMBNAILS: 'disabled', SOCIAL_MEDIA_ENABLED: 'false', NEXT_TELEMETRY_DISABLED: '1',
     NOTIONBLOG_DEVELOPMENT_MODE: 'offline' };
+  if (process.env.NB_SELF_HOST_PUBLIC_BUILD === '1') env.SELF_HOSTED_DEPLOYMENT = 'public-website';
 }
 install(phase, root, env);

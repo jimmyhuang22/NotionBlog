@@ -1,0 +1,28 @@
+[Unit]
+Description=NotionBlog website
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=notionblog
+Group=notionblog
+WorkingDirectory=/opt/notionblog/current
+ExecStart=/opt/notionblog-node/bin/node scripts/self-hosted/start.mjs --config /etc/notionblog/website.json --port 3100
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/notionblog/current/.next
+MemoryHigh=1200M
+MemoryMax=1400M
+CPUQuota=150%
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target
