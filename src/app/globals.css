@@ -189,9 +189,9 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
 /* "更多": the hobby sections, one click away. */
 .site-nav__more { position: relative; }
 /*
- * The folded sections a second time, as plain entries of the row. Hidden wherever the row is short;
- * from 820 up (900 in y2k, see below) every section fits beside the name and the tools, so they show and
- * the menu does not. Rules that count the row's entries count only the ones that are not these.
+ * The folded sections a second time, as plain entries of the row. Hidden wherever the row is short:
+ * from 820 up (900 in y2k) every section fits beside the name and the tools, and on most phones (F53) every
+ * section fits the row of its own, so they show and the menu does not. Rules that count the row's entries count only the ones that are not these.
  */
 .site-nav__wide { display: none; }
 /*
@@ -207,6 +207,25 @@ h1, h2, h3, h4, h5, h6, p { overflow-wrap: anywhere; }
   :root:not([data-skin]) .site-nav__list > li > a, [data-skin="island"] .site-nav__list > li > a { padding: 0 9px; }
 }
 @media (min-width: 900px) {
+  [data-skin="y2k"] .site-nav__wide { display: list-item; }
+  [data-skin="y2k"] .site-nav__more { display: none; }
+}
+/*
+ * Phones (F53, 2026-11-01): below 761 the sections have a row of their own, and measured on the live site with the
+ * seven sections (current first or last, light and dark), all of them fit with the last one ending at least 9px from
+ * the screen's edge, the same as the first, from 320 in apple, 326 in ink and 328 in the island; y2k from 376 with
+ * its narrower padding there (skins.css). The narrowest phones still fold. Measured for seven sections: with more
+ * open, measure again. 761–819 keep folding: there the sections share the row with the name (R-03 above).
+ */
+@media (max-width: 760px) {
+  [data-skin="apple"] .site-nav__wide { display: list-item; }
+  [data-skin="apple"] .site-nav__more { display: none; }
+}
+@media (min-width: 330px) and (max-width: 760px) {
+  :is(:root:not([data-skin]), [data-skin="island"]) .site-nav__wide { display: list-item; }
+  :is(:root:not([data-skin]), [data-skin="island"]) .site-nav__more { display: none; }
+}
+@media (min-width: 376px) and (max-width: 760px) {
   [data-skin="y2k"] .site-nav__wide { display: list-item; }
   [data-skin="y2k"] .site-nav__more { display: none; }
 }
