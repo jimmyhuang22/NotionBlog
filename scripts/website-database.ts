@@ -1,5 +1,5 @@
 import { closeOwnerPool } from "./cleanup.ts";
-import { createDatabasePool } from "../src/server/database/connection.ts";
+import { createOwnerArchivePool, configureOwnerArchive, ownerArchiveSql, startOwnerArchiveDeadline } from "./owner-archive.ts";
 import { exportWebsiteArchive, restoreWebsiteArchive } from "../src/server/database/website-archive.ts";
 import { createWebsiteArchiveStore } from "../src/server/database/website-archive-files.ts";
 import { createLocalMediaStorage } from "../src/server/database/local-storage.ts";
@@ -20,11 +20,12 @@ async function main() {
     console.log(JSON.stringify({ verified: true, mediaIncluded: bundle!.mediaIncluded, mediaFiles: bundle!.mediaFiles })); return;
   }
   const url = process.env.DATABASE_MIGRATION_URL;
-  const pool = createDatabasePool(url, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
+  const pool = createOwnerArchivePool(command as "export" | "restore", url, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
   let client;
   let failed = false;
   try {
     client = await pool.connect();
+    await configureOwnerArchive(client, command as "export" | "restore");
     if (command === "export") {
       const archive = await exportWebsiteArchive(client);
       let stored: ReturnType<typeof createSupabaseStorage> | undefined;
@@ -38,12 +39,15 @@ async function main() {
       });
       console.log(JSON.stringify({ exported: true, ...await files.save(path, archive, storage) }));
     } else {
-      await restoreWebsiteArchive(client, bundle!.archive);
+      await restoreWebsiteArchive(ownerArchiveSql(client), bundle!.archive);
       console.log(JSON.stringify({ restored: true, publicationEnabled: false, objectUploads: 0, mediaBackupVerified: bundle!.mediaIncluded }));
     }
   } catch (error) { failed = true; throw error; }
   finally { await closeOwnerPool(pool, client, failed); }
 }
-main().catch(() => {
+const deadlineOperation = process.argv[2];
+const finish = deadlineOperation === "export" || deadlineOperation === "restore" ? startOwnerArchiveDeadline(deadlineOperation) : () => {};
+main().catch(error => {
+  if (error?.code === "OWNER_ARCHIVE_OUTCOME_UNKNOWN") { console.error("OWNER_ARCHIVE_OUTCOME_UNKNOWN"); process.exitCode = 2; return; }
   console.error("Website backup operation failed. Check the private files, version, empty target and operator permissions; provider details are withheld."); process.exitCode = 1;
-});
+}).finally(finish);

@@ -1,5 +1,5 @@
 import { closeOwnerPool } from "./cleanup.ts";
-import { createDatabasePool } from "../src/server/database/connection.ts";
+import { createOwnerArchivePool, configureOwnerArchive, ownerArchiveSql, startOwnerArchiveDeadline } from "./owner-archive.ts";
 import { exportPublicationArchive, restorePublicationArchive, createPublicationArchiveStore, validatePublicationArchive, archivedPublicationObjects } from "../src/server/database/publication-archive.ts";
 import { createWebsiteArchiveMediaReader } from "../src/server/database/website-archive-media.ts";
 import { createLocalMediaStorage } from "../src/server/database/local-storage.ts";
@@ -14,13 +14,14 @@ async function main() {
       flag !== undefined && !(command === "export" && flag === "--media")) throw new Error("Invalid publication archive command.");
   const files = createPublicationArchiveStore(), bundle = command === "export" ? undefined : await files.load(path);
   if (command === "verify") { console.log(JSON.stringify({verified: true, mediaIncluded: bundle!.mediaIncluded, mediaFiles: bundle!.mediaFiles})); return; }
-  const url = process.env.DATABASE_MIGRATION_URL, pool = createDatabasePool(url, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
+  const url = process.env.DATABASE_MIGRATION_URL, pool = createOwnerArchivePool(command as "export" | "restore", url, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
   let client;
   let failed = false;
   try {
     client = await pool.connect();
+    await configureOwnerArchive(client, command as "export" | "restore");
     if (command === "restore") {
-      await restorePublicationArchive(client, bundle!.archive);
+      await restorePublicationArchive(ownerArchiveSql(client), bundle!.archive);
       console.log(JSON.stringify({restored: true, publicationEnabled: false, operationHistoryRestored: true, objectUploads: 0}));
       return;
     }
@@ -42,4 +43,9 @@ async function main() {
   } catch (error) { failed = true; throw error; }
   finally { await closeOwnerPool(pool, client, failed); }
 }
-main().catch(() => {console.error("Publication backup failed. Check private files, complete migrations and an empty owner-only target; provider details are withheld."); process.exitCode = 1;});
+const deadlineOperation = process.argv[2];
+const finish = deadlineOperation === "export" || deadlineOperation === "restore" ? startOwnerArchiveDeadline(deadlineOperation) : () => {};
+main().catch(error => {
+  if (error?.code === "OWNER_ARCHIVE_OUTCOME_UNKNOWN") { console.error("OWNER_ARCHIVE_OUTCOME_UNKNOWN"); process.exitCode = 2; return; }
+  console.error("Publication backup failed. Check private files, complete migrations and an empty owner-only target; provider details are withheld."); process.exitCode = 1;
+}).finally(finish);

@@ -59,6 +59,8 @@ AWS 前置 Cloudflare＋Nginx，先核对 Nginx 只信任 Cloudflare 网段并�
 
 ## 4. M08：已发现事务池参数不一致
 
+11-02 后续：用户已批准离线实现，源码和本机验证见[本项进度](progress/2026-11-02-m08-reader-deadlines.md)及[期限说明](DATABASE_OPERATION_DEADLINES.md)。下表保留修复前的线上观测；本轮没有发布或改线上设置。
+
 以下为本次 AWS 两条实际连接在同一个 READ ONLY 事务里的元数据，不是负载／取消实验：
 
 | 项 | 网站 | 社交 |
@@ -80,7 +82,7 @@ AWS 前置 Cloudflare＋Nginx，先核对 Nginx 只信任 Cloudflare 网段并�
 - 建议导出采用已在 G1 实现并验证的 300 秒／400 MB 计数方式，作为日常导出另行变更的参考。本轮只读现役脚本及回执，没有安装该改动、导出或下载数据库。
 - JSON 运维导出／恢复仍复用 [`createDatabasePool`](../src/server/database/connection.ts)，不应通过修改其全局 15／20 秒影响网站。建议专用 owner 运维配置及端到端截止；恢复先提议 30 分钟硬截止，锁等待沿用 5 秒，单语句上限须按相同数据规模的本机恢复计时确定。30 分钟只是待验证提案，没有本次恢复耗时实测，不能标为核验通过。结果不明时停止并分类，不自动重放写入。
 
-资料：[Supabase 连接方式](https://supabase.com/docs/guides/database/connecting-to-postgres)、[超时](https://supabase.com/docs/guides/database/postgres/timeouts)、[node-postgres Client 参数](https://node-postgres.com/apis/client)。M08 仍是“核验部分完成，修复／恢复期限待交付”。
+资料：[Supabase 连接方式](https://supabase.com/docs/guides/database/connecting-to-postgres)、[超时](https://supabase.com/docs/guides/database/postgres/timeouts)、[node-postgres Client 参数](https://node-postgres.com/apis/client)。上述为初评依据；后续源码与离线修复已交付，真实采用和恢复规模核验仍待完成，见本节开头的交付链接。
 
 ## 5. M04：错误和响应头收敛方案
 

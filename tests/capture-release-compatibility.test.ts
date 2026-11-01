@@ -147,7 +147,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
         ? "46b6e467e40d8155f13327731029f68fe7cbff850442f4dd70b4ca368ee4dbc1"
       : pair.path === "src/server/database/runtime.ts"
-        ? "e98d2b78346d9ef89b4b530e5be45fc70260b61592813a1be32d850d313e0bc8"
+        ? "8d38f8296d2571cce31c91046c44d861d16e1692f4425235fe9d0f99c7dfdf51"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "3d7a448f5f1603ef1a66aab74975c043f06a78be83ef390cad603b128a3d44eb"
         : null;
@@ -168,6 +168,8 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     (v: typeof consumer) => { v.files.push({ path: "scripts/website-sync/worker.ts", sha256: "0".repeat(64) }); },
     (v: typeof consumer) => { v.files.push({ path: "src/server/notion/website-repository.ts", sha256: "0".repeat(64) }); },
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/shared-reader-pool.ts", sha256: "0".repeat(64) }); },
+    (v: typeof consumer) => { v.files.push({ path: "src/server/database/connection.ts", sha256: "0".repeat(64) }); },
+    (v: typeof consumer) => { v.files.push({ path: "src/server/database/request-query.ts", sha256: "0".repeat(64) }); },
   ]) {
     const changed = structuredClone(consumer); mutate(changed);
     assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });

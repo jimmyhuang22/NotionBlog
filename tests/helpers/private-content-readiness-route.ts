@@ -16,16 +16,18 @@ try {
   delete process.env.SITE_CONFIG;
   globalThis.fetch = async () => { throw Error("No Source or object access is permitted"); };
   const port = f.open({ connectionString: f.options.database.readerUrl });
-  let queries = 0;
+  let queries = 0, controls = 0;
   Pool.prototype.query = (async (sql: string, values?: unknown[]) => { queries++; return port.query(sql, values); }) as typeof Pool.prototype.query;
-  installMediaRouteCheckout();
+  installMediaRouteCheckout(() => { controls++; });
   const { POST } = await import("../../src/app/api/internal/content-readiness/route.ts");
   const target = `https://example.test${READINESS_PATH}`, sample = { id: record.detail.item.id, slug: record.detail.item.slug };
   const transport: typeof fetch = (input, init) => POST(new Request(input, init));
   await verifyRetentionReadiness(target, process.env.CONTENT_READINESS_SECRET, f.artifact.fullRunId, sample, transport);
   const coldQueries = queries;
+  const coldControls = controls;
   await verifyRetentionReadiness(target, process.env.CONTENT_READINESS_SECRET, f.artifact.fullRunId, sample, transport);
   assert.ok(coldQueries <= 8); assert.ok(queries - coldQueries <= 8);
+  assert.equal(controls, queries * 3); assert.ok(coldQueries + coldControls <= 32); assert.ok(queries - coldQueries + controls - coldControls <= 32);
   assert.equal(f.counts.sourceCalls, 0);
-  console.log(JSON.stringify({ passed: true, queries, coldQueries, probes: 2 }));
+  console.log(JSON.stringify({ passed: true, queries: queries + controls, contentQueries: queries, controls, coldQueries: coldQueries + coldControls, probes: 2 }));
 } finally { await f.close(); }

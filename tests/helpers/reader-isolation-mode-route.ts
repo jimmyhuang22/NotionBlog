@@ -1,3 +1,4 @@
+import { readerControlResponse } from "./reader-controls.ts";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
@@ -21,6 +22,7 @@ try {
   Pool.prototype.query=(()=>{throw Error("Budgeted checkout is required");}) as typeof Pool.prototype.query;
   Pool.prototype.connect=function(callback:(error:Error|null,client:PoolClient)=>void){connects++;
     const client=Object.assign(new EventEmitter(),{query:async(config:QueryConfig)=>{
+      const control = readerControlResponse(config.text); if (control) return control;
       if(config.text===WEBSITE_READER_ISOLATION_SQL){inspections++;return{rows:[{isolated:false}]};}
       business++;assert.equal(config.text,"SELECT nb_api.read_media($1) AS result");
       if(broken)throw Error("private driver details");return{rows:[{result:{schemaDigest:SYNC_SCHEMA_DIGEST,media:missing?null:media}}]};
