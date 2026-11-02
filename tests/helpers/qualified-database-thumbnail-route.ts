@@ -1,3 +1,4 @@
+import { thumbnailBatchSql } from "../../src/server/database/thumbnail-query.ts";
 import { installMediaRouteCheckout } from "./media-route-pool.ts";
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -13,20 +14,29 @@ const media={assetId:asset,ownerPageId:owner,sha256:hash(original),objectKey:'sh
 const thumbnail={assetId:mediaIdentity(owner,'thumbnail:400:'+asset,hash(bytes)),ownerPageId:owner,sha256:hash(bytes),objectKey:'sha256/'+hash(bytes),byteSize:bytes.length,mime:'image/webp',width:400,height:300};
 const projection={thumbnailCapability:'notionblog-thumbnail-index-v1',schemaDigest:WEBSITE_SCHEMA_DIGEST,version:'v2',runId:'11111111-1111-4111-8111-111111111111',source:{media,binding:{assetId:asset,ownerPageId:owner,sha256:media.sha256,locator:{kind:'cover'},delivery:'notion',sourceFingerprint:'a'.repeat(64)}},thumbnail};
 let sourceRequests=0,objectRequests=0,queries=0,denied=false,withdrawDuringRead=false;
+const conditional=process.argv.includes("conditional");
 const query=Pool.prototype.query,fetcher=globalThis.fetch;
 const restoreCheckout = installMediaRouteCheckout();
 try{
  Object.assign(process.env,{DATABASE_READER_ISOLATION: "enforce", CONTENT_PROVIDER:'database',DATABASE_CONTENT_VERSION:'2',DATABASE_PUBLICATION_MODE:'qualified',DATABASE_READER_URL:'postgres://fixture:fixture@localhost/db',DATABASE_TLS:'disable',MEDIA_PROVIDER:'notion',MEDIA_THUMBNAILS:'enabled',MEDIA_THUMBNAIL_QUALIFICATION:'database',THUMBNAIL_STORAGE_PROVIDER:'cos',STORAGE_PROVIDER:'supabase',COS_BUCKET:'fiction-media-1250000000',COS_REGION:'ap-shanghai',COS_PREFIX:'notionblog',COS_SECRET_ID:'fixtureSecretId123',COS_SECRET_KEY:'fixtureSecretKeyForCos123',NOTION_TOKEN:'offline-source-token',NOTION_SOURCES_JSON:JSON.stringify({schemaVersion:2,sources:[{key:'statuses',kind:'status',enabled:true,dataSourceId:owner,fields:{title:'Name',recordedAt:'Date'},publication:{mode:'all',allowlistPageIds:[]}}]})});
  for(const key of ['NOTION_TOKEN','NOTION_SOURCES_JSON','NOTION_SOURCES_CONFIG','DATABASE_MEDIA_DIRECTORY','COS_READ_TRANSPORT','COS_SECURITY_TOKEN','COS_CREDENTIALS_EXPIRES_AT'])delete process.env[key];
- Pool.prototype.query=(async(sql:string)=>{queries++;if(sql===WEBSITE_READER_ISOLATION_SQL)return {rows:[{isolated:true}]};assert.equal(sql,'SELECT nb_thumbnail_api.read_media($1,$2,$3) AS result');return {rows:[{result:denied?null:projection}]};}) as typeof Pool.prototype.query;
+ if(conditional)Object.assign(process.env,{PUBLIC_CONTENT_CACHE:"tagged-v1",PUBLIC_CACHE_SITE_KEY:"fixture-site",CACHE_PURGE_SECRET:"a".repeat(64),PUBLIC_CACHE_ORIGIN:"https://example.test",VERCEL:"0"});
+ Pool.prototype.query=(async(sql:string,input?:unknown[])=>{queries++;if(sql===WEBSITE_READER_ISOLATION_SQL)return {rows:[{isolated:true}]};if(sql===thumbnailBatchSql){const wanted=JSON.parse(input![0] as string) as {request_id:number;asset_id:string;width:number}[];assert.ok(wanted.every(row=>row.asset_id===asset&&row.width===400));return {rows:wanted.map(row=>({request_id:row.request_id,result:denied?null:projection}))};}assert.equal(sql,'SELECT nb_thumbnail_api.read_media($1,$2,$3) AS result');return {rows:[{result:denied?null:projection}]};}) as typeof Pool.prototype.query;
  globalThis.fetch=async input=>{const u=new URL(String(input));if(u.hostname!=='fiction-media-1250000000.cos.ap-shanghai.myqcloud.com'){sourceRequests++;throw Error('Notion must not be requested');}objectRequests++;if(withdrawDuringRead)denied=true;return new Response(bytes);};
  const {GET}=await import('../../src/app/media/v2/[assetId]/route.ts');
- const call=()=>GET(new Request('https://example.test/media/v2/'+asset+'?thumbnail=400'),{params:Promise.resolve({assetId:asset})});
+ const call=(etag?:string)=>GET(new Request('https://example.test/media/v2/'+asset+'?thumbnail=400',{headers:etag?{'If-None-Match':etag}:{}}),{params:Promise.resolve({assetId:asset})});
  const good=await call();assert.equal(good.status,200);assert.deepEqual(Buffer.from(await good.arrayBuffer()),bytes);assert.equal(queries,3);assert.equal(sourceRequests,0);
  const cached=await call();assert.equal(cached.status,200);assert.deepEqual(Buffer.from(await cached.arrayBuffer()),bytes);assert.equal(queries,5);assert.equal(objectRequests,1);assert.match(cached.headers.get('Server-Timing')!,/desc="hit"/);
+ if(conditional){
+  const etag=good.headers.get("ETag")!;assert.equal(etag,`"pc1-${hash(bytes)}"`);
+  const before=queries;
+  const validated=await Promise.all(Array.from({length:32},()=>call(etag)));
+  for(const response of validated){assert.equal(response.status,304);assert.equal(response.headers.get("ETag"),etag);assert.equal(response.headers.get("Cache-Control"),"private, no-cache, must-revalidate");assert.equal((await response.arrayBuffer()).byteLength,0);}
+  assert.equal(queries-before,2);assert.equal(objectRequests,1);
+ }
  denied=true;assert.equal((await call()).status,404);assert.equal(objectRequests,1);
  // A new derivative must download again; withdrawal during that transfer still blocks it.
  bytes=Buffer.concat([bytes,Buffer.from([0])]);Object.assign(thumbnail,{sha256:hash(bytes),objectKey:'sha256/'+hash(bytes),byteSize:bytes.length,assetId:mediaIdentity(owner,'thumbnail:400:'+asset,hash(bytes))});
  denied=false;withdrawDuringRead=true;assert.equal((await call()).status,404);assert.equal(objectRequests,2);assert.equal(sourceRequests,0);
- console.log(JSON.stringify({sourceRequests,objectRequests,cacheHitQualified:true,centralWithdrawalBlocked:true,postReadWithdrawalBlocked:true}));
+ console.log(JSON.stringify({sourceRequests,objectRequests,cacheHitQualified:true,centralWithdrawalBlocked:true,postReadWithdrawalBlocked:true,...(conditional?{validators:32,validatorStatements:2,validatorObjectReads:0}:{})}));
 }finally{restoreCheckout(); Pool.prototype.query=query;globalThis.fetch=fetcher;}

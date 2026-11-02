@@ -7,6 +7,7 @@ import { TransientStorageReadError, verifyMediaBytes } from "../database/storage
 import { safeMediaUrl } from "../notion/media.ts";
 import { validateMediaSource, type MediaSourceBinding } from "./notion-source.ts";
 import { readThumbnailBytes, type ThumbnailByteSource } from "./thumbnail-bytes.ts";
+import { matchesIfNoneMatch } from "../public-cache/conditional.ts";
 
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
 
@@ -32,6 +33,8 @@ export function thumbnailQualification(value: string | undefined): "live-notion"
 }
 
 export interface ThumbnailMediaPorts {
+  /** Only supplied by the v2 route when conditional public HTTP mode is active. */
+  ifNoneMatch?: string | null;
   /** Explicit v2 opt-in: source changes propagate with publication, as pages do. */
   qualification?: "live-notion" | "database";
   read(assetId: string, width: ThumbnailWidth): Promise<ThumbnailProjection | null>;
@@ -64,6 +67,24 @@ export async function thumbnailMediaResponse(assetId: string, width: ThumbnailWi
   if (first.source.media.assetId !== assetId) return missing();
   if (first.thumbnail === null) return ports.original();
   if (live && !safeSource(await ports.resolve(first.source.binding), first.source.binding)) return missing();
+  // The qualified descriptor carries the same digest publicHttpResponse hashes from bytes.
+  // A browser validator needs fresh eligibility, not an object download or byte-cache hit.
+  const etag = `"pc1-${first.thumbnail.sha256}"`;
+  if (first.version === "v2" && matchesIfNoneMatch(ports.ifNoneMatch, etag)) {
+    const recheckStarted = performance.now();
+    const current = await ports.read(assetId, width);
+    if (!current || JSON.stringify(current) !== JSON.stringify(first)) return missing();
+    if (live) {
+      if (!safeSource(await ports.resolve(current.source.binding), current.source.binding)) return missing();
+      const final = await ports.read(assetId, width);
+      if (!final || JSON.stringify(final) !== JSON.stringify(current)) return missing();
+    }
+    const response = new Response(null, { status: 304, headers: {
+      ...cacheableMediaHeaders(headers), ETag: etag,
+      "Server-Timing": `thumb_scope;dur=${scopeMs.toFixed(2)}, thumb_recheck;dur=${(performance.now() - recheckStarted).toFixed(2)}`,
+    } });
+    return live ? excludeFromSharedCache(response) : response;
+  }
   let bytes: Uint8Array;
   let byteSource: ThumbnailByteSource;
   const objectStarted = performance.now();

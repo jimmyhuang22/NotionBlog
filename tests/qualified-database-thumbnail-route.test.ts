@@ -19,3 +19,9 @@ test('qualified 1600 body-image route uses the same cache and fresh withdrawal g
  const result=await promisify(execFile)(process.execPath,['--conditions=react-server',fileURLToPath(new URL('./helpers/qualified-course-thumbnail-route.ts',import.meta.url)),'body'],{timeout:60000,maxBuffer:65536});
  assert.deepEqual(JSON.parse(result.stdout),{sourceRequests:0,objectRequests:2,cacheHitQualified:true,centralWithdrawalBlocked:true,postReadWithdrawalBlocked:true});
 });
+
+
+test('active-cache v2 route batches 32 browser validators into two fresh qualifications without object reads',async()=>{
+ const result=await promisify(execFile)(process.execPath,['--conditions=react-server',fileURLToPath(new URL('./helpers/qualified-database-thumbnail-route.ts',import.meta.url)),'conditional'],{timeout:60000,maxBuffer:65536});
+ assert.deepEqual(JSON.parse(result.stdout),{sourceRequests:0,objectRequests:2,cacheHitQualified:true,centralWithdrawalBlocked:true,postReadWithdrawalBlocked:true,validators:32,validatorStatements:2,validatorObjectReads:0});
+});

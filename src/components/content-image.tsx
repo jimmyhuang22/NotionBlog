@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId } from "react";
 import type { ImageAsset } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { useLightbox } from "./lightbox";
+import { useImageFailure } from "./use-image-failure";
 import { useFadeIn } from "./use-fade-in";
 
 type Props = { image: ImageAsset; caption?: string; previewWidth?: 400 | 800 };
@@ -15,17 +16,15 @@ export function ContentImage(props: Props) {
 }
 
 function ContentImagePicture({ image, caption = "", previewWidth }: Props) {
-  const [failed, setFailed] = useState(false);
-  // A preview that cannot be read gives way to src once (the original, or the largest display version); only src failing too is a failure.
-  const [original, setOriginal] = useState(false);
   const lightbox = useLightbox();
   const key = useId();
   const fade = useFadeIn();
   const { src, alt, width, height } = image;
   // Self-hosted display-only: src is already the largest version there is (at most 1600 wide); nothing beyond it exists.
   const maxWidth = image.delivery?.mode === "display-only" ? image.delivery.maxWidth : undefined;
-  const displaySrc = previewWidth === undefined || original ? src : imagePreviewSrc(image, previewWidth);
-  const preview = displaySrc === src ? undefined : displaySrc;
+  const initialPreview = previewWidth === undefined ? src : imagePreviewSrc(image, previewWidth);
+  const { src: displaySrc, original, failed, lost } = useImageFailure(initialPreview, src, fade);
+  const preview = original || initialPreview === src ? undefined : initialPreview;
   // The 1600 version is only worth it between a smaller preview on the page and the original; display-only has no original past src.
   const larger = preview && maxWidth === undefined ? imagePreviewSrc(image, 1600) : src;
   const large = larger === src || larger === preview ? undefined : larger;
@@ -35,23 +34,8 @@ function ContentImagePicture({ image, caption = "", previewWidth }: Props) {
     return lightbox.register({ key, src, alt, caption, preview, large, width, height, ...(maxWidth === undefined ? {} : { maxWidth }) });
   }, [lightbox, failed, key, src, alt, caption, preview, large, width, height, maxWidth]);
 
-  // A picture can fail before the page is interactive, when no error event reaches here (as in cover-image.tsx):
-  // without this, the browser's broken-image mark would stay, with no original tried and no notice shown.
-  useEffect(() => {
-    const img = fade.current;
-    if (!img?.complete || img.naturalWidth > 0) return;
-    // A drawing without a size of its own also reads as zero wide; decoding tells it apart from a broken file.
-    let live = true;
-    img.decode().catch(() => {
-      if (!live) return;
-      if (img.getAttribute("src") === src) setFailed(true);
-      else setOriginal(true);
-    });
-    return () => { live = false; };
-  }, [fade, src]);
-
   if (failed) return <div className="figure__failed" role="img" aria-label={alt || "图片"}>图片暂时无法显示</div>;
-  const img = <img ref={fade} src={displaySrc} alt={alt} width={width ?? undefined} height={height ?? undefined} loading="lazy" decoding="async" onError={() => (displaySrc === src ? setFailed(true) : setOriginal(true))} />;
+  const img = <img ref={fade} src={displaySrc} alt={alt} width={width ?? undefined} height={height ?? undefined} loading="lazy" decoding="async" onError={lost} />;
   if (!lightbox) return img;
   return (
     <button type="button" className="figure__zoom" data-photo={key} onClick={() => lightbox.open(key)} aria-label={`查看大图：${alt || caption || "图片"}`}>
