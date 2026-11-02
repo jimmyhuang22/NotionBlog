@@ -1,5 +1,7 @@
 # 项目需求
 
+Cloudflare 脚本执行（2026-11-02）：用户确认关闭本站 Rocket Loader，保留 Next 流式替换、hydration 与首绘主题脚本原有执行顺序；此设置由云端配置管理，不靠修改应用脚本绕过。见[决定](decisions/2026-11-02-disable-rocket-loader.md)和[执行记录](progress/2026-11-02-f54-rocket-loader-off.md)。
+
 读取与运维期限（2026-11-02）：用户确认 M08 方案。网站／社交在同一只读事务内显式设置服务端超时，新增控制 SQL 计入预算且保留业务查询上限；归档导出／恢复使用独立 owner session 和进程期限，不加大全局网站超时，未知恢复结果不重放。冻结协议、来源及真实采用权限保持，见[决定](decisions/2026-11-02-reader-transaction-deadlines.md)与[说明](DATABASE_OPERATION_DEADLINES.md)。
 
 自托管发布后交付（2026-10-28）：用独立外层入口包装现有轮次脚本，保留原批准、启动期限和来源退出码；外层不占协调锁、不干扰清理进程检查。内容发布并读回成功、原流程安全结束且既有持久指针采纳完成后，再按同一版本交付自托管；锁忙等待或留待办，去重、防旧版本覆盖、失败与未知结果分开处理。来源脚本、媒体配方、数据库协议和定时不随本项改动，见[决定](decisions/2026-10-28-self-hosted-completion-entry.md)与[说明](SELF_HOSTED_COMPLETION.md)。
