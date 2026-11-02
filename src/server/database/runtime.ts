@@ -19,6 +19,7 @@ import { selfHostedDisplayStore } from "../self-hosted-media/runtime.ts";
 import { displayProjectionSql } from "../self-hosted-media/projection.ts";
 import { displayDeliveryMode, readDisplayMedia } from "./display.ts";
 import { databaseDisplayProjectionSql } from "../media/display.ts";
+import { createThumbnailSql } from "./thumbnail-query.ts";
 
 let runtime: ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -36,6 +37,7 @@ function createRuntime() {
   const pool=sharedContentReaderPool(process.env.DATABASE_READER_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
   const rawDb=isolatedWebsiteReader(readerSqlExecutor(pool),isolationMode);
   const db=publicationReader(rawDb,mode);
+  const thumbnailDb=mode==="qualified"?createThumbnailSql(db):db;
   const displayStore=selfHostedDisplayStore();
   const cloudDisplay=displayDeliveryMode(process.env.MEDIA_DELIVERY_MODE);
   if(cloudDisplay&&(displayStore||process.env.DATABASE_CONTENT_VERSION!=="2"||process.env.MEDIA_PROVIDER!=="storage"||storageProvider(process.env)!=="supabase"))
@@ -58,6 +60,6 @@ function createRuntime() {
     });
   }
   const storage=()=>storageFor(objectProvider), thumbnailStorage=()=>storageFor(variantProvider);
-  return {db,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(project(rawDb),mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})}),storage};
+  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(project(rawDb),mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})}),storage};
 }
 export function getDatabaseRuntime() { return measureContentRead("database-runtime", () => runtime??=createRuntime()); }

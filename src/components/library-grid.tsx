@@ -11,29 +11,28 @@ import { LinkPending } from "./link-pending";
 import { ListTail } from "./list-tail";
 import { PlatformChips } from "./platform-chips";
 import { pagingMessage, usePagedList } from "./use-paged-list";
+import { useImageFailure } from "./use-image-failure";
 import { useFadeIn } from "./use-fade-in";
 import { ARRIVING_ROWS, arrivalStyle, useFilterArrival } from "./use-filter-arrival";
 
-export function Cover({ image, title, previewWidth }: { image: ImageAsset | null; title: string; previewWidth?: 400 | 800 }) {
-  const [failed, setFailed] = useState(false);
-  // A preview that cannot be read gives way to the original once.
-  const [original, setOriginal] = useState(false);
+type CoverProps = { image: ImageAsset | null; title: string; previewWidth?: 400 | 800 };
+export function Cover(props: CoverProps) {
+  return <CoverPicture key={props.image?.src ?? "missing"} {...props} />;
+}
+function CoverPicture({ image, title, previewWidth }: CoverProps) {
   const [waiting, setWaiting] = useState(false);
   const fade = useFadeIn();
-  // Checked after the page is interactive, so a cover that is already there never shows the spine.
+  const preview = image ? (previewWidth === undefined ? image.src : imagePreviewSrc(image, previewWidth)) : "";
+  const { src, original, failed, lost } = useImageFailure(preview, image?.src ?? "", fade);
   useEffect(() => { if (fade.current && !fade.current.complete) setWaiting(true); }, [fade]);
-  // A cover that is missing or cannot be read right now shows the title as a book spine, never a broken image.
   if (!image || failed) return <div className="cover cover--empty" aria-hidden="true"><span>{title}</span></div>;
-  const src = previewWidth === undefined || original ? image.src : imagePreviewSrc(image, previewWidth);
-  // A detail page's large cover stands on the list's small one, usually already in the browser, so a picture shows with the title and sharpens when the large one arrives.
+  // Detail covers keep the smaller preview underneath while the larger one arrives.
   const under = previewWidth === 800 && !original ? imagePreviewSrc(image, 400) : null;
-  // Media paths are re-authorised per request, so covers stay plain images without an optimiser cache.
   return (
     <div className="cover-slot">
-      {/* While the cover is on its way the same spine stands in its place; the cover fades in over it. */}
       {waiting && !under ? <div className="cover cover--empty cover--waiting" aria-hidden="true"><span>{title}</span></div> : null}
-      {under && under !== src ? <img className="cover" src={under} alt="" aria-hidden="true" decoding="async" /> : null}
-      <img ref={fade} className="cover" src={src} alt={image.alt || `${title} 的封面`} loading={under ? "eager" : "lazy"} decoding="async" onLoad={() => setWaiting(false)} onError={() => (src === image.src ? setFailed(true) : setOriginal(true))} />
+      {under && under !== preview ? <img className="cover" src={under} alt="" aria-hidden="true" decoding="async" /> : null}
+      <img ref={fade} className="cover" src={src} alt={image.alt || `${title} 的封面`} loading={under ? "eager" : "lazy"} decoding="async" onLoad={() => setWaiting(false)} onError={lost} />
     </div>
   );
 }

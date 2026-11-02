@@ -51,6 +51,53 @@ test("explicit database qualification serves verified bytes with current scope c
   assert.deepEqual(f.counts(),{reads:2,resolves:0,storageReads:1,originals:0});
 });
 
+test("current v2 validators return the existing byte ETag without reading Storage, in both qualification modes", async () => {
+  for (const qualification of ["database", "live-notion"] as const) {
+    for (const condition of ["strong", "weak", "list", "star"]) {
+      const f = await fixture(); f.ports.qualification = qualification;
+      const etag = `"pc1-${f.projection.thumbnail!.sha256}"`;
+      f.ports.ifNoneMatch = condition === "strong" ? etag : condition === "weak" ? `W/${etag}` : condition === "list" ? `"old", W/${etag}` : "*";
+      f.ports.storage = () => assert.fail("304 must not even construct Storage");
+      const response = await thumbnailMediaResponse(f.asset, 400, f.ports);
+      assert.equal(response.status, 304); assert.equal(response.headers.get("ETag"), etag);
+      assert.equal(response.headers.get("Content-Length"), null); assert.equal((await response.arrayBuffer()).byteLength, 0);
+      assert.deepEqual(f.counts(), { reads: qualification === "database" ? 2 : 3, resolves: qualification === "database" ? 0 : 2, storageReads: 0, originals: 0 });
+    }
+  }
+});
+
+test("matching validators cannot survive withdrawal, replacement, a source denial or the final qualification", async () => {
+  for (const change of ["withdraw", "generation", "variant", "source", "final"]) {
+    const f = await fixture(); f.ports.qualification = change === "source" || change === "final" ? "live-notion" : "database";
+    f.ports.ifNoneMatch = `"pc1-${f.projection.thumbnail!.sha256}"`;
+    f.ports.storage = () => assert.fail("validator must not read Storage");
+    let reads = 0, resolves = 0;
+    f.ports.read = async () => {
+      reads++;
+      if (change === "withdraw" && reads === 2 || change === "final" && reads === 3) return null;
+      const current = structuredClone(f.projection);
+      if (reads > 1 && change === "generation") current.runId = "22222222-2222-4222-8222-222222222222";
+      if (reads > 1 && change === "variant") current.thumbnail!.sha256 = "0".repeat(64);
+      return current;
+    };
+    const original = f.ports.resolve;
+    f.ports.resolve = async binding => change === "source" && ++resolves === 2 ? null : original(binding);
+    const response = await thumbnailMediaResponse(f.asset, 400, f.ports);
+    assert.equal(response.status, 404, change); assert.equal(response.headers.get("ETag"), null);
+  }
+});
+
+test("nonmatching and oversized validators still read verified bytes; absent variants keep qualified original handling", async () => {
+  for (const condition of ['"old"', 'invalid', 'x'.repeat(8193)]) {
+    const f = await fixture(); f.ports.qualification = "database"; f.ports.ifNoneMatch = condition;
+    const response = await thumbnailMediaResponse(f.asset, 400, f.ports);
+    assert.equal(response.status, 200); assert.deepEqual(Buffer.from(await response.arrayBuffer()), f.bytes);
+    assert.equal(f.counts().storageReads, 1);
+  }
+  const f = await fixture(); f.ports.qualification = "database"; f.ports.ifNoneMatch = "*"; f.projection.thumbnail = null;
+  assert.equal((await thumbnailMediaResponse(f.asset, 400, f.ports)).status, 302); assert.equal(f.counts().originals, 1);
+});
+
 test("cached bytes never cache qualification: every request rechecks current scope and keeps private HTTP policy", async () => {
   const f = await fixture(); f.ports.qualification = "database";
   const objectStorage = f.ports.storage(); f.ports.storage = () => objectStorage;

@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request, context: { params: Promise<{ assetId: string }> }) {
+
   try {
     if (process.env.CONTENT_PROVIDER === "notion") return await withDirectMediaBudget(request, async () => {
       const { assetId } = await context.params;
@@ -27,7 +28,7 @@ export async function GET(request: Request, context: { params: Promise<{ assetId
       const { assetId } = await context.params;
       if (process.env.CONTENT_PROVIDER === "database") {
         if ((process.env.DATABASE_CONTENT_VERSION ?? "1") !== "1") return new Response(null, { status: 404, headers: { "Cache-Control": "private, no-store" } });
-        const { db, storage } = getDatabaseRuntime();
+        const { db, thumbnailDb, storage } = getDatabaseRuntime();
         if (mediaProvider(process.env.MEDIA_PROVIDER) === "notion") {
           const { repository, client, config } = getNotionRuntime();
           if (config.schemaVersion !== 1) throw new ContentServiceError("MISCONFIGURED", "Media source configuration does not match the content version.");
@@ -37,7 +38,7 @@ export async function GET(request: Request, context: { params: Promise<{ assetId
           } satisfies import("../../../server/media/hybrid.ts").HybridMediaPorts;
           const width = thumbnailWidth(request.url);
           if (width && thumbnailsEnabled(process.env.MEDIA_THUMBNAILS)) return await thumbnailMediaResponse(assetId, width, {
-            read: (id, cap) => readThumbnail(db, "v1", id, cap), resolve: ports.resolve, storage,
+            read: (id, cap) => readThumbnail(thumbnailDb, "v1", id, cap), resolve: ports.resolve, storage,
             original: () => hybridMediaResponse(assetId, ports),
           });
           return await hybridMediaResponse(assetId, ports);
