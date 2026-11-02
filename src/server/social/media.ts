@@ -5,6 +5,7 @@ import type { SqlExecutor } from "../database/sql.ts";
 import { verifyMediaBytes, type ObjectStorage } from "../database/storage.ts";
 import { coverContentVersion, validateCoverFiles, type CoverKind, type CoverMode } from "./covers.ts";
 import { readThumbnailBytes } from "../media/thumbnail-bytes.ts";
+import { socialMediaAssetSql, socialMediaOwnerSql } from "./media-query.ts";
 
 const noStore = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
 /** GET validators use weak comparison. Invalid/oversized lists fall back to full reads. */
@@ -36,9 +37,7 @@ export async function socialMediaResponse(assetId: string, width: 400 | 800 | nu
   const read = async () => {
     try {
       const rows = (await db.query<{ owner_kind: CoverKind; owner_key: string; files: unknown }>(
-        stable
-          ? "SELECT owner_kind,owner_key,files FROM social_sync.cover_bindings WHERE owner_kind=$1 AND owner_key=$2 AND display_mode=$3"
-          : "SELECT owner_kind,owner_key,files FROM social_sync.cover_bindings WHERE asset_id=$1 AND display_mode=$2",
+        stable ? socialMediaOwnerSql : socialMediaAssetSql,
         stable ? [stable[1], stable[2], mode] : [assetId, mode])).rows;
       if (rows.length > 1) throw Error();
       if (!rows.length) return null;

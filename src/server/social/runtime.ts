@@ -22,6 +22,7 @@ import { collectionDayAdditionsEnabled } from "./collection-day-additions.ts";
 import { getSiteConfig } from "../../lib/site/index.ts";
 import { createSocialReadQueue, queueSocialWorksRepository } from "./read-queue.ts";
 import { contentReadBudgetIdentity, checkContentReadBudget } from "../content-read-budget.ts";
+import { createSocialMediaSql } from "./media-query.ts";
 
 let pool: Pool | undefined;
 let worksQueue: ReturnType<typeof createSocialReadQueue> | undefined;
@@ -66,10 +67,14 @@ export function socialTimelineSnapshot():Promise<SocialCoverSnapshot<SocialTimel
   });
 }
 let mediaStorage: ObjectStorage | undefined;
+let mediaSql: ReturnType<typeof createSocialMediaSql> | undefined;
 let mediaTransport: typeof fetch | undefined;
 const mediaRequest: typeof fetch = (url, init) => {
   checkContentReadBudget();
   const scope = contentReadBudgetIdentity();
   return (mediaTransport ??= socialReaderTransport(process.env))(url, scope ? { ...init, signal: AbortSignal.any([scope.signal, ...(init?.signal ? [init.signal] : [])]) } : init);
 };
-export async function socialMediaRuntime(){return {sql:await collectionReaderSql(),storage:()=>mediaStorage??=createSocialStorage(process.env,"reader",mediaRequest)};}
+export async function socialMediaRuntime(){
+  mediaSql ??= createSocialMediaSql(monitoredSocialReaderSql(readerSqlExecutor(readerPool())));
+  return {sql:mediaSql,storage:()=>mediaStorage??=createSocialStorage(process.env,"reader",mediaRequest)};
+}
