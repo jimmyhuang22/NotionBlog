@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { PoolConfig } from "pg";
 import { ContentServiceError } from "../contracts/repository.ts";
-import { createDatabasePool, databasePoolConfig, sqlExecutor } from "../src/server/database/connection.ts";
+import { createDatabasePool, databasePoolConfig, readerSqlExecutor } from "../src/server/database/connection.ts";
 import { createDatabaseRepository } from "../src/server/database/repository.ts";
 import { createStorageReaderToken, type ReaderAuthOptions } from "../src/server/database/reader-auth.ts";
 import { createSupabaseStorage } from "../src/server/database/storage.ts";
@@ -170,7 +170,7 @@ export async function checkReader(env: NodeJS.ProcessEnv, mode: Mode = "config-o
   try {
     const open = dependencies.openDatabase ?? (() => {
       const pool = createDatabasePool(env.DATABASE_READER_URL, env.DATABASE_TLS, env.DATABASE_CA_CERT);
-      return { db: sqlExecutor(pool), close: () => pool.end() };
+      return { db: readerSqlExecutor(pool), close: () => pool.end() };
     });
     connection = open(config!);
     const { rows } = await connection.db.query<PermissionResult>(READER_PERMISSIONS_SQL);

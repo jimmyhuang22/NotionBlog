@@ -33,30 +33,75 @@ function acquire(pool: Pool, budget: ReadBudget): Promise<PoolClient> {
 
 /** Deadline applies across checkout and SQL, with healthy release on success and
  * destruction of only this query's client on cancellation/timeout. */
-export async function requestPoolQuery<T>(pool: Pool, budget: ReadBudget, text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+export async function requestPoolQuery<T>(pool: Pool, budget: ReadBudget, text: string, values?: unknown[], readOnly = false): Promise<{ rows: T[] }> {
   let stage: "acquire" | "query" = "acquire";
   let resultPlan: ResultQueryPlan | undefined;
   try {
     checkContentReadBudget();
     resultPlan = budget.resultBudget?.prepare(text, values);
     const client = await measureContentReadAsync("database-acquire", () => acquire(pool, budget));
-    let released = false, failed = false;
+    let released = false, failed = false, transaction = false;
     const onError = () => {}; // Keep active-client transport errors handled until release.
     const release = (destroy = false) => { if (!released) { released = true; client.release(destroy); } };
     const abort = () => release(true);
     client.on("error", onError);
     budget.signal.addEventListener("abort", abort, { once: true });
-    try {
+    const check = () => {
       checkContentReadBudget();
-      stage = "query";
+      if (released || budget.signal.aborted || remaining(budget) === 0) throw unavailable();
+    };
+    const query = async (queryText: string, queryValues?: unknown[]) => {
+      check();
       const driverLimit = pool.options.query_timeout;
       const timeout = Math.max(1, Math.min(remaining(budget), typeof driverLimit === "number" && driverLimit > 0 ? driverLimit : Infinity));
       // pg 8.23 supports this per-query limit; @types/pg omits the driver field.
-      const config: QueryConfig & { query_timeout: number } = { text: resultPlan?.text ?? text, values: resultPlan?.values ?? values, query_timeout: timeout };
+      const config: QueryConfig & { query_timeout: number } = { text: queryText, values: queryValues, query_timeout: timeout };
       const result = await measureContentReadAsync("database-roundtrip", () => client.query(config));
-      checkContentReadBudget();
-      return { rows: resultPlan ? resultPlan.accept<T>(result.rows) : result.rows as T[] };
-    } catch (error) { failed = true; throw error; }
+      check();
+      return result;
+    };
+    const control = async (command: string, expected: string) => {
+      check();
+      const sql = budget.sql;
+      if (sql) {
+        if (sql.queries >= sql.maxQueries || sql.responseBytes > sql.maxResponseBytes) throw unavailable();
+        sql.queries++;
+      }
+      const result = await query(command);
+      if (Array.isArray(result) || result.command !== expected) throw unavailable();
+      if (sql && sql.maxResponseBytes !== Infinity) {
+        sql.responseBytes += Buffer.byteLength(JSON.stringify(result.rows));
+        if (sql.responseBytes > sql.maxResponseBytes) throw unavailable();
+      }
+    };
+    try {
+      check();
+      if (readOnly) {
+        // Session startup GUCs may be ignored by a transaction pooler. BEGIN,
+        // SET LOCAL and the read must use this one checkout, without pool.query.
+        transaction = true;
+        await control("BEGIN READ ONLY", "BEGIN");
+        const configured = pool.options.statement_timeout;
+        const limit = typeof configured === "number" && Number.isSafeInteger(configured) && configured > 0 ? configured : 15_000;
+        const timeout = Math.max(1, Math.min(15_000, limit, remaining(budget)));
+        await control(`SET LOCAL statement_timeout = ${timeout}`, "SET");
+      }
+      stage = "query";
+      const result = await query(resultPlan?.text ?? text, resultPlan?.values ?? values);
+      const rows = resultPlan ? resultPlan.accept<T>(result.rows) : result.rows as T[];
+      if (readOnly) {
+        await control("COMMIT", "COMMIT");
+        transaction = false;
+      }
+      return { rows };
+    } catch (error) {
+      failed = true;
+      if (readOnly && transaction && !released) {
+        try { await control("ROLLBACK", "ROLLBACK"); failed = false; }
+        catch { /* No deadline/budget or uncertain cleanup: discard this client. */ }
+      }
+      throw error;
+    }
     finally {
       budget.signal.removeEventListener("abort", abort);
       release(failed);

@@ -330,7 +330,8 @@ test("late pauses and accepted recovery facts survive upload failure without sta
       current.browserIds=[...new Set([...current.browserIds,f.targets.at(-1)!.publicationId])];
       latest=JSON.stringify(current);await writeFile(browserFile,latest,{mode:0o600});
       if(mode!=="paused"){
-        ticket=JSON.stringify({version:1,id:"00000000-0000-0000-0000-000000000001",policyDigest:hash(JSON.stringify(f.policy)),publicationId:f.targets[0]!.publicationId,createdAt:now(),expiresAt:new Date(Date.now()+30*60000).toISOString(),status:"accepted",jobId:current.lastSubmission.id});
+        const createdAt=now();
+        ticket=JSON.stringify({version:1,id:"00000000-0000-0000-0000-000000000001",policyDigest:hash(JSON.stringify(f.policy)),publicationId:f.targets[0]!.publicationId,createdAt,expiresAt:new Date(Date.parse(createdAt)+30*60000).toISOString(),status:"accepted",jobId:current.lastSubmission.id});
         await writeFile(recoveryFile,ticket,{mode:0o600});
       }
       throw original;

@@ -112,7 +112,8 @@ test("maintenance has no public/legacy, redirect, cache or oversized-response fa
 test("actual route uses the restricted published PGlite runtime without Source or storage reads", async () => {
   const result = await promisify(execFile)(process.execPath, ["--conditions=react-server", "tests/helpers/private-content-readiness-route.ts"], { timeout: 30000 });
   const receipt = JSON.parse(result.stdout);
-  assert.equal(receipt.passed, true); assert.ok(receipt.queries > 0 && receipt.queries <= 16); assert.equal(receipt.probes, 2);
+  assert.equal(receipt.passed, true); assert.ok(receipt.queries > 0 && receipt.queries <= 64);
+  assert.ok(receipt.contentQueries <= 16); assert.equal(receipt.controls, receipt.contentQueries * 3); assert.equal(receipt.probes, 2);
 });
 test("actual maintenance CLI requires private pre/post proofs and never records success after failed post-check", async () => {
   for (const mode of ["pre-failure", "post-failure", "pass"]) {

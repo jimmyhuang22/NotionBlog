@@ -1,6 +1,7 @@
 import { createDatabasePool } from '../../src/server/database/connection.ts';
-import { verifySocialReader } from '../../src/server/social/reader.ts';
-import { sqlExecutor } from '../../src/server/database/connection.ts';
+import { socialReaderPoolConfig, verifySocialReader } from '../../src/server/social/reader.ts';
+import { Pool } from 'pg';
+import { readerSqlExecutor } from '../../src/server/database/connection.ts';
 import { readerLogin } from './profile.cjs';
 
 /** One bounded startup check; the website never receives an owner/writer login. */
@@ -8,7 +9,7 @@ export async function verifySelfHostedReaders(env: NodeJS.ProcessEnv): Promise<v
   const login = readerLogin(env.DATABASE_READER_URL ?? '', 'nb_website_reader', env.SELF_HOSTED_DEPLOYMENT === 'public-website');
   const pool = createDatabasePool(env.DATABASE_READER_URL, env.DATABASE_TLS, env.DATABASE_CA_CERT);
   try {
-    const row = (await pool.query<{ role: string; login: string; safe: boolean; execute: boolean; private_read: boolean }>(`WITH RECURSIVE reader_roles(oid) AS (
+    const row = (await readerSqlExecutor(pool).query<{ role: string; login: string; safe: boolean; execute: boolean; private_read: boolean }>(`WITH RECURSIVE reader_roles(oid) AS (
       SELECT oid FROM pg_roles WHERE rolname=current_user
       UNION SELECT m.roleid FROM pg_auth_members m JOIN reader_roles r ON m.member=r.oid
     ) SELECT current_user AS role,session_user AS login,
@@ -33,8 +34,9 @@ export async function verifySelfHostedReaders(env: NodeJS.ProcessEnv): Promise<v
   } catch { throw Error('SELF_HOSTED_READER_VERIFICATION'); }
   finally { await pool.end(); }
   if (env.SOCIAL_PROVIDER === 'database') {
-    const social = createDatabasePool(env.SOCIAL_READER_DATABASE_URL, env.SOCIAL_READER_DATABASE_TLS, env.SOCIAL_READER_DATABASE_CA_CERT);
-    try { await verifySocialReader(sqlExecutor(social)); }
+    const social = new Pool(socialReaderPoolConfig(env));
+    social.on('error', () => {});
+    try { await verifySocialReader(readerSqlExecutor(social)); }
     catch { throw Error('SELF_HOSTED_SOCIAL_READER_VERIFICATION'); }
     finally { await social.end(); }
   }

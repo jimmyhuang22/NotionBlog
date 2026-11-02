@@ -1,3 +1,4 @@
+import { readerControlResponse } from "./reader-controls.ts";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
@@ -39,6 +40,7 @@ try {
     const client = Object.assign(new EventEmitter(), {
       query: async (config: QueryConfig & { query_timeout: number }) => {
         assert.ok(config.query_timeout > 0 && config.query_timeout <= 8000);
+        const control = readerControlResponse(config.text); if (control) return control;
         queries++;
         if (config.text === WEBSITE_READER_ISOLATION_SQL) return { rows: [{ isolated: true }] };
         assert.equal(config.text, `SELECT ${version === "1" ? "nb_api" : "nb_v2_api"}.read_media($1) AS result`);

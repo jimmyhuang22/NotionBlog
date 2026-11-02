@@ -1,3 +1,4 @@
+import { readerControlResponse } from "./reader-controls.ts";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { registerHooks } from "node:module";
@@ -28,6 +29,7 @@ try {
   Pool.prototype.connect = function(this: Pool, callback: (error:Error|null,client:PoolClient)=>void) {
     assert.equal(this.options.ssl && typeof this.options.ssl === "object" && this.options.ssl.rejectUnauthorized,true);
     const client = Object.assign(new EventEmitter(), {query:async(config:QueryConfig & {query_timeout:number})=>{
+      const control = readerControlResponse(config.text); if (control) return control;
       queries++; assert.ok(config.query_timeout>0&&config.query_timeout<=8000);
       if(config.text===DIRECT_POLICY_CATALOG_SQL)return{rows:capability?[catalog]:[]};
       assert.equal(config.text,DIRECT_POLICY_SQL); assert.equal(config.values![0],1);
