@@ -23,8 +23,7 @@ function subscribe(listener: () => void) {
 
 /**
  * Lets named parts (the chosen filter segment) slide on a filter change (motion.css styles the "filter"
- * class). Moving to another page is not a view transition any more: page-switch.tsx keeps the old page
- * and cross-fades once the new one is there (F43, 2026-10-21). What arrives while a page loads — the
+ * class). Moving to another page is not a view transition any more: page-switch.tsx reveals a section loading frame first; detail pages keep F45’s dim-then-swap. What arrives while a page loads — the
  * loading state giving way to the page, a section streaming in later — runs no view transition either,
  * unless it came from a filter link: one click once faded the whole page four times as the home page's
  * parts arrived.
@@ -40,7 +39,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   const active = useSyncExternalStore(subscribe, () => engaged, () => false);
   return (
     <>
-    {/* Mounted here, inside every page, so the root layout stays as it is; they render nothing. */}
+    {/* Mounted here, inside every page, so the root layout stays as it is; the loading template is hidden. */}
     <PublicCacheWatch />
     <PageSwitch />
     <ViewTransition enter="none" exit="none"
