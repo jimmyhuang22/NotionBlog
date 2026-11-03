@@ -1,7 +1,7 @@
 /** User-approved browser lifetime; never permit shared caches or stale reuse past one day. */
 export const MEDIA_BROWSER_CACHE_CONTROL = "private, max-age=86400, must-revalidate";
-/** Tagged mode allows a short revisit without another qualification round trip. */
-export const MEDIA_REVISIT_CACHE_CONTROL = "private, max-age=300, must-revalidate";
+/** Tagged mode uses the same user-approved one-day private browser lifetime. */
+export const MEDIA_REVISIT_CACHE_CONTROL = MEDIA_BROWSER_CACHE_CONTROL;
 /** Mutable owner references can be stored, but every reuse must qualify at the origin. */
 export const MEDIA_REVALIDATE_CACHE_CONTROL = "private, no-cache, must-revalidate";
 
@@ -38,7 +38,7 @@ export function hasSafeMediaCachePolicy(response: Response, requestPath: string)
     return [200, 304].includes(response.status) &&
       /^\/media\/(?:v2\/a1\.[a-f0-9]{64}|social\/(?:s[12]\.(?:[a-f0-9]{64}|(?:publication|collection)\.[a-f0-9]{64})|s3\.(?:publication|collection)\.[a-f0-9]{64}\.[a-f0-9]{64}))$/.test(pathname) &&
       (browserPolicy === "must-revalidate,no-cache,private" ||
-        (isVersionedMediaPath(pathname) && browserPolicy === "max-age=300,must-revalidate,private")) &&
+        (isVersionedMediaPath(pathname) && browserPolicy === "max-age=86400,must-revalidate,private")) &&
       response.headers.get("CDN-Cache-Control") === "no-store" &&
       // The managed CDN consumes its dedicated response header in production.
       (managed === null || managed === "no-store" || (lifetime !== null && Number(lifetime[1]) > 0 && Number(lifetime[1]) <= 86400)) &&

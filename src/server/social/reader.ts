@@ -14,7 +14,7 @@ export function socialReaderPoolConfig(env: Record<string, string | undefined>) 
       url.port = "6543";
     }
     return { ...databasePoolConfig(mode === "transaction" ? url.toString() : env.SOCIAL_READER_DATABASE_URL, env.SOCIAL_READER_DATABASE_TLS, env.SOCIAL_READER_DATABASE_CA_CERT),
-      max: mode === "transaction" ? 1 : 2, idleTimeoutMillis: 5000, application_name: "notionblog-social-reader", statement_timeout: 10000, query_timeout: 12000 };
+      pipeline: true, max: mode === "transaction" ? 1 : 2, idleTimeoutMillis: 5000, application_name: "notionblog-social-reader", statement_timeout: 10000, query_timeout: 12000 };
   } catch { throw new ContentServiceError("MISCONFIGURED", "The social reader connection is not configured."); }
 }
 export async function verifySocialReader(sql: SqlExecutor): Promise<void> {

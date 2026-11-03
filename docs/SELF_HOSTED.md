@@ -69,4 +69,4 @@ npm run start:self-hosted -- --config /private/notionblog/fixture-reader.json --
 
 验证应覆盖真实HTTP→TLS reader→PostgreSQL→DTO、失败不回退、坏证书/身份拒绝、在途排空与池关闭。本机演练不证明目标服务器容量、真实数据/图片迁移及国内外可达性；这些操作另行确认。
 
-静态构建资源可按[独立静态入口方案](STATIC_ASSET_CACHE.md)走 8444，避免 Cloudflare 对既有 8443 的默认缓存限制。此候选只开放 `/_next/static/`，动态页面与媒体仍走原入口；Nginx、两层防火墙和 Cloudflare 规则须在发布批准后一起启用并验证 HIT。
+静态构建资源可按[独立静态入口方案](STATIC_ASSET_CACHE.md)走 8444，避免 Cloudflare 对既有 8443 的默认缓存限制。本站已于 2026-11-03 经用户批准启用，只开放 `/_next/static/`，动态页面与媒体仍走原入口；两层防火墙限 Cloudflare 网段，公网 JS/CSS/字体双读 HIT 已验证。其他安装仍须按各自发布批准启用并验收，见[本轮记录](progress/2026-11-03-static-media-cache.md)。
