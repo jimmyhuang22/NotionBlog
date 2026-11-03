@@ -1,6 +1,6 @@
 # 自托管静态资源缓存
 
-本配置只处理构建资源，不缓存页面内容。示例不会自动安装；正式启用仍需发布确认。
+本配置只处理构建资源，不缓存页面内容。本站已于 2026-11-03 经用户授权启用，JS/CSS/字体双读均验证 HIT/Age；见[验收记录](progress/2026-11-03-static-media-cache.md)。示例不会自动安装，其他部署仍需各自发布确认。
 
 ## 为什么需要独立入口
 
@@ -8,7 +8,7 @@ Next 已为 `/_next/static/` 的版本资源生成 `public, max-age=31536000, im
 
 候选方案为静态文件单独使用 8444 TLS listener，避开该禁用列表；Cloudflare 对外仍是 443，通过 [Origin Rule 目标端口覆盖](https://developers.cloudflare.com/rules/origin-rules/parameters/)回源。它是否在本站实际命中缓存，必须启用后取得 `HIT` 和 `Age` 才算通过，离线配置检查不能代替此验收。
 
-## 待启用配置
+## 启用步骤
 
 1. 在现有 Nginx `http` 配置中额外包含 [nginx-static.conf.example](../deploy/self-hosted/nginx-static.conf.example)，仅替换站点域名并沿用当前证书。现有 443、8443 与 Node 回环监听不改。8444 只代理 GET／HEAD `/_next/static/`，其他路径拒绝，错误不强设缓存。
 2. 确认 8444 未占用；安全组与主机防火墙都只允许现有 Cloudflare 官方网段进入 8444。先 `nginx -t`，再平滑 reload，回环 TLS 请求检查静态 200 和非静态 404。证书、Full (strict) 与现有 8443 回退入口保持。
