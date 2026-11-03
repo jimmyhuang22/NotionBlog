@@ -21,6 +21,9 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   const [clientPathname, setClientPathname] = useState("");
   // The section pressed, shown as current at the press while its page is on its way (F43).
   const [going, setGoing] = useState<string | null>(null);
+  // Warm only a section the visitor points to, focuses or touches. Mounting the
+  // header must not compete with the current page by prefetching every section.
+  const [prefetchHref, setPrefetchHref] = useState<string | null>(null);
   const selected = going ?? clientPathname;
   // Recomputed only when the sections change: `more` is a dependency of the layout effect below.
   const { more } = useMemo(() => splitNav(items), [items]);
@@ -55,10 +58,12 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   }, [at, items, more]);
 
   // Following a link closes the menu; so do Escape (focus returns to the button) and a press outside.
-  useEffect(() => { setClientPathname(pathname); setGoing(null); setOpen(false); }, [pathname]);
+  useEffect(() => { setClientPathname(pathname); setGoing(null); setOpen(false); setPrefetchHref(null); }, [pathname]);
   useMenuDismiss(open, () => setOpen(false), group, button);
 
   const link = (item: NavItem) => <Link href={item.href} aria-current={isCurrentSection(selected, item.href) ? "page" : undefined}
+    prefetch={prefetchHref === item.href && !isCurrentSection(pathname, item.href) ? null : false}
+    onMouseEnter={() => setPrefetchHref(item.href)} onFocus={() => setPrefetchHref(item.href)} onTouchStart={() => setPrefetchHref(item.href)}
     onClick={event => { if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) setGoing(isCurrentSection(pathname, item.href) ? null : item.href); }}>{item.label}</Link>;
   return (
     <nav ref={nav} className="site-nav" aria-label="主要导航">

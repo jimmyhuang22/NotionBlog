@@ -16,6 +16,7 @@ test("separate module copies share one reader pool without multiplying lifecycle
     assert.equal(sharedContentReaderPool(address("module_copy"), "disable"), pool);
     assert.deepEqual(pool.eventNames().map(name => [name, pool.listenerCount(name)]), listeners);
     assert.equal(pool.options.max, 2);
+    assert.equal(pool.options.pipeline, true);
     assert.equal(pool.options.idleTimeoutMillis, 10000);
     assert.equal(pool.options.connectionTimeoutMillis, 10000);
     assert.equal(pool.options.statement_timeout, 15000);

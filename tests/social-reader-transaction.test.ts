@@ -8,6 +8,7 @@ test('transaction pool changes only the reviewed shared-pooler port, keeps TLS/i
  const original=new URL(before.connectionString!),candidate=new URL(after.connectionString!);
  assert.equal(original.port,'5432');assert.equal(candidate.port,'6543');candidate.port='5432';assert.equal(candidate.href,original.href);
  assert.deepEqual(after.ssl,{rejectUnauthorized:true});assert.equal(after.max,1);assert.equal(before.max,2);
+ assert.equal(after.pipeline,true);assert.equal(before.pipeline,true);
  for(const key of ['idleTimeoutMillis','connectionTimeoutMillis','statement_timeout','query_timeout','application_name'] as const)assert.deepEqual(after[key],before[key]);
  assert.deepEqual(socialReaderPoolConfig({SOCIAL_READER_DATABASE_URL:uri,SOCIAL_READER_CONNECTION_MODE:'configured'}),before);
  assert.equal(new URL(socialReaderPoolConfig({SOCIAL_READER_DATABASE_URL:uri.replace(':5432/',':6543/'),SOCIAL_READER_CONNECTION_MODE:'transaction'}).connectionString!).port,'6543');
