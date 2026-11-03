@@ -1,0 +1,90 @@
+# 2026-11-03：前端缓存、刷新与加载策略审查（Codex）
+
+## 编辑登记与范围
+
+用户反馈首次加载慢、切栏目返回后图片像重新加载，要求审查原因。本项从最新 develop `3d5c7ed` 建独立分支，审查正式 main `d527bd2` 所含实现；包含已发布的社交图片合批、普通小图条件响应与栏目渐进加载修复。只新增本记录，不修改应用、依赖、契约、数据库、配置或公开规则，不部署。
+
+## 结论
+
+主要问题是缓存、撤回与加载策略叠加后的等待成本，不是没有启用缓存，也没有证据表明需要重写前端。当前图片缓存主要节省字节，不能保证省去请求和资格检查；AWS 上未获得原 Vercel CDN 的媒体共享缓存。此前修复降低了失败与排队、改善了等待反馈，但未改变这一基本路径。
+
+本轮快速站内回访能立即恢复已看过的首屏封面，不能将用户现象概括为“每次切路由必然重新下载”。普通刷新、五分钟过期、服务端版本变化、分页状态丢失，以及尚未完成的懒加载需要分别分析。
+
+## 当前策略
+
+| 层级 | 实现 | 用户可感知的限制 |
+| --- | --- | --- |
+| 标签页路由 | `next.config.ts` 的 dynamic/static staleTimes 均为300秒（公开模式） | 不等于图片免联网，也不覆盖整页刷新；刷新失效可提前清理路由缓存 |
+| 列表数据 | `publicProjection` 按全局 stamp、操作、参数和日边界缓存 DTO | 每次调用先读数据库 stamp；缓存命中也不等于没有数据库往返 |
+| HTML | 实测作品、书籍响应为 private/no-cache/no-store，Cloudflare DYNAMIC | 首次文档及整页刷新仍经过源站；DTO 缓存仍可独立命中 |
+| 图片 HTTP | private/no-cache/must-revalidate，ETag；CDN-Cache-Control:no-store | 浏览器可以保留字节，但 HTTP 缓存复用需要验证；浏览器同文档已有图像的复用另当别论 |
+| 服务端缩略图字节 | WebP、每对象不超过1 MiB；总16 MiB、128条、5分钟 | 只缓存已验证字节，不缓存资格；304快速路径不再读对象 |
+| 版本刷新 | 首次、可见时每30秒、标签页重新可见时查询版本 | **不是每30秒刷新页面**；只有 revision 变化才清分页并 router.refresh |
+| 分页 | 模块内最多记6份；作品允许相同初始数据下普通导航恢复，作品库仅历史返回恢复 | Library 从导航栏回来会重新补载之前追加的页 |
+
+依据：[HTTP策略](../../src/server/public-cache/policy.ts)、[DTO读取](../../src/server/public-cache/read.ts)、[缓存运行时](../../src/server/public-cache/runtime.ts)、[图片字节缓存](../../src/server/media/thumbnail-bytes.ts)、[版本监看](../../src/components/public-cache-watch.tsx)、[分页实现](../../src/components/use-paged-list.ts)。
+
+## 主要发现与建议顺序
+
+### 1. 优先：图片条件验证仍有明显固定延迟
+
+最新 [thumbnailMediaResponse](../../src/server/media/thumbnail.ts) 在304分支仍顺序执行首次资格读取和资格复查。普通 reader 的每次业务读取又经 `BEGIN READ ONLY`、`SET LOCAL statement_timeout`、业务语句、`COMMIT`；[请求执行器](../../src/server/database/request-query.ts) 保留了安全期限，但跨网络串行控制语句有成本。已合入的合批减少同批图片重复往返，不能消除单个请求的这两轮等待。
+
+有限公网样本（单独 curl 请求，包含本机连接成本；不是浏览器 LCP，也不是全站分位数）：
+
+| 样本 | HTTP | 正文 | 总耗时 | 服务端阶段 |
+| --- | --- | --- | --- | --- |
+| 作品封面首次样本 | 200 | 60,652 B | 2.292秒 | 无 Server-Timing，不能进一步归因 |
+| 同作品封面条件请求 | 304 | 0 B | 0.739秒 | 无 Server-Timing |
+| 书籍封面首次样本 | 200 | 9,654 B | 1.104秒 | 资格385ms、对象282ms（miss）、复查289ms |
+| 同书籍封面条件请求 | 304 | 0 B | 0.725秒 | 资格290ms、复查290ms；无对象读取 |
+
+因此至少这一书籍样本的主要时间不在9.7KB图片传输；304也有约580ms的服务端资格阶段。不能简单乘以图片张数计算整页耗时，因为请求并发并且服务端合批。
+
+建议优先明确图片回访允许的陈旧窗口，再优化资格读取的串行往返。在现有规则下可先研究保持只读事务、截止时间和撤回保证的控制语句／查询合并；若希望已看过封面在短时间内无需联网，则需另行决定浏览器 freshness，例如与页面一致的5分钟，不能把这个建议当作已批准。现有[图片逐次验证决定](../decisions/2026-10-28-image-revalidation-keep.md)仍有效。
+
+### 2. 优先：旧 CDN 策略在当前主机上只有部分效果
+
+两个图片样本均同时携带 `Vercel-CDN-Cache-Control: public, max-age=...` 和 `CDN-Cache-Control: no-store`，实际 `CF-Cache-Status: DYNAMIC`。AWS/Cloudflare 不是 Vercel 托管 CDN，不能把前一个头或 `nb-public-cache-v1` 标记解释为边缘命中。公开自托管说明也明确当前动态页面不共享缓存。
+
+这是既有迁移边界与性能代价，不据此判定所有缓存失效。Next DTO缓存、浏览器字节缓存和进程字节缓存仍可工作。若采用 Cloudflare 媒体缓存，须先实现匹配的清理／撤回机制并单独确认云端配置，不能直接打开全站 Cache Everything。
+
+### 3. 可直接定位的前端问题：提前分页与普通返回重载相互放大
+
+[ListTail](../../src/components/list-tail.tsx) 在距底部 `max(1200px, 1.5 × viewport height)` 内自动取下一页；首屏不滚动也可能满足。真实 Chrome 本轮作品由首批20项自动增至40项，书籍由24项增至48项；书籍最终29张图完成、首屏12张完成，其余仍懒加载。不能把48个 img 当成48次实际图片传输。
+
+[LibraryGrid](../../src/components/library-grid.tsx) 调用 `usePagedList` 没有启用 `reuseOnNavigation`。本轮从导航回书籍时先看到24项，随后再次补到48项；作品虽启用恢复，但仍要求首批完整 JSON（包括游标上下文）相同。下一页 fetch 固定 `cache:no-store`，因此丢掉分页状态后会再次请求。
+
+建议合并处理：首屏关键图片尚未就绪时不急于自动补页；普通导航回访在版本／初始页一致时恢复已加载列表。保留撤回、版本更新和游标失效时的清理。先验收回访的页数与重复 API 请求数，再看动画效果。
+
+### 4. 全局刷新粒度过粗，可能打断无关栏目
+
+`read_stamp()` 包含统一 `generation`，content/social/media 的刷新事件都会推进它；[迁移定义](../../supabase/migrations/20261020203508_public_content_cache.sql)可追溯。相同 stamp 参与所有 publicProjection 的 key。客户端看到 revision 变化便 `forgetPagedLists()` 并 `router.refresh()`，未按当前栏目和事件影响范围区分。
+
+这意味着社交更新也可能令书籍等无关页面失去热缓存或分页状态。本轮未制造发布事件，也未实测一次这样的版本变化，因此是代码确认的行为和风险，不宣称是本次每次闪动的触发原因。建议普通更新按栏目／内容范围失效，撤回保持立即处理；这涉及缓存协议，需作为独立方案审阅。
+
+### 5. 列表被辅助年份数据挡住，首屏图片没有单独优先级
+
+[作品库页面](../../src/app/library/[type]/page.tsx) 用 `Promise.all([list, readYears])` 等两者完成后才输出实际卡片。`readYears` 虽然捕获失败，却没有独立 Suspense；较慢的辅助年份查询仍会挡住已经准备好的列表。新增的 loading 边界只会更早显示标题／骨架，并不会缩短这个等待。是否实际由年份读取拖慢，仍需分阶段计时，不能从一次文档响应直接断定。
+
+卡片封面统一 lazy，作品封面固定档位（横图800、竖图400）；没有区分首屏可见图片与远处图片的优先级。建议首屏少数封面 eager／优先获取，其余继续 lazy，结合响应式尺寸和提前分页一起评估。不要给全部图片设 high，或仅因为使用普通 img 就直接改成另一个优化器缓存。
+
+### 6. 次要成本：过渡动画与根加载内容
+
+[useFadeIn](../../src/components/use-fade-in.ts) 对尚未 complete 的封面设透明，随后淡入；作品切平台还包含离场、等待卡片、入场及图片淡入。详情切页仍复制旧 DOM 做覆盖层；源码会复制图片节点，未测得因此新增的网络量，不作确定重复下载结论。它们会放大等待感，但不能解释已测的服务端580ms资格阶段。
+
+根 [loading.tsx](../../src/app/loading.tsx) 将 HomeHero 作为服务端子树传给客户端 RootLoading，再按路径选显示分支。正式作品 HTML 即使不显示首页介绍，仍包含首页头像 preload。这是可清理的额外请求／载荷来源，不是当前主要瓶颈。字体为分片、font-display:swap；本轮没有浏览器性能 trace，不能归因于字体阻塞或客户端长任务。
+
+## 线上核验与限制
+
+- 正式 Chrome 打开作品、导航至书籍、互相回访及一次普通书籍刷新。快速回访时作品首屏9张、书籍首屏12张均已完成；普通刷新后首批24张曾全部未完成，随后首屏12张正常，未见失败占位，捕获 warn/error 为0。不同观察间隔不能转换为精确浏览器加载耗时。
+- 普通 HTTP 样本：作品文档 TTFB约0.156秒／完整0.440秒，书籍约0.880秒／1.591秒。加载标题先到达不意味着正文或图片已完成；这是热访问环境中的有限样本，不是冷启动压测。
+- 本轮浏览器工具不能提供完整 Network／Performance trace，原生 Chrome 窗口检查不可用。未取得浏览器逐请求的 memory-cache／disk-cache／304比例；没有把 curl 条件请求替代这项证据，也没有假设不同设备、网络或超过5分钟后的结果一致。
+- 纯读取。独立 HTTP 正文合计242,175 B；浏览器和后端出口未独立计量，按这两页及一次刷新估计数MB，保守20MB以内，未遍历全站、批量下载、直连实库、SSH、清缓存、改配置或部署。
+- 不将两张样本推广成全站P95；不把曾经的图片503、原图回退当作当前仍未修复。建议下一项以“首次可用时间、首屏封面完成时间、30秒内站内回访请求数、普通刷新请求数”验收，而不是仅看测试通过、最终图片全部显示或304数量。
+
+## 验证与下一项
+
+本项纯记录，记录格式3项、15个本地链接、差异检查和 `npm run privacy:check`（2,271个文件）通过；无需完整应用 check/build。所有性能调整仍是审查建议，未改变既有决定。优先准备一份统一的短期回访缓存与撤回窗口方案，同时集中修正分页恢复、预取时机及辅助数据阻塞；正式发布按当次授权执行。
+
+语义参考：[MDN Cache-Control](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control)、[Next staleTimes](https://nextjs.org/docs/app/api-reference/config/next-config-js/staleTimes)、[Cloudflare 默认缓存行为](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/)。Next行为同时核对本机16.4.0随包文档，未按旧版默认缓存假设判断。
