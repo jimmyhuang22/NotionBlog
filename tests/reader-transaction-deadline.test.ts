@@ -8,6 +8,7 @@ import { SearchResultBudget } from "../src/server/database/result-response-budge
 
 type Config = { text: string; values?: unknown[]; query_timeout: number };
 class Client extends EventEmitter {
+  pipeline = false;
   configs: Config[] = [];
   releases: boolean[] = [];
   run: (config: Config) => Promise<{ rows: unknown[]; command: string }> = async c => ({
@@ -41,6 +42,104 @@ test("reader controls and read share one checkout, count all SQL, and preserve r
   assert.ok(f.clients[0].configs.every(c => c.query_timeout > 0 && c.query_timeout <= 12_000));
   assert.deepEqual(f.clients[0].releases, [false]);
   assert.equal(f.pool.options.statement_timeout, 10_000);
+});
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void, reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
+const tick = () => new Promise<void>(resolve => setImmediate(resolve));
+const acknowledgement = (command: string) => ({ command, rows: [] });
+
+test("pipelined reader waits for both setup acknowledgements, then drains read and commit before release", async () => {
+  const f = fixture({ statement_timeout: 10000 });
+  const begin = deferred<ReturnType<typeof acknowledgement>>(), setup = deferred<ReturnType<typeof acknowledgement>>();
+  const commit = deferred<ReturnType<typeof acknowledgement>>();
+  f.prepare(client => {
+    client.pipeline = true;
+    const run = client.run;
+    client.run = c => c.text.startsWith("BEGIN") ? begin.promise : c.text.startsWith("SET") ? setup.promise : c.text === "COMMIT" ? commit.promise : run(c);
+  });
+  let settled = false;
+  const pending = withContentReadBudget(signal(), async () => {
+    const result = await f.sql.query("SELECT fixture", ["'; COMMIT; --"]);
+    assert.equal(contentReadBudgetIdentity()!.sql!.queries, 4);
+    assert.equal(contentReadBudgetIdentity()!.sql!.responseBytes, Buffer.byteLength(JSON.stringify(result.rows)) + 6);
+    return result;
+  }, { maxQueries: 4, maxResponseBytes: 200 }).finally(() => { settled = true; });
+  await tick();
+  assert.deepEqual(f.clients[0].configs.map(c => c.text), ["BEGIN READ ONLY", "SET LOCAL statement_timeout = 10000"]);
+  begin.resolve(acknowledgement("BEGIN")); await tick();
+  assert.equal(f.clients[0].configs.length, 2, "No business read before SET is acknowledged");
+  setup.resolve(acknowledgement("SET")); await tick();
+  assert.deepEqual(f.clients[0].configs.slice(2).map(c => c.text), ["SELECT fixture", "COMMIT"]);
+  assert.deepEqual(f.clients[0].configs[2].values, ["'; COMMIT; --"], "Parameters never become SQL text");
+  assert.equal(settled, false); assert.deepEqual(f.clients[0].releases, []);
+  commit.resolve(acknowledgement("COMMIT"));
+  assert.deepEqual(await pending, { rows: [{ fixture: 1 }] });
+  assert.deepEqual(f.clients[0].releases, [false]);
+});
+
+test("pipelined statement failure preserves its error and drains the rollback acknowledgement", async t => {
+  t.mock.method(console, "warn", () => {});
+  const f = fixture(), error = Object.assign(new Error("synthetic statement timeout"), { code: "57014" });
+  const commit = deferred<ReturnType<typeof acknowledgement>>();
+  f.prepare(client => {
+    client.pipeline = true; const run = client.run;
+    client.run = c => c.text === "SELECT fixture" ? Promise.reject(error) : c.text === "COMMIT" ? commit.promise : run(c);
+  });
+  let settled = false;
+  const pending = withContentReadBudget(signal(), () => f.sql.query("SELECT fixture"), { maxQueries: 4 });
+  const rejection = assert.rejects(pending, e => e === error).then(() => { settled = true; });
+  await tick(); assert.equal(settled, false); assert.deepEqual(f.clients[0].releases, []);
+  commit.resolve(acknowledgement("ROLLBACK")); await rejection;
+  assert.deepEqual(f.clients[0].releases, [false]);
+  assert.equal(f.clients[0].configs.length, 4, "No extra round trip after PostgreSQL closed the failed transaction");
+});
+
+test("pipelined setup failure cannot read and drains the other command before cleanup", async t => {
+  t.mock.method(console, "warn", () => {});
+  const f = fixture(), error = new Error("synthetic SET failure"), begin = deferred<ReturnType<typeof acknowledgement>>();
+  f.prepare(client => {
+    client.pipeline = true; const run = client.run;
+    client.run = c => c.text.startsWith("BEGIN") ? begin.promise : c.text.startsWith("SET") ? Promise.reject(error) : run(c);
+  });
+  const rejection = assert.rejects(withContentReadBudget(signal(), () => f.sql.query("SELECT fixture")), e => e === error);
+  await tick(); assert.deepEqual(f.clients[0].releases, []); assert.equal(f.clients[0].configs.length, 2);
+  begin.resolve(acknowledgement("BEGIN")); await rejection;
+  assert.deepEqual(f.clients[0].configs.map(c => c.text), ["BEGIN READ ONLY", "SET LOCAL statement_timeout = 15000", "ROLLBACK"]);
+  assert.deepEqual(f.clients[0].releases, [false]);
+});
+
+test("pipelined setup is reserved atomically within the original SQL cap", async t => {
+  t.mock.method(console, "warn", () => {});
+  const f = fixture(); f.prepare(client => { client.pipeline = true; });
+  await assert.rejects(withContentReadBudget(signal(), () => f.sql.query("SELECT fixture"), { maxQueries: 2 }), { code: "CONTENT_UNAVAILABLE" });
+  assert.deepEqual(f.clients[0].configs, []);
+  assert.deepEqual(f.clients[0].releases, [true]);
+});
+
+test("pipelined cancellation destroys once and cannot start the business phase", async t => {
+  t.mock.method(console, "warn", () => {});
+  const f = fixture(), controller = new AbortController();
+  f.prepare(client => { client.pipeline = true; const run = client.run; client.run = async c => {
+    const value = await run(c); if (c.text.startsWith("SET")) controller.abort(); return value;
+  }; });
+  await assert.rejects(withContentReadBudget(controller.signal, () => f.sql.query("SELECT fixture")), { code: "CONTENT_UNAVAILABLE" });
+  assert.equal(f.clients[0].configs.length, 2);
+  assert.deepEqual(f.clients[0].releases, [true]);
+});
+
+test("a pipelined read requires an explicit COMMIT acknowledgement even after successful rows", async t => {
+  t.mock.method(console, "warn", () => {});
+  for (const failure of [undefined, new Error("synthetic commit failure")]) {
+    const f = fixture(); f.prepare(client => { client.pipeline = true; const run = client.run;
+      client.run = c => c.text === "COMMIT" ? Promise.reject(failure) : run(c);
+    });
+    await assert.rejects(withContentReadBudget(signal(), () => f.sql.query("SELECT fixture"), { maxQueries: 4 }), e => e === failure);
+    assert.deepEqual(f.clients[0].releases, [true]);
+  }
 });
 
 test("readers outside HTTP still establish a bounded transaction without changing pool options", async () => {

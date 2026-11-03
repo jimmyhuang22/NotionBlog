@@ -19,8 +19,9 @@ const digest = "a".repeat(64), etag = `"pc1-${digest}"`;
 const url = `https://example.test/media/v2/a1.${digest}?thumbnail=400`;
 const bytes = () => new Response("image", { headers: cacheableMediaHeaders({ ETag: etag }) });
 
-test("qualified versioned images keep a five-minute private window on GET, HEAD and both 304 paths", async t => {
+test("qualified versioned images keep a one-day private window on GET, HEAD and both 304 paths", async t => {
   activate(t);
+  assert.equal(MEDIA_REVISIT_CACHE_CONTROL, "private, max-age=86400, must-revalidate");
   for (const path of [`/media/v2/a1.${digest}`, `/media/social/s1.${digest}`, `/media/social/s3.publication.${digest}.${digest}`, `/media/social/s3.collection.${digest}.${digest}`]) {
     for (const method of ["GET", "HEAD"]) {
       const request = new Request(`https://example.test${path}?thumbnail=400`, { method });
@@ -71,7 +72,7 @@ test("freshness requires a qualified response and never extends live, mutable, A
 test("visitor acceptance rejects longer windows, stale reuse and freshness on mutable URLs", async t => {
   activate(t);
   const good = await publicHttpResponse(new Request(url), bytes(), "media");
-  for (const control of ["private, max-age=301, must-revalidate", "private, max-age=86400, must-revalidate", "private, max-age=300, stale-if-error=60", "public, max-age=300, must-revalidate", "private, max-age=300, must-revalidate, immutable"]) {
+  for (const control of ["private, max-age=301, must-revalidate", "private, max-age=86401, must-revalidate", "private, max-age=86400, stale-if-error=60", "public, max-age=86400, must-revalidate", "private, max-age=86400, must-revalidate, immutable"]) {
     const headers = new Headers(good.headers); headers.set("Cache-Control", control);
     assert.equal(hasSafeMediaCachePolicy(new Response(null, { headers }), url), false);
   }
@@ -79,7 +80,7 @@ test("visitor acceptance rejects longer windows, stale reuse and freshness on mu
   for (const status of [302, 404, 503]) assert.equal(hasSafeMediaCachePolicy(new Response(null, { status, headers: good.headers }), url), false);
 });
 
-test("real social qualification preserves early 304 and withdrawal with the short revisit window", async t => {
+test("real social qualification preserves early 304 and withdrawal with the one-day revisit window", async t => {
   activate(t);
   const engine = await coverTestEngine(t), row = await engine.add("BV0000000003", "work-a");
   const source = publicationCoverSource(row), prepared = await prepareCover(source, await coverTestImage());
