@@ -68,3 +68,5 @@ npm run start:self-hosted -- --config /private/notionblog/fixture-reader.json --
 当前使用完整Node部署，不使用standalone输出；部署需携带启动脚本、Next构建与对应依赖。Mac原生依赖不能直接复制到Linux，镜像构建、导入和目标机器运行仍须验收。
 
 验证应覆盖真实HTTP→TLS reader→PostgreSQL→DTO、失败不回退、坏证书/身份拒绝、在途排空与池关闭。本机演练不证明目标服务器容量、真实数据/图片迁移及国内外可达性；这些操作另行确认。
+
+静态构建资源可按[独立静态入口方案](STATIC_ASSET_CACHE.md)走 8444，避免 Cloudflare 对既有 8443 的默认缓存限制。此候选只开放 `/_next/static/`，动态页面与媒体仍走原入口；Nginx、两层防火墙和 Cloudflare 规则须在发布批准后一起启用并验证 HIT。

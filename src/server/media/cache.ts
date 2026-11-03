@@ -1,7 +1,20 @@
 /** User-approved browser lifetime; never permit shared caches or stale reuse past one day. */
 export const MEDIA_BROWSER_CACHE_CONTROL = "private, max-age=86400, must-revalidate";
+/** Tagged mode allows a short revisit without another qualification round trip. */
+export const MEDIA_REVISIT_CACHE_CONTROL = "private, max-age=300, must-revalidate";
 /** Mutable owner references can be stored, but every reuse must qualify at the origin. */
 export const MEDIA_REVALIDATE_CACHE_CONTROL = "private, no-cache, must-revalidate";
+
+function isVersionedMediaPath(pathname: string): boolean {
+  return /^\/media\/(?:v2\/a1\.[a-f0-9]{64}|social\/(?:s1\.[a-f0-9]{64}|s3\.(?:publication|collection)\.[a-f0-9]{64}\.[a-f0-9]{64}))$/.test(pathname);
+}
+
+/** The route must already have granted byte caching after its qualification checks. */
+export function permitsMediaRevisit(response: Response, requestUrl: string): boolean {
+  return [200, 304].includes(response.status) &&
+    response.headers.get("Cache-Control") === MEDIA_BROWSER_CACHE_CONTROL &&
+    isVersionedMediaPath(new URL(requestUrl).pathname);
+}
 export function revalidatedMediaHeaders(headers: Record<string, string>, etag: string): Record<string, string> {
   return { ...headers, "Cache-Control": MEDIA_REVALIDATE_CACHE_CONTROL, ETag: etag,
     "CDN-Cache-Control": "no-store", "Vercel-CDN-Cache-Control": "no-store" };
@@ -18,12 +31,14 @@ export function cacheableMediaHeaders(headers: Record<string, string>): Record<s
 export function hasSafeMediaCachePolicy(response: Response, requestPath: string): boolean {
   const directives = (response.headers.get("Cache-Control") ?? "").toLowerCase().split(",").map(x => x.trim());
   const pathname = new URL(requestPath, "https://example.invalid").pathname;
+  const browserPolicy = directives.sort().join(",");
   if (response.headers.get("X-Content-Cache-Policy") === "nb-public-cache-v1") {
     const managed = response.headers.get("Vercel-CDN-Cache-Control");
     const lifetime = /^public, max-age=(\d+), must-revalidate$/.exec(managed ?? "");
     return [200, 304].includes(response.status) &&
       /^\/media\/(?:v2\/a1\.[a-f0-9]{64}|social\/(?:s[12]\.(?:[a-f0-9]{64}|(?:publication|collection)\.[a-f0-9]{64})|s3\.(?:publication|collection)\.[a-f0-9]{64}\.[a-f0-9]{64}))$/.test(pathname) &&
-      directives.sort().join(",") === "must-revalidate,no-cache,private" &&
+      (browserPolicy === "must-revalidate,no-cache,private" ||
+        (isVersionedMediaPath(pathname) && browserPolicy === "max-age=300,must-revalidate,private")) &&
       response.headers.get("CDN-Cache-Control") === "no-store" &&
       // The managed CDN consumes its dedicated response header in production.
       (managed === null || managed === "no-store" || (lifetime !== null && Number(lifetime[1]) > 0 && Number(lifetime[1]) <= 86400)) &&

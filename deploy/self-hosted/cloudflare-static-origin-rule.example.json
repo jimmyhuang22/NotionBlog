@@ -1,0 +1,7 @@
+{
+  "description": "Next static assets HTTPS origin on 8444",
+  "expression": "(http.host in {\"blog.example.invalid\" \"www.blog.example.invalid\"} and starts_with(http.request.uri.path, \"/_next/static/\") and http.request.method in {\"GET\" \"HEAD\"})",
+  "action": "route",
+  "action_parameters": { "origin": { "port": 8444 } },
+  "enabled": true
+}
