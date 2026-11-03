@@ -16,7 +16,7 @@ async function Recent({ timeZone }: { timeZone: string }) {
   try {
     // Merged by the home feed service: the enabled sections' updates and, when switched on, works and collections published elsewhere.
     const initial = await homeFeedV2Repository.getPage({ limit: PAGE_SIZE });
-    return <HomeTimeline initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone} />;
+    return <><template data-home-feed-ready="true" /><HomeTimeline initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone} /></>;
   } catch (error) {
     // The introduction stays readable when the content service is slow or down.
     return <DirectoryRetry label="动态" busy={error instanceof ContentServiceError && error.code === "RATE_LIMITED"} />;

@@ -3,6 +3,7 @@ import next from 'next';
 import context from './context.cjs';
 import { verifySelfHostedReaders } from './reader.ts';
 import { drainSelfHostedServer } from './lifecycle.mjs';
+import { warmSelfHostedHome } from './warm-home.mjs';
 import { selfHostedDisplayStore } from '../../src/server/self-hosted-media/runtime.ts';
 
 if (!['self-hosted', 'self-hosted-public'].includes(context.configureSelfHostedEnvironment(process.env))) throw Error('SELF_HOSTED_CONTEXT_REQUIRED');
@@ -13,6 +14,8 @@ try {
   app = next({ dev: false, dir: process.cwd(), hostname: process.env.HOSTNAME, port: Number(process.env.PORT) });
   await app.prepare();
   const handle = app.getRequestHandler();
+  const warmup = await warmSelfHostedHome(handle, process.env);
+  console.log('self_hosted_home_warmup', JSON.stringify(warmup));
   server = createServer((request, response) => {
     if (stopping) { response.writeHead(503).end(); return; }
     void handle(request, response).catch(() => {
