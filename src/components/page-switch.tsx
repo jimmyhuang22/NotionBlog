@@ -1,24 +1,18 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { PageLoading } from "./page-loading";
+import { sectionLoadingTitle } from "../lib/section-loading.ts";
 
 /**
- * Moving between pages inside the site: only one page is ever on screen (F45, the owner's choice of
- * 2026-10-21, revising F43's cross-fade, which showed two notes' text at once for a moment).
+ * Section roots enter their own loading frame immediately (2026-11-03). A short
+ * 60ms grace avoids flashing a skeleton for an already cached page. The frame
+ * gives way as soon as Next commits the route, including its loading boundary;
+ * content and images then arrive normally. It never waits for a complete list.
  *
- * Next swaps the old page for the new route's loading state the moment a link is followed, so the old page
- * is kept as a still copy: the page area (and the footer) cloned into an opaque layer over the live page,
- * under the header, painted with the page's own paper. Whatever happens beneath it — the loading state, the
- * page streaming in — is not seen. The copy dims to 55% at once (80ms). Once the new page is there (its
- * address is current and no loading state is left in it) the copy is taken away in one step and the new page
- * rises from 55% to full in 160ms: the old page is never laid over the new one.
- *
- * If the new page takes longer, a thin bar under the header grows towards 85% over 1.6s, fills and fades
- * when the page arrives. A second link followed while waiting restarts the bar and only the last page is
- * shown. Filters and sorts keep the same address and are left to their own motion; a note within its
- * course changes only the note column, so the directory beside it stays put. With reduced motion the page
- * is simply swapped; the dim and a still bar remain as a sign of waiting.
+ * Detail pages and notes retain F45's dim-then-swap; a note within its course
+ * changes only the reading column. Same-path filters/sorts keep their own motion.
  */
 
 const SLOW_AFTER = 60;
@@ -29,6 +23,8 @@ const GIVE_UP_AFTER = 15000;
 const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 
 interface Switch {
+  progressive?: boolean;
+  restore?: () => void;
   target: string;
   /** Whether only the note column is changing (a note within its course). */
   column: boolean;
@@ -43,6 +39,8 @@ interface Switch {
 }
 
 let current: Switch | null = null;
+let committedPath = "";
+let loadingTemplate: HTMLElement | null = null;
 
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -122,10 +120,83 @@ function drop(entry: Switch) {
   clearTimeout(entry.slowTimer);
   entry.overlay.remove();
   entry.bar.remove();
+  entry.restore?.();
   if (current === entry) current = null;
 }
 
+/** Show a section before its response arrives, then let Next stream its real
+ * loading boundary/content. Never keep an opaque old-page copy over that boundary. */
+function enterSection(target: string, title: string) {
+  const template = loadingTemplate;
+  if (!template) return false;
+  const immediate = current?.progressive && !current.overlay.hidden;
+  if (current) drop(current);
+  if (location.pathname === target && committedPath === target) return true;
+  const top = headerBottom();
+  const overlay = document.createElement("div");
+  overlay.className = "page-switch";
+  overlay.dataset.sectionPending = target;
+  overlay.setAttribute("role", "main");
+  overlay.style.pointerEvents = "auto";
+  overlay.hidden = true;
+  const shell = template.cloneNode(true) as HTMLElement;
+  shell.setAttribute("aria-label", `正在加载${title}`);
+  const header = document.createElement("header");
+  header.className = "page-head";
+  const heading = document.createElement("h1");
+  heading.textContent = title;
+  header.append(heading);
+  shell.querySelector("[data-loading-heading]")?.replaceWith(header);
+  overlay.append(shell);
+  document.body.append(overlay);
+  const bar = document.createElement("div");
+  bar.className = "page-switch__bar";
+  bar.style.top = `${top}px`;
+  bar.setAttribute("aria-hidden", "true");
+  document.body.append(bar);
+  const place = () => {
+    const nextTop = headerBottom();
+    const bounds = new DOMRect(0, nextTop, document.documentElement.clientWidth, Math.max(0, window.innerHeight - nextTop));
+    Object.assign(overlay.style, { left: "0px", top: `${nextTop}px`, width: `${bounds.width}px`, height: `${bounds.height}px` });
+    bar.style.top = `${nextTop}px`;
+    paint(overlay, bounds);
+  };
+  place();
+  const theme = new MutationObserver(place);
+  theme.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "data-skin", "style"] });
+  window.addEventListener("resize", place);
+  const hidden: { element: HTMLElement; aria: string | null; inert: boolean }[] = [];
+  const entry: Switch = { target, progressive: true, column: false, dimmed: 0, overlay, copies: [], bar,
+    slow: false, slowTimer: 0, frame: 0, started: performance.now(), restore() {
+      theme.disconnect();
+      window.removeEventListener("resize", place);
+      for (const { element, aria, inert } of hidden) {
+        if (aria === null) element.removeAttribute("aria-hidden"); else element.setAttribute("aria-hidden", aria);
+        element.inert = inert;
+      }
+    } };
+  current = entry;
+  const show = () => {
+    if (current !== entry) return;
+    for (const element of [document.getElementById("main"), document.querySelector<HTMLElement>(".site-footer")]) {
+      if (!element) continue;
+      hidden.push({ element, aria: element.getAttribute("aria-hidden"), inert: element.inert });
+      element.inert = true;
+      element.setAttribute("aria-hidden", "true");
+    }
+    overlay.hidden = false;
+    wait(entry);
+  };
+  // A cached page can commit in this brief interval without flashing a skeleton.
+  if (immediate) show(); else entry.slowTimer = window.setTimeout(show, SLOW_AFTER);
+  return true;
+}
+
 function start(from: string, target: string) {
+  const title = sectionLoadingTitle(target);
+  if (title && enterSection(target, title)) return;
+  // A detail/note followed while a section is pending must start from the live area.
+  if (current?.progressive) drop(current);
   if (current) {
     // Another link while waiting: only the last page is faded to, and the bar begins again. A note within its
     // course covers only its column; a move on to another page must cover the whole page area, so it starts over.
@@ -192,7 +263,9 @@ function start(from: string, target: string) {
   entry.slowTimer = window.setTimeout(() => { if (current === entry) wait(entry); }, SLOW_AFTER);
   const check = () => {
     if (current !== entry) return;
-    if (location.pathname === entry.target && !document.querySelector("#main .page-loading, #main [data-page-loading]")) { finish(entry); return; }
+    const loading = [...document.querySelectorAll("#main .page-loading, #main [data-page-loading]")]
+      .some(element => !element.closest("[data-switch-template]"));
+    if (location.pathname === entry.target && !loading) { finish(entry); return; }
     if (performance.now() - entry.started > GIVE_UP_AFTER) { finish(entry); return; }
     entry.frame = requestAnimationFrame(check);
   };
@@ -266,8 +339,22 @@ export function announceMove(href: string) {
 export function PageSwitch() {
   // The page last shown: on Back the address has already changed when the browser says so.
   const shown = useRef("");
+  const template = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  useEffect(() => { shown.current = pathname; }, [pathname]);
+  useLayoutEffect(() => {
+    shown.current = pathname;
+    committedPath = pathname;
+    if (current?.progressive && (current.target === pathname ||
+        pathname === "/content-not-found" || pathname === "/content-unavailable")) drop(current);
+  }, [pathname]);
+  useEffect(() => {
+    const own = template.current?.firstElementChild as HTMLElement | null;
+    loadingTemplate = own;
+    return () => {
+      if (loadingTemplate === own) loadingTemplate = null;
+      if (current?.progressive) drop(current);
+    };
+  }, []);
   useEffect(() => {
     // Bubbling to the window, so Next's own handler has already decided the click is a client navigation.
     const onClick = (event: MouseEvent) => {
@@ -284,5 +371,6 @@ export function PageSwitch() {
       window.removeEventListener("popstate", onPop);
     };
   }, []);
-  return null;
+  // No hidden h1: the heading is inserted only into the visible pending shell.
+  return <div ref={template} hidden data-switch-template aria-hidden="true"><PageLoading title="" /></div>;
 }
