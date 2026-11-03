@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState, type RefObject } from "react";
 import { coverFailureAction } from "../lib/content/cover-failure.ts";
 
+/** A transparent pixel. An image with a size and no address (or a failed one) draws the browser's broken-picture
+ * frame, so the wait before the retry shows this instead; its load is not the picture's. */
+export const RETRY_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
 /** Keep the same image node (and its fade listeners) while retrying the same URL.
  * Callers key their picture by original source to cancel retries on replacement. */
 export function useImageFailure(preview: string, original: string, ref: RefObject<HTMLImageElement | null>) {
@@ -31,5 +35,6 @@ export function useImageFailure(preview: string, original: string, ref: RefObjec
     img.decode().catch(() => { if (live) lost(); });
     return () => { live = false; };
   }, [ref, src, retrying, failed, lost]);
-  return { src: retrying ? undefined : src, original: useOriginal, failed, lost };
+  // While waiting to retry the image shows the transparent placeholder; callers ignore its load event.
+  return { src: retrying ? RETRY_PLACEHOLDER : src, original: useOriginal, failed, retrying, lost };
 }

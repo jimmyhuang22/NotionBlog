@@ -23,7 +23,7 @@ function CoverPicture({ image, title, previewWidth }: CoverProps) {
   const [waiting, setWaiting] = useState(false);
   const fade = useFadeIn();
   const preview = image ? (previewWidth === undefined ? image.src : imagePreviewSrc(image, previewWidth)) : "";
-  const { src, original, failed, lost } = useImageFailure(preview, image?.src ?? "", fade);
+  const { src, original, failed, retrying, lost } = useImageFailure(preview, image?.src ?? "", fade);
   useEffect(() => { if (fade.current && !fade.current.complete) setWaiting(true); }, [fade]);
   if (!image || failed) return <div className="cover cover--empty" aria-hidden="true"><span>{title}</span></div>;
   // Detail covers keep the smaller preview underneath while the larger one arrives.
@@ -32,7 +32,7 @@ function CoverPicture({ image, title, previewWidth }: CoverProps) {
     <div className="cover-slot">
       {waiting && !under ? <div className="cover cover--empty cover--waiting" aria-hidden="true"><span>{title}</span></div> : null}
       {under && under !== preview ? <img className="cover" src={under} alt="" aria-hidden="true" decoding="async" /> : null}
-      <img ref={fade} className="cover" src={src} alt={image.alt || `${title} 的封面`} loading={under ? "eager" : "lazy"} decoding="async" onLoad={() => setWaiting(false)} onError={lost} />
+      <img ref={fade} className="cover" src={src} alt={image.alt || `${title} 的封面`} loading={under ? "eager" : "lazy"} decoding="async" onLoad={() => { if (!retrying) setWaiting(false); }} onError={lost} />
     </div>
   );
 }

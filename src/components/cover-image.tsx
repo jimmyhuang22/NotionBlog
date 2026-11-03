@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ImageAsset } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
-import { coverFailureAction } from "../lib/content/cover-failure.ts";
+import { useImageFailure } from "./use-image-failure";
 
 interface Props {
   image: ImageAsset;
@@ -41,45 +41,30 @@ export function CoverImage(props: Props) {
 }
 function CoverImageContent({ image, className, previewWidth, label, alt, lazy = false, sized = true, fallback, larger }: Props) {
   const ref = useRef<HTMLImageElement>(null);
-  const [state, setState] = useState<"waiting" | "shown" | "failed">("waiting");
-  const [original, setOriginal] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const [retryQueued, setRetryQueued] = useState(false);
-  const src = original ? image.src : imagePreviewSrc(image, previewWidth);
+  const [shown, setShown] = useState(false);
+  const preview = imagePreviewSrc(image, previewWidth);
+  // The same retry as content and library pictures: while waiting, a transparent placeholder stands in, so no broken mark shows.
+  const { src, original, failed, retrying, lost } = useImageFailure(preview, image.src, ref);
   const big = larger && !original ? imagePreviewSrc(image, larger.width) : null;
   // Both tiers must be real previews; falling back to the original drops the choice with them, or the browser could keep picking the failed one.
-  const srcSet = big && big !== image.src && src !== image.src ? `${src} ${previewWidth}w, ${big} ${larger!.width}w` : undefined;
-  const lost = useCallback(() => {
-    const action = coverFailureAction(src, image.src, attempt);
-    if (action === "retry") {
-      setState("waiting");
-      setRetryQueued(true);
-    } else if (action === "failed") setState("failed");
-    else setOriginal(true);
-  }, [src, image.src, attempt]);
-  useEffect(() => {
-    if (!retryQueued) return;
-    const timer = setTimeout(() => { setRetryQueued(false); setAttempt(value => value + 1); }, 600);
-    return () => clearTimeout(timer);
-  }, [retryQueued]);
-  // A cover can be settled before the page is interactive, when no event reaches here.
+  // No srcset while a retry waits either, or the browser would fetch from it at once.
+  const srcSet = !retrying && big && big !== image.src && src !== image.src ? `${src} ${previewWidth}w, ${big} ${larger!.width}w` : undefined;
+  // A cover can be there before the page is interactive, when no load event reaches here (a failure then is the hook's).
   useEffect(() => {
     const img = ref.current;
-    if (!img?.complete) return;
-    if (img.naturalWidth > 0) setState("shown");
-    else lost();
-  }, [image.src, lost]);
-  if (state === "failed") {
+    if (img?.complete && img.naturalWidth > 0) setShown(true);
+  }, []);
+  if (failed) {
     return fallback === undefined
       ? <div className={`figure__failed ${className}--failed`} role="img" aria-label={image.alt || alt || label}>封面暂时无法显示</div>
       : fallback;
   }
   return (
     <img
-      key={attempt} ref={ref} className={`${className} cover-image`} src={src} srcSet={srcSet} sizes={srcSet ? larger!.sizes : undefined} alt={image.alt || alt || ""}
+      ref={ref} className={`${className} cover-image`} src={src} srcSet={srcSet} sizes={srcSet ? larger!.sizes : undefined} alt={image.alt || alt || ""}
       width={sized ? image.width ?? undefined : undefined} height={sized ? image.height ?? undefined : undefined}
-      loading={lazy ? "lazy" : undefined} decoding={lazy ? "async" : undefined} data-shown={state === "shown" ? "" : undefined}
-      onLoad={() => setState("shown")} onError={lost}
+      loading={lazy ? "lazy" : undefined} decoding={lazy ? "async" : undefined} data-shown={shown ? "" : undefined}
+      onLoad={() => { if (!retrying) setShown(true); }} onError={lost}
     />
   );
 }
