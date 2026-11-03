@@ -1,4 +1,5 @@
 import { contentErrorResponse } from "../../lib/content/http-error.ts";
+import { matchesIfNoneMatch } from "./conditional.ts";
 import { createHash } from "node:crypto";
 import { publicCacheEnabled, publicResponseHeaders, isSharedCacheExcluded, type PublicCacheScope } from "./policy.ts";
 
@@ -19,8 +20,7 @@ async function applyPublicHttpResponse(request: Request, response: Response, sco
   headers.set("ETag", etag);
   // This runs after the origin's normal checks. A withdrawn response can never turn into 304.
   const condition = request.headers.get("if-none-match");
-  const matches = condition !== null && condition.length <= 8192 &&
-    (condition.trim() === "*" || (condition.match(/(?:W\/)?"[^"\r\n]*"/g) ?? []).some(v => v.replace(/^W\//, "") === etag));
+  const matches = matchesIfNoneMatch(condition, etag);
   if (matches) { headers.delete("Content-Length"); return new Response(null, { status: 304, headers }); }
   return new Response(request.method === "HEAD" ? null : bytes, { status: response.status, headers });
 }

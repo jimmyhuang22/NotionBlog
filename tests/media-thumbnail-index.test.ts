@@ -1,3 +1,4 @@
+import { createThumbnailSql, thumbnailBatchSql } from "../src/server/database/thumbnail-query.ts";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -121,6 +122,18 @@ for (const version of ["v1", "v2"] as const) test(`${version}-only thumbnail reg
       await registrar.register(input); await registrar.register(input);
       const projection = await readThumbnail(reader, version, images[0].assetId, 400);
       assert.equal(projection?.runId, lease.runId); assert.deepEqual(projection?.thumbnail, input.thumbnail);
+      let batchCalls = 0;
+      const batched = createThumbnailSql({ query: async <T>(text: string, values?: unknown[]) => {
+        assert.equal(text, thumbnailBatchSql); batchCalls++; return reader.query<T>(text, values);
+      } });
+      const simultaneous = await Promise.all(Array.from({ length: 40 }, (_, i) =>
+        readThumbnail(batched, version, images[i % 2]!.assetId, 400)));
+      assert.equal(batchCalls, 2);
+      simultaneous.forEach((value, i) => {
+        assert.equal(value?.source.media.assetId, images[i % 2]!.assetId);
+        assert.deepEqual(value?.thumbnail, i % 2 === 0 ? input.thumbnail : null);
+      });
+
       assert.deepEqual((await db.query(`SELECT row_to_json(s) AS state FROM ${c.namespace}.state s`)).rows, before);
       assert.deepEqual((await db.query(`SELECT row_to_json(r) AS run FROM ${c.namespace}.runs r ORDER BY id`)).rows, runsBefore);
       const otherOutput = { ...input, thumbnail: thumbnail(images[0], 400, "c".repeat(64)) };

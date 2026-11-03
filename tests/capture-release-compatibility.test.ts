@@ -15,7 +15,7 @@ const directNotionSources: Record<string, string> = {
   'src/server/notion/repository.ts': 'd49598f05cb3836e75049bb92b6b4a32e1921cbd7c217d4aa9193fc69f1a8d08',
   'src/server/notion/website-repository.ts': 'e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9',
   'src/server/notion/automatic-study.ts': '443c7c17f3e5568b218644bb5a4ba878200b6cfae76392df51ede2ecedfbc822',
-  'src/app/media/[assetId]/route.ts': '06015cf3d024d940fd773cedec714380528ac89ebcaaada1b9dc4b303fcbb0a5',
+  'src/app/media/[assetId]/route.ts': '36088b487cbd05b6a8a18dddc70c808a0406eff9c8cc80c030b841760f2668e1',
 };
 
 function laterPublicationRepair(path:string,current:string,prior:string,producer:Parameters<typeof checkCaptureReleaseCompatibility>[0],consumer:Parameters<typeof checkCaptureReleaseCompatibility>[1]):boolean {
@@ -145,11 +145,11 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
-        ? "46b6e467e40d8155f13327731029f68fe7cbff850442f4dd70b4ca368ee4dbc1"
+        ? "3a3a4c7b5b31176dfc2c68cc9721fbbd0b4e5dc0d9fa4314110c1a158d267e8b"
       : pair.path === "src/server/database/runtime.ts"
-        ? "8d38f8296d2571cce31c91046c44d861d16e1692f4425235fe9d0f99c7dfdf51"
+        ? "dede276aff29b0f20c37c3297b386127ee12130f71dc023c73486cc2528a12f1"
       : pair.path === "src/server/media/thumbnail.ts"
-        ? "3d7a448f5f1603ef1a66aab74975c043f06a78be83ef390cad603b128a3d44eb"
+        ? "68ad50ad20e25bddfb9849005027c00c8ea0dc2bc2215830cf343d11d36e22a2"
         : null;
     if(expected) {
       assert.equal(current,expected,pair.path);

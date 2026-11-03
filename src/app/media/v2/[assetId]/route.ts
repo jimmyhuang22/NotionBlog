@@ -1,3 +1,4 @@
+import { publicCacheEnabled } from "../../../../server/public-cache/policy.ts";
 import { withPublicHttp } from "../../../../server/public-cache/http.ts";
 import { getDatabaseRuntime } from "../../../../server/database/runtime.ts";
 import { websiteMediaResponse } from "../../../../server/database/website-media.ts";
@@ -16,14 +17,15 @@ import { databaseDisplayResponse } from "../../../../server/media/display.ts";
 import { DisplayError } from "../../../../server/database/display.ts";
 export const runtime="nodejs";
 async function readMedia(request:Request,context:{params:Promise<{assetId:string}>}) {
+
   if(process.env.CONTENT_PROVIDER!=="database"||process.env.DATABASE_CONTENT_VERSION!=="2")return new Response(null,{status:404,headers:{"Cache-Control":"private, no-store"}});
   try {
     return await withMediaReadBudget(request.signal, async () => {
       const {assetId}=await context.params;
-      const {db,storage,thumbnailStorage,publishedThumbnail,displayStore,cloudDisplay}=getDatabaseRuntime();
+      const {db,thumbnailDb,storage,thumbnailStorage,publishedThumbnail,displayStore,cloudDisplay}=getDatabaseRuntime();
       if(cloudDisplay)return await databaseDisplayResponse(assetId,displayWidth(request.url),{read:cloudDisplay.read,storage});
       if(displayStore)return await displayMediaResponse(assetId,displayWidth(request.url),{
-        qualify:id=>readThumbnail(db,"v2",id,400),store:displayStore,
+        qualify:id=>readThumbnail(thumbnailDb,"v2",id,400),store:displayStore,
       });
       if(mediaProvider(process.env.MEDIA_PROVIDER)==="notion"){
         let notion:ReturnType<typeof getNotionRuntime>|undefined;
@@ -35,7 +37,8 @@ async function readMedia(request:Request,context:{params:Promise<{assetId:string
         const width=thumbnailWidth(request.url,true);
         if(width&&thumbnailsEnabled(process.env.MEDIA_THUMBNAILS))return await thumbnailMediaResponse(assetId,width,{
           qualification:thumbnailQualification(process.env.MEDIA_THUMBNAIL_QUALIFICATION),
-          read:(id,cap)=>readThumbnail(db,"v2",id,cap),resolve:ports.resolve,storage:thumbnailStorage,original:()=>hybridMediaResponse(assetId,ports),
+          ifNoneMatch:publicCacheEnabled()?request.headers.get("if-none-match"):null,
+          read:(id,cap)=>readThumbnail(thumbnailDb,"v2",id,cap),resolve:ports.resolve,storage:thumbnailStorage,original:()=>hybridMediaResponse(assetId,ports),
         });
         return await hybridMediaResponse(assetId,ports);
       }

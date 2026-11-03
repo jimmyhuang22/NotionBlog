@@ -31,7 +31,7 @@ interface Props {
  * A cover: of a page, an entry or a card. Plain img on purpose: media paths are re-authorised per
  * request and must not pass through an optimiser cache. A cover that does not arrive never shows the
  * browser's broken-picture mark: it says so in the site's own quiet way, or gives way to what the
- * caller shows for "no cover". Registered social previews retry once without fetching a larger file;
+ * caller shows for "no cover". Qualified v2 and registered social previews retry once without fetching a larger file;
  * other previews retain their original fallback. Until it
  * arrives its place is a soft block.
  */
