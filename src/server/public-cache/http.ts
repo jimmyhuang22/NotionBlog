@@ -1,6 +1,7 @@
 import { contentErrorResponse } from "../../lib/content/http-error.ts";
 import { matchesIfNoneMatch } from "./conditional.ts";
 import { createHash } from "node:crypto";
+import { MEDIA_REVISIT_CACHE_CONTROL, permitsMediaRevisit } from "../media/cache.ts";
 import { publicCacheEnabled, publicResponseHeaders, isSharedCacheExcluded, type PublicCacheScope } from "./policy.ts";
 
 /** Applied only after the existing parser and current reader have accepted a response. */
@@ -13,6 +14,10 @@ async function applyPublicHttpResponse(request: Request, response: Response, sco
     // only shared caching is excluded. Qualification has already run above.
     headers.set("Vercel-CDN-Cache-Control", "no-store");
     headers.delete("Vercel-Cache-Tag");
+  } else if (scope === "media" && permitsMediaRevisit(response, request.url)) {
+    // Only already-qualified versioned bytes get a fresh browser window.
+    // Live-source responses and mutable owner URLs still revalidate every time.
+    headers.set("Cache-Control", MEDIA_REVISIT_CACHE_CONTROL);
   }
   if (response.status === 304) return new Response(null, { status: 304, headers });
   const bytes = new Uint8Array(await response.arrayBuffer());
