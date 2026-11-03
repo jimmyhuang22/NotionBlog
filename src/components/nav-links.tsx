@@ -59,7 +59,7 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   useMenuDismiss(open, () => setOpen(false), group, button);
 
   const link = (item: NavItem) => <Link href={item.href} aria-current={isCurrentSection(selected, item.href) ? "page" : undefined}
-    onClick={event => { if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0 && !isCurrentSection(pathname, item.href)) setGoing(item.href); }}>{item.label}</Link>;
+    onClick={event => { if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) setGoing(isCurrentSection(pathname, item.href) ? null : item.href); }}>{item.label}</Link>;
   return (
     <nav ref={nav} className="site-nav" aria-label="主要导航">
       <span ref={mark} className="site-nav__mark" aria-hidden="true" hidden />
