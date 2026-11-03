@@ -31,7 +31,7 @@ try{
   const etag=good.headers.get("ETag")!;assert.equal(etag,`"pc1-${hash(bytes)}"`);
   const before=queries;
   const validated=await Promise.all(Array.from({length:32},()=>call(etag)));
-  for(const response of validated){assert.equal(response.status,304);assert.equal(response.headers.get("ETag"),etag);assert.equal(response.headers.get("Cache-Control"),"private, no-cache, must-revalidate");assert.equal((await response.arrayBuffer()).byteLength,0);}
+  for(const response of validated){assert.equal(response.status,304);assert.equal(response.headers.get("ETag"),etag);assert.equal(response.headers.get("Cache-Control"),"private, max-age=300, must-revalidate");assert.equal((await response.arrayBuffer()).byteLength,0);}
   assert.equal(queries-before,2);assert.equal(objectRequests,1);
  }
  denied=true;assert.equal((await call()).status,404);assert.equal(objectRequests,1);

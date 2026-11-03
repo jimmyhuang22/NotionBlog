@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cacheableMediaHeaders, MEDIA_BROWSER_CACHE_CONTROL, hasSafeMediaCachePolicy } from "../src/server/media/cache.ts";
+import { cacheableMediaHeaders, MEDIA_BROWSER_CACHE_CONTROL, MEDIA_REVISIT_CACHE_CONTROL, hasSafeMediaCachePolicy } from "../src/server/media/cache.ts";
 import { thumbnailMediaResponse } from "../src/server/media/thumbnail.ts";
 import { hybridMediaResponse } from "../src/server/media/hybrid.ts";
 import { createHash } from "node:crypto";
@@ -69,6 +69,8 @@ test("public cache preserves live-source qualification, including database-thumb
    const result=await publicHttpResponse(request,await thumbnailMediaResponse(assetId,800,{...ports,qualification:"database"}),"media");
    assert.equal(result.status,304);assert.match(result.headers.get("Vercel-CDN-Cache-Control")!,/max-age=/);
    assert.equal(result.headers.get("X-Content-Cache-Policy"),"nb-public-cache-v1");
+   assert.equal(result.headers.get("Cache-Control"),MEDIA_REVISIT_CACHE_CONTROL);
+   assert.equal(hasSafeMediaCachePolicy(result,request.url),true);
   });
   await t.test("missing and transient variants preserve the live original's exclusion",async()=>{
    await privateOnly(await thumbnailMediaResponse(assetId,800,{...ports,qualification:"database",read:async()=>({...projection,thumbnail:null})}));

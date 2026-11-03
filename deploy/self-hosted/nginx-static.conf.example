@@ -1,0 +1,37 @@
+# Optional static-only origin, included from nginx's http context alongside
+# nginx.conf.example. The listener and Cloudflare rules require release approval.
+# Do not use 8443: Cloudflare disables caching on that origin port by default.
+# Restrict 8444 to Cloudflare's current IP ranges at BOTH firewall layers.
+server {
+    listen 8444 ssl default_server;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 8444 ssl;
+    server_name blog.example.invalid www.blog.example.invalid;
+    ssl_certificate /etc/notionblog/tls/origin.pem;
+    ssl_certificate_key /etc/notionblog/tls/origin.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    access_log /var/log/nginx/notionblog-static-access.log notionblog;
+
+    location ^~ /_next/static/ {
+        limit_except GET HEAD { deny all; }
+        proxy_pass http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Connection "";
+        proxy_buffering on;
+        proxy_read_timeout 30s;
+        # Next owns immutable asset headers. Never add a blanket cache TTL here.
+    }
+
+    location / {
+        add_header Cache-Control "private, no-store" always;
+        return 404;
+    }
+}
