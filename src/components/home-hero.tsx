@@ -42,7 +42,7 @@ export function TimelineHead() {
   return (
     <div className="timeline__head">
       <h2 id="recent">最近</h2>
-      <Link href="/status">全部动态</Link>
+      <Link href="/status" prefetch={false}>全部动态</Link>
     </div>
   );
 }

@@ -23,7 +23,7 @@ export function isBiliCard(work: SocialTimelineWork): boolean {
  * with the full words for screen readers (the owner's choice, F37). The day is left to the timeline row
  * unless the row holds works of several days (`showDay`).
  */
-export function BiliCard({ work, timeZone, today = null, showDay = true }: { work: SocialTimelineWork; timeZone: string; today?: CalendarDay | null; showDay?: boolean }) {
+export function BiliCard({ work, timeZone, today = null, showDay = true, priorityCover = false }: { work: SocialTimelineWork; timeZone: string; today?: CalendarDay | null; showDay?: boolean; priorityCover?: boolean }) {
   const lead = workLines(work)[0]!;
   const views = lead.figures.find(figure => figure.metric === "views") ?? null;
   // "151 个视频" or "26 个分 P": the count on the cover, the words read out.
@@ -41,7 +41,7 @@ export function BiliCard({ work, timeZone, today = null, showDay = true }: { wor
       {badge ? <span className="visually-hidden">，{badge.words}</span> : null}
       {/* After the words in the source, so the link reads its title first; drawn on top (`order`). */}
       <span className="bili-card__frame">
-        {work.cover ? <CoverImage className="bili-card__cover" image={work.cover} previewWidth={coverPreviewWidths.wide} label="作品封面" lazy sized={false} fallback={blank} /> : blank}
+        {work.cover ? <CoverImage className="bili-card__cover" image={work.cover} previewWidth={coverPreviewWidths.wide} label="作品封面" lazy priority={priorityCover} sized={false} fallback={blank} /> : blank}
         <span className="bili-card__badge">{mark}<span className="visually-hidden">{name}</span>{lead.kind}</span>
         {badge ? <span className="bili-card__new" aria-hidden="true">{badge.count ? `+${badge.count}` : "新"}</span> : null}
         {views || count !== null ? (
