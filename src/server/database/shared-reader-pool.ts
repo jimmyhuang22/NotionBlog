@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import { isSelfHostedRuntime } from "../../../scripts/self-hosted/context.cjs";
 import { databasePoolConfig } from "./connection.ts";
 import { attachContentReaderPool } from "./reader-pool.ts";
 import { measureContentRead } from "../content-read-timing.ts";
@@ -12,6 +13,10 @@ export function sharedContentReaderPool(connectionString: string | undefined, tl
   // Validate before lookup and include every effective option: credentials, TLS
   // trust and limits must never inherit a different reader's existing pool.
   const config = { ...databasePoolConfig(connectionString, tls, ca), pipeline: true };
+  // The persistent public server can reuse connections across short gaps between visits.
+  if (isSelfHostedRuntime() && process.env.SELF_HOSTED_DEPLOYMENT === "public-website") {
+    config.idleTimeoutMillis = 60_000;
+  }
   const identity = createHash("sha256").update(JSON.stringify(config)).digest("hex");
   const pools = host[key] ??= new Map();
   const previous = pools.get(identity);

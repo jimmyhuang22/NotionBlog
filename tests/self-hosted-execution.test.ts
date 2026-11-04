@@ -97,14 +97,29 @@ test('public runtime requires a matching public artifact and reasserts the prote
       DATABASE_CA_CERT: '-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----',
       SITE_URL: 'https://blog.example.invalid', SITE_INDEXING_ENABLED: 'true',
     } }), { mode: 0o600 });
-    const args = ['--require', bootstrap, '--input-type=module', '-e', `const {configureExecutionEnvironment:c}=await import(${JSON.stringify(execution)});console.log(JSON.stringify({mode:c(process.env),cache:process.env.PUBLIC_CONTENT_CACHE,indexing:process.env.SITE_INDEXING_ENABLED,vercel:!!process.env.VERCEL}));`];
+    const poolModule = new URL('../src/server/database/shared-reader-pool.ts', import.meta.url).href;
+    const contextModule = new URL('../scripts/self-hosted/context.cjs', import.meta.url).href;
+    const code = `
+      const { configureExecutionEnvironment } = await import(${JSON.stringify(execution)});
+      const mode = configureExecutionEnvironment(process.env);
+      const { sharedContentReaderPool } = await import(${JSON.stringify(poolModule)});
+      const { closeSelfHostedPools } = await import(${JSON.stringify(contextModule)});
+      const pool = sharedContentReaderPool(process.env.DATABASE_READER_URL, process.env.DATABASE_TLS, process.env.DATABASE_CA_CERT);
+      const { idleTimeoutMillis, max } = pool.options;
+      const connections = pool.totalCount;
+      await closeSelfHostedPools();
+      console.log(JSON.stringify({ mode, cache: process.env.PUBLIC_CONTENT_CACHE, indexing: process.env.SITE_INDEXING_ENABLED,
+        vercel: !!process.env.VERCEL, idleTimeoutMillis, max, connections, ended: pool.ended }));
+    `;
+    const args = ['--require', bootstrap, '--input-type=module', '-e', code];
     const env = environment({ NB_SELF_HOST_ROOT: dir, NB_SELF_HOST_PHASE: 'runtime', NB_SELF_HOST_PROFILE: join(dir, 'reader.json') });
     await assert.rejects(execute(process.execPath, args, { cwd: dir, env }), /SELF_HOSTED_BUILD_MISMATCH/);
     await writeFile(join(dir, '.next/notionblog-self-hosted.json'), JSON.stringify(files.buildMarker(dir, true)));
     files.verifyBuild(dir, true);
     assert.throws(() => files.verifyBuild(dir, false), /SELF_HOSTED_BUILD_MISMATCH/);
     const result = await execute(process.execPath, args, { cwd: dir, env });
-    assert.deepEqual(JSON.parse(result.stdout), { mode: 'self-hosted-public', cache: 'disabled', indexing: 'true', vercel: false });
+    assert.deepEqual(JSON.parse(result.stdout), { mode: 'self-hosted-public', cache: 'disabled', indexing: 'true', vercel: false,
+      idleTimeoutMillis: 60_000, max: 2, connections: 0, ended: true });
     // Exercise the actual server's context gate as well as Next's config gate.
     // The synthetic reader must fail closed before the server can listen.
     const server = fileURLToPath(new URL('../scripts/self-hosted/server.mjs', import.meta.url));
