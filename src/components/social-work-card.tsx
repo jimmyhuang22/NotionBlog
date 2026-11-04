@@ -42,9 +42,9 @@ function Figures({ line, signs, hint }: { line: WorkLine; signs: boolean; hint?:
  * checked address is a link and it is used exactly as given. When the figures were read is only a
  * hint on hovering them; a visitor is not told about the reading schedule. A work on further platforms adds a line for each under the card.
  */
-export function SocialWorkCard({ work, timeZone, today = null, small = false }: { work: SocialTimelineWork; timeZone: string;
+export function SocialWorkCard({ work, timeZone, today = null, small = false, priorityCover = false }: { work: SocialTimelineWork; timeZone: string;
   /** Today in the site's time zone, for naming a recent day the way status entries do. */
-  today?: CalendarDay | null; /** One of many, in a strip or on the works page: narrower, told by its day, its figures on the cover, and a missing cover keeps its place. */ small?: boolean }) {
+  today?: CalendarDay | null; /** One of many, in a strip or on the works page: narrower, told by its day, its figures on the cover, and a missing cover keeps its place. */ small?: boolean; priorityCover?: boolean }) {
   const [lead, ...more] = workLines(work);
   const shape = lead ? coverShapes[lead.platform] : "wide";
   const framed = Boolean(work.cover) || small;
@@ -78,7 +78,7 @@ export function SocialWorkCard({ work, timeZone, today = null, small = false }: 
       {framed ? (
         <span className="work-card__frame">
           {/* A cover that cannot be read gives way to the same quiet place as no cover; the frame crops it, so its own size is not passed on. */}
-          {work.cover ? <CoverImage className="work-card__cover" image={work.cover} previewWidth={coverPreviewWidths[shape]} label="作品封面" lazy sized={false} fallback={blank} /> : blank}
+          {work.cover ? <CoverImage className="work-card__cover" image={work.cover} previewWidth={coverPreviewWidths[shape]} label="作品封面" lazy priority={priorityCover} sized={false} fallback={blank} /> : blank}
           {shape === "wide" && what.length ? <span className="work-card__badge">{what.join(" · ")}</span> : null}
           {onCover && lead ? <span className="work-card__over"><Figures line={lead} signs hint={hint(lead, Boolean(work.collection))} /></span> : null}
         </span>
