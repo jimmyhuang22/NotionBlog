@@ -16,6 +16,8 @@ interface Props {
   alt?: string;
   /** For covers further down a page or in a list. */
   lazy?: boolean;
+  /** The first cover can load as soon as its row reaches the browser. */
+  priority?: boolean;
   /** Pass the source's dimensions on, so the place is held at the picture's shape. */
   sized?: boolean;
   /** What stands in when the picture cannot be read: the quiet block when left out, nothing when null. */
@@ -39,7 +41,7 @@ export function CoverImage(props: Props) {
   // A replacement must not inherit the old image's terminal error or original fallback.
   return <CoverImageContent key={props.image.src} {...props} />;
 }
-function CoverImageContent({ image, className, previewWidth, label, alt, lazy = false, sized = true, fallback, larger }: Props) {
+function CoverImageContent({ image, className, previewWidth, label, alt, lazy = false, priority = false, sized = true, fallback, larger }: Props) {
   const ref = useRef<HTMLImageElement>(null);
   const [shown, setShown] = useState(false);
   const preview = imagePreviewSrc(image, previewWidth);
@@ -63,7 +65,8 @@ function CoverImageContent({ image, className, previewWidth, label, alt, lazy = 
     <img
       ref={ref} className={`${className} cover-image`} src={src} srcSet={srcSet} sizes={srcSet ? larger!.sizes : undefined} alt={image.alt || alt || ""}
       width={sized ? image.width ?? undefined : undefined} height={sized ? image.height ?? undefined : undefined}
-      loading={lazy ? "lazy" : undefined} decoding={lazy ? "async" : undefined} data-shown={shown ? "" : undefined}
+      loading={priority ? "eager" : lazy ? "lazy" : undefined} fetchPriority={priority ? "high" : undefined}
+      decoding={lazy ? "async" : undefined} data-shown={shown ? "" : undefined}
       onLoad={() => { if (!retrying) setShown(true); }} onError={lost}
     />
   );

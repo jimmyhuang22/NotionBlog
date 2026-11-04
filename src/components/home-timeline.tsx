@@ -26,13 +26,13 @@ import { useToday } from "./use-today";
  * their makers' colours. The
  * line wraps as a whole, chips and all, never through a word.
  */
-function GameLine({ event }: { event: WorkEvent }) {
+function GameLine({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
   const platforms = platformChips((event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean));
   // The game's current total, written as on its card: none at all and unknown are left out.
   const time = cardTimeLabel(event.playedTime ?? null);
   const body: ReactNode = (
     <>
-      {event.cover ? <CoverImage className="event__square" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy sized={false} fallback={<span className="event__square" aria-hidden="true" />} /> : <span className="event__square" aria-hidden="true" />}
+      {event.cover ? <CoverImage className="event__square" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy priority={priorityCover} sized={false} fallback={<span className="event__square" aria-hidden="true" />} /> : <span className="event__square" aria-hidden="true" />}
       <span className="event__line">
         <span className="event__sentence"><span className="event__lead">在玩</span> <span className="event__title">{event.title}</span></span>
         {platforms.length || time ? (
@@ -49,14 +49,14 @@ function GameLine({ event }: { event: WorkEvent }) {
   return <div className={className}>{body}</div>;
 }
 
-function WorkCard({ event }: { event: WorkEvent }) {
-  if (event.type.startsWith("game-")) return <GameLine event={event} />;
+function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
+  if (event.type.startsWith("game-")) return <GameLine event={event} priorityCover={priorityCover} />;
   const { kind, verb } = eventKinds[event.type];
   const detail = eventDetail(event);
   const body: ReactNode = (
     <>
       {/* The title already names the card, so the cover is not read out; one that cannot be read keeps its quiet place. */}
-      {event.cover ? <CoverImage className="event__cover" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy sized={false} fallback={<span className="event__cover" aria-hidden="true" />} /> : null}
+      {event.cover ? <CoverImage className="event__cover" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy priority={priorityCover} sized={false} fallback={<span className="event__cover" aria-hidden="true" />} /> : null}
       <span className="event__text">
         <span className="event__verb">{verb}</span>
         <span className="event__title">{event.title}</span>
@@ -97,6 +97,8 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
       {restarted ? <p className="notice timeline__notice" role="status">内容有更新，已从最新一条重新加载。</p> : null}
       {feedRuns(items, timeZone).map(({ first: index, items: run }, position) => {
         const item = run[0]!;
+        // The entrance clips the row before it becomes visible. Let its first cover load during that wait.
+        const priorityCover = index === 0;
         const { month } = eventMoment(item.source === "content" ? item.event : item, timeZone);
         const moment = entryMoment((item.source === "content" ? item.event : item).occurredAt, timeZone, today);
         const span = run.length > 1 ? spanMoment(run, timeZone, today) : null;
@@ -119,7 +121,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                   <Link className="tag tag--social" href="/works" prefetch={false} title="全部作品">作品</Link>
                   <span className="entry__count">{run.length} 件</span>
                 </p>
-                <HomeWorks works={run.flatMap(entry => entry.source === "social" ? [entry.work] : [])} timeZone={timeZone} today={today} />
+                <HomeWorks works={run.flatMap(entry => entry.source === "social" ? [entry.work] : [])} timeZone={timeZone} today={today} priorityCover={priorityCover} />
               </article>
             ) : item.source === "social" ? (
               <article className="entry entry--event entry--social">
@@ -132,8 +134,8 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                 </p>
                 {/* A Bilibili work with a cover is the same card as in a run of works, one of it. */}
                 {item.work.cover && isBiliCard(item.work)
-                  ? <HomeWorks works={[item.work]} timeZone={timeZone} today={today} />
-                  : <SocialWorkCard work={item.work} timeZone={timeZone} today={today} />}
+                  ? <HomeWorks works={[item.work]} timeZone={timeZone} today={today} priorityCover={priorityCover} />
+                  : <SocialWorkCard work={item.work} timeZone={timeZone} today={today} priorityCover={priorityCover} />}
               </article>
             ) : item.event.type === "status" ? (
               <article id={item.event.entry.id} className={item.id === leadId ? "entry entry--lead" : "entry"}>
@@ -142,7 +144,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                 {demo}
                 <StatusBody entry={item.event.entry} />
                 {/* Unsized here as before: the picture keeps its own shape under the height limit. */}
-                {item.event.entry.cover ? <CoverImage className="entry__cover" image={item.event.entry.cover} previewWidth={800} label="动态封面" lazy sized={false} /> : null}
+                {item.event.entry.cover ? <CoverImage className="entry__cover" image={item.event.entry.cover} previewWidth={800} label="动态封面" lazy priority={priorityCover} sized={false} /> : null}
               </article>
             ) : (
               <article className="entry entry--event">
@@ -151,7 +153,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                   <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{eventKinds[item.event.type].section}</span>
                   {demo}
                 </p>
-                <WorkCard event={item.event} />
+                <WorkCard event={item.event} priorityCover={priorityCover} />
               </article>
             )}
           </div>

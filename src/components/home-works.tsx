@@ -17,13 +17,19 @@ import { WorkStrip } from "./work-strip";
  * address, an unknown figure is left out and only a checked address is a link. Days are named the way
  * status entries name them.
  */
-export function HomeWorks({ works, timeZone, today = null }: { works: SocialTimelineWork[]; timeZone: string; today?: CalendarDay | null }) {
+export function HomeWorks({ works, timeZone, today = null, priorityCover = false }: { works: SocialTimelineWork[]; timeZone: string; today?: CalendarDay | null; priorityCover?: boolean }) {
   if (works.some(work => work.cover)) {
     // The row above names the day; a card repeats it only when the works here fall on different days.
     const days = new Set(works.map(work => { const moment = workMoment(work); const day = moment ? calendarDay(moment, timeZone) : null; return day ? `${day.year}-${day.month}-${day.day}` : "?"; }));
     return (
       <WorkStrip label={works.length > 1 ? `${works.length} 件作品，可左右滚动` : "1 件作品"}>
-        {works.map(work => <li key={work.id}>{isBiliCard(work) ? <BiliCard work={work} timeZone={timeZone} today={today} showDay={days.size > 1} /> : <SocialWorkCard work={work} timeZone={timeZone} today={today} small />}</li>)}
+        {works.map((work, index) => (
+          <li key={work.id}>
+            {isBiliCard(work)
+              ? <BiliCard work={work} timeZone={timeZone} today={today} showDay={days.size > 1} priorityCover={priorityCover && index === 0} />
+              : <SocialWorkCard work={work} timeZone={timeZone} today={today} small priorityCover={priorityCover && index === 0} />}
+          </li>
+        ))}
       </WorkStrip>
     );
   }
