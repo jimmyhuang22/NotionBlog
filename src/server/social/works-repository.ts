@@ -5,7 +5,8 @@ import { createPagedSocialRepository } from "./repository.ts";
 import { measureContentReadAsync, traceContentRead } from "../content-read-timing.ts";
 import { hydrateSelectedSocialCovers, type SocialCoverSnapshot } from "./cover-hydration.ts";
 
-/** The input remains a fresh, fully qualified snapshot. No stored eligibility or SQL policy changes. */
+/** The input is a qualified snapshot: read fresh, or rows shared by the public cache (no covers). Covers always
+ * qualify live for the selected page through hydrateCovers. No stored eligibility or SQL policy changes. */
 export function createSocialWorksRepository(read: () => Promise<SocialCoverSnapshot<SocialTimelineWork>>): SocialTimelineRepository {
   return { listWorks:(query={})=>traceContentRead("works", "unknown", async () => {
     validateSocialWorksQuery(query);
