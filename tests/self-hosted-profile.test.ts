@@ -69,6 +69,7 @@ test('public website profile accepts the rotated reader through the Supabase poo
     assert.equal(env.SELF_HOSTED_DEPLOYMENT, 'public-website');
     assert.equal(env.SITE_INDEXING_ENABLED, 'true'); assert.equal(env.MEDIA_THUMBNAILS, 'enabled');
     assert.equal(env.PUBLIC_CONTENT_CACHE, 'disabled'); assert.equal(env.DATABASE_READER_ISOLATION, 'enforce');
+    assert.equal(env.MEDIA_DELIVERY_MODE, 'legacy');
     assert.equal(socialCollectionPlaybackEnabled(env.SOCIAL_COLLECTION_PLAYBACK), false);
     assert.equal(collectionDayAdditionsEnabled(env.SOCIAL_COLLECTION_DAY_ADDITIONS), false);
     assert.equal(files.readerLogin(env.DATABASE_READER_URL, 'nb_website_reader', true), 'nb_website_reader_r20260101');
@@ -88,5 +89,42 @@ test('public website profile accepts the rotated reader through the Supabase poo
       await writeFile(path, JSON.stringify(publicProfile(extra)), { mode: 0o600 });
       assert.throws(() => files.readProfile(path), /SELF_HOSTED_PROFILE_INVALID/);
     }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('public display delivery requires a Supabase reader profile and rejects local display storage', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'cloud-display-profile-'));
+  const filename = join(root, 'website.json');
+  const publishableKey = 'sb_publishable_fixture';
+  const readerToken = (role: string) => 'fixture.' + Buffer.from(JSON.stringify({
+    role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 600, app_metadata: { notionblog_storage_role: role },
+  })).toString('base64url') + '.fixture';
+  const display = {
+    SITE_URL: 'https://blog.example.invalid', MEDIA_DELIVERY_MODE: 'display-only',
+    STORAGE_URL: 'https://storage.example.invalid/storage/v1', STORAGE_BUCKET: 'fixture-media',
+    STORAGE_API_KEY: publishableKey, STORAGE_READ_TOKEN: readerToken('reader'),
+  };
+  const write = (extra = {}, publicWebsite = true) => writeFile(filename,
+    JSON.stringify({ ...profile({ ...display, ...extra }), ...(publicWebsite ? { deployment: 'public-website' } : {}) }),
+    { mode: 0o600 });
+  try {
+    await write();
+    assert.equal(files.readProfile(filename).MEDIA_DELIVERY_MODE, 'display-only');
+    await write({ MEDIA_DELIVERY_MODE: 'legacy', STORAGE_PROVIDER: 'cos', MEDIA_PROVIDER: 'notion' });
+    assert.equal(files.readProfile(filename).MEDIA_DELIVERY_MODE, 'legacy');
+    for (const extra of [
+      { MEDIA_DELIVERY_MODE: '' }, { MEDIA_DELIVERY_MODE: 'unexpected' },
+      { STORAGE_PROVIDER: 'cos' }, { MEDIA_PROVIDER: 'notion' },
+      { SELF_HOSTED_MEDIA_MODE: 'display-only', SELF_HOSTED_MEDIA_ROOT: '/run/notionblog-media' },
+      { SELF_HOSTED_MEDIA_ROOT: '/run/notionblog-media' },
+      { STORAGE_READ_TOKEN: readerToken('writer') }, { STORAGE_READ_TOKEN: '' },
+      { STORAGE_API_KEY: 'placeholder' }, { STORAGE_READER_EMAIL: 'fixture@example.invalid' },
+      { STORAGE_URL: 'https://storage.example.invalid/private' },
+    ]) {
+      await write(extra);
+      assert.throws(() => files.readProfile(filename), { message: 'SELF_HOSTED_PROFILE_INVALID' });
+    }
+    await write({}, false);
+    assert.throws(() => files.readProfile(filename), { message: 'SELF_HOSTED_PROFILE_INVALID' });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
