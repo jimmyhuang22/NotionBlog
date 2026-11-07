@@ -9,7 +9,7 @@ import { RichDocumentBody } from "@/components/rich-document";
 import { StudyChildPages } from "@/components/study-child-pages";
 import { StudyLinkContexts } from "@/components/study-reading-context";
 import { studyLinkContexts } from "@/lib/study-link-context";
-import { rangeLabel } from "@/lib/format";
+import { rangeLabel, semesterLabel } from "@/lib/format";
 import { getCourseMetadata, getNote } from "@/lib/request-cache";
 import { getSiteConfig } from "@/lib/site";
 import { studyProjectForCourse } from "@/lib/study-projects";
@@ -53,7 +53,8 @@ export default async function NotePage({ params }: Props) {
   return (
     <>
       <StudyLinkContexts owner={item.href} labels={studyLinkContexts(document)} />
-      <NoteCrumbs trail={trail} title={item.title} courseCode={trail[0]?.href === courseItem.href ? courseItem.code : null} project={project ? { title: project.code || project.title, href: project.href } : null} />
+      <NoteCrumbs trail={trail} title={item.title} courseCode={trail[0]?.href === courseItem.href ? courseItem.code : null} project={project ? { title: project.code || project.title, href: project.href } : null}
+        term={trail[0]?.href === courseItem.href && courseItem.semester ? semesterLabel(courseItem.semester) : null} />
       <div className={toc.length ? "reading__body reading__body--toc" : "reading__body"}>
         <article className="reading__article card">
           {typeLabel || date ? (

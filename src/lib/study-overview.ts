@@ -30,9 +30,9 @@ export function studyEntryType(node: StudyNode): "Note" | "Course" | "Assignment
   return "Note";
 }
 
-/** Interface words for the four kinds: the full name for readers and assistive technology, one character for the list mark. */
-export const studyTypeLabels: Record<ReturnType<typeof studyEntryType>, { name: string; mark: string }> = {
-  Course: { name: "课程", mark: "课" }, Note: { name: "笔记", mark: "记" }, Assignment: { name: "作业", mark: "作" }, eFolio: { name: "eFolio", mark: "作" },
+/** The four kinds' names, for readers and assistive technology; the eye gets study-type-icon.tsx in both the overview and the directory (S16-2). */
+export const studyTypeLabels: Record<ReturnType<typeof studyEntryType>, { name: string }> = {
+  Course: { name: "课程" }, Note: { name: "笔记" }, Assignment: { name: "作业" }, eFolio: { name: "eFolio" },
 };
 
 interface StudyDay { year: number; month: number; day: number; time: string | null }

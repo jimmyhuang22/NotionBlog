@@ -7,6 +7,8 @@ import type { DateRange, StudyNode } from "../../contracts/content.ts";
 import { dateParts } from "@/lib/format";
 import { studyOverviewEntries, studyReadingNodes, studyEntryType, studyDateText, studyTypeLabels, studyView, type StudyView } from "@/lib/study-overview";
 import { LinkPending } from "@/components/link-pending";
+import { FindIcon, countStudyNodes } from "@/components/find-icon";
+import { StudyTypeIcon } from "@/components/study-type-icon";
 
 const views: [StudyView, string][] = [["all", "总览"], ["notes", "笔记"], ["courses", "周课"], ["assignments", "作业"]];
 
@@ -37,6 +39,7 @@ export function StudyOverview({ nodes, timeZone, quickLinks = [] }: { nodes: Stu
     else setQuery(addressed);
   }, [addressed]);
   const ordered = useMemo(() => studyReadingNodes(nodes, quickLinks), [nodes, quickLinks]);
+  const total = useMemo(() => countStudyNodes(nodes), [nodes]);
   const entries = studyOverviewEntries(ordered, view, query);
   function update(key: "view" | "q", value: string) {
     const url = new URL(window.location.href);
@@ -90,14 +93,19 @@ export function StudyOverview({ nodes, timeZone, quickLinks = [] }: { nodes: Stu
   return <section className="study-overview" aria-label="课程纵览">
     <div className="study-overview__toolbar">
       <nav ref={nav} className="study-views segmented" aria-label="按材料类型筛选"><span ref={pill} className="study-views__pill" aria-hidden="true" />{views.map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => choose(key)}>{label}</button>)}</nav>
-      <input className="study-overview__find" type="search" aria-label="在本课程目录中查找" placeholder="在本课程里查找" value={query} onChange={event => { setQuery(event.target.value); unshown.current.push(event.target.value); update("q", event.target.value); }} />
+      {/* Drawn like the reading directory's finder, with the same words: one finder, two places (S16-6). */}
+      <label className="tree-find study-overview__find">
+        <span className="visually-hidden">在本课程目录里查找</span>
+        <FindIcon />
+        <input type="search" placeholder={`在 ${total} 篇里查找`} enterKeyHint="search" value={query} onChange={event => { setQuery(event.target.value); unshown.current.push(event.target.value); update("q", event.target.value); }} />
+      </label>
     </div>
     <p className="visually-hidden" role="status" aria-live="polite">{entries.length} 个目录项</p>
     {entries.length ? <ul ref={list} key={switched ? `${view}:${switched}` : "first"} className="study-entries">{entries.map(({ node, path }, index) => {
       const type = studyEntryType(node);
       const arriving = switched > 0 && index < 12;
       return <li key={node.id} className={arriving ? "is-arriving" : undefined} style={arriving ? { "--i": index } as CSSProperties : undefined}><Link className="study-entry" href={node.href} prefetch={false} onNavigate={rememberPosition}>
-        <span className={`study-entry__type study-type--${type.toLowerCase()}`}><i aria-hidden="true">{studyTypeLabels[type].mark}</i><span className="visually-hidden">{studyTypeLabels[type].name}</span></span>
+        <span className={`study-entry__type study-type--${type.toLowerCase()}`}><StudyTypeIcon type={type} /><span className="visually-hidden">{studyTypeLabels[type].name}</span></span>
         <span className="study-entry__name"><span className="study-entry__title">{node.title}</span>{path.length ? <span className="study-entry__path">{path.join(" › ")}</span> : null}</span><EntryDate date={node.date} timeZone={timeZone} /><LinkPending />
       </Link></li>;
     })}</ul> : <p className="study-overview__empty">{nodes.length ? "没有匹配的目录项。" : "这门课还没有笔记。"}</p>}
