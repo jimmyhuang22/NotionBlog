@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { contentRepository } from "./lib/content";
 import { contentFeatures } from "../config/features.ts";
 import { getStudyProjects } from "./lib/content/study";
-import { routeAnswer, routeVerdict, standInStatus } from "./lib/route-verdict.ts";
+import { routeAnswer, routeVerdict, routeVerdictFromConfig, standInStatus } from "./lib/route-verdict.ts";
 import { publicCacheEnabled, publicCacheSecret } from "./server/public-cache/policy.ts";
 import { fetchCachedRouteVerdict } from "./server/public-cache/route-lookup.ts";
 import { cacheRouteCaller } from "./server/public-cache/deployment.ts";
@@ -15,10 +15,14 @@ export async function middleware(request: NextRequest) {
   if (direct !== null) return NextResponse.next({ status: direct, headers: noStore });
   let verdict: Awaited<ReturnType<typeof routeVerdict>>;
   try {
-    verdict = publicCacheEnabled() ? await fetchCachedRouteVerdict(request.nextUrl.pathname + request.nextUrl.search,
+    // A section's own page, a disabled section or a malformed address is decided by configuration alone, as
+    // it was before the public cache: no database read before the first byte (about 0.15 s on the live site).
+    // Everything that needs stored content still goes to the cached lookup or the provider.
+    const known = await routeVerdictFromConfig(request.nextUrl.pathname, contentFeatures, request.nextUrl.searchParams);
+    verdict = known ?? (publicCacheEnabled() ? await fetchCachedRouteVerdict(request.nextUrl.pathname + request.nextUrl.search,
       { ...await cacheRouteCaller(), siteKey: process.env.PUBLIC_CACHE_SITE_KEY ?? "", secret: publicCacheSecret() ?? "" })
       : await routeVerdict(request.nextUrl.pathname, contentFeatures, contentRepository, request.nextUrl.searchParams,
-        { studyProject: async slug => (await getStudyProjects()).some(project => project.slug === slug) });
+        { studyProject: async slug => (await getStudyProjects()).some(project => project.slug === slug) }));
   } catch { verdict = "unknown"; }
   const answer = routeAnswer(verdict);
   if (!answer) return NextResponse.next();

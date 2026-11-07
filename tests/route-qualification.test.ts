@@ -6,7 +6,7 @@ import { fixtureItems } from "../fixtures/content.ts";
 import { ContentServiceError } from "../contracts/repository.ts";
 import { createFeatureGatedRepository } from "../src/lib/content/factory.ts";
 import { qualifyRoute } from "../src/lib/qualify-route.ts";
-import { routeAnswer, routeVerdict, standInStatus } from "../src/lib/route-verdict.ts";
+import { routeAnswer, routeVerdict, routeVerdictFromConfig, standInStatus } from "../src/lib/route-verdict.ts";
 
 const all = Object.fromEntries(CONTENT_KINDS.map(kind => [kind, true])) as typeof defaultContentFeatures;
 
@@ -120,3 +120,27 @@ test("a page that is missing or could not be checked is answered by a stand-in a
   assert.equal(standInStatus("/content-unavailable"), 503);
   for (const path of ["/", "/about", "/study/any", "/content-unavailable/x"]) assert.equal(standInStatus(path), null, path);
 });
+
+test("addresses decided by configuration alone skip every read; the rest are left to the full check, and agree with it", async () => {
+  const query = (text = "") => new URLSearchParams(text);
+  for (const path of ["/status", "/photos", "/blog", "/projects", "/study", "/library/movies", "/library/books", "/library/games"])
+    assert.equal(await routeVerdictFromConfig(path, all, query()), "found", path);
+  for (const path of ["/photos", "/blog", "/library/books", "/library/movies", "/about", "/blog/anything"])
+    assert.equal(await routeVerdictFromConfig(path, defaultContentFeatures, query()), "missing", path);
+  for (const path of ["/library", "/library/unknown", "/library/toString", "/library/books/a/b", "/library/books/%2F", "/library/books/%broken", "/about/child", "/status/extra"])
+    assert.equal(await routeVerdictFromConfig(path, all, query()), "missing", path);
+  for (const [path, search] of [["/status", "focus=abc"], ["/photos/an-album", ""], ["/library/books/a-book", ""], ["/blog/a-post", ""],
+    ["/about", ""], ["/study/a-course", ""], ["/study/a-course/notes/a-note", ""], ["/study/projects/a-project", ""]] as const)
+    assert.equal(await routeVerdictFromConfig(path, all, query(search)), null, `${path}?${search}`);
+
+  // Wherever it answers, the full check answers the same.
+  const repository = createMockRepository();
+  const paths = ["/status", "/status?focus=nope", "/photos", "/blog", "/projects", "/study", "/library/movies", "/library/unknown", "/library/books/a/b", "/about/child",
+    fixtureItems.post[0].href, fixtureItems.album[0].href, fixtureItems.book[0].href, "/blog/missing"];
+  for (const features of [all, defaultContentFeatures]) for (const address of paths) {
+    const url = new URL(address, "https://site.example");
+    const quick = await routeVerdictFromConfig(url.pathname, features, url.searchParams);
+    if (quick !== null) assert.equal(quick, await routeVerdict(url.pathname, features, repository, url.searchParams), address);
+  }
+});
+

@@ -34,3 +34,24 @@ export async function routeVerdict(pathname: string, features: ContentFeatures, 
     return "unknown";
   }
 }
+
+/** Thrown by the stand-in below the moment an answer would need stored content. */
+class NeedsLookup extends Error {}
+
+/**
+ * The verdict for an address the rules decide from configuration alone: a section's own page (/status,
+ * /photos, /study, /library/movies), a disabled section, a malformed address. null when the answer needs
+ * stored content (a detail page, a focused status, a note, the about page); the caller then asks the
+ * provider or the cached route lookup as before. It runs the same rules (qualifyRoute) against a stand-in
+ * that refuses every read, so no address can be decided differently here than there.
+ */
+export async function routeVerdictFromConfig(pathname: string, features: ContentFeatures, query?: URLSearchParams): Promise<RouteVerdict | null> {
+  const refuse = () => { throw new NeedsLookup(); };
+  const repository = new Proxy({}, { get: () => refuse }) as unknown as ContentRepository;
+  try {
+    return await qualifyRoute(pathname, features, repository, query, { studyProject: refuse }) ? "found" : "missing";
+  } catch {
+    // A read was needed (or anything unexpected happened): leave the address to the full check.
+    return null;
+  }
+}
