@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import type { TextRun } from "../../contracts/content.ts";
-import { renderSnippets } from "../lib/render/actions.ts";
+import { renderInBrowser } from "../lib/render/browser.ts";
 import { withinLimits, type Snippet } from "../lib/render/snippets.ts";
 import { InlineEquationText, type InlineEquation } from "./rich-text";
 
@@ -18,7 +18,7 @@ function request(expressions: string[]) {
   const snippets = withinLimits(wanted.map((expression, index): Snippet => ({ id: `inline:${index}`, kind: "inline-equation", expression })));
   for (const snippet of snippets) if (snippet.kind === "inline-equation") asked.add(snippet.expression);
   // Formula styles arrive with the markup, so a formula never shows half-styled.
-  Promise.all([renderSnippets(snippets), import("./katex-styles")]).then(([html]) => {
+  Promise.all([renderInBrowser(snippets), import("./katex-styles")]).then(([html]) => {
     for (const snippet of snippets) {
       const rendered = html[snippet.id];
       if (rendered && snippet.kind === "inline-equation") markup.set(snippet.expression, rendered);

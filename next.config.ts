@@ -1,6 +1,22 @@
 import type { NextConfig } from "next";
 import { configureExecutionEnvironment, isolatedBrowserPolicy } from "./scripts/development/execution.ts";
 
+const publicBrowserReportPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join('; ');
+
 const config: NextConfig = {
   poweredByHeader: false,
   // next dev restarted on a kept .next/dev cache can answer every page load with "HMR hash mismatch"
@@ -44,7 +60,9 @@ export default function nextConfig(phase: string): NextConfig {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Content-Security-Policy', value: publicWebsite ? "frame-ancestors 'self'" : isolatedBrowserPolicy },
-          ...(publicWebsite ? [] : [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]),
+          ...(publicWebsite
+            ? [{ key: 'Content-Security-Policy-Report-Only', value: publicBrowserReportPolicy }]
+            : [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]),
         ] },
         // Keep every media response, including redirects and errors, at its existing stricter policy.
         { source: '/media/:path*', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },

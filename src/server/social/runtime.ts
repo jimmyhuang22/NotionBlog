@@ -1,6 +1,6 @@
 import "server-only";
 import { ContentServiceError } from "../../../contracts/repository.ts";
-import { socialReaderPoolConfig, verifySocialReader } from "./reader.ts";
+import { socialReaderRuntimePoolConfig, verifySocialReader } from "./reader.ts";
 import { readSocialSnapshot } from "./repository.ts";
 import { Pool } from "pg";
 import { readerSqlExecutor } from "../database/connection.ts";
@@ -33,7 +33,7 @@ export function socialProvider(): "disabled" | "database" | "mock" {
 }
 function readerPool() {
   if (!pool) {
-    const candidate = measureContentRead("database-pool", () => new Pool(socialReaderPoolConfig(process.env)));
+    const candidate = measureContentRead("database-pool", () => new Pool(socialReaderRuntimePoolConfig(process.env)));
     attachSocialReaderPool(candidate);
     pool = candidate;
   }
@@ -50,21 +50,48 @@ async function covers<T extends SocialWork>(snapshot: FeedSnapshot<T>, sql: Awai
 export async function socialRuntime() { return createPagedSocialRepository(socialSnapshot); }
 export function socialSnapshot() { return traceContentRead("social-snapshot", "unknown", async () => { const sql=await readerSql();return covers(await measureContentReadAsync("social-snapshot", () => readSocialSnapshot(sql)),sql,socialDisplayMode(process.env.SOCIAL_DISPLAY_MODE)); }); }
 async function collectionReaderSql(){const sql=await readerSql();await measureContentReadAsync("social-collection-check", () => verifyCollectionReader(sql));return sql;}
-export async function socialTimelineRuntime(){
+function timelineSettings(){
+  return {mode:socialDisplayMode(process.env.SOCIAL_DISPLAY_MODE),playback:socialCollectionPlaybackEnabled(process.env.SOCIAL_COLLECTION_PLAYBACK),
+    day:{enabled:collectionDayAdditionsEnabled(process.env.SOCIAL_COLLECTION_DAY_ADDITIONS),timeZone:getSiteConfig().timeZone}};
+}
+function readTimelineRows(sql:Awaited<ReturnType<typeof readerSql>>,{mode,playback,day}:ReturnType<typeof timelineSettings>):Promise<FeedSnapshot<SocialTimelineWork>>{
+  return measureContentReadAsync("social-snapshot", () => mode==="retained"?readRetainedSocialSnapshot(sql,playback,day):readSocialTimelineSnapshot(sql,playback,day));
+}
+async function hydrateTimelineCovers(version:string,selected:SocialTimelineWork[],sql:Awaited<ReturnType<typeof readerSql>>,{mode,playback}:ReturnType<typeof timelineSettings>){
+  return (await measureContentReadAsync("social-covers",()=>withSocialCovers({version,items:selected},sql,mode,playback))).items;
+}
+/** Without `rows`, one verified reader serves the rows and their covers, as before. With shared rows
+ * (the public cache), covers still qualify per request through withLiveSocialCovers. */
+export async function socialTimelineRuntime(rows?:()=>Promise<FeedSnapshot<SocialTimelineWork>>){
   const currentPool = readerPool();
   worksQueue ??= createSocialReadQueue(currentPool.options.max ?? 1);
-  return queueSocialWorksRepository(createSocialWorksRepository(socialTimelineSnapshot), worksQueue);
+  return queueSocialWorksRepository(createSocialWorksRepository(rows?async()=>withLiveSocialCovers(await rows()):socialTimelineSnapshot), worksQueue);
 }
 export function socialTimelineSnapshot():Promise<SocialCoverSnapshot<SocialTimelineWork>> {
   return traceContentRead("social-snapshot", "unknown", async () => {
-    const sql=await collectionReaderSql(),mode=socialDisplayMode(process.env.SOCIAL_DISPLAY_MODE),playback=socialCollectionPlaybackEnabled(process.env.SOCIAL_COLLECTION_PLAYBACK);
-    const day={enabled:collectionDayAdditionsEnabled(process.env.SOCIAL_COLLECTION_DAY_ADDITIONS),timeZone:getSiteConfig().timeZone};
-    const snapshot=await measureContentReadAsync("social-snapshot", () => mode==="retained"?readRetainedSocialSnapshot(sql,playback,day):readSocialTimelineSnapshot(sql,playback,day));
+    const sql=await collectionReaderSql(),settings=timelineSettings();
+    const snapshot=await readTimelineRows(sql,settings);
     if(!socialMediaEnabled(process.env.SOCIAL_MEDIA_ENABLED))return snapshot;
     // Bind the verified reader and mode to this read only. Actual cover qualification
     // still runs after selection; no extra role query or cached positive eligibility.
-    return {...snapshot,hydrateCovers:async selected=>(await measureContentReadAsync("social-covers",()=>withSocialCovers({version:snapshot.version,items:selected},sql,mode,playback))).items};
+    return {...snapshot,hydrateCovers:selected=>hydrateTimelineCovers(snapshot.version,selected,sql,settings)};
   });
+}
+/**
+ * The timeline rows alone, read by a verified reader. Every row has `cover: null` and the result carries no
+ * request-bound capability, so it holds no cover eligibility and may be kept by the public cache.
+ */
+export function socialTimelineRows():Promise<FeedSnapshot<SocialTimelineWork>> {
+  return traceContentRead("social-snapshot", "unknown", async () => readTimelineRows(await collectionReaderSql(),timelineSettings()));
+}
+/**
+ * Rows (fresh or shared) with live cover qualification: each hydration takes a newly verified reader and
+ * qualifies only the selected works, as an uncached snapshot does. No cover result is retained here.
+ */
+export function withLiveSocialCovers(rows:FeedSnapshot<SocialTimelineWork>):SocialCoverSnapshot<SocialTimelineWork> {
+  if(!socialMediaEnabled(process.env.SOCIAL_MEDIA_ENABLED))return rows;
+  const settings=timelineSettings();
+  return {...rows,hydrateCovers:async selected=>hydrateTimelineCovers(rows.version,selected,await collectionReaderSql(),settings)};
 }
 let mediaStorage: ObjectStorage | undefined;
 let mediaSql: ReturnType<typeof createSocialMediaSql> | undefined;

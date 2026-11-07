@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ContentBlock, ContentDocument } from "../../contracts/content.ts";
-import { renderSnippets } from "../lib/render/actions.ts";
+import { renderInBrowser } from "../lib/render/browser.ts";
 import { collectSnippets, withinLimits } from "../lib/render/snippets.ts";
 import { CodeFigure, DocumentBody, EquationFigure, type BlockExtensions } from "./blocks";
 import { InlineEquationText } from "./rich-text";
@@ -22,7 +22,7 @@ function load(document: ContentDocument): Promise<Rendered> {
     const snippets = withinLimits(collectSnippets(document.blocks));
     request = snippets.length
       // Formula styles arrive with the markup, so a formula never shows half-styled.
-      ? Promise.all([renderSnippets(snippets), snippets.some(snippet => snippet.kind !== "code") ? import("./katex-styles") : null])
+      ? Promise.all([renderInBrowser(snippets),snippets.some(snippet => snippet.kind !== "code") ? import("./katex-styles") : null])
         .then(([html]): Rendered => {
           const markup = new Map(Object.entries(html));
           const inline = new Map<string, string>();
@@ -56,7 +56,8 @@ const extensions: BlockExtensions = { Code, Equation, InlineEquation };
 
 /**
  * A body rendered in the browser. Code and formulas appear as plain text first, then the server
- * returns their highlighted and typeset markup in one request; if that fails the plain text stays.
+ * returns their highlighted and typeset markup, together with other bodies opened at the same time;
+ * if that fails the plain text stays.
  * The highlighter and typesetter themselves are never shipped to the browser.
  */
 export function BrowserDocumentBody({ document, topHeading, emptyText, imagePreviewWidth }: { document: ContentDocument; topHeading?: number; emptyText?: string; imagePreviewWidth?: 400 | 800 }) {

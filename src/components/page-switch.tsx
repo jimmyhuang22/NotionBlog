@@ -34,6 +34,8 @@ interface Switch {
   bar: HTMLElement;
   slow: boolean;
   slowTimer: number;
+  /** A section frame's own give-up: a move that never lands must not leave the page covered and inert. */
+  giveUpTimer?: number;
   frame: number;
   started: number;
 }
@@ -118,6 +120,7 @@ function headerBottom(): number {
 function drop(entry: Switch) {
   cancelAnimationFrame(entry.frame);
   clearTimeout(entry.slowTimer);
+  clearTimeout(entry.giveUpTimer);
   entry.overlay.remove();
   entry.bar.remove();
   entry.restore?.();
@@ -176,6 +179,9 @@ function enterSection(target: string, title: string) {
       }
     } };
   current = entry;
+  // As detail pages give up after GIVE_UP_AFTER: if the section has not landed by then, the frame goes and the
+  // page left is usable again. Should the move land later, it simply replaces that page.
+  entry.giveUpTimer = window.setTimeout(() => { if (current === entry) drop(entry); }, GIVE_UP_AFTER);
   const show = () => {
     if (current !== entry) return;
     for (const element of [document.getElementById("main"), document.querySelector<HTMLElement>(".site-footer")]) {

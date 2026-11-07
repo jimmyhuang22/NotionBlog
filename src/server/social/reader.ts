@@ -1,5 +1,6 @@
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { databasePoolConfig } from "../database/connection.ts";
+import { isSelfHostedRuntime } from "../../../scripts/self-hosted/context.cjs";
 import type { SqlExecutor } from "../database/sql.ts";
 
 export function socialReaderPoolConfig(env: Record<string, string | undefined>) {
@@ -16,6 +17,16 @@ export function socialReaderPoolConfig(env: Record<string, string | undefined>) 
     return { ...databasePoolConfig(mode === "transaction" ? url.toString() : env.SOCIAL_READER_DATABASE_URL, env.SOCIAL_READER_DATABASE_TLS, env.SOCIAL_READER_DATABASE_CA_CERT),
       pipeline: true, max: mode === "transaction" ? 1 : 2, idleTimeoutMillis: 5000, application_name: "notionblog-social-reader", statement_timeout: 10000, query_timeout: 12000 };
   } catch { throw new ContentServiceError("MISCONFIGURED", "The social reader connection is not configured."); }
+}
+/**
+ * The pool the website opens. As the shared content pool (2026-11-04), the persistent public server keeps an
+ * idle connection for 60 s instead of 5 s, so a visit after a short gap does not reconnect (about 0.4 s).
+ * Still at most the configured connections, created on demand, recycled when idle and closed with the server.
+ */
+export function socialReaderRuntimePoolConfig(env: Record<string, string | undefined>, selfHosted: () => boolean = isSelfHostedRuntime) {
+  const config = socialReaderPoolConfig(env);
+  if (selfHosted() && env.SELF_HOSTED_DEPLOYMENT === "public-website") config.idleTimeoutMillis = 60_000;
+  return config;
 }
 export async function verifySocialReader(sql: SqlExecutor): Promise<void> {
   try {
