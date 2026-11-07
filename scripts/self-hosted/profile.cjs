@@ -18,7 +18,7 @@ const publicAllowed = new Set([...allowed,
   'SITE_INDEXING_ENABLED', 'SITE_DISCOVERY_KINDS_JSON', 'NOTION_SOURCES_JSON',
   'NOTION_TOKEN', 'NOTION_API_VERSION', 'MEDIA_SIGNING_SECRET',
   'DATABASE_SEARCH_CONTEXT', 'DATABASE_SEARCH_RESULT_BUDGET', 'CONTENT_READ_TIMING',
-  'MEDIA_PROVIDER', 'MEDIA_THUMBNAILS', 'MEDIA_THUMBNAIL_QUALIFICATION',
+  'MEDIA_PROVIDER', 'MEDIA_DELIVERY_MODE', 'MEDIA_THUMBNAILS', 'MEDIA_THUMBNAIL_QUALIFICATION',
   'STORAGE_PROVIDER', 'THUMBNAIL_STORAGE_PROVIDER', 'STORAGE_URL', 'STORAGE_BUCKET',
   'STORAGE_API_KEY', 'STORAGE_READ_TOKEN', 'STORAGE_READER_EMAIL',
   'STORAGE_READER_PASSWORD', 'STORAGE_READER_USER_ID',
@@ -39,6 +39,7 @@ const defaults = Object.freeze({
   SOCIAL_PROVIDER: 'disabled', SOCIAL_MEDIA_ENABLED: 'false', SOCIAL_COLLECTION_PLAYBACK: 'false',
   SOCIAL_COLLECTION_DAY_ADDITIONS: 'false', SOCIAL_READER_CONNECTION_MODE: 'configured',
   MEDIA_PROVIDER: 'storage', MEDIA_THUMBNAILS: 'disabled', STORAGE_PROVIDER: 'supabase',
+  MEDIA_DELIVERY_MODE: 'legacy',
   THUMBNAIL_STORAGE_PROVIDER: 'supabase', SOCIAL_DISPLAY_MODE: 'trial', PUBLIC_CONTENT_CACHE: 'disabled',
   NEXT_TELEMETRY_DISABLED: '1', NOTIONBLOG_DEVELOPMENT_MODE: 'self-hosted',
   SELF_HOSTED_MEDIA_MODE: 'disabled', DATABASE_READER_ISOLATION: 'enforce',
@@ -99,11 +100,24 @@ function loadProfile(filename, localOnly) {
         env.SELF_HOSTED_MEDIA_ROOT.startsWith(path.resolve('public') + path.sep)) fail();
   } else if (env.SELF_HOSTED_MEDIA_MODE !== 'disabled' || raw.environment.SELF_HOSTED_MEDIA_ROOT !== undefined) fail();
   if (publicWebsite && (env.SELF_HOSTED_MEDIA_MODE !== 'disabled' ||
+      !['legacy', 'display-only'].includes(env.MEDIA_DELIVERY_MODE) ||
       !['true', 'false'].includes(env.SITE_INDEXING_ENABLED) ||
       !['storage', 'notion'].includes(env.MEDIA_PROVIDER) ||
       !['enabled', 'disabled'].includes(env.MEDIA_THUMBNAILS) ||
       !['supabase', 'cos'].includes(env.STORAGE_PROVIDER) ||
       !['supabase', 'cos'].includes(env.THUMBNAIL_STORAGE_PROVIDER))) fail();
+  if (env.MEDIA_DELIVERY_MODE === 'display-only') {
+    if (!publicWebsite || env.MEDIA_PROVIDER !== 'storage' || env.STORAGE_PROVIDER !== 'supabase') fail();
+    // Reuse the reader's local configuration validation. These factories make no requests.
+    const { createStorageReaderToken } = require('../../src/server/database/reader-auth.ts');
+    const { createSupabaseStorage } = require('../../src/server/database/storage.ts');
+    const token = createStorageReaderToken({
+      storageUrl: env.STORAGE_URL, apiKey: env.STORAGE_API_KEY, staticToken: env.STORAGE_READ_TOKEN,
+      email: env.STORAGE_READER_EMAIL, password: env.STORAGE_READER_PASSWORD, userId: env.STORAGE_READER_USER_ID,
+    });
+    createSupabaseStorage({ url: env.STORAGE_URL, bucket: env.STORAGE_BUCKET, apiKey: env.STORAGE_API_KEY,
+      token, role: 'reader' });
+  }
   if (publicWebsite && env.PUBLIC_CONTENT_CACHE !== 'disabled') {
     if (env.PUBLIC_CONTENT_CACHE !== 'tagged-v1' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(env.PUBLIC_CACHE_SITE_KEY ?? '') ||
         !/^[a-f0-9]{64}$/.test(env.CACHE_PURGE_SECRET ?? '')) fail();
