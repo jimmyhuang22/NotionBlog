@@ -68,6 +68,16 @@
 .course-directory { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
 .course-directory__head { flex-shrink: 0; }
 .course-directory__scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+/* Once the directory scrolls, its top edge fades instead of cutting a row in half under the finder (S16-4). */
+@property --directory-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .course-directory__scroll {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--directory-fade));
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--directory-fade));
+    animation: directory-fade linear both; animation-timeline: scroll(self block); animation-range: 0 28px;
+  }
+}
+@keyframes directory-fade { from { --directory-fade: 0px; } to { --directory-fade: 28px; } }
 /* In the scrolling directory and page outline the ring is drawn inside the row: outside it, the column's edges cut off its sides. */
 :is(.course-directory__scroll, .reading__toc) :is(a, button):focus-visible { outline-offset: -2px; }
 .reading__side .tree__heading { display: none; }
@@ -183,7 +193,7 @@
 .course-directory .tree__link[aria-current="page"] { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 2px 0 0 var(--accent); color: var(--accent); }
 .tree__row[data-active-branch] > .tree__toggle { color: var(--accent); }
 /* The finder above a long directory (course-tree.tsx). */
-.reading__side .course-directory .tree-find { display: flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 0 10px; min-height: 38px; border: 1px solid var(--rule); border-image: none; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--soft) 45%, transparent); box-shadow: none; color: var(--muted); }
+:is(.reading__side .course-directory, .study-overview__toolbar) .tree-find { display: flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 0 10px; min-height: 38px; border: 1px solid var(--rule); border-image: none; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--soft) 45%, transparent); box-shadow: none; color: var(--muted); }
 .tree-find:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tree-find input { flex: 1; min-width: 0; padding: 8px 0; border: 0; background: none; font: inherit; font-size: var(--text-sm); color: var(--ink); outline: none; }
 .tree--hits > li > .tree__link { display: grid; gap: 4px; }
@@ -246,8 +256,8 @@
 .study-overview { position: relative; }
 .study-entries--leaving { position: absolute; left: 0; right: 0; pointer-events: none; }
 .study-overview__toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; padding-bottom: 12px; }
-.study-overview__find { width: 210px; min-width: 0; max-width: 100%; padding: 8px 12px; border: 0; border-radius: var(--radius-xs); background: var(--soft); color: var(--ink); font: inherit; font-size: var(--text-sm); }
-.study-overview__find::placeholder { color: var(--muted); opacity: 1; }
+.study-overview__toolbar .study-overview__find { width: 230px; max-width: 100%; margin: 0; }
+.tree-find input::placeholder { color: var(--muted); opacity: 1; }
 .study-entries { list-style: none; margin: 0; padding: 8px 0 0; border-top: 1px solid var(--rule); }
 .study-entry { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 14px; align-items: baseline; min-height: 44px; padding: 10px 6px; border-radius: var(--radius-xs); }
 .study-entry:hover { background: var(--soft); color: var(--ink); }
@@ -256,10 +266,9 @@
  * 记 a dashed one, and 作 (assignments and eFolios) a filled ink dot, so only the deadlines stand out. The full
  * name is read out instead of the character.
  */
-.study-entry__type { display: inline-grid; place-items: center; justify-self: start; width: 22px; height: 22px; border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 50%; color: var(--muted); font-family: var(--font-hand); font-size: var(--text-xs); line-height: 1; transform: translateY(-1px); }
-.study-entry__type > i { font-style: normal; }
-.study-entry__type.study-type--note { border-style: dashed; }
-.study-entry__type:is(.study-type--assignment, .study-type--efolio) { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+/* The same line icons as the reading directory, assignments in the accent (S16-2). */
+.study-entry__type { display: inline-flex; justify-self: start; align-self: center; color: var(--muted); }
+.study-entry__type:is(.study-type--assignment, .study-type--efolio) { color: var(--accent); }
 .study-entry__title { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-base); line-height: 1.5; }
 .study-entry__name { min-width: 0; }
 .study-entry__path { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
@@ -290,7 +299,9 @@
 }
 @media (max-width: 720px) {
   .course-grid.course-grid--gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .study-overview__find { width: 100%; font-size: var(--text-md); }
+  .study-overview__toolbar .study-overview__find { width: 100%; }
+  /* At 16px a phone does not zoom in when the field is focused; the directory drawer's finder too. */
+  .tree-find input { font-size: var(--text-md); }
   .study-entry { grid-template-columns: 26px minmax(0, 1fr); gap: 3px 12px; padding: 12px 0; }
   .study-entry__date { grid-column: 2; text-align: left; white-space: normal; }
   .study-entry__date time { display: inline-block; white-space: nowrap; }

@@ -80,3 +80,15 @@ test("note breadcrumbs and the back link use the course title when its code is n
     assert.equal(html.includes("null"), false);
   }
 });
+
+test("note breadcrumbs name the course's term before it, as the course page does, and only when known", () => {
+  const { NoteCrumbs } = view("src/components/note-crumbs.tsx");
+  const item = course("REAL42");
+  const render = (term: string | null) => renderToStaticMarkup(React.createElement(NoteCrumbs, {
+    trail: [{ href: item.href, title: item.title }], title: "Week 1", courseCode: "REAL42", term,
+  }));
+  const withTerm = render("2025 S2");
+  assert.ok(withTerm.indexOf("<span>2025 S2</span>") > 0);
+  assert.ok(withTerm.indexOf("<span>2025 S2</span>") < withTerm.indexOf(">REAL42</a>"));
+  assert.equal(render(null).includes("S2"), false);
+});
