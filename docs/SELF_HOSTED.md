@@ -21,6 +21,8 @@ npm run start:self-hosted -- --config /etc/notionblog/website.json --port 3100
 
 网站只监听回环端口，通过 HTTPS 入口对外提供服务。[Nginx 示例](../deploy/self-hosted/nginx.conf.example)将网站放在8443，保留现有443服务；Cloudflare 使用 Full (strict) 和只匹配网站域名的 Origin Rule，将源站目标端口覆盖为8443，安全组与主机自身防火墙均只允许 Cloudflare 当前网段访问该端口；不能只检查其中一层。不要覆盖已有服务或开放 Node 回环端口。构建必须在目标操作系统/架构对应的 Linux 环境完成，不能携带 Mac 的原生依赖。安装、扩容、DNS、真实连接及正式发布仍依照用户对该次部署的授权执行。
 
+Nginx 需启用 `http_realip_module`。网站监听只信任来自 [Cloudflare 当前 IPv4／IPv6 网段](https://www.cloudflare.com/ips/)的 `CF-Connecting-IP`，再用解析后的地址覆盖传给回环 Node 的 `X-Real-IP` 和 `X-Forwarded-For`。安装时核对示例网段，并与安全组、主机防火墙已启用的地址族同步维护。网站访问日志首列继续记录 TCP 对端（公网为 Cloudflare 边缘），以免将恢复出的访客地址写入访问日志。验收需测试可信请求、伪造头和不可信来源的回退行为。
+
 ## 正式版本安装
 
 AWS当前使用完整Node产物人工部署，没有Git自动发布任务。完成main发布后，核对正式提交与受检文件树一致，在对应Linux架构离线构建公开产物，再安装到独立release目录并切换服务；合并main本身不会更新AWS程序。保留受保护运行配置在代码之外，图片继续由既有云端存储读取，不打包私人配置、后台任务或媒体库。启用systemd开机启动，重启后仍须使用专用入口，普通 `npm start` 仍是离线演示。
