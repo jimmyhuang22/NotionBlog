@@ -99,6 +99,8 @@
 .prose table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: var(--text-md); text-align: left; }
 /* "Break anywhere" also lets a table count every column as one character wide, so words split in two; in a table a word breaks only when it cannot fit (S15-2). */
 .prose table, .prose table * { overflow-wrap: break-word; }
+/* Chinese breaks between any two characters, so a short label column next to long text was squeezed to two characters a line; it keeps room for about six (S16-1). */
+.prose tr > :first-child { min-width: 6em; }
 .prose th, .prose td { padding: 12px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 .prose th { font-weight: 600; }
 .prose th[scope="col"] { font-size: var(--text-sm); color: var(--muted); }

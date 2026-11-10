@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { CODE_ROLES, highlightCode, normalizeLanguage } from "../src/lib/render/highlight.ts";
 import { renderEquation } from "../src/lib/render/equation.ts";
-import { renderSnippets } from "../src/lib/render/actions.ts";
+import { parseSnippets, renderSnippets } from "../src/lib/render/server.ts";
 import { MAX_SNIPPETS, MAX_SNIPPET_CHARS, collectSnippets, withinLimits, type Snippet } from "../src/lib/render/snippets.ts";
 import type { ContentBlock } from "../contracts/content.ts";
 import { headingShift, headingTag } from "../src/lib/headings.ts";
@@ -92,7 +92,7 @@ test("the browser-facing renderer returns markup by block id and ignores anythin
   for (const invalid of [null, "text", {}, [null], [{ id: "", kind: "equation", expression: "x" }], [{ id: "a", kind: "image" }],
     [{ id: "a", kind: "code", code: 1, language: "java" }], [{ id: 7, kind: "equation", expression: "x" }],
     Array.from({ length: MAX_SNIPPETS + 1 }, (_, index) => ({ id: `e${index}`, kind: "equation", expression: "x" })), oversized]) {
-    assert.deepEqual(await renderSnippets(invalid), {});
+    assert.equal(parseSnippets(invalid), null);
   }
 });
 

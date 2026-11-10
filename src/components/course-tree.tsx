@@ -8,6 +8,7 @@ import { studyEntryType } from "@/lib/study-overview";
 import { StudyTypeIcon } from "@/components/study-type-icon";
 import { LinkPending } from "@/components/link-pending";
 import { useStudyLinkContexts } from "@/components/study-reading-context";
+import { FindIcon } from "@/components/find-icon";
 
 function contains(node: StudyNode, href: string): boolean {
   return node.href === href || (node.children ?? []).some(child => contains(child, href));
@@ -115,7 +116,7 @@ function Finder({ nodes, current }: { nodes: StudyNode[]; current: string }) {
       <div className="course-directory__head">
       <label className="tree-find">
         <span className="visually-hidden">在本课程目录里查找</span>
-        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="7" cy="7" r="4.6" /><path d="m10.5 10.5 3.2 3.2" strokeLinecap="round" /></svg>
+        <FindIcon />
         <input type="search" value={query} placeholder={`在 ${all.length} 篇里查找`} enterKeyHint="search"
           onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setQuery(""); }} />
       </label>
