@@ -1,7 +1,8 @@
 import type { SocialTimelineWork } from "../../contracts/social-timeline.ts";
-import { platformNames } from "../lib/home-feed.ts";
+import { collectionAddition, platformNames } from "../lib/home-feed.ts";
 import { calendarDay, type CalendarDay } from "../lib/format.ts";
-import { workDayMoment, workLines, workMoment } from "../lib/works.ts";
+import { coverShapes, workDayMoment, workLines, workMoment } from "../lib/works.ts";
+import { CoverImage } from "./cover-image";
 import { EntryMoment } from "./entry-moment";
 import { PlatformExitNote, PlatformMark } from "./platform-signs";
 import { BiliCard, isBiliCard } from "./bili-card";
@@ -67,5 +68,64 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
           : <div key={line.key} className={className}>{body}</div>;
       })}</li>)}
     </ul>
+  );
+}
+
+/**
+ * A work standing alone on the home timeline, as one light line (the owner's choice, 2026-11-11): a small
+ * picture in its platform's shape, then the title and one quiet line of where it lives, its kind and its
+ * figures. The status entries stay the timeline's main reading; this only says what was published. A further
+ * platform of the same work gets its own short line under it with that platform's figures and address. The
+ * picture comes after the words in the source, so the link reads its title first. The figures keep to the
+ * platform's own and an unknown one is left out; only a checked address is a link.
+ */
+export function HomeWorkLine({ work, timeZone, priorityCover = false }: { work: SocialTimelineWork; timeZone: string; priorityCover?: boolean }) {
+  const [lead, ...more] = workLines(work);
+  const shape = lead ? coverShapes[lead.platform] : "wide";
+  const update = work.collection ? collectionAddition(work.collection, timeZone) : null;
+  const name = lead ? platformNames[lead.platform] : null;
+  const blank = <span className="work-line__blank">{lead ? <PlatformMark platform={lead.platform} size={16} /> : null}<span className="visually-hidden">封面未记录</span></span>;
+  const main = (
+    <>
+      <span className="work-line__text">
+        <span className="work-line__title">{work.title}</span>
+        {lead ? (
+          <span className="work-line__meta">
+            <PlatformMark platform={lead.platform} />
+            <span>{name}</span>
+            {[lead.kind, lead.size].filter(Boolean).map(part => <span key={part} className="work-line__part">{part}</span>)}
+            {lead.figures.map(figure => <span key={figure.metric} className="work-line__part work-line__figure">{figure.label} {figure.value}</span>)}
+            {update ? <span className="work-line__part work-line__update">{update.text}</span> : null}
+          </span>
+        ) : null}
+      </span>
+      <span className={`work-line__thumb work-line__thumb--${shape}`}>
+        {work.cover ? <CoverImage className="work-line__cover" image={work.cover} previewWidth={400} label="作品封面" lazy priority={priorityCover} sized={false} fallback={blank} /> : blank}
+      </span>
+      {lead?.url && name ? <PlatformExitNote name={name} /> : null}
+    </>
+  );
+  return (
+    <div className="work-line">
+      {lead?.url
+        ? <a className="work-line__main" href={lead.url} target="_blank" rel="noopener noreferrer" {...(lead.opensLatest ? { title: "打开最新一集" } : {})}>{main}</a>
+        : <div className="work-line__main">{main}</div>}
+      {more.map(line => {
+        const lineName = platformNames[line.platform];
+        const body = (
+          <>
+            <span className="visually-hidden">{work.title}，</span>
+            <PlatformMark platform={line.platform} />
+            <span>{lineName}</span>
+            <span className="work-line__part">{line.kind}</span>
+            {line.figures.map(figure => <span key={figure.metric} className="work-line__part work-line__figure">{figure.label} {figure.value}</span>)}
+            {line.url ? <PlatformExitNote name={lineName} /> : null}
+          </>
+        );
+        return line.url
+          ? <a key={line.key} className="work-line__meta work-line__more" href={line.url} target="_blank" rel="noopener noreferrer">{body}</a>
+          : <span key={line.key} className="work-line__meta work-line__more">{body}</span>;
+      })}
+    </div>
   );
 }

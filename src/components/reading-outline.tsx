@@ -3,15 +3,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { TableOfContentsEntry } from "../../contracts/content.ts";
 
-/** The outline follows the article, showing detail only for the current chapter. */
-export function ReadingOutline({ toc }: { toc: TableOfContentsEntry[] }) {
+/**
+ * The heading the reader is in: the last one above the line under the header, else the first. Shared by the
+ * outline beside the article and the one opened from its button (page-outline.tsx).
+ */
+export function useCurrentHeading(toc: TableOfContentsEntry[]) {
   const [active, setActive] = useState("");
-  const [expanded, setExpanded] = useState(false);
-  const base = Math.min(...toc.map(entry => entry.level));
-  const current = toc.findIndex(entry => entry.id === active);
-  let chapter = 0;
-  for (let i = 0; i <= current; i++) if (toc[i]?.level === base) chapter = i;
-
   useEffect(() => {
     const headings = toc.flatMap(entry => {
       const element = document.getElementById(entry.id);
@@ -42,6 +39,28 @@ export function ReadingOutline({ toc }: { toc: TableOfContentsEntry[] }) {
       cancelAnimationFrame(frame);
     };
   }, [toc]);
+  return [active, setActive] as const;
+}
+
+/** A chapter reached from an outline is marked once under its heading, so the eye knows where it landed. */
+export function markArrival(id: string) {
+  const heading = document.getElementById(id);
+  if (!heading || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  heading.classList.remove("is-arrived");
+  void heading.offsetWidth;
+  heading.classList.add("is-arrived");
+  heading.addEventListener("animationend", () => heading.classList.remove("is-arrived"), { once: true });
+}
+
+/** The outline follows the article, showing detail only for the current chapter. */
+export function ReadingOutline({ toc }: { toc: TableOfContentsEntry[] }) {
+  const [active, setActive] = useCurrentHeading(toc);
+  const [expanded, setExpanded] = useState(false);
+  const base = Math.min(...toc.map(entry => entry.level));
+  const current = toc.findIndex(entry => entry.id === active);
+  let chapter = 0;
+  for (let i = 0; i <= current; i++) if (toc[i]?.level === base) chapter = i;
+
 
   // The current chapter's mark slides along the outline instead of jumping (2026-10-20); placed without motion the first time.
   const list = useRef<HTMLUListElement>(null);
@@ -55,15 +74,9 @@ export function ReadingOutline({ toc }: { toc: TableOfContentsEntry[] }) {
     mark.current.style.transform = `translateY(${link.offsetTop}px)`;
     list.current.dataset.mark = "";
   }, [active, expanded, chapter]);
-  // A chapter reached from the outline is marked once under its heading, so the eye knows where it landed.
   function arrive(id: string) {
     setActive(id);
-    const heading = document.getElementById(id);
-    if (!heading || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    heading.classList.remove("is-arrived");
-    void heading.offsetWidth;
-    heading.classList.add("is-arrived");
-    heading.addEventListener("animationend", () => heading.classList.remove("is-arrived"), { once: true });
+    markArrival(id);
   }
 
   let owner = 0;
