@@ -49,9 +49,11 @@ export function createCosStorage(input: CosStorageOptions): CosStorage {
   const accelerated = options.role === "reader" ? options.readEndpoint === "accelerate" : options.writeEndpoint === "accelerate";
   const prefix = options.prefix.replace(/\/$/, "");
   const fetcher = options.fetch ?? fetch;
-  async function request(method: "GET" | "PUT", path: string, query: string, extra: Record<string, string> = {}, body?: Uint8Array) {
+  async function request(method: "GET" | "PUT", path: string, query: string, extra: Record<string, string> = {}, body?: Uint8Array, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     const host = `${options.bucket}.cos.${!query && accelerated ? "accelerate" : options.region}.myqcloud.com`;
     const credential = typeof options.credentials === "function" ? await options.credentials() : options.credentials;
+    signal?.throwIfAborted();
     const end = Math.floor(Date.now() / 1000) + 120, time = `${end - 150};${end}`;
     credentialsValid(credential, end);
     const headers: Record<string, string> = { host, ...extra };
@@ -62,7 +64,8 @@ export function createCosStorage(input: CosStorageOptions): CosStorage {
     const toSign = `sha1\n${time}\n${createHash("sha1").update(httpString).digest("hex")}\n`;
     headers.authorization = `q-sign-algorithm=sha1&q-ak=${credential.secretId}&q-sign-time=${time}&q-key-time=${time}&q-header-list=${names.join(";")}&q-url-param-list=${query}&q-signature=${createHmac("sha1", key).update(toSign).digest("hex")}`;
     return fetcher(`https://${host}${path}${query ? `?${query}` : ""}`, {
-      method, headers, body: body === undefined ? undefined : Buffer.from(body), redirect: "error", cache: "no-store", signal: AbortSignal.timeout(20000),
+      method, headers, body: body === undefined ? undefined : Buffer.from(body), redirect: "error", cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000),
     });
   }
   async function boundedBody(response: Response, maximum: number, control = false) {
@@ -98,12 +101,12 @@ export function createCosStorage(input: CosStorageOptions): CosStorage {
       } catch { unavailable(); }
     })();
   }
-  async function read(input: StoredMedia) {
+  async function read(input: StoredMedia, signal?: AbortSignal) {
     const media = { ...input };
     validateMedia(media);
     let stage: CosReadFailure["stage"] = "request", httpStatus: number | undefined;
     try {
-      const response = await request("GET", `/${prefix}/${media.objectKey}`, "");
+      const response = await request("GET", `/${prefix}/${media.objectKey}`, "", {}, undefined, signal);
       httpStatus = response.status; stage = "status";
       if (response.status !== 200) { await response.body?.cancel().catch(() => {}); unavailable(); }
       stage = "body"; const bytes = await boundedBody(response, media.byteSize);
@@ -114,7 +117,7 @@ export function createCosStorage(input: CosStorageOptions): CosStorage {
       const code = cause && typeof cause === "object" && "code" in cause ? cause.code : undefined;
       const networkCode = typeof code === "string" && known.has(code) ? code : error instanceof Error && error.name === "TimeoutError" ? "TIMEOUT" : undefined;
       try { options.onReadFailure?.({ stage, ...(httpStatus === undefined ? {} : { httpStatus }), ...(networkCode ? { networkCode } : {}) }); } catch { /* Diagnostics cannot change the public error. */ }
-      if (stage === "request" && networkCode && ["UND_ERR_CONNECT_TIMEOUT", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "TIMEOUT"].includes(networkCode)) throw new TransientStorageReadError();
+      if (!signal?.aborted && stage === "request" && networkCode && ["UND_ERR_CONNECT_TIMEOUT", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "TIMEOUT"].includes(networkCode)) throw new TransientStorageReadError();
       return unavailable();
     }
   }

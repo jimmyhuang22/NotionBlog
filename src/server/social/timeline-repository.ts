@@ -77,7 +77,7 @@ function timelineSql(playback: boolean) { return `WITH collections AS MATERIALIZ
     ) AS collection
     FROM social_sync.website_collections c ${playback ? "LEFT JOIN social_sync.website_collection_playbacks playback USING(collection_key)" : ""}
   ),
-  -- Candidates and each work's bounded aggregate reuse the same RLS-filtered publications.
+  -- Candidates and the grouped aggregate reuse the same RLS-filtered publications.
   publications AS MATERIALIZED (
     SELECT * FROM social_sync.website_publications p WHERE NOT EXISTS (
       SELECT 1 FROM social_sync.website_collection_members m WHERE m.publication_key=p.publication->>'id'
@@ -90,13 +90,20 @@ function timelineSql(playback: boolean) { return `WITH collections AS MATERIALIZ
       coalesce(c.collection->'activity'->>'at',CASE WHEN p.work_id IS NOT NULL THEN p.occurred_at ELSE c.collection->>'firstPublishedAt' END) AS timeline_at
     FROM (SELECT work_id,title,occurred_at FROM publications GROUP BY work_id,title,occurred_at) p
       FULL JOIN collections c ON c.collection->>'id'=p.work_id
-  ), selected AS MATERIALIZED (SELECT * FROM candidates ORDER BY timeline_at DESC NULLS LAST,id LIMIT ${MAX_SOCIAL_WORKS+1})
+  ), selected AS MATERIALIZED (SELECT * FROM candidates ORDER BY timeline_at DESC NULLS LAST,id LIMIT ${MAX_SOCIAL_WORKS+1}),
+  -- Scan the materialized publications once; a per-work LATERAL scan cannot use
+  -- the underlying work_id index. Keep one extra row so oversized works fail.
+  ranked_publications AS (
+    SELECT p.work_id,p.publication,row_number() OVER (
+      PARTITION BY p.work_id ORDER BY p.publication->>'platform',p.publication->>'id'
+    ) AS position FROM publications p WHERE p.work_id IN (SELECT id FROM selected)
+  ), grouped_publications AS (
+    SELECT work_id,jsonb_agg(publication ORDER BY publication->>'platform',publication->>'id') AS items
+    FROM ranked_publications WHERE position<=${MAX_SOCIAL_PUBLICATIONS_PER_WORK+1} GROUP BY work_id
+  )
   SELECT jsonb_build_object('id',s.id,'title',s.title,'occurredAt',s.occurred_at,'collection',s.collection,'collectionIdentity',s.identity,
-    'publications',coalesce(p.items,'[]'::jsonb)) AS work FROM selected s CROSS JOIN LATERAL (
-      SELECT jsonb_agg(publication ORDER BY publication->>'platform',publication->>'id') AS items FROM (
-        SELECT publication FROM publications WHERE work_id=s.id ORDER BY publication->>'platform',publication->>'id' LIMIT ${MAX_SOCIAL_PUBLICATIONS_PER_WORK+1}
-      ) bounded
-    ) p ORDER BY s.timeline_at DESC NULLS LAST,s.id`; }
+    'publications',coalesce(p.items,'[]'::jsonb)) AS work FROM selected s
+    LEFT JOIN grouped_publications p ON p.work_id=s.id ORDER BY s.timeline_at DESC NULLS LAST,s.id`; }
 export const socialTimelineSql = timelineSql(false);
 export const socialPlaybackTimelineSql = timelineSql(true);
 export async function verifyCollectionReader(sql:SqlExecutor) {
