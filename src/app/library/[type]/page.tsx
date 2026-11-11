@@ -6,12 +6,11 @@ import { LinkPending } from "@/components/link-pending";
 import { ScrollingSegments } from "@/components/scrolling-segments";
 import { SortToggle } from "@/components/sort-toggle";
 import { FILTER_TRANSITION } from "@/lib/transitions";
-import { contentRepository } from "@/lib/content";
-import { libraryHref, libraryOrders, librarySections, type LibraryItem } from "@/lib/library";
+import { readLibraryFirstPage } from "@/lib/content";
+import { libraryHref, libraryOrders, librarySections } from "@/lib/library";
 import { getSiteConfig } from "@/lib/site";
-import { hasYear, readYear, yearTabs, type YearChoice } from "@/lib/year-filter";
+import { readYear, yearTabs } from "@/lib/year-filter";
 import { isEnabledContentKind } from "../../../../config/features.ts";
-import type { LibraryKind, LibraryYears, Page } from "../../../../contracts/content.ts";
 
 const PAGE_SIZE = 24;
 
@@ -19,15 +18,6 @@ type Props = { params: Promise<{ type: string }>; searchParams: Promise<{ status
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: librarySections[(await params).type]?.label ?? "作品" };
-}
-
-/** The year counts are an aid: if they cannot be read the list still shows, without the year switch. */
-async function readYears(kind: LibraryKind, status: string | null): Promise<LibraryYears | null> {
-  try {
-    return await contentRepository.getLibraryYears(kind, status ? { status } : {});
-  } catch {
-    return null;
-  }
 }
 
 export default async function LibraryPage({ params, searchParams }: Props) {
@@ -40,11 +30,9 @@ export default async function LibraryPage({ params, searchParams }: Props) {
   const status = section.tabs.find(([value]) => value === requested.status)?.[0] ?? section.defaultStatus;
   const order = libraryOrders.find(([value]) => value !== null && value === requested.order)?.[0] ?? null;
   const asked = readYear(requested.year);
-  const list = (year: YearChoice) => contentRepository.list(section.kind, { limit: PAGE_SIZE, ...(status ? { status } : {}), ...(year === null ? {} : { year }), ...(order ? { order } : {}) }) as Promise<Page<LibraryItem>>;
-  const [first, years] = await Promise.all([list(asked), readYears(section.kind, status)]);
-  // A year carried over from another status may have nothing under this one; the whole status shows instead of an empty year.
-  const year = years && !hasYear(years, asked) ? null : asked;
-  const initial = year === asked ? first : await list(year);
+  const { page: initial, years, year } = await readLibraryFirstPage(section.kind, {
+    limit: PAGE_SIZE, ...(status ? { status } : {}), ...(asked === null ? {} : { year: asked }), ...(order ? { order } : {}),
+  });
   const selected = year === null ? null : String(year);
   const tabs = section.tabs;
   const yearChoices = years ? yearTabs(years) : [];

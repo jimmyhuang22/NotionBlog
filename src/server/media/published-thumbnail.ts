@@ -1,4 +1,5 @@
 import { cacheableMediaHeaders } from "./cache.ts";
+import { readMediaObject } from "./storage-read.ts";
 import type { PublishedThumbnailProjection } from "../database/published-thumbnails.ts";
 import type { ThumbnailWidth } from "../database/thumbnail-index.ts";
 import { verifyMediaBytes, type ObjectStorage } from "../database/storage.ts";
@@ -17,7 +18,7 @@ export async function publishedThumbnailResponse(assetId: string, width: Thumbna
   const first = await ports.read(assetId, width);
   if (!first) return missing();
   const descriptor = first.thumbnail ?? first.original;
-  const bytes = await ports.storage().read(descriptor); verifyMediaBytes(descriptor, bytes);
+  const bytes = await readMediaObject(ports.storage(), descriptor); verifyMediaBytes(descriptor, bytes);
   const current = await ports.read(assetId, width);
   if (!current || JSON.stringify(current) !== JSON.stringify(first)) return missing();
   return new Response(Buffer.from(bytes), { headers: { ...cacheableMediaHeaders(headers), "Content-Type": descriptor.mime, "Content-Length": String(bytes.length) } });

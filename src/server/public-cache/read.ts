@@ -20,16 +20,30 @@ export interface ProjectionAdmission<T> {
   readonly policy: string;
   accepts(value: T): boolean;
 }
+// In-flight rows can be shared by separately bundled routes. These private control
+// errors must be recognizable across module copies, unlike instanceof alone. A
+// public provider code/message never grants retry or return-value semantics.
+const projectionControl = Symbol.for("notionblog.public-projection-control.v1");
 class ProjectionNotStored extends Error {
+  readonly [projectionControl] = "not-stored";
   readonly value: unknown;
   constructor(value: unknown) { super("Public projection result must not be stored."); this.value = value; }
 }
 class OversizeProjection extends Error {
+  readonly [projectionControl] = "oversize";
   readonly value: unknown;
   constructor(value: unknown) { super("Public projection is too large for the data cache."); this.value = value; }
 }
 class ProjectionChanged extends ContentServiceError {
+  readonly [projectionControl] = "changed";
   constructor() { super("CONTENT_UNAVAILABLE", "Publication changed while preparing cached content."); }
+}
+function controlResult(error: unknown): { kind: "changed" } | { kind: "not-stored" | "oversize"; value: unknown } | null {
+  if (!(error instanceof Error)) return null;
+  const kind = Object.getOwnPropertyDescriptor(error, projectionControl)?.value;
+  if (kind === "changed") return { kind };
+  const value = Object.getOwnPropertyDescriptor(error, "value");
+  return (kind === "not-stored" || kind === "oversize") && value && "value" in value ? { kind, value: value.value } : null;
 }
 const generation = new AsyncLocalStorage<string>();
 /** Request-local service memos must not carry a rejected generation into a retry. */
@@ -66,12 +80,13 @@ export async function readPublicProjection<T>(scope: PublicCacheScope, operation
         throw new ContentServiceError("CONTENT_UNAVAILABLE", "Public projection cache result violates its admission policy.");
       return structuredClone(entry.value);
     } catch (error) {
+      const control = controlResult(error);
       // Preserve large valid documents without storing them or weakening generation checks.
-      if (error instanceof OversizeProjection || error instanceof ProjectionNotStored) {
+      if (control?.kind === "oversize" || control?.kind === "not-stored") {
         checkContentReadBudget();
-        return structuredClone(error.value) as T;
+        return structuredClone(control.value) as T;
       }
-      if (!(error instanceof ProjectionChanged) || attempt >= MAX_ATTEMPTS) throw error;
+      if (control?.kind !== "changed" || attempt >= MAX_ATTEMPTS) throw error;
     }
   }
 }

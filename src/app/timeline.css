@@ -116,9 +116,10 @@ a.tag--social::after { content: ""; position: absolute; inset: -11px -8px; }
 .event__title { font-family: var(--font-hand); font-size: var(--text-body); }
 .event__detail { font-size: var(--text-sm); color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .event__arrow { flex: 0 0 auto; color: var(--muted); }
-/* A game as one line (home-timeline.tsx GameLine): a square of its cover, the sentence, its platform chips. */
-.event--line { width: fit-content; max-width: 100%; align-items: center; gap: 12px; padding: 10px 18px 10px 10px; }
-.event__square { flex: 0 0 44px; width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--soft); object-fit: cover; }
+/* A game as one line (home-timeline.tsx GameLine): a square of its cover, the sentence, its platform chips. No card behind it
+   since 2026-11-11, so the status entries keep the weight. */
+.event--line { width: fit-content; max-width: 100%; align-items: center; gap: 12px; padding: 0; border-radius: var(--radius-sm); }
+.event__square { flex: 0 0 48px; width: 48px; height: 48px; border-radius: var(--radius-sm); background: var(--soft); object-fit: cover; }
 .event__line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
 .event__sentence { min-width: 0; overflow-wrap: anywhere; }
 .event__lead { font-family: var(--font-hand); font-size: var(--text-body); }
@@ -126,6 +127,34 @@ a.tag--social::after { content: ""; position: absolute; inset: -11px -8px; }
 .event__chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; white-space: nowrap; }
 .event__time { font-size: var(--text-sm); color: var(--muted); }
 .event--line:hover .event__title { color: var(--accent); }
+a.event--line:focus-visible { outline-offset: 4px; }
+/*
+ * A work standing alone on the home timeline (home-works.tsx HomeWorkLine, 2026-11-11): a small picture in its
+ * platform's shape, the title over one quiet line. The picture follows the words in the source and is drawn first.
+ */
+.work-line { display: flex; flex-direction: column; gap: 6px; max-width: 460px; margin-top: 10px; }
+.work-line__main { display: flex; align-items: center; gap: 12px; color: inherit; }
+.work-line__thumb { order: -1; flex: none; position: relative; display: block; height: 52px; overflow: hidden; border-radius: var(--radius-sm); background: var(--soft); }
+.work-line__thumb--wide { width: 92px; }
+.work-line__thumb--tall { width: 39px; }
+.work-line__cover { display: block; width: 100%; height: 100%; object-fit: cover; }
+.work-line__blank { display: grid; place-items: center; width: 100%; height: 100%; color: var(--muted); opacity: 0.6; }
+.work-line__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.work-line__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: var(--font-hand); font-size: var(--text-body); line-height: 1.4; overflow-wrap: anywhere; }
+/* Parts are parted by dots hung in the gap before each, so a wrapped line never starts with one (as on the work cards). */
+.work-line__meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-width: 0; overflow-x: clip; font-size: var(--text-xs); color: var(--muted); }
+.work-line__meta > svg { flex: none; margin-right: -10px; }
+.work-line__part { position: relative; }
+.work-line__part::before { content: "·"; content: "·" / ""; position: absolute; left: -10px; }
+.work-line__figure { font-variant-numeric: tabular-nums; }
+.work-line__update { color: var(--accent); }
+/* A further platform of the same work, under the words, not under the picture. */
+.work-line__more { align-self: flex-start; padding-left: 104px; color: var(--muted); }
+.work-line:has(.work-line__thumb--tall) .work-line__more { padding-left: 51px; }
+a.work-line__main:hover .work-line__title, a.work-line__more:hover { color: var(--accent); }
+a.work-line__main:focus-visible, a.work-line__more:focus-visible { outline-offset: 4px; border-radius: var(--radius-sm); }
+/* Updates that are not status entries take a little less room under them. */
+.timeline--home .entry--event { padding-bottom: 24px; }
 /*
  * A work published on other platforms, drawn the way its own platform draws it: a video frame with the
  * figures along its foot, or an upright note with its likes under the title. Without a cover it is
@@ -292,6 +321,10 @@ a.home-works__row:focus-visible { outline-offset: -3px; border-radius: var(--rad
 /* So days line up across a row (the owner's choice, 2026-10-18): a Bilibili title keeps to one line, the whole title in its hover hint; a Xiaohongshu title always takes two lines' height. */
 .works-card--wide .works-card__title { display: block; white-space: nowrap; text-overflow: ellipsis; }
 .works-card--tall .works-card__title { min-height: calc(2 * 1.4em); }
+/* On a phone a Bilibili title takes two lines' height as well (2026-11-11): two columns leave too little room for one line to say much. Days still line up. */
+@media (max-width: 720px) {
+  .works-card--wide .works-card__title { display: -webkit-box; min-height: calc(2 * 1.4em); white-space: normal; }
+}
 .works-card__day { font-size: var(--text-xs); color: var(--muted); }
 a.works-card:hover .works-card__title { color: var(--accent); }
 a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md); }

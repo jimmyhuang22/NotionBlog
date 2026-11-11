@@ -48,3 +48,8 @@ const mappedQualification=JSON.parse(await readFile(new URL("../database/mapped-
 if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${mappedQualification.migration.file}`,import.meta.url))).digest("hex")!==mappedQualification.migration.sha256)
   throw new Error("Mapped fresh qualification extension differs from its manifest.");
 console.log("Mapped fresh qualification verified; no historical deadlines are updated.");
+
+const libraryPage=JSON.parse(await readFile(new URL("../database/library-page-protocol.json",import.meta.url),"utf8")) as {migration:{file:string;sha256:string}};
+if(createHash("sha256").update(await readFile(new URL(`../supabase/migrations/${libraryPage.migration.file}`,import.meta.url))).digest("hex")!==libraryPage.migration.sha256)
+  throw new Error("Live library page extension differs from its manifest.");
+console.log("Live library page extension verified; activation remains explicit.");

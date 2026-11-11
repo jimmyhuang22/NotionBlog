@@ -14,7 +14,7 @@ export function HomeHero({ about = null }: { about?: ReactNode }) {
   const site = getSiteConfig();
   const name = site.profile.name ?? site.siteName;
   return (
-    <section className="wrap wrap--narrow hero">
+    <section className="wrap wrap--narrow hero hero--home">
       <div className="hero__avatar">
         <Avatar src={site.profile.avatar} name={name} />
         {about}

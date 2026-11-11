@@ -1,3 +1,4 @@
+import { isLibraryKind } from "./years.ts";
 import { createMockRepository } from "../../../adapters/mock-repository.ts";
 import {
   contentFeatures,
@@ -48,6 +49,14 @@ export function createFeatureGatedRepository(
     ? repository.getCourseMetadata(slug)
     : (await repository.get("course", slug))?.item ?? null;
   return {
+    ...(repository.readLibraryPage ? { readLibraryPage: async <K extends LibraryKind>(kind: K, query: ListQuery = {}) => {
+      if (!isLibraryKind(kind)) throw new ContentServiceError("INVALID_QUERY", "Unsupported library kind.");
+      validateListQuery(kind, query);
+      return enabled(kind) ? repository.readLibraryPage!(kind, query) : {
+        page: { items: [], nextCursor: null, hasMore: false, total: 0 },
+        years: { years: [], undatedCount: 0, timeZone: "UTC" }, year: null,
+      };
+    } } : {}),
     ...(repository.readSearchSnapshot ? { readSearchSnapshot: (kinds: ContentKind[]) => repository.readSearchSnapshot!(kinds.filter(kind => enabled(kind))) } : {}),
     ...(repository.search ? { search: (query: SearchQuery) => searchRepository(repository, features, query) } : {}),
     async getContentMetadata(kind, slug) {

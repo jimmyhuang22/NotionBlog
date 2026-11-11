@@ -105,7 +105,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
         ? "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9"
-        : "099c69f530ea98d25150980b533e92b1855d40f5b405e11e26e9f8eb85855f19";
+        : "a882627e31984d81087e16b683d20655f8c87288f912d9b7bf0d89bd858a4e36";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});
@@ -138,18 +138,26 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     // New website/development capabilities remain outside these frozen transitions.
     // The opt-in display route/runtime are pinned here and still reject old captures.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
-    const expected = pair.path === "scripts/dev-real.mjs"
+    // Request cancellation is a website-reader change, never an admission of new
+    // storage/thumbnail bytes into the frozen media-reuse producer transition.
+    const expected = pair.path === ".env.example"
+      ? "cc29ee0ed623a1c29a6f86e7b52f890ff642f056d225a9c9be5d4d0ffa853a19"
+      : pair.path === "scripts/dev-real.mjs"
       ? "425464dc01fb77ee49fe383ed9e2101b93b6b16c8049d8d3b7130f842a2d53ac"
       : pair.path === "src/server/database/cos-storage.ts"
-        ? "b49fdc2b2e67a6d5e3f565f63f96ed3f33a7d51a932ffe77f50872b668ac8cc4"
+        ? "b161b018294ed127f6caf520afa1e040b2adb1038a4e30d761a415b61f9449b5"
+      : pair.path === "src/server/database/storage.ts"
+        ? "fa5193d212597c0b265f59e04bd0260d3768db850ee43bed611e636ba52aa5c8"
+      : pair.path === "src/server/media/thumbnail-bytes.ts"
+        ? "620748f4ca7ae95c67aa8422364399530e833a06a443f432fd6bf23f3e19b165"
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
         ? "3a3a4c7b5b31176dfc2c68cc9721fbbd0b4e5dc0d9fa4314110c1a158d267e8b"
       : pair.path === "src/server/database/runtime.ts"
-        ? "dede276aff29b0f20c37c3297b386127ee12130f71dc023c73486cc2528a12f1"
+        ? "37830baeec278040afdedd9f6a276f83d5d189d1131b37498956af8b2bd3730b"
       : pair.path === "src/server/media/thumbnail.ts"
-        ? "68ad50ad20e25bddfb9849005027c00c8ea0dc2bc2215830cf343d11d36e22a2"
+        ? "a098022ed0a6f32473225330b1ffa265c8191c30373c9723af995504faae13c0"
         : null;
     if(expected) {
       assert.equal(current,expected,pair.path);
@@ -170,6 +178,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/shared-reader-pool.ts", sha256: "0".repeat(64) }); },
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/connection.ts", sha256: "0".repeat(64) }); },
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/request-query.ts", sha256: "0".repeat(64) }); },
+    (v: typeof consumer) => { v.files.push({ path: "src/server/media/storage-read.ts", sha256: "0".repeat(64) }); },
   ]) {
     const changed = structuredClone(consumer); mutate(changed);
     assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });

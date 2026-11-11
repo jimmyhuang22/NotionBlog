@@ -21,7 +21,6 @@ import type { SocialTimelineWork } from "../../../contracts/social-timeline.ts";
 import { collectionDayAdditionsEnabled } from "./collection-day-additions.ts";
 import { getSiteConfig } from "../../lib/site/index.ts";
 import { createSocialReadQueue, queueSocialWorksRepository } from "./read-queue.ts";
-import { contentReadBudgetIdentity, checkContentReadBudget } from "../content-read-budget.ts";
 import { createSocialMediaSql } from "./media-query.ts";
 
 let pool: Pool | undefined;
@@ -97,9 +96,9 @@ let mediaStorage: ObjectStorage | undefined;
 let mediaSql: ReturnType<typeof createSocialMediaSql> | undefined;
 let mediaTransport: typeof fetch | undefined;
 const mediaRequest: typeof fetch = (url, init) => {
-  checkContentReadBudget();
-  const scope = contentReadBudgetIdentity();
-  return (mediaTransport ??= socialReaderTransport(process.env))(url, scope ? { ...init, signal: AbortSignal.any([scope.signal, ...(init?.signal ? [init.signal] : [])]) } : init);
+  // Object reads carry their request or shared-download signal. Auth retains its
+  // own bounded session; neither operation inherits a thumbnail leader's scope.
+  return (mediaTransport ??= socialReaderTransport(process.env))(url, init);
 };
 export async function socialMediaRuntime(){
   mediaSql ??= createSocialMediaSql(monitoredSocialReaderSql(readerSqlExecutor(readerPool())));

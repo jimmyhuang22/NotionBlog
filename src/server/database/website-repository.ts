@@ -20,7 +20,7 @@ import { readSearchContexts } from "./search-context.ts";
 import { SEARCH_CONTEXT_VERSION } from "../../lib/content/search-context.ts";
 import type { SearchHit } from "../../../contracts/website.ts";
 import type { Page } from "../../../contracts/content.ts";
-interface Projection { runId: string; revision: string; schemaDigest: string; records: ContentDetail<AnyContent>[]; links: string[]; mediaIds: string[]; hasMore?: boolean }
+export interface Projection { runId: string; revision: string; schemaDigest: string; records: ContentDetail<AnyContent>[]; links: string[]; mediaIds: string[]; hasMore?: boolean }
 /** Scrub references against CURRENT eligibility even when stored AST predates a withdrawal. */
 function project<T>(value: T, snapshot: Projection, timeZone: string): T {
   const links=new Set(snapshot.links), images=new Set(snapshot.mediaIds);
@@ -314,3 +314,6 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     }
   };return repository;
 }
+
+/** Shared reference qualification for the independent live library reader. */
+export { project as projectWebsiteContent };

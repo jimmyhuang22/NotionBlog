@@ -1,4 +1,5 @@
 import type {StoredMedia} from "../../../contracts/sync.ts";
+import {readMediaObject} from "./storage-read.ts";
 import type {SqlExecutor} from "../database/sql.ts";
 import type {PublicationMode} from "../database/publication.ts";
 import {mediaIdentity} from "../database/website-validation.ts";
@@ -24,7 +25,7 @@ export async function databaseDisplayResponse(assetId:string,width:400|800|1600|
  const missing=()=>new Response(null,{status:404,headers});
  if(!displayAssetId(assetId))return missing();
  const first=await ports.read(assetId);if(!first)return missing();
- const file=selectDisplayFile(first.asset,width),bytes=await ports.storage().read(displayStoredMedia(first.asset,file));
+ const file=selectDisplayFile(first.asset,width),bytes=await readMediaObject(ports.storage(),displayStoredMedia(first.asset,file));
  verifyDisplayBytes(file,bytes,DISPLAY_V2_RECIPE);
  const current=await ports.read(assetId);
  if(!current||JSON.stringify(current)!==JSON.stringify(first))return missing();

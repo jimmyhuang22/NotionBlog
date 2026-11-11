@@ -102,7 +102,7 @@ export async function prepareStudyDelta(checkpoint:StudyCheckpoint,pageIds:strin
   };
   const descendants=(id:string)=>{
     const children=new Map<string,string[]>();
-    for(const [key,e] of current){const p=parent(e);if(p!==null)children.set(p,[...(children.get(p)??[]),key]);}
+    for(const [key,e] of current){const p=parent(e);if(p!==null){const siblings=children.get(p)??[];siblings.push(key);children.set(p,siblings);}}
     const ids:string[]=[],pending=[id],seen=new Set<string>();
     for(let cursor=0;cursor<pending.length;cursor++){const p=pending[cursor];if(seen.has(p))bad();seen.add(p);for(const key of children.get(p)??[]){ids.push(key);pending.push(key);}}
     return ids;
@@ -252,7 +252,7 @@ export function applyStudyDelta(checkpoint:StudyCheckpoint,delta:StudyDelta,vers
   for(const id of withdrawals){if(removed.has(id)||!entries.has(id))bad();removed.add(id);}
   for(const e of upserts){const id=item(e).id;if(updated.has(id)||removed.has(id))bad();updated.add(id);}
   const children=new Map<string,string[]>(),covered=new Set<string>(),roots=new Set<string>();
-  for(const [id,e] of entries){const p=parent(e);if(p!==null)children.set(p,[...(children.get(p)??[]),id]);}
+  for(const [id,e] of entries){const p=parent(e);if(p!==null){const siblings=children.get(p)??[];siblings.push(id);children.set(p,siblings);}}
   for(const proof of withdrawalEvidence){
     if(roots.has(proof.id)||!entries.has(proof.id)||entries.get(proof.id)!.record.evidence.sourceKey!==proof.sourceKey||updated.has(proof.id)||!["archived","deleted","out-of-scope","denied"].includes(proof.reason))bad();
     roots.add(proof.id);const pending=[proof.id];

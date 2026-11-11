@@ -1,0 +1,7 @@
+{
+  "capability": "notionblog-library-page-v1",
+  "migration": {
+    "file": "20261111105304_library_page_read.sql",
+    "sha256": "098b9ab9c21bf9f4745a74d55d082a194f74d51d2c084dc9c55dfb9d0def1deb"
+  }
+}

@@ -481,6 +481,11 @@ a.card:hover { box-shadow: var(--shadow-lift); }
   [data-pen="drawn"] .hero__stroke path { animation: none; }
 }
 .hero__bio { margin: 0; font-family: var(--font-hand); font-size: var(--text-lg); color: var(--muted); }
+/* On a phone the home introduction is tighter, so the latest updates come into view sooner (2026-11-11); a wider screen keeps its air. Home only: the about page shares `.hero`. */
+@media (max-width: 760px) {
+  .hero--home { gap: 12px; padding-block: 32px 28px; }
+  .hero--home .avatar { width: 72px; height: 72px; font-size: var(--text-2xl); }
+}
 .avatar {
   width: 88px; height: 88px; margin-bottom: 10px; border-radius: 50%; object-fit: cover;
   background: var(--card); box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 7px var(--bg), 0 0 0 8px var(--rule);

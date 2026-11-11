@@ -4,6 +4,7 @@ import { contentMetadata } from "@/lib/seo/metadata";
 import { notFound } from "next/navigation";
 import { TocList } from "@/components/blocks";
 import { NoteCrumbs } from "@/components/note-crumbs";
+import { PageOutline } from "@/components/page-outline";
 import { ReadingOutline } from "@/components/reading-outline";
 import { RichDocumentBody } from "@/components/rich-document";
 import { StudyChildPages } from "@/components/study-child-pages";
@@ -73,6 +74,8 @@ export default async function NotePage({ params }: Props) {
             <ReadingOutline toc={toc} />
           </nav>
         ) : null}
+        {/* Below the width where the outline stands beside the article, a long note opens it from a button. */}
+        {toc.length ? <PageOutline toc={toc} /> : null}
       </div>
     </>
   );

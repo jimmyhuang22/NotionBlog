@@ -1,3 +1,5 @@
+import type { LibraryKind, ListQuery } from "../../../contracts/content.ts";
+import { readLibraryFirstPageFrom } from "./library-page.ts";
 import { getContentProvider } from "./provider.ts";
 export { getContentProvider } from "./provider.ts";
 import { publicRepository } from "../../server/public-cache/runtime.ts";
@@ -60,3 +62,8 @@ export function hydrateContentTimelinePage(events: TimelineEvent[], version: str
 }
 
 export const contentRepository = publicRepository("content", "contentRepository", uncachedRepository);
+
+/** Live joint SSR entry: deliberately outside publicRepository's completed DTO cache. */
+export function readLibraryFirstPage<K extends LibraryKind>(kind: K, query: ListQuery = {}) {
+  return traceContentRead("works", kind, () => readLibraryFirstPageFrom(getContentService().repository, contentRepository, kind, query));
+}

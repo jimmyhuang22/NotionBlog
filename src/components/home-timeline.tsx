@@ -10,9 +10,7 @@ import { PlatformChips } from "./platform-chips";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
 import { EntryMoment } from "./entry-moment";
 import { MonthLabel } from "./month-label";
-import { isBiliCard } from "./bili-card";
-import { HomeWorks } from "./home-works";
-import { SocialWorkCard } from "./social-work-card";
+import { HomeWorkLine, HomeWorks } from "./home-works";
 import { StatusBody } from "./status-body";
 import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
@@ -44,7 +42,8 @@ function GameLine({ event, priorityCover }: { event: WorkEvent; priorityCover: b
       </span>
     </>
   );
-  const className = "card event event--game event--line";
+  // No card behind it (2026-11-11): a game is a quiet line beside the status entries.
+  const className = "event event--game event--line";
   if (event.href) return <Link className={className} href={event.href} prefetch={false}>{body}</Link>;
   return <div className={className}>{body}</div>;
 }
@@ -74,8 +73,8 @@ function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: b
 /**
  * Home only: status entries carry the timeline; other sections' updates and works published on other
  * platforms sit between them as cards. The merged order, the daily de-duplication and the paging all
- * come from the home feed endpoint. A work standing alone is one card in its platform's shape; works
- * that follow one another share one entry, as a strip of such cards or, without covers, a list. The first batch and every later page come from the same version
+ * come from the home feed endpoint. A work standing alone is one light line with a small picture, and so is a game
+ * (2026-11-11); works that follow one another share one entry, as a strip of cards or, without covers, a list. The first batch and every later page come from the same version
  * of it, because a cursor of one version is refused by the other. Entries of the last week are named by
  * today ("昨天 · …"), by this device's clock once the page is running (the cached markup writes dates
  * out in full), so a page
@@ -132,10 +131,8 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                   {/* Placed at the moment a change was noticed: said here, so the time is not read as a publication date. */}
                   {item.work.collection && isNoticedActivity(item.work.collection) ? <span className="tag">发现更新</span> : null}
                 </p>
-                {/* A Bilibili work with a cover is the same card as in a run of works, one of it. */}
-                {item.work.cover && isBiliCard(item.work)
-                  ? <HomeWorks works={[item.work]} timeZone={timeZone} today={today} priorityCover={priorityCover} />
-                  : <SocialWorkCard work={item.work} timeZone={timeZone} today={today} priorityCover={priorityCover} />}
+                {/* One light line, so the status entries stay the main reading (2026-11-11); a run of works keeps its strip. */}
+                <HomeWorkLine work={item.work} timeZone={timeZone} priorityCover={priorityCover} />
               </article>
             ) : item.event.type === "status" ? (
               <article id={item.event.entry.id} className={item.id === leadId ? "entry entry--lead" : "entry"}>
