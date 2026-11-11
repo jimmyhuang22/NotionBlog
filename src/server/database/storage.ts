@@ -10,7 +10,7 @@ export class TransientStorageReadError extends ContentServiceError {
 }
 
 export interface ObjectStorage {
-  read(media: StoredMedia): Promise<Uint8Array>;
+  read(media: StoredMedia, signal?: AbortSignal): Promise<Uint8Array>;
   /** Immutable upload; an existing key is accepted only after byte verification. */
   put(media: StoredMedia,bytes: Uint8Array): Promise<void>;
 }
@@ -56,11 +56,16 @@ export function createSupabaseStorage(options: StorageOptions): ObjectStorage {
     validateToken(token);
     return {apikey:options.apiKey,Authorization:`Bearer ${token}`};
   }
-  async function read(media: StoredMedia): Promise<Uint8Array> {
+  async function read(media: StoredMedia, signal?: AbortSignal): Promise<Uint8Array> {
     validateMedia(media);
     try {
+      const deadline = AbortSignal.timeout(20000);
+      const transportSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+      transportSignal.throwIfAborted();
+      const requestHeaders = await headers();
+      transportSignal.throwIfAborted();
       const response=await fetcher(`${base.origin}/storage/v1/object/authenticated/${options.bucket}/${media.objectKey}`,{
-        headers:await headers(),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(20000),
+        headers:requestHeaders,redirect:"error",cache:"no-store",signal:transportSignal,
       });
       if(!response.ok||!response.body)unavailable();
       const declared=response.headers.get("Content-Length");

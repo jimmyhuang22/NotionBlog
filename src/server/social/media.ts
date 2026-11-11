@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readMediaObject } from "../media/storage-read.ts";
 import { cacheableMediaHeaders, revalidatedMediaHeaders } from "../media/cache.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { SqlExecutor } from "../database/sql.ts";
@@ -62,7 +63,7 @@ export async function socialMediaResponse(assetId: string, width: 400 | 800 | nu
     return new Response(null, { status: 304, headers });
   }
   // Cache only verified immutable bytes, never reader identity or positive eligibility.
-  const bytes = immutable && width ? (await readThumbnailBytes(storage(), media)).bytes : await storage().read(media);
+  const bytes = immutable && width ? (await readThumbnailBytes(storage(), media)).bytes : await readMediaObject(storage(), media);
   verifyMediaBytes(media, bytes);
   // Recheck after a slow private object read; no withdrawal can start a new body.
   if (!await recheck()) return missing();

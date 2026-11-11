@@ -1,4 +1,5 @@
 import { cacheableMediaHeaders } from "../media/cache.ts";
+import { readMediaObject } from "../media/storage-read.ts";
 import type { StoredMedia } from "../../../contracts/sync.ts";
 import { SYNC_SCHEMA_DIGEST } from "../../../contracts/sync.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
@@ -18,7 +19,7 @@ export async function databaseMediaResponse(assetId: string,db: SqlExecutor,stor
     return projection.media;
   };
   const media=await read();if(!media)return missing();validateMedia(media);
-  const bytes=await storage().read(media);verifyMediaBytes(media,bytes);
+  const bytes=await readMediaObject(storage(),media);verifyMediaBytes(media,bytes);
   // A withdrawal during a slow object request must not start a new body response.
   const current=await read();if(!current)return missing();
   if(current.objectKey!==media.objectKey||current.sha256!==media.sha256||current.ownerPageId!==media.ownerPageId)throw new ContentServiceError("CONTENT_UNAVAILABLE","Media changed during the request.");

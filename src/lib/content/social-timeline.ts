@@ -1,4 +1,4 @@
-import { publicProjection, publicRepository } from "../../server/public-cache/runtime.ts";
+import { sharedSocialProjection, publicRepository } from "../../server/public-cache/runtime.ts";
 import { publicCacheEnabled } from "../../server/public-cache/policy.ts";
 import "server-only";
 import type { SocialTimelineRepository } from "../../../contracts/social-timeline.ts";
@@ -16,7 +16,7 @@ export function isSocialWorksEnabled() { return socialProvider() !== "disabled";
  * cache keys read the whole snapshot again on a miss. The rows carry no covers; covers still qualify live
  * for the selected works. With the cache off, nothing changes: one fresh read per request.
  */
-const sharedTimelineRows = () => publicProjection("social", "socialTimelineRows", [], socialTimelineRows);
+const sharedTimelineRows = () => sharedSocialProjection(socialTimelineRows);
 
 const uncachedRepository:SocialTimelineRepository={listWorks:query=>withListReadBudget("works",async()=>{
   if(!isSocialWorksEnabled())throw new Error("Social content is disabled.");

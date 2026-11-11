@@ -1,4 +1,5 @@
 import { cacheableMediaHeaders } from "./cache.ts";
+import { readMediaObject } from "./storage-read.ts";
 import { excludeFromSharedCache } from "../public-cache/policy.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { ObjectStorage } from "../database/storage.ts";
@@ -32,7 +33,7 @@ export async function hybridMediaResponse(assetId: string, ports: HybridMediaPor
   if (!source || source.sourceFingerprint !== first.binding.sourceFingerprint) return missing();
   const url = safeMediaUrl(source.url);
   if (!url || new URL(url).protocol !== "https:") return missing();
-  const bytes = first.binding.delivery === "storage" ? await ports.storage().read(first.media) : undefined;
+  const bytes = first.binding.delivery === "storage" ? await readMediaObject(ports.storage(), first.media) : undefined;
   if (bytes) verifyMediaBytes(first.media, bytes);
   // Qualification is checked again after every remote lookup / object download.
   const current = await ports.read(assetId);

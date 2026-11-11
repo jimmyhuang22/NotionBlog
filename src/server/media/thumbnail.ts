@@ -1,4 +1,5 @@
 import { cacheableMediaHeaders } from "./cache.ts";
+import { readMediaObject } from "./storage-read.ts";
 import { excludeFromSharedCache } from "../public-cache/policy.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { ThumbnailProjection, ThumbnailWidth } from "../database/thumbnail-index.ts";
@@ -91,7 +92,7 @@ export async function thumbnailMediaResponse(assetId: string, width: ThumbnailWi
   try {
     ({ bytes, source: byteSource } = first.version === "v2"
       ? await readThumbnailBytes(ports.storage(), first.thumbnail)
-      : { bytes: await ports.storage().read(first.thumbnail), source: "bypass" });
+      : { bytes: await readMediaObject(ports.storage(), first.thumbnail), source: "bypass" });
   }
   catch (error) {
     if (!(error instanceof TransientStorageReadError)) throw error;

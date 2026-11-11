@@ -138,10 +138,16 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     // New website/development capabilities remain outside these frozen transitions.
     // The opt-in display route/runtime are pinned here and still reject old captures.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
+    // Request cancellation is a website-reader change, never an admission of new
+    // storage/thumbnail bytes into the frozen media-reuse producer transition.
     const expected = pair.path === "scripts/dev-real.mjs"
       ? "425464dc01fb77ee49fe383ed9e2101b93b6b16c8049d8d3b7130f842a2d53ac"
       : pair.path === "src/server/database/cos-storage.ts"
-        ? "b49fdc2b2e67a6d5e3f565f63f96ed3f33a7d51a932ffe77f50872b668ac8cc4"
+        ? "b161b018294ed127f6caf520afa1e040b2adb1038a4e30d761a415b61f9449b5"
+      : pair.path === "src/server/database/storage.ts"
+        ? "fa5193d212597c0b265f59e04bd0260d3768db850ee43bed611e636ba52aa5c8"
+      : pair.path === "src/server/media/thumbnail-bytes.ts"
+        ? "620748f4ca7ae95c67aa8422364399530e833a06a443f432fd6bf23f3e19b165"
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
@@ -149,7 +155,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/runtime.ts"
         ? "dede276aff29b0f20c37c3297b386127ee12130f71dc023c73486cc2528a12f1"
       : pair.path === "src/server/media/thumbnail.ts"
-        ? "68ad50ad20e25bddfb9849005027c00c8ea0dc2bc2215830cf343d11d36e22a2"
+        ? "a098022ed0a6f32473225330b1ffa265c8191c30373c9723af995504faae13c0"
         : null;
     if(expected) {
       assert.equal(current,expected,pair.path);
@@ -170,6 +176,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/shared-reader-pool.ts", sha256: "0".repeat(64) }); },
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/connection.ts", sha256: "0".repeat(64) }); },
     (v: typeof consumer) => { v.files.push({ path: "src/server/database/request-query.ts", sha256: "0".repeat(64) }); },
+    (v: typeof consumer) => { v.files.push({ path: "src/server/media/storage-read.ts", sha256: "0".repeat(64) }); },
   ]) {
     const changed = structuredClone(consumer); mutate(changed);
     assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });
