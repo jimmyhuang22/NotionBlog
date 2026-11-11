@@ -43,6 +43,8 @@ npm run build:self-hosted
 
 初始版本只接受 database v2、qualified 发布读取和 configured 连接。网站 LOGIN 为 nb_website_reader，继承冻结的 nb_reader，不能有额外角色、私表或写入权限。社交可选，使用独立 nb_social_reader，沿用其严格身份检查。启动先完成有时限的身份/权限核验，失败不监听网站，也不回退 mock。
 
+作品首屏共同读取的 `DATABASE_LIBRARY_PAGE` 默认 `legacy`，保留原列表、年份读取与缓存。受保护配置允许显式设置 `compact`，但须同时使用 `DATABASE_READ_PROJECTION=scoped`，并先安装及登记独立的 `database/library-page-protocol.json` 协议。白名单支持不代表已安装协议或已启用；本项默认关闭，云端验收和启用仍需另行授权。
+
 普通 PostgreSQL 中，冻结 REVOKE 语句引用的 anon/authenticated/service_role 需要无登录、无高权的兼容角色；不因此启用 Auth/Data API。数据库必须由既有安装器登记协议摘要，不能把直接执行所有 SQL 当作完整安装。完整迁移和媒体是后续验收项。
 
 ## 启动与本机验证

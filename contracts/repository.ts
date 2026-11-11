@@ -4,7 +4,15 @@ import type {
 } from "./content.ts";
 import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, SearchSnapshot, TimelinePage } from "./website.ts";
 
+export interface LibraryPageResult<K extends LibraryKind = LibraryKind> {
+  page: Page<ContentByKind[K]>;
+  years: LibraryYears | null;
+  year: NonNullable<ListQuery["year"]> | null;
+}
+
 export interface ContentRepository {
+  /** Live SSR list + years. Must not be stored in the completed public DTO cache. */
+  readLibraryPage?<K extends LibraryKind>(kind: K, query?: ListQuery): Promise<LibraryPageResult<K>>;
   /** Public eligibility and item fields only, without loading a document. */
   getContentMetadata?<K extends ContentKind>(kind: K, slug: string): Promise<ContentByKind[K] | null>;
   getPage?(key: "about"): Promise<SitePage | null>;

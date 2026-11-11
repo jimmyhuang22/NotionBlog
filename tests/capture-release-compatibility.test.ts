@@ -105,7 +105,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
         ? "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9"
-        : "099c69f530ea98d25150980b533e92b1855d40f5b405e11e26e9f8eb85855f19";
+        : "a882627e31984d81087e16b683d20655f8c87288f912d9b7bf0d89bd858a4e36";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});
@@ -140,7 +140,9 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
     // Request cancellation is a website-reader change, never an admission of new
     // storage/thumbnail bytes into the frozen media-reuse producer transition.
-    const expected = pair.path === "scripts/dev-real.mjs"
+    const expected = pair.path === ".env.example"
+      ? "cc29ee0ed623a1c29a6f86e7b52f890ff642f056d225a9c9be5d4d0ffa853a19"
+      : pair.path === "scripts/dev-real.mjs"
       ? "425464dc01fb77ee49fe383ed9e2101b93b6b16c8049d8d3b7130f842a2d53ac"
       : pair.path === "src/server/database/cos-storage.ts"
         ? "b161b018294ed127f6caf520afa1e040b2adb1038a4e30d761a415b61f9449b5"
@@ -153,7 +155,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
         ? "3a3a4c7b5b31176dfc2c68cc9721fbbd0b4e5dc0d9fa4314110c1a158d267e8b"
       : pair.path === "src/server/database/runtime.ts"
-        ? "dede276aff29b0f20c37c3297b386127ee12130f71dc023c73486cc2528a12f1"
+        ? "37830baeec278040afdedd9f6a276f83d5d189d1131b37498956af8b2bd3730b"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "a098022ed0a6f32473225330b1ffa265c8191c30373c9723af995504faae13c0"
         : null;

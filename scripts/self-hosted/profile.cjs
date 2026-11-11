@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const allowed = new Set([
   'DATABASE_READER_URL', 'DATABASE_TLS', 'DATABASE_CA_CERT', 'DATABASE_CONTENT_VERSION',
   'DATABASE_READ_PROJECTION', 'DATABASE_PUBLICATION_MODE', 'DATABASE_SEARCH_PROJECTION',
+  'DATABASE_LIBRARY_PAGE',
   'SITE_URL', 'SITE_CONFIG_JSON', 'CONTENT_FEATURES_JSON', 'SOCIAL_PROVIDER',
   'SOCIAL_READER_DATABASE_URL', 'SOCIAL_READER_DATABASE_TLS', 'SOCIAL_READER_DATABASE_CA_CERT',
   'SOCIAL_READER_CONNECTION_MODE', 'SOCIAL_DISPLAY_MODE', 'SOCIAL_COLLECTION_PLAYBACK',
@@ -35,6 +36,7 @@ const publicAllowed = new Set([...allowed,
 const defaults = Object.freeze({
   CONTENT_PROVIDER: 'database', DATABASE_CONTENT_VERSION: '2', DATABASE_TLS: 'verify',
   DATABASE_READ_PROJECTION: 'legacy', DATABASE_PUBLICATION_MODE: 'qualified',
+  DATABASE_LIBRARY_PAGE: 'legacy',
   SITE_CONFIG_JSON: '{}', CONTENT_FEATURES_JSON: '{}', SITE_INDEXING_ENABLED: 'false',
   SOCIAL_PROVIDER: 'disabled', SOCIAL_MEDIA_ENABLED: 'false', SOCIAL_COLLECTION_PLAYBACK: 'false',
   SOCIAL_COLLECTION_DAY_ADDITIONS: 'false', SOCIAL_READER_CONNECTION_MODE: 'configured',
@@ -87,6 +89,8 @@ function loadProfile(filename, localOnly) {
   } : {}), ...raw.environment };
   if (publicWebsite) env.SELF_HOSTED_DEPLOYMENT = 'public-website';
   if (env.DATABASE_CONTENT_VERSION !== '2' || env.DATABASE_PUBLICATION_MODE !== 'qualified' ||
+      !['legacy', 'compact'].includes(env.DATABASE_LIBRARY_PAGE) ||
+      env.DATABASE_LIBRARY_PAGE === 'compact' && env.DATABASE_READ_PROJECTION !== 'scoped' ||
       !['legacy', 'scoped'].includes(env.DATABASE_READ_PROJECTION) || !['disabled', 'database'].includes(env.SOCIAL_PROVIDER) ||
       !(publicWebsite ? ['configured', 'transaction'] : ['configured']).includes(env.SOCIAL_READER_CONNECTION_MODE)) fail();
   database(env.DATABASE_READER_URL, env.DATABASE_TLS, env.DATABASE_CA_CERT, 'nb_website_reader', localOnly, publicWebsite);
