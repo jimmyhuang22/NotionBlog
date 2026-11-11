@@ -1,4 +1,5 @@
 # 2026-10-18：作品卡片标题行数统一
+状态：手机 B 站标题一行的规定已被 [2026-11-11-reading-design-refinement](2026-11-11-reading-design-refinement.md) 部分取代（手机改为两行），其余仍有效。
 
 用户决定（反馈 F30，经反馈审查对话转达；看了原型后选定），Claude 落实。补充 [作品页按平台分开](2026-10-18-works-by-platform.md)。
 

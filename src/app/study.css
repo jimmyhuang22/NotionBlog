@@ -319,3 +319,43 @@
   .study-views button { min-height: 44px; }
   .study-entry { grid-template-columns: 26px minmax(0, 1fr); gap: 3px 10px; }
 }
+
+/*
+ * A long note's outline from a button (page-outline.tsx, 2026-11-11), below the width where it stands beside the
+ * article. The button sits at the left foot, clear of the way back up on the right; from 1100 the course
+ * directory takes the left, so it moves next to that button.
+ */
+.page-outline__open { position: fixed; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); z-index: 15; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; max-width: calc(100vw - 98px); padding: 6px 16px 6px 13px; border: 0; border-radius: 999px; background: var(--card); color: var(--accent); box-shadow: var(--shadow), 0 0 0 1px var(--rule); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.page-outline__open[hidden] { display: none; }
+.page-outline__open svg { flex: none; }
+.page-outline__label { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.3; text-align: start; }
+.page-outline__current { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--muted); }
+@media (min-width: 1100px) { .page-outline__open { left: auto; right: calc(max(18px, env(safe-area-inset-right)) + 56px); } }
+/* The sheet rises from the foot of the screen; its list scrolls on its own when the note has many headings. */
+.page-outline { width: min(560px, 100vw); max-width: none; max-height: min(70dvh, 640px); margin: auto auto 0; padding: 0; border: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--rule), 0 -16px 40px -20px rgba(30, 24, 10, 0.45); overflow: hidden; }
+.page-outline[open] { display: flex; }
+.page-outline::backdrop { background: rgba(12, 12, 14, 0.4); background: light-dark(rgba(32, 36, 44, 0.3), rgba(0, 0, 0, 0.6)); }
+.page-outline__sheet { display: flex; flex-direction: column; width: 100%; min-height: 0; padding: 12px 18px max(16px, env(safe-area-inset-bottom)); }
+.page-outline__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.page-outline__head h2 { margin: 0; font-family: var(--font-hand); font-size: var(--text-xl); font-weight: 400; }
+.page-outline__close { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -8px; border: 0; border-radius: 50%; background: var(--soft); color: var(--muted); cursor: pointer; }
+.page-outline__close:hover { color: var(--accent); }
+.page-outline nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.page-outline__list { margin: 0; padding: 0; list-style: none; }
+.page-outline__item a { display: flex; align-items: center; min-height: 44px; padding: 8px 12px; border-left: 2px solid var(--rule); color: var(--ink); line-height: 1.4; overflow-wrap: anywhere; }
+.page-outline__item--2 a { padding-left: 26px; font-size: var(--text-sm); color: var(--muted); }
+.page-outline__item--3 a { padding-left: 40px; font-size: var(--text-sm); color: var(--muted); }
+.page-outline__item a[aria-current] { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); font-weight: 600; }
+.page-outline__item a:hover { color: var(--accent); }
+.page-outline__item a:focus-visible { outline-offset: -2px; }
+/* A heading reached from the sheet takes focus without a ring drawn round it: the arrival mark says where it is. */
+.prose__h:focus:not(:focus-visible) { outline: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .page-outline, .page-outline::backdrop { opacity: 0; transition: opacity 0.2s ease, translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), overlay 0.2s allow-discrete, display 0.2s allow-discrete; }
+  .page-outline { translate: 0 24px; }
+  .page-outline[open], .page-outline[open]::backdrop { opacity: 1; translate: none; }
+  @starting-style {
+    .page-outline[open], .page-outline[open]::backdrop { opacity: 0; }
+    .page-outline[open] { translate: 0 24px; }
+  }
+}

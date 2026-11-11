@@ -1,4 +1,5 @@
 # 2026-10-14：发在其他平台的作品按各平台的样子显示，只留播放和点赞
+状态：首页单件作品的视觉体量已被 [2026-11-11-reading-design-refinement](2026-11-11-reading-design-refinement.md) 部分取代，其余仍有效。
 
 用户确认，Claude 落实。
 
