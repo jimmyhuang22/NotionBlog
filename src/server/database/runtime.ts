@@ -1,3 +1,5 @@
+import { createLibraryPageReader, readLibraryPageMode } from "./library-page.ts";
+import { createLibraryDisplayPreparation } from "./library-display.ts";
 import "server-only";
 import { isolatedWebsiteReader, websiteReaderIsolationMode } from "./website-reader-isolation.ts";
 import { createLocalMediaStorage } from "./local-storage.ts";
@@ -34,6 +36,9 @@ function createRuntime() {
     throw new ContentServiceError("MISCONFIGURED","Search context requires database v2.");
   if(projection==="scoped"&&process.env.DATABASE_CONTENT_VERSION!=="2")
     throw new ContentServiceError("MISCONFIGURED","Scoped reads require database v2.");
+  const libraryPage=readLibraryPageMode(process.env.DATABASE_LIBRARY_PAGE);
+  if(libraryPage&&(process.env.DATABASE_CONTENT_VERSION!=="2"||projection!=="scoped"))
+    throw new ContentServiceError("MISCONFIGURED","Compact library pages require scoped database v2 reads.");
   const pool=sharedContentReaderPool(process.env.DATABASE_READER_URL,process.env.DATABASE_TLS,process.env.DATABASE_CA_CERT);
   const rawDb=isolatedWebsiteReader(readerSqlExecutor(pool),isolationMode);
   const db=publicationReader(rawDb,mode);
@@ -60,6 +65,11 @@ function createRuntime() {
     });
   }
   const storage=()=>storageFor(objectProvider), thumbnailStorage=()=>storageFor(variantProvider);
-  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository:(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(project(rawDb),mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})}),storage};
+  const baseRepository=(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(project(rawDb),mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})});
+  const repository=libraryPage?{...baseRepository,readLibraryPage:createLibraryPageReader(rawDb,{
+    mode,timeZone:()=>getSiteConfig().timeZone,
+    ...((displayStore||cloudDisplay)?{prepareDelivery:createLibraryDisplayPreparation(project)}:{}),
+  })}:baseRepository;
+  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository,storage};
 }
 export function getDatabaseRuntime() { return measureContentRead("database-runtime", () => runtime??=createRuntime()); }

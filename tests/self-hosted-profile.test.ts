@@ -21,6 +21,7 @@ test('self-hosted profile accepts only protected reader configuration and fixes 
     assert.equal(env.SITE_INDEXING_ENABLED, 'false'); assert.equal(env.PUBLIC_CONTENT_CACHE, 'disabled');
     assert.equal(env.SOCIAL_MEDIA_ENABLED, 'false');
     assert.equal(env.DATABASE_READER_ISOLATION, 'enforce');
+    assert.equal(env.DATABASE_LIBRARY_PAGE, 'legacy');
     await writeFile(path, JSON.stringify(profile({ SELF_HOSTED_MEDIA_MODE: 'display-only', SELF_HOSTED_MEDIA_ROOT: '/run/notionblog-media' })), { mode: 0o600 });
     assert.equal(files.readProfile(path, true).SELF_HOSTED_MEDIA_MODE, 'display-only');
     await chmod(path, 0o644); assert.throws(() => files.readProfile(path), /SELF_HOSTED_PROFILE_INVALID/);
@@ -70,15 +71,18 @@ test('public website profile accepts the rotated reader through the Supabase poo
     assert.equal(env.SITE_INDEXING_ENABLED, 'true'); assert.equal(env.MEDIA_THUMBNAILS, 'enabled');
     assert.equal(env.PUBLIC_CONTENT_CACHE, 'disabled'); assert.equal(env.DATABASE_READER_ISOLATION, 'enforce');
     assert.equal(env.MEDIA_DELIVERY_MODE, 'legacy');
+    assert.equal(env.DATABASE_LIBRARY_PAGE, 'legacy');
     assert.equal(socialCollectionPlaybackEnabled(env.SOCIAL_COLLECTION_PLAYBACK), false);
     assert.equal(collectionDayAdditionsEnabled(env.SOCIAL_COLLECTION_DAY_ADDITIONS), false);
     assert.equal(files.readerLogin(env.DATABASE_READER_URL, 'nb_website_reader', true), 'nb_website_reader_r20260101');
     assert.throws(() => files.readProfile(path, true), /SELF_HOSTED_PROFILE_INVALID/);
-    await writeFile(path, JSON.stringify(publicProfile({ PUBLIC_CONTENT_CACHE: 'tagged-v1',
+    await writeFile(path, JSON.stringify(publicProfile({ DATABASE_LIBRARY_PAGE: 'compact', DATABASE_READ_PROJECTION: 'scoped', PUBLIC_CONTENT_CACHE: 'tagged-v1',
       PUBLIC_CACHE_SITE_KEY: 'example-site', CACHE_PURGE_SECRET: 'a'.repeat(64),
       PUBLIC_CACHE_ORIGIN: 'http://127.0.0.1:3100' })), { mode: 0o600 });
     assert.equal(files.readProfile(path).PUBLIC_CONTENT_CACHE, 'tagged-v1');
+    assert.equal(files.readProfile(path).DATABASE_LIBRARY_PAGE, 'compact');
     for (const extra of [
+      { DATABASE_LIBRARY_PAGE: 'compact' }, { DATABASE_LIBRARY_PAGE: 'unexpected' },
       { DATABASE_READER_URL: 'postgresql://postgres.abcdefghijklmnopqrst:example@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres' },
       { DATABASE_READER_URL: 'postgresql://nb_website_reader_r20260101.abcdefghijklmnopqrst:fixture@other.example.invalid:5432/postgres' },
       { DATABASE_READER_URL: 'postgresql://nb_website_reader_r20260101.abcdefghijklmnopqrst:example@aws-0-ap-northeast-1.pooler.supabase.com:1234/postgres' },
