@@ -12,6 +12,7 @@ import { StudyLinkContexts } from "@/components/study-reading-context";
 import { studyLinkContexts } from "@/lib/study-link-context";
 import { rangeLabel, semesterLabel } from "@/lib/format";
 import { getCourseMetadata, getNote } from "@/lib/request-cache";
+import { mergeNumberedHeadings } from "@/lib/headings";
 import { getSiteConfig } from "@/lib/site";
 import { studyProjectForCourse } from "@/lib/study-projects";
 import { documentStudyLinks } from "@/lib/study-overview";
@@ -47,7 +48,8 @@ export default async function NotePage({ params }: Props) {
   if (!courseItem || !note || note.item.courseId !== courseItem.id) notFound();
   const { item, document } = note;
   const project = studyProjectForCourse(courseItem, getSiteConfig().studyProjects);
-  const toc = document?.toc ?? [];
+  // A heading that is only a number joins the one after it, in all three outlines alike (X-15).
+  const toc = mergeNumberedHeadings(document?.toc ?? []);
   const typeLabel = noteTypes[item.noteType];
   const date = rangeLabel(item.date, getSiteConfig().timeZone);
   const trail = item.breadcrumbs.filter(link => link.href !== "/study");
