@@ -49,6 +49,16 @@ test("the actual host skips frozen pages, refreshes one group and recovers a los
   f.demo.pages.get(DEMO.week)!.last_edited_time = "2026-10-27T00:00:00Z";
   f.demo.blocks.set(DEMO.week, [demoParagraph(demoId(300), DEMO.week, "Refreshed frozen content")]);
   const selected = plan.members.find(m => m.id === DEMO.course)!;
+  const initialOnce = await store.preview(DEMO.course, "once");
+  requested.length = 0;
+  const rootBatch = await runIncrementalHost({...f.options, command: "run", freezeEnabled: true,
+    target: {sourceKey: selected.sourceKey, pageKey: selected.id}, refreshFrozenGroup: frozen.groupId,
+    expectedFreezeGeneration: initialOnce.generation, expectedPublicationRevision: initialOnce.publicationRevision,
+    refreshPageIds: [DEMO.course]}, deps);
+  assert.ok(["unchanged", "partial"].includes(rootBatch.outcome), JSON.stringify(rootBatch));
+  assert.equal(rootBatch.published, 0); assert.equal(rootBatch.unchanged, 1);
+  assert.ok(!requested.some(path => path.includes(`/blocks/${DEMO.week}`)), "Later-batch bodies must not be pulled by parent discovery");
+  assert.deepEqual(await snapshot(), before);
   const once = await store.preview(DEMO.course, "once");
   const sourceCallsBeforeInvalid = f.counts.sourceCalls;
   const invalid = await runIncrementalHost({...f.options, command: "run", freezeEnabled: true,

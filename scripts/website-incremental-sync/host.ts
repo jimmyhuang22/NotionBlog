@@ -159,7 +159,7 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
       if (!ready || Object.keys(ready).length !== 6 || ready.format !== "incremental-host-ready-v1" || ready.configDigest !== digest ||
         ready.schemaDigest !== WEBSITE_SCHEMA_DIGEST || !/^[0-9]+$/.test(ready.policyEpoch) || ready.directorySeeded !== true) hostFail("HOST_BASELINE_MISSING");
       const exclusions = denied(ready.deniedPageIds);
-      const frozenPageIds = new Set<string>();
+      const frozenPageIds = new Set<string>(), readFrozenPageIds = new Set<string>();
       let freezeState: FreezeState | undefined;
       const loadFrozen = async () => {
         if (!options.freezeEnabled) return;
@@ -171,6 +171,12 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
         frozenPageIds.clear();
         for (const member of freezeState.members) if (member.groupId !== options.refreshFrozenGroup) frozenPageIds.add(member.id);
         queue!.setFrozenPages(frozenPageIds);
+        readFrozenPageIds.clear();
+        for (const id of frozenPageIds) readFrozenPageIds.add(id);
+        // The queue still targets the group root; source preparation only thaws
+        // this batch. Parent discovery must not pull later batches into it.
+        if (options.refreshPageIds) for (const member of freezeState.members)
+          if (member.groupId === options.refreshFrozenGroup && !options.refreshPageIds.includes(member.id)) readFrozenPageIds.add(member.id);
       };
       await loadFrozen();
       let source: RuntimeSources | undefined;
@@ -178,11 +184,11 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
       const publication = createDatabasePublicationPort(db.writer, db.reader, options.refreshFrozenGroup ?
         () => ({ groupId: options.refreshFrozenGroup!, generation: freezeState!.generation }) : undefined);
       const domain = createStudyDomainPort<QueueTicket>({ store: study, sourceKeys: studyKeys, assertPreparing: ticket => queue!.assertPreparing(ticket),
-        frozenPageIds, maxReads: options.refreshFrozenGroup ? 2000 : undefined,
+        frozenPageIds: readFrozenPageIds, maxReads: options.refreshFrozenGroup ? 2000 : undefined,
         refreshPageIds: options.refreshFrozenGroup ? options.refreshPageIds ?? freezeState!.members.filter(m => m.groupId === options.refreshFrozenGroup).map(m => m.id) : undefined,
         source: (state, signal) => sources().study(state, signal), verify: (receipt, signal) => db!.verify(receipt, signal),
         incomingLinks: async (changes, state, signal) => { signal.throwIfAborted(); const links = cache!.incomingLinks(changes, state);
-          return { ...links, records: links.records.filter(r => !frozenPageIds.has(r.detail.item.id)) }; },
+          return { ...links, records: links.records.filter(r => !readFrozenPageIds.has(r.detail.item.id)) }; },
         assets: async (records, state, signal) => sources().assets(records, state, signal) });
       const coordinator = createIncrementalCoordinator<QueueTicket>({ scopeDigest: digest, sourceKeys, studySourceKeys: studyKeys, queue,
         publication, checkpoint: study, study: domain, regular: { prepare: (ticket, state, signal) => sources().regular.prepare(ticket, state, signal) } });
@@ -205,7 +211,7 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
       else {
         report.phase = "discovery";
         if (options.target && (frozenPageIds.has(options.target.pageKey) || !cache.readPublished(options.target, state))) hostFail("HOST_TARGET_FROZEN");
-        source = await hostAwait(budget, () => resources.open(() => dependencies.sources({ config, store: cache!, budget, deniedPageIds: exclusions, frozenPageIds, registerCleanup: resources.register }))); budget.guard();
+        source = await hostAwait(budget, () => resources.open(() => dependencies.sources({ config, store: cache!, budget, deniedPageIds: exclusions, frozenPageIds: readFrozenPageIds, registerCleanup: resources.register }))); budget.guard();
         if (options.target) queue.enqueue([{ eventId: `console:${randomUUID()}`, ...options.target, reason: "reconcile", observedAt: Date.now() }]);
         const checkpoint = queue.checkpoint(sourceKeys[0], "host-round-robin-v1");
         let offset = checkpoint.cursor === null ? 0 : Number(checkpoint.cursor), revision = checkpoint.revision;
