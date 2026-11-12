@@ -13,7 +13,7 @@ import { createRuntimeStorage } from "./runtime-storage.ts";
 export function parseIncrementalArguments(args: readonly string[]) {
   const [command, ...rest] = args;
   if (!["initialize", "recover", "run", "status", "list-review", "resume", "compact-history"].includes(command ?? "") || rest.length % 2) hostFail("HOST_INPUT_INVALID");
-  const allowed = ["config", "lock-dir", "runtime-dir", "artifact", "max-tasks", "max-sources", "duration-ms", "source-requests", "source-bytes", "media-bytes", "source", "page", "refresh-group", "freeze-generation", "expected-revision", "baseline-reads"];
+  const allowed = ["config", "lock-dir", "runtime-dir", "artifact", "max-tasks", "max-sources", "duration-ms", "source-requests", "source-bytes", "media-bytes", "source", "page", "refresh-group", "freeze-generation", "refresh-pages", "expected-revision", "baseline-reads"];
   const values = new Map<string, string>();
   for (let i = 0; i < rest.length; i += 2) {
     const name = rest[i].startsWith("--") ? rest[i].slice(2) : "", value = rest[i + 1];
@@ -41,12 +41,14 @@ export function parseIncrementalArguments(args: readonly string[]) {
     return command === "list-review" ? { ...review, command: "list-review" as const } : { ...review, command: "resume" as const };
   }
   if (values.has("source") !== values.has("page") || values.has("source") && command !== "run" ||
+      values.has("refresh-pages") && (!values.has("refresh-group") || !/^[a-f0-9]{32}(,[a-f0-9]{32}){0,99}$/.test(values.get("refresh-pages")!)) ||
       values.has("refresh-group") !== values.has("freeze-generation") || values.has("refresh-group") && (!values.has("source") || command !== "run")) hostFail("HOST_INPUT_INVALID");
   if (command !== "initialize" && values.has("artifact")) hostFail("HOST_INPUT_INVALID");
   if (values.has("expected-revision") && command !== "run") hostFail("HOST_INPUT_INVALID");
   if (values.has("baseline-reads") && command !== "initialize") hostFail("HOST_INPUT_INVALID");
   return { command: command as IncrementalHostOptions["command"], runtimeDirectory, configPath: path("config")!, lockDirectory: path("lock-dir")!,
     target: values.has("source") ? { sourceKey: values.get("source")!, pageKey: values.get("page")! } : undefined,
+    refreshPageIds: values.has("refresh-pages") ? values.get("refresh-pages")!.split(",") : undefined,
     refreshFrozenGroup: values.get("refresh-group"), expectedFreezeGeneration: values.get("freeze-generation"),
     expectedPublicationRevision: values.get("expected-revision"),
     artifactPath: path("artifact", command === "initialize"), maxTasks: number("max-tasks"), maxSources: number("max-sources"), maxBaselineReads: number("baseline-reads"),
