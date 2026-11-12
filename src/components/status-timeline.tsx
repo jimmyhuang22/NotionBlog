@@ -5,6 +5,10 @@ import { EntryMoment } from "./entry-moment";
 import { StatusBody } from "./status-body";
 import { MonthLabel } from "./month-label";
 import { runsBy } from "../lib/runs.ts";
+import type { CSSProperties } from "react";
+
+/** How many entries of a fresh list rise in. Kept here: this file also renders on the server, where a value from a client file is only a reference. */
+const ARRIVING_ROWS = 6;
 
 /** Entries arrive newest first with unknown dates last; grouping keeps that order. */
 function groupByMonth(items: StatusEntry[], timeZone: string, today: CalendarDay | null) {
@@ -15,17 +19,20 @@ function groupByMonth(items: StatusEntry[], timeZone: string, today: CalendarDay
   return runsBy(dated, ({ month }) => month ? { key: `${month.year}-${month.month}`, label: `${month.year} 年 ${month.month} 月` } : { key: "unknown", label: "日期未记录" });
 }
 
-export function StatusTimeline({ items, timeZone, today = null, leadFirst = false, level = 3, appendedFrom = null }: {
+export function StatusTimeline({ items, timeZone, today = null, leadFirst = false, level = 3, appendedFrom = null, arriving = false }: {
   items: StatusEntry[]; timeZone: string; leadFirst?: boolean;
   /** Today in the site's time zone: entries of the last week are named by it ("昨天 · …"). Without it every entry is a plain date. */
   today?: CalendarDay | null;
   /** Index of the first entry added by the latest "load more"; those ease in. */
   appendedFrom?: number | null;
+  /** This list replaced another on the same page (a year was chosen): its first entries rise from where the old ones stood dimmed. */
+  arriving?: boolean;
   /** Heading level of the month labels: one below the heading that introduces the timeline. */
   level?: 2 | 3;
 }) {
   const leadId = leadFirst ? items[0]?.id : undefined;
   const appended = new Set(appendedFrom === null ? [] : items.slice(appendedFrom).map(item => item.id));
+  const rank = new Map(arriving ? items.slice(0, ARRIVING_ROWS).map((item, index) => [item.id, index] as const) : []);
   const Month = `h${level}` as const;
   return (
     <>
@@ -33,7 +40,8 @@ export function StatusTimeline({ items, timeZone, today = null, leadFirst = fals
         <div key={`${group.key}:${group.items[0]?.entry.id}`}>
           <Month className={index === 0 ? "timeline__month timeline__month--first" : "timeline__month"}><MonthLabel monthKey={group.key} label={group.label} /></Month>
           {group.items.map(({ entry, moment }) => (
-            <article key={entry.id} id={entry.id} className={`${entry.id === leadId ? "entry entry--lead" : "entry"}${appended.has(entry.id) ? " is-appended" : ""}`}>
+            <article key={entry.id} id={entry.id} className={`${entry.id === leadId ? "entry entry--lead" : "entry"}${appended.has(entry.id) ? " is-appended" : rank.has(entry.id) ? " is-arriving" : ""}`}
+              style={rank.has(entry.id) ? { "--i": rank.get(entry.id) } as CSSProperties : undefined}>
               {/* Undated entries sit under their own "日期未记录" heading; no invented date per entry. */}
               {moment ? <time className="entry__time" dateTime={entry.recordedAt?.start}><EntryMoment moment={moment} /></time> : null}
               <StatusBody entry={entry} titleLevel={level === 2 ? 3 : 4} />

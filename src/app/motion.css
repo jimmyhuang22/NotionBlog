@@ -88,6 +88,9 @@
   /* They rise from the 45% the old list was dimmed to, never from nothing, so the list is never blank in between (round four, M-12). */
   .is-arriving { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
   @keyframes arrive-row { from { opacity: 0.45; transform: translateY(6px); } }
+  /* A timeline entry carries the line and its ring: those stay, and what the entry holds rises (the status page after a year is chosen). */
+  .entry.is-arriving { animation: none; }
+  .entry.is-arriving > * { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
   /* The study overview fades a copy of its old rows out over the new ones instead (study-overview.tsx): its new rows still start from nothing, or the two would show through each other. */
   .study-entries > .is-arriving { animation-name: arrive-row-clear; animation-delay: calc(60ms + var(--i, 0) * 25ms); }
   @keyframes arrive-row-clear { from { opacity: 0; transform: translateY(6px); } }
@@ -134,16 +137,6 @@
 }
 
 /*
- * Changing a filter: the selected segment slides to its new place instead of jumping. The two
- * controls have their own names so a segment never flies from one page's control to another's.
- */
-@media (prefers-reduced-motion: no-preference) {
-  .segmented--scroll a[aria-current] { view-transition-name: segment-year; }
-  .library__head .segmented:not(.works__platforms) a[aria-current] { view-transition-name: segment-status; }
-  ::view-transition-group(segment-year), ::view-transition-group(segment-status) { animation-duration: 0.3s; animation-timing-function: cubic-bezier(0.3, 0.9, 0.3, 1); }
-}
-
-/*
  * Moving between pages is page-switch.tsx's cross-fade, not a view transition (F43, 2026-10-21; it replaced
  * the fade out and rise in, and the sideways move for sections chosen in the header). A filter change is
  * a view transition of class "filter": the list is swapped in place, the old one hidden at once, and only
@@ -157,6 +150,8 @@
 @media (prefers-reduced-motion: no-preference) {
   /* The header's ink mark glides to the section pressed, at the press (F43): it does not wait for the page. */
   .site-nav__mark.is-placed { transition: transform 0.36s cubic-bezier(0.3, 0.9, 0.3, 1); }
+  /* Apple's capsule also takes the width of the section it lands on. */
+  [data-skin="apple"] .site-nav__mark.is-placed { transition: transform 0.36s cubic-bezier(0.3, 0.9, 0.3, 1), width 0.36s cubic-bezier(0.3, 0.9, 0.3, 1), margin 0.36s cubic-bezier(0.3, 0.9, 0.3, 1); }
 }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*) { animation: none; }

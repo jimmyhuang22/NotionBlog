@@ -73,8 +73,8 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
 
 /**
  * A work standing alone on the home timeline, as one light line (the owner's choice, 2026-11-11): a small
- * picture in its platform's shape, then the title and one quiet line of where it lives, its kind and its
- * figures. The status entries stay the timeline's main reading; this only says what was published. A further
+ * picture in its platform's shape, then the title, what is new about it (a collection's added videos) as a
+ * small mark beside the title, and one quiet line of where it lives, its kind and its figures. The status entries stay the timeline's main reading; this only says what was published. A further
  * platform of the same work gets its own short line under it with that platform's figures and address. The
  * picture comes after the words in the source, so the link reads its title first. The figures keep to the
  * platform's own and an unknown one is left out; only a checked address is a link.
@@ -88,14 +88,17 @@ export function HomeWorkLine({ work, timeZone, priorityCover = false }: { work: 
   const main = (
     <>
       <span className="work-line__text">
-        <span className="work-line__title">{work.title}</span>
+        <span className="work-line__head">
+          <span className="work-line__title">{work.title}</span>
+          {/* What is new comes right after the name, as a game's platform and hours do; the quiet line under it only says where and how much. */}
+          {update ? <span className="work-line__update"><span className="visually-hidden">，</span>{update.text}</span> : null}
+        </span>
         {lead ? (
           <span className="work-line__meta">
             <PlatformMark platform={lead.platform} />
             <span>{name}</span>
             {[lead.kind, lead.size].filter(Boolean).map(part => <span key={part} className="work-line__part">{part}</span>)}
             {lead.figures.map(figure => <span key={figure.metric} className="work-line__part work-line__figure">{figure.label} {figure.value}</span>)}
-            {update ? <span className="work-line__part work-line__update">{update.text}</span> : null}
           </span>
         ) : null}
       </span>

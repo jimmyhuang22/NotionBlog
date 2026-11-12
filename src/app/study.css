@@ -401,6 +401,11 @@
     .page-outline[open] { translate: 0 100%; }
     .page-outline[open]::backdrop { opacity: 0; }
   }
+  /* On a phone the button steps aside for the sheet and comes back once the sheet has gone, so the two never show together. */
+  @media (max-width: 699.98px) {
+    .page-outline__open[aria-expanded="false"] { transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease, opacity 0.2s ease 0.22s; }
+    .page-outline__open[aria-expanded="true"] { opacity: 0; transition: opacity 0.1s ease; }
+  }
   @media (min-width: 700px) {
     .page-outline { translate: none; clip-path: inset(100% -60px -60px -60px); transition: clip-path 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), overlay 0.26s allow-discrete, display 0.26s allow-discrete; }
     .page-outline[open] { clip-path: inset(-60px); }

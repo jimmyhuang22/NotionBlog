@@ -1,4 +1,6 @@
 @import "lxgw-wenkai-screen-webfont/lxgwwenkaiscreen.css";
+/* The island skin's headings (skins.css): a rounded Chinese face to go with Nunito. Cut into slices by Unicode range, so only the slices a page's headings use are fetched, and only under that skin. */
+@import "@chinese-fonts/hcqyt/dist/ChillRoundFBold/result.css";
 
 /*
  * Until the hand font has loaded, headings fall back to the system Kai. Its Latin letters are
@@ -484,6 +486,14 @@ a.card:hover { box-shadow: var(--shadow-lift); }
 .page-loading { min-height: 100vh; }
 @media (prefers-reduced-motion: no-preference) {
   .skeleton { animation: breathe 2.4s ease-in-out infinite; }
+  /*
+   * A section's faint shapes hold back a moment and then come up softly (2026-11-13). A page that arrives within
+   * that moment, as most do, shows its title and tools and then its list, with no grey blocks flashing between;
+   * a slow one still gets its outline. --waited is how long the visitor has already waited (page-switch.tsx), so
+   * the loading state that takes over from the click's frame carries on instead of starting again.
+   */
+  .page-loading > :not(.page-head, .search__form, .skeleton) { animation: waiting-in 0.3s ease backwards; animation-delay: calc(320ms - var(--waited, 0ms)); }
+  @keyframes waiting-in { from { opacity: 0; } }
   @keyframes breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.9; } }
   @keyframes pulse { 50% { opacity: 0.5; } }
 }

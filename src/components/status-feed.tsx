@@ -8,6 +8,7 @@ import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { readStatusHash, statusFocusHref } from "../lib/status-focus.ts";
 import { useToday } from "./use-today";
+import { useFilterArrival } from "./use-filter-arrival";
 
 export function StatusFeed({ initial, pageSize, timeZone, year = null, total = null }: {
   initial: Page<StatusEntry>; pageSize: number; timeZone: string;
@@ -18,6 +19,7 @@ export function StatusFeed({ initial, pageSize, timeZone, year = null, total = n
 }) {
   const router = useRouter();
   const today = useToday(timeZone);
+  const arriving = useFilterArrival();
   const query: Record<string, string> = { limit: String(pageSize), ...(year ? { year } : {}) };
   const { items, restarted, appendedFrom, paged, ...paging } = usePagedList<StatusEntry>("/api/content/status", query, initial);
   useEffect(() => {
@@ -35,7 +37,7 @@ export function StatusFeed({ initial, pageSize, timeZone, year = null, total = n
     <>
       {restarted ? <p className="notice timeline__notice" role="status">动态有更新，已从最新一条重新加载。</p> : null}
       {/* The status page has no section heading between its title and the months. */}
-      <StatusTimeline items={items} timeZone={timeZone} today={today} level={2} appendedFrom={appendedFrom} />
+      <StatusTimeline items={items} timeZone={timeZone} today={today} level={2} appendedFrom={appendedFrom} arriving={arriving} />
       {paged ? <ListTail className="timeline__more" paging={paging} label="加载更早的动态" end="到底了" status={pagingMessage(paging.problem, items.length, "条", total)} /> : null}
     </>
   );
