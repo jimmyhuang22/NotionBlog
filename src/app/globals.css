@@ -79,7 +79,7 @@
     --shadow: 0 0 0 1px rgba(255, 245, 225, 0.07);
     --shadow-lift: 0 0 0 1px rgba(255, 245, 225, 0.16);
     --shadow-press: 0 0 0 1px rgba(255, 245, 225, 0.07), inset 0 1px 4px rgba(0, 0, 0, 0.55);
-    --bloom: color-mix(in srgb, var(--accent) 14%, transparent);
+    --bloom: color-mix(in srgb, var(--accent) 18%, transparent);
     --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.035 0 0 0 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 }
@@ -100,7 +100,7 @@
   --shadow: 0 0 0 1px rgba(255, 245, 225, 0.07);
   --shadow-lift: 0 0 0 1px rgba(255, 245, 225, 0.16);
   --shadow-press: 0 0 0 1px rgba(255, 245, 225, 0.07), inset 0 1px 4px rgba(0, 0, 0, 0.55);
-  --bloom: color-mix(in srgb, var(--accent) 14%, transparent);
+  --bloom: color-mix(in srgb, var(--accent) 18%, transparent);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.035 0 0 0 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -425,7 +425,7 @@ a.card:hover { box-shadow: var(--shadow-lift); }
  * press of its own, and nothing dims (a faded control reads as disabled on paper). Rows and words take a wash of
  * ink under them, --bloom, that comes at once and fades slowly after; rows with no padding of their own get the
  * wash a little wider than themselves. Cards and round buttons with a shadow are pressed into the paper: down by
- * --press-depth, lift gone, a little shade inside (--shadow-press). The island keeps its step-down buttons (skins.css).
+ * --press-depth, lift gone, a little shade inside (--shadow-press). Each skin presses in its own way with the same targets and timing (skins.css, "Pressing in each skin").
  */
 :root { -webkit-tap-highlight-color: transparent; }
 :is(.site-nav__list > li > a:not([aria-current]), .site-nav__more > button:not(.is-current), .site-nav__menu a, .segmented :is(a:not([aria-current]), button:not([aria-pressed="true"])), a.event--line, a.work-line__main, a.work-line__more, .tree__link, .toc a, .page-outline__item a, .search-hit, .palette__option a, .study-entry, .child-page, .course-quick-links a, .course-gallery-card, .crumbs a):active { background-color: var(--bloom); }
@@ -544,11 +544,12 @@ a.card:hover { box-shadow: var(--shadow-lift); }
 .socials a[data-platform="bilibili"]:hover, :root:not([data-input="pointer"]) .socials a[data-platform="bilibili"]:focus-visible { color: var(--brand-bilibili); }
 .socials a[data-platform="xiaohongshu"]:hover, :root:not([data-input="pointer"]) .socials a[data-platform="xiaohongshu"]:focus-visible { color: var(--brand-xiaohongshu); }
 .socials a[data-platform="steam"]:hover, :root:not([data-input="pointer"]) .socials a[data-platform="steam"]:focus-visible { color: var(--brand-steam); }
-:root:not([data-skin="island"]) .socials li a:active { box-shadow: var(--shadow-press); }
+.socials li:nth-child(n) a:active { box-shadow: var(--shadow-press); }
 @media (prefers-reduced-motion: no-preference) {
   .socials a { transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), color 0.2s, box-shadow 0.2s ease; }
   .socials li:nth-child(odd) a:hover { transform: rotate(-6deg) translateY(-2px); }
   .socials li:nth-child(even) a:hover { transform: rotate(6deg) translateY(-2px); }
+  .socials li:nth-child(n) a:active { transform: translateY(var(--press-depth, 1.5px)); transition-duration: 0.05s; }
 
 /* About: the home hero, one card with the page, and its last-edited day. */
 .about__updated { margin: 0; padding: 18px 0 40px; font-size: var(--text-sm); color: var(--muted); text-align: center; }
