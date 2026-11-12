@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { UNZOOMED, clampPan, zoomAbout, type Zoom } from "../lib/zoom.ts";
 import { nearestShown } from "../lib/photo-order.ts";
-import { closeOnBackdrop, useModal } from "./use-dismiss";
+import { useModal } from "./use-dismiss";
 
 export interface Photo {
   key: string; src: string; alt: string; caption: string;
@@ -26,6 +26,29 @@ export const useLightbox = () => useContext(LightboxContext);
 
 /** A little longer than the fade in prose.css, so the content is removed only after it is invisible. */
 const CLOSE_MS = 240;
+/** The picture's flight between its place on the page and the viewer (M-18), out and back. */
+const GROW_MS = 280;
+const SHRINK_MS = 240;
+const FLIGHT_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+
+const moving = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * The keyframes that carry the viewer's picture from a thumbnail's box to where it stands. A thumbnail may be a
+ * crop of the picture (a square tile, a cover), so the picture is scaled evenly until it covers the thumbnail
+ * and clipped down to it, instead of being stretched to its shape. Null when either box has no size yet.
+ */
+function flight(picture: DOMRect, thumbnail: DOMRect, radius: number): Keyframe[] | null {
+  if (!picture.width || !picture.height || !thumbnail.width || !thumbnail.height) return null;
+  const scale = Math.max(thumbnail.width / picture.width, thumbnail.height / picture.height);
+  const x = thumbnail.left + thumbnail.width / 2 - (picture.left + picture.width / 2);
+  const y = thumbnail.top + thumbnail.height / 2 - (picture.top + picture.height / 2);
+  const insetX = (picture.width - thumbnail.width / scale) / 2, insetY = (picture.height - thumbnail.height / scale) / 2;
+  return [
+    { transform: `translate(${x}px, ${y}px) scale(${scale})`, clipPath: `inset(${insetY}px ${insetX}px round ${radius / scale}px)` },
+    { transform: "none", clipPath: "inset(0px 0px round 0px)" },
+  ];
+}
 
 /**
  * Wraps one document. Every image inside can open in a full-screen viewer and step through
@@ -57,6 +80,9 @@ export function LightboxProvider({ className, children }: { className?: string; 
   const [opened, setOpened] = useState(false);
   // Closing fades the dialog out; the picture stays in place until that has finished.
   const clearing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // The photo whose thumbnail the viewer grows from as it opens, and the thumbnail hidden while the picture is in flight.
+  const grow = useRef<string | null>(null);
+  const hidden = useRef<HTMLElement | null>(null);
 
   const api = useMemo<LightboxApi>(() => ({
     register(photo) {
@@ -73,12 +99,66 @@ export function LightboxProvider({ className, children }: { className?: string; 
         .map(element => element.dataset.photo ?? "").filter(candidate => registry.current.has(candidate));
       if (!order.includes(key)) return;
       clearTimeout(clearing.current);
+      grow.current = key;
       setView({ order, key });
       setOpened(true);
     },
   }), []);
 
   useModal(dialog, opened);
+
+  /** The picture a photo shows on the page, while it is on screen; the viewer flies to and from it. */
+  function thumbnail(key: string): HTMLElement | null {
+    const holder = root.current?.querySelector<HTMLElement>(`[data-photo="${CSS.escape(key)}"]`);
+    const picture = holder?.querySelector<HTMLElement>("img") ?? holder;
+    const box = picture?.getBoundingClientRect();
+    return picture && box && box.width && box.bottom > 0 && box.top < window.innerHeight && box.right > 0 && box.left < window.innerWidth ? picture : null;
+  }
+  function hide(picture: HTMLElement | null) {
+    if (hidden.current && hidden.current !== picture) hidden.current.style.visibility = "";
+    hidden.current = picture;
+    if (picture) picture.style.visibility = "hidden";
+  }
+
+  // Opening: the picture grows out of the thumbnail that was pressed and the dark ground fades in under it (M-18).
+  // This runs after the dialog has been shown and before it is painted. Without a thumbnail on screen, or a size
+  // to grow to, or with reduced motion, the viewer fades in as before.
+  useEffect(() => {
+    const element = dialog.current, img = image.current, key = grow.current;
+    grow.current = null;
+    if (!opened || !element || !img || !key || key !== photoKey || !moving()) return;
+    const source = thumbnail(key);
+    const frames = source && flight(img.getBoundingClientRect(), source.getBoundingClientRect(), parseFloat(getComputedStyle(source).borderTopLeftRadius) || 0);
+    if (!source || !frames) return;
+    element.dataset.grow = "";
+    hide(source);
+    const animation = img.animate(frames, { duration: GROW_MS, easing: FLIGHT_EASE });
+    void animation.finished.catch(() => {}).then(() => { hide(null); delete element.dataset.grow; });
+  });
+
+  /**
+   * Closing: the picture shrinks back into the thumbnail of the photo now on show (after stepping through, that
+   * is another one), the ground fading out around it; then the dialog goes at once. Where that thumbnail is off
+   * screen, or with reduced motion, the viewer fades out as before.
+   */
+  function dismiss() {
+    const element = dialog.current, img = image.current;
+    if (!element?.open || element.dataset.shrink !== undefined) return;
+    const target = photo && moving() && zoom.current === UNZOOMED ? thumbnail(photo.key) : null;
+    const frames = target && img && flight(img.getBoundingClientRect(), target.getBoundingClientRect(), parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
+    if (!target || !img || !frames) { element.close(); return; }
+    img.getAnimations().forEach(animation => animation.cancel());
+    delete element.dataset.grow;
+    element.dataset.shrink = "";
+    hide(target);
+    const animation = img.animate([...frames].reverse(), { duration: SHRINK_MS, easing: FLIGHT_EASE, fill: "forwards" });
+    void animation.finished.catch(() => {}).then(() => {
+      element.dataset.shrunk = "";
+      element.close();
+      hide(null);
+      animation.cancel();
+    });
+  }
 
   // Only photos still on the page can be shown. One that left while on show (a picture that failed to load
   // gives up its place) hands over to the next one still there, else the one before; with none left the viewer closes.
@@ -266,8 +346,15 @@ export function LightboxProvider({ className, children }: { className?: string; 
         ref={dialog}
         className="lightbox"
         aria-label="查看大图"
-        onClose={() => { setOpened(false); clearing.current = setTimeout(() => setView(null), CLOSE_MS); }}
-        onClick={closeOnBackdrop}
+        onClose={event => {
+          const element = event.currentTarget;
+          hide(null);
+          delete element.dataset.grow; delete element.dataset.shrink;
+          setOpened(false);
+          clearing.current = setTimeout(() => { setView(null); delete element.dataset.shrunk; }, CLOSE_MS);
+        }}
+        onCancel={event => { event.preventDefault(); dismiss(); }}
+        onClick={event => { if (event.target === event.currentTarget) dismiss(); }}
         onKeyDown={event => {
           if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomBy(1.5); }
           if (event.key === "-") { event.preventDefault(); zoomBy(1 / 1.5); }
@@ -284,7 +371,7 @@ export function LightboxProvider({ className, children }: { className?: string; 
                 <span className="lightbox__count" aria-live="polite">{many ? `${live.indexOf(photo.key) + 1} / ${live.length}` : ""}</span>
                 <span className="lightbox__state" role="status">{status}</span>
               </span>
-              <button type="button" className="lightbox__button lightbox__close" onClick={() => dialog.current?.close()} aria-label="关闭">
+              <button type="button" className="lightbox__button lightbox__close" onClick={dismiss} aria-label="关闭">
                 {/* Two strokes of the pen, like the arrows (X-07, 2026-10-20). */}
                 <svg aria-hidden="true" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5.2 5.6c3.6 3.4 7.6 7.4 11.3 11.1M16.6 5.1c-3.5 3.9-7.3 7.8-11.2 11.6" /></svg>
               </button>

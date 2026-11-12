@@ -28,6 +28,26 @@
     .lightbox[open], .lightbox[open]::backdrop { opacity: 0; }
     .lightbox[open] .lightbox__frame { scale: 0.97; }
   }
+  /*
+   * Opened from a thumbnail on screen, the picture flies out of it instead (M-18, lightbox.tsx): the viewer is
+   * there at once, its dark ground fades in on its own and the bar and arrows follow. Closing flies the picture
+   * back into its thumbnail as the ground fades out, then the viewer goes without a fade of its own.
+   */
+  .lightbox:is([data-grow], [data-shrink], [data-shrunk]), .lightbox:is([data-grow], [data-shrink], [data-shrunk])::backdrop, .lightbox:is([data-grow], [data-shrink], [data-shrunk]) .lightbox__frame { transition: none; }
+  .lightbox[data-grow], .lightbox[data-grow]::backdrop { opacity: 1; }
+  .lightbox[data-grow] .lightbox__frame { scale: none; }
+  .lightbox[data-grow] { animation: lightbox-ground 0.28s ease backwards; }
+  .lightbox[data-grow]::backdrop { animation: lightbox-fade 0.28s ease backwards; }
+  .lightbox[data-grow] :is(.lightbox__bar, .lightbox__nav, .lightbox__caption) { animation: lightbox-fade 0.2s 0.12s ease backwards; }
+  /* The spinner waits for the flight to end: the picture in flight is already the one shown. */
+  .lightbox[data-grow] .lightbox__wait { visibility: hidden; }
+  .lightbox[data-shrink] { animation: lightbox-ground-out 0.24s ease forwards; }
+  .lightbox[data-shrink]::backdrop { animation: lightbox-fade-out 0.24s ease forwards; }
+  .lightbox[data-shrink] :is(.lightbox__bar, .lightbox__nav, .lightbox__caption, .lightbox__wait) { animation: lightbox-fade-out 0.12s ease forwards; }
+  @keyframes lightbox-ground { from { background-color: transparent; } }
+  @keyframes lightbox-ground-out { to { background-color: transparent; } }
+  @keyframes lightbox-fade { from { opacity: 0; } }
+  @keyframes lightbox-fade-out { to { opacity: 0; } }
 
   /* The course directory's drawer slides in from the left over a fading backdrop (narrow screens, study-reading-directory.tsx). */
   .reading__side[data-open] { transition: translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease; }
