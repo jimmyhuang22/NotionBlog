@@ -13,6 +13,9 @@
   --ink: #1d1d1f; --muted: #636366; --rule: #d2d2d7; --accent: #0066cc; --button: var(--accent);
   --sky: #e5f0fc; --peach: #fdeee4;
   --shadow: 0 2px 14px rgba(0, 0, 0, 0.06); --shadow-lift: 0 10px 28px rgba(0, 0, 0, 0.12);
+  --shadow-press: 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  /* Pressed like a system list row: neutral grey, never the accent. */
+  --bloom: rgba(0, 0, 0, 0.07); --press-fill: rgba(0, 0, 0, 0.07);
   --grain: none; --radius-lg: 22px; --radius-md: 18px; --radius-sm: 10px;
   --font-hand: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
   --title-stroke: 0px;
@@ -24,6 +27,8 @@
   --ink: #f5f5f7; --muted: #a1a1a6; --rule: #3a3a3c; --accent: #2997ff; --button: #0071e3;
   --sky: #1b2a3d; --peach: #3a2a20;
   --shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); --shadow-lift: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 10px 28px rgba(0, 0, 0, 0.5);
+  --shadow-press: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 4px rgba(0, 0, 0, 0.6);
+  --bloom: rgba(255, 255, 255, 0.12); --press-fill: rgba(255, 255, 255, 0.12);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-skin="apple"]:not([data-theme="light"]) {
@@ -32,6 +37,8 @@
     --ink: #f5f5f7; --muted: #a1a1a6; --rule: #3a3a3c; --accent: #2997ff; --button: #0071e3;
     --sky: #1b2a3d; --peach: #3a2a20;
     --shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); --shadow-lift: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 10px 28px rgba(0, 0, 0, 0.5);
+    --shadow-press: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 4px rgba(0, 0, 0, 0.6);
+    --bloom: rgba(255, 255, 255, 0.12); --press-fill: rgba(255, 255, 255, 0.12);
   }
 }
 /* The frosted header stays at the top; side columns and anchors clear it (see --header-h in globals.css). It is two rows tall on a phone. */
@@ -97,6 +104,9 @@
   --ink: #5b3c1c; --muted: #7d6648; --rule: #e2d7b9; --accent: #08706a;
   --sky: #e2f4f1; --peach: #fbe7d4;
   --shadow: 0 4px 0 #e4d9bd; --shadow-lift: 0 6px 0 #d8caa6;
+  /* A card pressed on the island steps down onto its ledge, like the buttons. */
+  --shadow-press: 0 1px 0 #e4d9bd; --press-depth: 3px;
+  --bloom: color-mix(in srgb, var(--accent) 14%, transparent);
   /* 6% since 2026-11-11 (was 16%): the stripes stay, quieter behind long reading. Dark keeps its own below. */
   --grain: repeating-linear-gradient(135deg, transparent 0 22px, rgba(196, 184, 158, 0.06) 22px 44px);
   --radius-lg: 24px; --radius-md: 18px; --radius-sm: 12px; --radius-xs: 8px;
@@ -114,6 +124,8 @@
   --ink: #f4ebd3; --muted: #c2b89e; --rule: #3c4c67; --accent: #4fd8c9;
   --sky: #24364a; --peach: #3d3230;
   --shadow: 0 4px 0 #131b28; --shadow-lift: 0 6px 0 #0f1621;
+  --shadow-press: 0 1px 0 #131b28;
+  --bloom: color-mix(in srgb, var(--accent) 20%, transparent);
   --grain: repeating-linear-gradient(135deg, transparent 0 22px, rgba(255, 255, 255, 0.028) 22px 44px);
   --island-bar: #0f6159; --island-bar-edge: #0a4741; --island-bar-ink: #ffffff;
   --island-bar-button: #167a70; --island-bar-button-ink: #e9fffb; --island-bar-button-edge: #0a4741;
@@ -128,6 +140,8 @@
     --ink: #f4ebd3; --muted: #c2b89e; --rule: #3c4c67; --accent: #4fd8c9;
     --sky: #24364a; --peach: #3d3230;
     --shadow: 0 4px 0 #131b28; --shadow-lift: 0 6px 0 #0f1621;
+    --shadow-press: 0 1px 0 #131b28;
+    --bloom: color-mix(in srgb, var(--accent) 20%, transparent);
     --grain: repeating-linear-gradient(135deg, transparent 0 22px, rgba(255, 255, 255, 0.028) 22px 44px);
     --island-bar: #0f6159; --island-bar-edge: #0a4741; --island-bar-ink: #ffffff;
     --island-bar-button: #167a70; --island-bar-button-ink: #e9fffb; --island-bar-button-edge: #0a4741;
@@ -186,6 +200,8 @@
   --ink: #14233b; --muted: #4d5f7c; --rule: #c2daf0; --accent: #1560c2;
   --sky: #dcecff; --peach: #e6f1fd;
   --shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 14px 34px -16px rgba(30, 110, 205, 0.45); --shadow-lift: 0 0 0 1px #fff, 0 20px 40px -16px rgba(30, 110, 205, 0.6);
+  --shadow-press: 0 0 0 1px #fff, inset 0 1px 4px rgba(30, 110, 205, 0.28);
+  --bloom: rgba(70, 150, 235, 0.16);
   --grain: none; --radius-lg: 24px; --radius-md: 18px; --radius-sm: 12px;
   --font-hand: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
   --title-stroke: 0px;
@@ -302,3 +318,26 @@
 [data-skin="y2k"] .tree__link[aria-current="page"] { background: var(--y2k-gloss); color: #17549f; box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #c6dcf2; }
 [data-skin="y2k"] .palette mark { background: #cfe6ff; }
 [data-skin="y2k"] .search-hit__kind { border-color: transparent; background: var(--y2k-button) #1a6ace; color: #fff; }
+
+/*
+ * Pressing in each skin (2026-11-12, design review 5 and its skins addendum). Every skin presses the same
+ * targets with the same timing as ink (globals.css): rows and words take the skin's wash (--bloom), cards and
+ * round buttons its own way of going down.
+ * Apple: a neutral grey under rows; cards and buttons shrink a little onto the same grey, no sinking, no shade.
+ */
+[data-skin="apple"] :is(.pill-button, a.card, .to-top, .page-outline__open):active, [data-skin="apple"] .socials li:nth-child(n) a:active { box-shadow: var(--shadow); background-image: linear-gradient(var(--press-fill), var(--press-fill)); }
+[data-skin="apple"] .icon-button:active { box-shadow: none; background-image: linear-gradient(var(--press-fill), var(--press-fill)); }
+@media (prefers-reduced-motion: no-preference) {
+  [data-skin="apple"] :is(.pill-button, .icon-button, a.card, .to-top, .page-outline__open):active, [data-skin="apple"] .socials li:nth-child(n) a:active { transform: scale(0.97); }
+}
+/* Island: its step-down reaches the social buttons, the yellow pill of the header and the chosen segment. */
+[data-skin="island"] .socials li:nth-child(n) a:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); }
+[data-skin="island"] :is(.site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current):active { transform: translateY(2px); box-shadow: 0 1px 0 var(--island-pick-edge); }
+[data-skin="island"] .segmented :is(a[aria-current], button[aria-pressed="true"]):active { transform: translateY(3px); background-color: var(--picked); box-shadow: 0 1px 0 var(--island-ledge); }
+@media (prefers-reduced-motion: no-preference) {
+  [data-skin="island"] :is(.site-nav__list > li > a, .site-nav__more > button, .segmented :is(a, button)) { transition: background-color 0.22s ease, box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  [data-skin="island"] :is(.site-nav__list > li > a, .site-nav__more > button, .segmented :is(a, button)):active { transition-duration: 0.05s; }
+}
+/* Y2K: a pale blue under rows; a glossy button is pushed in, its highlight moving from the top edge to the bottom and its glow gone. */
+[data-skin="y2k"] :is(.pill-button, .site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current, .segmented :is(a[aria-current], button[aria-pressed="true"])):active { transform: none; box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.5), inset 0 2px 5px rgba(10, 50, 110, 0.45); }
+[data-skin="y2k"] :is(.icon-button, .to-top, .page-outline__open):active, [data-skin="y2k"] .socials li:nth-child(n) a:active { transform: none; box-shadow: inset 0 -1px 0 #fff, 0 0 0 1px #cfe2f4, inset 0 2px 4px rgba(30, 110, 205, 0.3); }
