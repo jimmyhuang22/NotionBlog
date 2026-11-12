@@ -13,6 +13,7 @@
   --ink: #1d1d1f; --muted: #636366; --rule: #d2d2d7; --accent: #0066cc; --button: var(--accent);
   --sky: #e5f0fc; --peach: #fdeee4;
   --shadow: 0 2px 14px rgba(0, 0, 0, 0.06); --shadow-lift: 0 10px 28px rgba(0, 0, 0, 0.12);
+  --shadow-press: 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 3px rgba(0, 0, 0, 0.12);
   --grain: none; --radius-lg: 22px; --radius-md: 18px; --radius-sm: 10px;
   --font-hand: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
   --title-stroke: 0px;
@@ -24,6 +25,7 @@
   --ink: #f5f5f7; --muted: #a1a1a6; --rule: #3a3a3c; --accent: #2997ff; --button: #0071e3;
   --sky: #1b2a3d; --peach: #3a2a20;
   --shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); --shadow-lift: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 10px 28px rgba(0, 0, 0, 0.5);
+  --shadow-press: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-skin="apple"]:not([data-theme="light"]) {
@@ -32,6 +34,7 @@
     --ink: #f5f5f7; --muted: #a1a1a6; --rule: #3a3a3c; --accent: #2997ff; --button: #0071e3;
     --sky: #1b2a3d; --peach: #3a2a20;
     --shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); --shadow-lift: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 10px 28px rgba(0, 0, 0, 0.5);
+    --shadow-press: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 4px rgba(0, 0, 0, 0.6);
   }
 }
 /* The frosted header stays at the top; side columns and anchors clear it (see --header-h in globals.css). It is two rows tall on a phone. */
@@ -97,6 +100,8 @@
   --ink: #5b3c1c; --muted: #7d6648; --rule: #e2d7b9; --accent: #08706a;
   --sky: #e2f4f1; --peach: #fbe7d4;
   --shadow: 0 4px 0 #e4d9bd; --shadow-lift: 0 6px 0 #d8caa6;
+  /* A card pressed on the island steps down onto its ledge, like the buttons. */
+  --shadow-press: 0 1px 0 #e4d9bd; --press-depth: 3px;
   /* 6% since 2026-11-11 (was 16%): the stripes stay, quieter behind long reading. Dark keeps its own below. */
   --grain: repeating-linear-gradient(135deg, transparent 0 22px, rgba(196, 184, 158, 0.06) 22px 44px);
   --radius-lg: 24px; --radius-md: 18px; --radius-sm: 12px; --radius-xs: 8px;
@@ -114,6 +119,7 @@
   --ink: #f4ebd3; --muted: #c2b89e; --rule: #3c4c67; --accent: #4fd8c9;
   --sky: #24364a; --peach: #3d3230;
   --shadow: 0 4px 0 #131b28; --shadow-lift: 0 6px 0 #0f1621;
+  --shadow-press: 0 1px 0 #131b28;
   --grain: repeating-linear-gradient(135deg, transparent 0 22px, rgba(255, 255, 255, 0.028) 22px 44px);
   --island-bar: #0f6159; --island-bar-edge: #0a4741; --island-bar-ink: #ffffff;
   --island-bar-button: #167a70; --island-bar-button-ink: #e9fffb; --island-bar-button-edge: #0a4741;
@@ -128,6 +134,7 @@
     --ink: #f4ebd3; --muted: #c2b89e; --rule: #3c4c67; --accent: #4fd8c9;
     --sky: #24364a; --peach: #3d3230;
     --shadow: 0 4px 0 #131b28; --shadow-lift: 0 6px 0 #0f1621;
+    --shadow-press: 0 1px 0 #131b28;
     --grain: repeating-linear-gradient(135deg, transparent 0 22px, rgba(255, 255, 255, 0.028) 22px 44px);
     --island-bar: #0f6159; --island-bar-edge: #0a4741; --island-bar-ink: #ffffff;
     --island-bar-button: #167a70; --island-bar-button-ink: #e9fffb; --island-bar-button-edge: #0a4741;
@@ -162,7 +169,7 @@
 [data-skin="island"] .site-nav__menu a[aria-current="page"] { color: var(--ink); background: var(--marker); }
 /* Chunky buttons that press down onto their ledge. */
 [data-skin="island"] :is(.pill-button, .icon-button, .socials a, .to-top, .page-outline__open) { border: 2px solid var(--rule); box-shadow: 0 4px 0 var(--island-press); }
-[data-skin="island"] :is(.pill-button, .icon-button, .socials a, .to-top, .page-outline__open):active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); }
+[data-skin="island"] :is(.pill-button, .icon-button, .socials a, .to-top, .page-outline__open):active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); opacity: 0.82; } /* unchanged by the 2026-11-12 press language */
 [data-skin="island"] .tag { border-radius: 999px; font-weight: 700; }
 [data-skin="island"] .entry__latest { background: var(--island-pick); color: var(--island-pick-ink); border-radius: 999px; padding: 1px 10px; font-weight: 800; }
 /* Timeline: a quiet line, yellow beads, and cards that speak like a villager's bubble. */
@@ -186,6 +193,7 @@
   --ink: #14233b; --muted: #4d5f7c; --rule: #c2daf0; --accent: #1560c2;
   --sky: #dcecff; --peach: #e6f1fd;
   --shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 14px 34px -16px rgba(30, 110, 205, 0.45); --shadow-lift: 0 0 0 1px #fff, 0 20px 40px -16px rgba(30, 110, 205, 0.6);
+  --shadow-press: 0 0 0 1px #fff, inset 0 1px 4px rgba(30, 110, 205, 0.28);
   --grain: none; --radius-lg: 24px; --radius-md: 18px; --radius-sm: 12px;
   --font-hand: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
   --title-stroke: 0px;
@@ -292,6 +300,8 @@
 [data-skin="y2k"] .segmented { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #cfe2f4; }
 [data-skin="y2k"] .segmented--scroll a[aria-current]:focus-visible { outline-color: currentColor; }
 [data-skin="y2k"] .segmented :is(a[aria-current], button[aria-pressed="true"]) { background: var(--y2k-button) #1a6ace; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px -4px rgba(22, 103, 199, 0.7); }
+/* Pressed, the glossy chosen item sinks: its glow goes and a shade comes in from the top (the press language, globals.css). */
+[data-skin="y2k"] .segmented :is(a[aria-current], button[aria-pressed="true"]):active { box-shadow: inset 0 2px 4px rgba(10, 50, 110, 0.45); }
 /* A tile without a cover keeps its spine line, in the skin's blue. */
 [data-skin="y2k"] .cover--empty, [data-skin="y2k"] .album-card__cover.album-card__cover--empty { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent), 0 6px 14px -6px rgba(30, 110, 205, 0.4); }
 [data-skin="y2k"] .library__item:hover .cover--empty, [data-skin="y2k"] .album-card:hover .album-card__cover.album-card__cover--empty { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent); }
