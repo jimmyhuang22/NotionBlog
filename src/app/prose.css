@@ -19,6 +19,8 @@
 @media (max-width: 540px) { .prose__h--1 { font-size: var(--text-2xl); } .prose__h--2 { font-size: var(--text-xl); } .prose__h--3 { font-size: var(--text-lg); } }
 .prose hr { margin: 32px 0; border: 0; border-top: 1px solid var(--rule); }
 .prose blockquote { margin: 0 0 18px; padding: 4px 0 4px 20px; border-left: 2px solid var(--accent); font-family: var(--font-hand); font-size: var(--text-lg); }
+/* An empty quote in the source keeps its little space but draws no rule: a stray stroke of ink under nothing (X-18). */
+.prose blockquote:empty { border-left-color: transparent; }
 
 .rt-code { padding: 2px 7px; border-radius: var(--radius-xs); background: var(--soft); font-family: var(--font-mono); font-size: 0.84em; }
 /* On a grey callout or the contents box, both --soft themselves, code takes the card's colour to stay visible (甲, 2026-10-29). */
@@ -72,6 +74,8 @@
 .code__copy { display: inline-flex; align-items: center; gap: 6px; }
 .code__actions { display: flex; align-items: center; gap: 2px; }
 .code__wrap[aria-pressed="true"] { background: var(--soft); color: var(--ink); }
+/* Only where the code runs wider than its block (code-wrap-button.tsx). */
+.code__wrap[hidden] { display: none; }
 .code[data-wrap="true"] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .code__copy[data-state="failed"] { color: var(--warning); }
 .code__tick path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }

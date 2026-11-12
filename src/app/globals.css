@@ -413,7 +413,8 @@ main { flex: 1 0 auto; }
 @media (max-width: 540px) {
   .page-head { padding-block: 10px 14px; }
   .page-head h1 { font-size: var(--text-3xl); }
-  .page-head.library__head { gap: 10px 16px; }
+  /* With its switches beside it a title stands where a plain one does (W-13): the row is centred, the head starts 8 higher. */
+  .page-head.library__head { gap: 10px 16px; align-items: center; padding-top: 2px; }
 }
 .section-title { margin: 0; font-family: var(--font-hand); font-size: var(--text-2xl); font-weight: 400; }
 .eyebrow { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
