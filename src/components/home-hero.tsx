@@ -47,16 +47,27 @@ export function TimelineHead() {
   );
 }
 
-/** The line and its dots are drawn first; the entries arrive where the faint bars are. */
+/**
+ * The timeline before its entries: a month and three rows in the timeline's own classes, so the line and the
+ * dots stand exactly where the timeline's will (M-16). When the entries arrive the line stays, and each row's
+ * faint bars give way to its contents in place (motion.css draws the same bars under the first screen's rows).
+ */
 export function RecentFallback() {
   return (
-    <div className="timeline-skeleton" role="status" aria-label="正在加载动态">
-      {[[72, 54], [64], [58, 40]].map((widths, index) => (
-        <div key={index}>
-          <span style={{ width: 96 }} />
-          {widths.map(width => <span key={width} style={{ width: `${width}%` }} />)}
-        </div>
-      ))}
+    <div className="timeline-waiting" role="status" aria-label="正在加载动态">
+      <div aria-hidden="true">
+        <h3 className="timeline__month timeline__month--first">
+          <span className="timeline__month-name"><span className="skeleton skeleton--text" style={{ width: 44 }} /></span>{" "}
+          <span className="timeline__month-year"><span className="skeleton skeleton--text" style={{ width: 40 }} /></span>
+        </h3>
+        {[0, 1, 2].map(row => (
+          <div key={row} className="entry">
+            <span className="timeline-waiting__bar timeline-waiting__bar--time" />
+            <span className="timeline-waiting__bar timeline-waiting__bar--long" />
+            <span className="timeline-waiting__bar timeline-waiting__bar--short" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
