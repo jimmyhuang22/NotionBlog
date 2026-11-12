@@ -28,7 +28,7 @@ export async function loadManagementConfig(path: string): Promise<ManagementConf
   if (!config || config.version !== 1 || typeof config.enabled !== "boolean" ||
       [config.stateDir, config.lockDirectory, config.runtimeDirectory, config.sourceConfigPath].some(p => typeof p !== "string" || !isAbsolute(p) || resolve(p) !== p) ||
       !config.stateDir.split("/").includes(".local") || config.lockDirectory === config.runtimeDirectory ||
-      !Number.isSafeInteger(config.durationMs) || config.durationMs < 1000 || config.durationMs > 899000 ||
+      !Number.isSafeInteger(config.durationMs) || config.durationMs < 1000 || config.durationMs > 1799000 ||
       !Number.isSafeInteger(config.mediaBytes) || config.mediaBytes < 1 || config.mediaBytes > 2 * 1024 ** 3) throw new FreezeError("FREEZE_INPUT_INVALID");
   const site = new URL(config.siteOrigin);
   if (site.protocol !== "https:" || site.origin !== config.siteOrigin) throw new FreezeError("FREEZE_INPUT_INVALID");
@@ -114,7 +114,7 @@ export async function managementMain(args: string[], env: NodeJS.ProcessEnv = pr
     },
     async runSync(input, signal) {
       const args = ["run", "--config", config.sourceConfigPath, "--lock-dir", config.lockDirectory, "--runtime-dir", config.runtimeDirectory,
-        "--duration-ms", String(config.durationMs), "--media-bytes", String(input.budget?.mediaBytes ?? config.mediaBytes)];
+        "--duration-ms", String(Math.min(config.durationMs, 899000)), "--media-bytes", String(input.budget?.mediaBytes ?? config.mediaBytes)];
       if (input.budget) args.push("--source-requests", String(input.budget.sourceRequests), "--source-bytes", String(input.budget.sourceBytes));
       if (input.target) args.push("--source", input.target.sourceKey, "--page", input.target.pageKey);
       if (input.refresh) args.push("--refresh-group", input.refresh.groupId, "--freeze-generation", input.refresh.generation);

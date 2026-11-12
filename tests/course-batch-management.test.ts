@@ -44,7 +44,7 @@ for (const failure of ["none", "rejected", "unknown", "budget"] as const) test(`
   const result = await backend.operation(started.operationId);
   assert.equal(result.state, failure === "none" ? "succeeded" : failure === "unknown" ? "unknown" : "failed");
   assert.equal(result.steps[0].state, "done");
-  if (failure === "none") { assert.equal(calls, 3); assert.deepEqual(selections.flat(), members.map(m => m.id)); }
+  if (failure === "none") { assert.equal(calls, 4); assert.deepEqual(selections.flat(), members.map(m => m.id)); }
   else { assert.equal(calls, failure === "budget" ? 1 : 2); assert.equal(completed, 1); assert.equal(result.steps[1].state, "failed"); assert.equal(result.steps[2].state, "pending"); }
   await assert.rejects(backend.work(started.operationId), /FREEZE_OPERATION_CONFLICT/);
 });

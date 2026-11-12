@@ -16,7 +16,7 @@ export function courseBatches(plan: Pick<FreezePlan, "members" | "media" | "thum
   for (const id of [plan.rootId, ...plan.members.map(m => m.id).filter(id => id !== plan.rootId)]) {
     const n = counts.get(id) ?? 0;
     if (n > 100) throw new FreezeError("FREEZE_PAGE_TOO_LARGE");
-    if (batch.length && (batch.length >= 25 || images + n > 60)) { batches.push(batch); batch = []; images = 0; }
+    if (batch.length && (batch.length >= 15 || images + n > 40)) { batches.push(batch); batch = []; images = 0; }
     batch.push(id); images += n;
   }
   if (batch.length) batches.push(batch);

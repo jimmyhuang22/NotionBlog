@@ -14,8 +14,8 @@ test("a whole course is partitioned without losing or duplicating any page or ex
   assert.ok(batches.length > 1);
   assert.deepEqual(batches.flat(), input.members.map(m => m.id));
   for (const pages of batches) {
-    assert.ok(pages.length <= 25);
-    assert.ok(input.media.filter(m => pages.includes(m.ownerPageId)).length <= 60);
+    assert.ok(pages.length <= 15);
+    assert.ok(input.media.filter(m => pages.includes(m.ownerPageId)).length <= 40);
   }
 });
 

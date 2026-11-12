@@ -36,6 +36,7 @@ const previewId = (value: string) => /^[a-f0-9]{64}$/.test(value);
 export function managementError(error: unknown): { code: string; message: string } {
   if (error instanceof WorkerError && error.code === "BUSY") return { code: "BUSY", message: "另一项操作正在进行。" };
   if (error instanceof FreezeError) {
+    if (error.code === "FREEZE_SYNC_INCOMPLETE") return {code: "RUN_FAILED", message: "本轮同步未完成，后续批次已停止。请查看操作记录。"};
     if (error.code === "FREEZE_PAGE_TOO_LARGE") return {code: "RUN_FAILED", message: "单个页面超过 100 个图片资产，无法安全拆分正文；请缩小该页面后重试。"};
     if (error.code === "FREEZE_BATCH_BUDGET") return {code: "RUN_FAILED", message: "本次操作已达到流量或请求预算，后续批次没有继续执行。"};
     if (error.code === "FREEZE_BATCH_TOO_LARGE") return {code: "RUN_FAILED", message: "本批关联的正文、图片或结构变更仍超过单批限制，请先检查相关页面。"};
