@@ -383,12 +383,21 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
   .status-page .timeline__more, .status-page .timeline__notice { margin-left: 22px; }
 }
 
-/* While the timeline loads, its line and dots are already there; faint bars stand in for the entries. */
-.timeline-skeleton { min-height: 60vh; margin-left: 8px; padding: 0 0 6px 30px; border-left: 1px solid var(--line); }
-.timeline-skeleton div { position: relative; padding-bottom: 34px; }
-.timeline-skeleton div::before { content: ""; position: absolute; left: -36px; top: 5px; width: 11px; height: 11px; border: 1.5px solid var(--accent); border-radius: 50%; background: var(--bg); }
-.timeline-skeleton div:first-child::before { background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 16%, transparent); }
-.timeline-skeleton span { display: block; height: 10px; margin-bottom: 12px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, var(--soft)); }
-.timeline-skeleton span:first-child { height: 8px; }
-@media (prefers-reduced-motion: no-preference) { .timeline-skeleton span { animation: pulse 1.4s ease-in-out infinite; } }
-@media (max-width: 520px) { .timeline-skeleton { padding-left: 22px; } .timeline-skeleton div::before { left: -28px; } }
+/*
+ * While the home timeline loads: its own month and rows (home-hero.tsx), with faint bars where the entries will
+ * be. The bars' places are shared with the first screen's rows while they are drawn (motion.css), so nothing
+ * jumps when the entries arrive: --bar-* are the bars' tops, widths and height.
+ */
+.timeline--home {
+  --bar: color-mix(in srgb, var(--ink) 7%, var(--bg));
+  --bar-time: 3px; --bar-long: 28px; --bar-short: 52px; --bar-height: 12px;
+  --bar-long-width: min(72%, 340px); --bar-short-width: min(54%, 250px);
+}
+.timeline-waiting { min-height: 60vh; }
+.timeline-waiting .entry { height: calc(var(--bar-short) + var(--bar-height)); padding-bottom: 32px; box-sizing: content-box; }
+.timeline-waiting__bar { position: absolute; left: 30px; height: var(--bar-height); background: var(--bar); }
+.timeline-waiting__bar--time { top: var(--bar-time); width: 96px; }
+.timeline-waiting__bar--long { top: var(--bar-long); width: var(--bar-long-width); }
+.timeline-waiting__bar--short { top: var(--bar-short); width: var(--bar-short-width); }
+@media (max-width: 520px) { .timeline-waiting__bar { left: 22px; } }
+@media (prefers-reduced-motion: no-preference) { .timeline-waiting__bar { animation: breathe 2.4s ease-in-out infinite; } }

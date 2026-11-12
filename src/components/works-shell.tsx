@@ -187,18 +187,22 @@ function MoveEnded({ onEnd }: { onEnd: () => void }) {
   return null;
 }
 
-/** Faint cards in a platform's shape and row, while its list is on the way. */
+/**
+ * Faint cards in a platform's shape and row, while its list is on the way: the year heading, then each card's
+ * title, date and picture in the real card's classes, so every line keeps its real height.
+ */
 export function WorksWaiting({ platform }: { platform: SocialPlatform }) {
   const shape = platform === "bilibili" ? "wide" : "tall";
   return (
     <section className="works__group" role="status" aria-label="正在加载作品">
+      <div className="section-title" aria-hidden="true"><span className="skeleton skeleton--text" style={{ width: 64 }} /></div>
       <ul className={`works__grid works__grid--${platform}`} aria-hidden="true">
         {Array.from({ length: platform === "bilibili" ? 8 : 10 }, (_, index) => (
           <li key={index}>
             <div className={`works-card works-card--${shape}`}>
+              <span className="works-card__title"><span className="skeleton skeleton--text" style={{ width: "72%" }} /></span>
+              <span className="works-card__day"><span className="skeleton skeleton--text" style={{ width: "40%" }} /></span>
               <span className="skeleton works-card__frame" />
-              <span className="skeleton" style={{ width: "72%", height: 12, marginTop: 6 }} />
-              <span className="skeleton" style={{ width: "44%", height: 10 }} />
             </div>
           </li>
         ))}

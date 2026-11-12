@@ -17,7 +17,7 @@ export default function Loading() {
         home={(
           <>
             <HomeHero />
-            <section className="wrap wrap--narrow timeline" aria-labelledby="recent">
+            <section className="wrap wrap--narrow timeline timeline--home" aria-labelledby="recent">
               <TimelineHead />
               <RecentFallback />
             </section>

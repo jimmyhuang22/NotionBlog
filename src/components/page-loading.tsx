@@ -2,13 +2,17 @@
 
 import { usePathname } from "next/navigation";
 import { sectionLoadingTitle } from "../lib/section-loading.ts";
+import { SectionWaiting } from "./section-waiting";
 
 /**
- * The plain loading state of a section without a page-shaped one of its own. It is tall enough that
- * the footer stays below the fold while the page is read, instead of jumping down when it arrives.
+ * A section's loading state: its own drawing where it has one (section-waiting.tsx), otherwise plain bars
+ * under its title. It is tall enough that the footer stays below the fold while the page is read, instead
+ * of jumping down when it arrives.
  */
 export function PageLoading({ title }: { title?: string } = {}) {
   const pathname = usePathname();
+  const shaped = title === undefined && pathname !== null ? SectionWaiting({ path: pathname }) : null;
+  if (shaped) return shaped;
   const heading = title ?? sectionLoadingTitle(pathname);
   return (
     <div className={`wrap${heading !== undefined ? "" : " wrap--narrow"} page-loading`} role="status" aria-label={heading ? `正在加载${heading}` : "正在加载"}>

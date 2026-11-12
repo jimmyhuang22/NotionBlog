@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HomeFeedV2Item, HomeFeedV2Page } from "../../contracts/social-timeline.ts";
 import { isNoticedActivity } from "../lib/home-feed.ts";
 import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
@@ -82,10 +82,14 @@ function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: b
  */
 /** How many rows of the first screen take part in the timeline's entrance. */
 const DRAWN_ROWS = 8;
+/** Whether this visit has drawn the home timeline already: coming back to the home page shows it at once. */
+let drawnThisVisit = false;
 
 export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFeedV2Page; pageSize: number; timeZone: string }) {
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<HomeFeedV2Item>("/api/home/feed-v2", { limit: String(pageSize) }, initial, true);
   const today = useToday(timeZone);
+  const [draw] = useState(() => !drawnThisVisit);
+  useEffect(() => { drawnThisVisit = true; }, []);
   if (!items.length) return <div className="state"><p>还没有动态。</p></div>;
   const leadId = items.find(item => item.source === "content" && item.event.type === "status")?.id;
   // Real works can stand beside demo content, so then each demo entry says so itself; the footer covers a page that is all demo.
@@ -110,7 +114,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
         return (
           <div key={item.id} className={appendedFrom !== null && index >= appendedFrom ? "is-appended" : undefined}
             /* The first screen's place in the ink line's entrance (motion.css); later rows arrive without it. */
-            style={position < DRAWN_ROWS ? { "--i": position } as CSSProperties : undefined}>
+            style={draw && position < DRAWN_ROWS ? { "--i": position } as CSSProperties : undefined}>
             {heading}
             {item.source === "social" && run.length > 1 ? (
               <article className="entry entry--event entry--social">
