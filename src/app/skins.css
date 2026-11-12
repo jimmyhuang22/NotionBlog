@@ -208,8 +208,8 @@
   --y2k-gloss: linear-gradient(180deg, #f4faff, #dcecfb);
   /* The glossy blue of buttons and chosen items, with the hard highlight line of the period; every stop is deep enough for small white text. */
   --y2k-button: linear-gradient(180deg, #1f74d8 0%, #1a6ace 50%, #145fc0 51%, #1764c6 100%);
-  /* Three window lights and a title bar, drawn as backgrounds so no extra element is needed. */
-  --y2k-lights: radial-gradient(circle at 24px 18px, #ff5f57 0 5.5px, transparent 6.5px), radial-gradient(circle at 43px 18px, #febc2e 0 5.5px, transparent 6.5px), radial-gradient(circle at 62px 18px, #28c840 0 5.5px, transparent 6.5px), linear-gradient(180deg, #f3f9ff 0, #dcecfb 35px, #c3dbf3 35px, #c3dbf3 36px, transparent 36px);
+  /* A glass title bar, drawn as a background so no extra element is needed; no window lights of another system (S-4). */
+  --y2k-lights: linear-gradient(180deg, #f3f9ff 0, #dcecfb 35px, #c3dbf3 35px, #c3dbf3 36px, transparent 36px);
 }
 /* The sky, a grid of faint white lines, and three bubbles: a ring, a body and a highlight each. */
 [data-skin="y2k"] body {
@@ -231,18 +231,17 @@
 @media (max-width: 1180px) { [data-skin="y2k"] body { --bubble-x: calc(100% - 8px); --bubble-y: 170px; --bubble-r: 46px; } }
 /* Where a directory runs down the left side, the left bubble would sit behind its lines; it moves out of view. */
 [data-skin="y2k"] body:has(.reading__side) { --bubble-left: -80px; }
-/* On a phone the big bubble would sit behind the portrait; two small ones keep to the edges. */
+/* On a phone only one small bubble stays, behind the header's right end (S-5): one beside the name or over the first picture sat on content. */
 @media (max-width: 760px) {
   [data-skin="y2k"] body {
     background-image:
-      radial-gradient(circle at 90% 250px, transparent 0 30px, rgba(255, 255, 255, 0.95) 31px 33px, transparent 34px),
-      radial-gradient(circle at calc(90% - 10px) 238px, rgba(255, 255, 255, 0.9) 0 4px, transparent 8px),
-      radial-gradient(circle at 90% 250px, rgba(255, 255, 255, 0.35) 0 30px, transparent 31px),
-      radial-gradient(circle at 5% 640px, transparent 0 22px, rgba(255, 255, 255, 0.9) 23px 25px, transparent 26px),
+      radial-gradient(circle at calc(100% - 4px) 28px, transparent 0 26px, rgba(255, 255, 255, 0.95) 27px 29px, transparent 30px),
+      radial-gradient(circle at calc(100% - 14px) 18px, rgba(255, 255, 255, 0.9) 0 3px, transparent 6px),
+      radial-gradient(circle at calc(100% - 4px) 28px, rgba(255, 255, 255, 0.35) 0 26px, transparent 27px),
       linear-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px),
       linear-gradient(180deg, #cbe6fa 0, #e4f3ff 520px, #d6ecfc 100%);
-    background-size: auto, auto, auto, auto, 34px 34px, 34px 34px, auto;
-    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
+    background-size: auto, auto, auto, 34px 34px, 34px 34px, auto;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
   }
 }
 [data-skin="y2k"] .site-header { background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.25)); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 0 rgba(120, 180, 235, 0.35); }
@@ -283,8 +282,9 @@
 /* The name in the period's chrome (C-03, the owner's pick of 2026-10-20): a blue metal gradient with a hard highlight and a fine edge. */
 [data-skin="y2k"] :is(.hero__name, .site-header__brand) {
   background: linear-gradient(180deg, #ffffff 0%, #d9ecff 38%, #6aa9ea 50%, #1d64c4 52%, #4f97e3 78%, #a8d2fb 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 0.6px #1558b0;
-  filter: drop-shadow(0 2px 0 rgba(255, 255, 255, 0.9)) drop-shadow(0 4px 8px rgba(30, 100, 200, 0.35));
+  /* The outline and glow are sized by the letters (S-6), so the smaller name on a phone stays sharp. */
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 0.02em #1558b0;
+  filter: drop-shadow(0 0.05em 0 rgba(255, 255, 255, 0.9)) drop-shadow(0 0.1em 0.2em rgba(30, 100, 200, 0.35));
 }
 [data-skin="y2k"] .avatar { background: radial-gradient(circle at 35% 28%, #fff 0, #cfe6fb 50%, #8fc2f2 100%); box-shadow: inset 0 2px 6px #fff, 0 0 0 4px rgba(255, 255, 255, 0.85), 0 10px 24px rgba(30, 110, 205, 0.35); color: var(--accent); font-weight: 700; }
 /* A link, as in the other skins; pills stay for real buttons (C-05, 2026-10-20). */
@@ -341,3 +341,23 @@
 /* Y2K: a pale blue under rows; a glossy button is pushed in, its highlight moving from the top edge to the bottom and its glow gone. */
 [data-skin="y2k"] :is(.pill-button, .site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current, .segmented :is(a[aria-current], button[aria-pressed="true"])):active { transform: none; box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.5), inset 0 2px 5px rgba(10, 50, 110, 0.45); }
 [data-skin="y2k"] :is(.icon-button, .to-top, .page-outline__open):active, [data-skin="y2k"] .socials li:nth-child(n) a:active { transform: none; box-shadow: inset 0 -1px 0 #fff, 0 0 0 1px #cfe2f4, inset 0 2px 4px rgba(30, 110, 205, 0.3); }
+
+/*
+ * A heading the author coloured (design review 5, S-1, S-7): every skin keeps its own heading colour and carries the
+ * author's colour on a part of its own. Apple: a straight, round-ended short line in place of ink's pen stroke.
+ * Island: its marker under the heading, in that colour. Y2K: a thin glass bar of that colour under the heading.
+ */
+:root[data-skin="apple"] .prose__h:has(.rt-warning)::before { bottom: -2px; width: min(3em, 100%); height: 4px; border-radius: 999px; opacity: 0.7; -webkit-mask: none; mask: none; }
+:is([data-skin="island"], [data-skin="y2k"]) .prose__h .rt-warning { color: inherit; }
+[data-skin="island"] .prose__h:has(.rt-warning) { text-decoration: underline 0.38em color-mix(in srgb, var(--warning) 42%, transparent); text-underline-offset: -0.22em; text-decoration-skip-ink: none; }
+[data-skin="y2k"] .prose__h:has(.rt-warning) { position: relative; width: fit-content; max-width: 100%; padding-bottom: 10px; }
+[data-skin="y2k"] .prose__h:has(.rt-warning)::before { content: ""; position: absolute; left: 0; bottom: 0; width: min(10em, 100%); height: 6px; border-radius: 999px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0) 60%), var(--warning); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 1px 3px color-mix(in srgb, var(--warning) 40%, transparent); opacity: 0.85; pointer-events: none; }
+
+/* Island: headings of one weight (S-3, without a new typeface): months, note headings and outline titles at 700, so the
+   Chinese of a heading falls on the system's semibold next to the rounded Latin instead of reading thin. */
+[data-skin="island"] :is(.timeline__month-name, .prose__h, .reading__toc-head, .tree__heading, .page-outline__head h2, .toc-drawer summary) { font-weight: 700; }
+
+/* Y2K bubbles keep to the page's margins (S-5): beside a note's outline or course directory the big right bubble moves up behind the header. */
+[data-skin="y2k"] body:has(.reading__toc, .reading__side) { --bubble-y: 26px; --bubble-r: 40px; --bubble-x: calc(100% - 40px); }
+/* Y2K has only a light scheme, so its moon is faint (S-6); pressing it still says so. */
+[data-skin="y2k"] .scheme-toggle .icon-button > span { opacity: 0.4; }

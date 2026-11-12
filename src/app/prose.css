@@ -34,7 +34,8 @@
 /*
  * A heading coloured red, orange or yellow in Notion keeps the ink of the other headings, with a faint stroke of that
  * colour under it, like the one under the owner's name (round four, H-10): the emphasis stays and the page keeps one
- * colour. Ink and Apple; the island and Y2K keep the colour. ::after is the outline's arrival stroke (motion.css).
+ * colour. Ink here; Apple draws a straight line, the island its marker and Y2K a glass bar in that colour (skins.css,
+ * design review 5 S-1 and S-7). ::after is the outline's arrival stroke (motion.css).
  */
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .prose__h:has(.rt-warning) { position: relative; width: fit-content; max-width: 100%; padding-bottom: 6px; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .prose__h .rt-warning { color: inherit; }
