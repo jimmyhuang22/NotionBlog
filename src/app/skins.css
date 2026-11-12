@@ -78,6 +78,8 @@
 [data-skin="apple"] .pill-button:disabled, [data-skin="apple"] .pill-button[aria-disabled="true"] { background: var(--soft); color: var(--muted); }
 [data-skin="apple"] .segmented { background: var(--soft); }
 [data-skin="apple"] .segmented :is(a[aria-current], button[aria-pressed="true"]) { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
+[data-skin="apple"] .segmented__pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
+[data-skin="apple"] .segmented--slide[data-pill] > a[aria-current] { box-shadow: none; }
 [data-skin="apple"] .prose__h { font-weight: 600; letter-spacing: -0.01em; }
 [data-skin="apple"] .prose blockquote { font-family: var(--font-sans); font-size: var(--text-body); border-left-color: var(--rule); }
 [data-skin="apple"] .timeline__head a { text-decoration: none; }
@@ -308,6 +310,10 @@
 [data-skin="y2k"] .segmented { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #cfe2f4; }
 [data-skin="y2k"] .segmented--scroll a[aria-current]:focus-visible { outline-color: currentColor; }
 [data-skin="y2k"] .segmented :is(a[aria-current], button[aria-pressed="true"]) { background: var(--y2k-button) #1a6ace; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px -4px rgba(22, 103, 199, 0.7); }
+[data-skin="y2k"] .segmented__pill { background: var(--y2k-button) #1a6ace; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px -4px rgba(22, 103, 199, 0.7); }
+[data-skin="y2k"] .segmented--slide[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
+[data-skin="y2k"] .segmented--slide > a[data-picked] { color: #fff; }
+[data-skin="y2k"] .segmented--slide[data-moving] > a[aria-current]:not([data-picked]) { color: var(--muted); }
 /* A tile without a cover keeps its spine line, in the skin's blue. */
 [data-skin="y2k"] .cover--empty, [data-skin="y2k"] .album-card__cover.album-card__cover--empty { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent), 0 6px 14px -6px rgba(30, 110, 205, 0.4); }
 [data-skin="y2k"] .library__item:hover .cover--empty, [data-skin="y2k"] .album-card:hover .album-card__cover.album-card__cover--empty { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent); }

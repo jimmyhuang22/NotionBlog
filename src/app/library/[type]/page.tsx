@@ -3,9 +3,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LibraryGrid } from "@/components/library-grid";
 import { LinkPending } from "@/components/link-pending";
-import { ScrollingSegments } from "@/components/scrolling-segments";
+import { ScrollingSegments, Segments } from "@/components/scrolling-segments";
 import { SortToggle } from "@/components/sort-toggle";
-import { FILTER_TRANSITION } from "@/lib/transitions";
 import { readLibraryFirstPage } from "@/lib/content";
 import { libraryHref, libraryOrders, librarySections } from "@/lib/library";
 import { getSiteConfig } from "@/lib/site";
@@ -40,18 +39,18 @@ export default async function LibraryPage({ params, searchParams }: Props) {
     <div className="wrap">
       <header className="page-head library__head">
         <h1>{section.label}</h1>
-        <nav className="segmented" aria-label="按状态筛选">
+        <Segments label="按状态筛选" current={status}>
           {tabs.map(([value, label]) => (
-            <Link key={value} href={libraryHref(type, value, order, year)} aria-current={value === status ? "true" : undefined} transitionTypes={FILTER_TRANSITION}>{label}<LinkPending /></Link>
+            <Link key={value} href={libraryHref(type, value, order, year)} aria-current={value === status ? "true" : undefined}>{label}<LinkPending /></Link>
           ))}
-        </nav>
+        </Segments>
       </header>
       <div className="library__filters">
         {/* With one year and nothing undated there is nothing to switch between. */}
         {yearChoices.length > 2 ? (
           <ScrollingSegments label="按年份浏览" current={selected}>
             {yearChoices.map(choice => (
-              <Link key={choice.value ?? "all"} href={libraryHref(type, status, order, readYear(choice.value ?? undefined))} aria-current={choice.value === selected ? "true" : undefined} title={`${choice.count} ${section.unit}`} transitionTypes={FILTER_TRANSITION}>{choice.label}<LinkPending /></Link>
+              <Link key={choice.value ?? "all"} href={libraryHref(type, status, order, readYear(choice.value ?? undefined))} aria-current={choice.value === selected ? "true" : undefined} title={`${choice.count} ${section.unit}`}>{choice.label}<LinkPending /></Link>
             ))}
           </ScrollingSegments>
         ) : null}

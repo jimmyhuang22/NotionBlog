@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HomeFeedV2Item, HomeFeedV2Page } from "../../contracts/social-timeline.ts";
 import { isNoticedActivity } from "../lib/home-feed.ts";
-import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, joinGames, spanMoment, type WorkEvent } from "../lib/timeline.ts";
+import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
 import { PlatformChips } from "./platform-chips";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
@@ -22,7 +22,9 @@ import { useToday } from "./use-today";
  * a platinum or cleared one stands on its hand-written completion day and reads the same, no mark — and
  * if it was played again later, a separate playing entry stands on that day, F47), then its platforms in
  * their makers' colours. The
- * line wraps as a whole, chips and all, never through a word.
+ * line wraps as a whole, chips and all, never through a word. Each game keeps its own line and day: neighbouring
+ * games were joined into one sentence for a day (design review 5, H-11) and the owner preferred them apart, with
+ * their platform and hours (2026-11-13).
  */
 function GameLine({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
   const platforms = platformChips((event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean));
@@ -46,34 +48,6 @@ function GameLine({ event, priorityCover }: { event: WorkEvent; priorityCover: b
   const className = "event event--game event--line";
   if (event.href) return <Link className={className} href={event.href} prefetch={false}>{body}</Link>;
   return <div className={className}>{body}</div>;
-}
-
-/**
- * Several games in one line: their small squares side by side, then one sentence naming each, every name a
- * link to the game's own page as on its own line. One day reads "在玩", several "这几天在玩".
- */
-/** A content entry that is a game, drawn as a light line on the home timeline. */
-const isGame = (item: HomeFeedV2Item): boolean => item.source === "content" && item.event.type !== "status" && item.event.type.startsWith("game-");
-
-function GamesLine({ events, sameDay, priorityCover }: { events: WorkEvent[]; sameDay: boolean; priorityCover: boolean }) {
-  return (
-    <div className="event event--game event--line event--games">
-      <span className="event__squares" aria-hidden="true">
-        {events.map((event, index) => event.cover
-          ? <CoverImage key={event.id} className="event__square" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy priority={priorityCover && index === 0} sized={false} fallback={<span className="event__square" />} />
-          : <span key={event.id} className="event__square" />)}
-      </span>
-      <span className="event__sentence">
-        <span className="event__lead">{sameDay ? "在玩" : "这几天在玩"}</span>{" "}
-        {events.map((event, index) => (
-          <span key={event.id}>
-            {index ? "、" : null}
-            {event.href ? <Link className="event__title event__name" href={event.href} prefetch={false}>{event.title}</Link> : <span className="event__title">{event.title}</span>}
-          </span>
-        ))}
-      </span>
-    </div>
-  );
 }
 
 function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
@@ -126,7 +100,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
   return (
     <>
       {restarted ? <p className="notice timeline__notice" role="status">内容有更新，已从最新一条重新加载。</p> : null}
-      {joinGames(feedRuns(items, timeZone), timeZone, isGame).map(({ first: index, items: run }, position) => {
+      {feedRuns(items, timeZone).map(({ first: index, items: run }, position) => {
         const item = run[0]!;
         // The entrance clips the row before it becomes visible. Let its first cover load during that wait.
         const priorityCover = index === 0;
@@ -144,18 +118,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
             /* The first screen's place in the ink line's entrance (motion.css); later rows arrive without it. */
             style={draw && position < DRAWN_ROWS ? { "--i": position } as CSSProperties : undefined}>
             {heading}
-            {run.length > 1 && run.every(isGame) ? (
-              <article className="entry entry--event entry--games">
-                <p className="entry__meta">
-                  {span ? <span className="entry__time"><EntryMoment moment={span} /></span> : null}
-                  {item.source === "content" && item.event.type !== "status" ? <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{eventKinds[item.event.type].section}</span> : null}
-                  <span className="entry__count">{run.length} 款</span>
-                  {markDemo && run.some(entry => entry.provider === "mock") ? <span className="tag tag--demo">演示</span> : null}
-                </p>
-                <GamesLine events={run.flatMap(entry => entry.source === "content" && entry.event.type !== "status" ? [entry.event as WorkEvent] : [])}
-                  sameDay={!span?.rest?.includes("至")} priorityCover={priorityCover} />
-              </article>
-            ) : item.source === "social" && run.length > 1 ? (
+            {item.source === "social" && run.length > 1 ? (
               <article className="entry entry--event entry--social">
                 <p className="entry__meta">
                   {/* The days the run covers; a time of day would belong to one work only. */}

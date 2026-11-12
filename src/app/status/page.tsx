@@ -4,7 +4,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LinkPending } from "@/components/link-pending";
 import { ScrollingSegments } from "@/components/scrolling-segments";
-import { FILTER_TRANSITION } from "@/lib/transitions";
 import { StatusFeed } from "@/components/status-feed";
 import { contentRepository } from "@/lib/content";
 import { getSiteConfig } from "@/lib/site";
@@ -62,7 +61,7 @@ async function readStatusPage({ searchParams }: Props) {
         <div className="library__filters status-filters">
           <ScrollingSegments label="按年份浏览" current={selected}>
             {tabs.map(tab => (
-              <Link key={tab.value ?? "all"} href={tab.value ? `/status?year=${tab.value}` : "/status"} aria-current={tab.value === selected ? "true" : undefined} title={`${tab.count} 条`} transitionTypes={FILTER_TRANSITION}>{tab.label}<LinkPending /></Link>
+              <Link key={tab.value ?? "all"} href={tab.value ? `/status?year=${tab.value}` : "/status"} aria-current={tab.value === selected ? "true" : undefined} title={`${tab.count} 条`}>{tab.label}<LinkPending /></Link>
             ))}
           </ScrollingSegments>
         </div>
