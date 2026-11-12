@@ -90,7 +90,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </header>
         {/* Pages cross-fade inside this boundary; see motion.css. */}
-        <main id="main"><PageTransition>{children}</PageTransition></main>
+        <main id="main">{process.env.PREVIEW_DATA_DATE === "2026-10-30" && process.env.PREVIEW_ACCESS_CONFIG ? <p className="wrap" role="note">试运行数据截至 2026-10-30，社交统计未追平；看大图最大 1600 像素。</p> : null}<PageTransition>{children}</PageTransition></main>
         <footer className="site-footer">
           <div className="wrap wrap--wide site-footer__inner">
             <span className="site-footer__name">{site.siteName}<PenStroke className="site-footer__stroke" /></span>

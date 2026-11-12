@@ -1,3 +1,4 @@
+import { loadAccessConfig, previewAccessAllowed } from "./access-jwt.ts";
 import { createServer } from 'node:http';
 import next from 'next';
 import context from './context.cjs';
@@ -9,6 +10,7 @@ import { selfHostedDisplayStore } from '../../src/server/self-hosted-media/runti
 if (!['self-hosted', 'self-hosted-public'].includes(context.configureSelfHostedEnvironment(process.env))) throw Error('SELF_HOSTED_CONTEXT_REQUIRED');
 let app, server, stopping;
 try {
+  const access = loadAccessConfig(process.env);
   await verifySelfHostedReaders(process.env);
   await selfHostedDisplayStore()?.verifyRoot();
   app = next({ dev: false, dir: process.cwd(), hostname: process.env.HOSTNAME, port: Number(process.env.PORT) });
@@ -17,13 +19,18 @@ try {
   const warmup = await warmSelfHostedHome(handle, process.env);
   console.log('self_hosted_home_warmup', JSON.stringify(warmup));
   server = createServer((request, response) => {
+    if (access && !previewAccessAllowed(request, access)) { response.writeHead(403, {"Cache-Control":"private, no-store", "X-Robots-Tag":"noindex, nofollow"}).end(); return; }
+    if (access) response.setHeader("X-Robots-Tag", "noindex, nofollow");
     if (stopping) { response.writeHead(503).end(); return; }
     void handle(request, response).catch(() => {
       if (!response.headersSent) response.writeHead(500);
       response.end();
     });
   });
-  server.on('upgrade', app.getUpgradeHandler());
+  server.on('upgrade', (request, socket, head) => {
+    if (access && !previewAccessAllowed(request, access)) { socket.destroy(); return; }
+    app.getUpgradeHandler()(request, socket, head);
+  });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(Number(process.env.PORT), process.env.HOSTNAME, resolve); });
   console.log('self_hosted_ready', JSON.stringify({ host: process.env.HOSTNAME, port: Number(process.env.PORT), indexing: process.env.SITE_INDEXING_ENABLED === 'true' }));
   const stop = () => {

@@ -20,6 +20,7 @@ const publicAllowed = new Set([...allowed,
   'NOTION_TOKEN', 'NOTION_API_VERSION', 'MEDIA_SIGNING_SECRET',
   'DATABASE_SEARCH_CONTEXT', 'DATABASE_SEARCH_RESULT_BUDGET', 'CONTENT_READ_TIMING',
   'MEDIA_PROVIDER', 'MEDIA_DELIVERY_MODE', 'MEDIA_THUMBNAILS', 'MEDIA_THUMBNAIL_QUALIFICATION',
+  'PRIVATE_MEDIA_ROOT', 'SOCIAL_MEDIA_PRIVATE_MEDIA_ROOT', 'PREVIEW_ACCESS_CONFIG', 'PREVIEW_DATA_DATE',
   'STORAGE_PROVIDER', 'THUMBNAIL_STORAGE_PROVIDER', 'STORAGE_URL', 'STORAGE_BUCKET',
   'STORAGE_API_KEY', 'STORAGE_READ_TOKEN', 'STORAGE_READER_EMAIL',
   'STORAGE_READER_PASSWORD', 'STORAGE_READER_USER_ID',
@@ -108,10 +109,17 @@ function loadProfile(filename, localOnly) {
       !['true', 'false'].includes(env.SITE_INDEXING_ENABLED) ||
       !['storage', 'notion'].includes(env.MEDIA_PROVIDER) ||
       !['enabled', 'disabled'].includes(env.MEDIA_THUMBNAILS) ||
-      !['supabase', 'cos'].includes(env.STORAGE_PROVIDER) ||
-      !['supabase', 'cos'].includes(env.THUMBNAIL_STORAGE_PROVIDER))) fail();
+      !['supabase', 'cos', 'private-disk'].includes(env.STORAGE_PROVIDER) ||
+      !['supabase', 'cos', 'private-disk'].includes(env.THUMBNAIL_STORAGE_PROVIDER))) fail();
   if (env.MEDIA_DELIVERY_MODE === 'display-only') {
-    if (!publicWebsite || env.MEDIA_PROVIDER !== 'storage' || env.STORAGE_PROVIDER !== 'supabase') fail();
+    if (!publicWebsite || env.MEDIA_PROVIDER !== 'storage' || !['supabase', 'private-disk'].includes(env.STORAGE_PROVIDER)) fail();
+    if (env.STORAGE_PROVIDER === 'private-disk') {
+      const { createPrivateDiskStorage, privateDiskEnabled } = require('../../src/server/database/private-disk-storage.ts');
+      if (!privateDiskEnabled(env) || env.THUMBNAIL_STORAGE_PROVIDER !== 'private-disk' ||
+          env.SOCIAL_MEDIA_ENABLED === 'true' && env.SOCIAL_MEDIA_STORAGE_PROVIDER !== 'private-disk') fail();
+      createPrivateDiskStorage(env.PRIVATE_MEDIA_ROOT, 'reader');
+      if (env.SOCIAL_MEDIA_ENABLED === 'true') createPrivateDiskStorage(env.SOCIAL_MEDIA_PRIVATE_MEDIA_ROOT, 'reader');
+    } else {
     // Reuse the reader's local configuration validation. These factories make no requests.
     const { createStorageReaderToken } = require('../../src/server/database/reader-auth.ts');
     const { createSupabaseStorage } = require('../../src/server/database/storage.ts');
@@ -121,7 +129,10 @@ function loadProfile(filename, localOnly) {
     });
     createSupabaseStorage({ url: env.STORAGE_URL, bucket: env.STORAGE_BUCKET, apiKey: env.STORAGE_API_KEY,
       token, role: 'reader' });
+    }
   }
+  if (env.STORAGE_PROVIDER === 'private-disk' && env.MEDIA_DELIVERY_MODE !== 'display-only') fail();
+  require('./access-jwt.ts').loadAccessConfig(env);
   if (publicWebsite && env.PUBLIC_CONTENT_CACHE !== 'disabled') {
     if (env.PUBLIC_CONTENT_CACHE !== 'tagged-v1' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(env.PUBLIC_CACHE_SITE_KEY ?? '') ||
         !/^[a-f0-9]{64}$/.test(env.CACHE_PURGE_SECRET ?? '')) fail();
