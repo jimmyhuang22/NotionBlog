@@ -1,3 +1,4 @@
+import { createPrivateDiskStorage, privateDiskEnabled } from "../database/private-disk-storage.ts";
 import { createSupabaseStorage, type ObjectStorage } from "../database/storage.ts";
 import { createStorageReaderToken } from "../database/reader-auth.ts";
 import { configuredCosStorage, storageProvider } from "../database/cos-config.ts";
@@ -10,6 +11,10 @@ export function socialStorageProfile(env: Readonly<Record<string, string | undef
 }
 export function createSocialStorage(env: Readonly<Record<string, string | undefined>>, role: "reader" | "writer", request?: typeof fetch): ObjectStorage {
   const profile = socialStorageProfile(env);
+  if (profile.STORAGE_PROVIDER === "private-disk") {
+    if (!privateDiskEnabled(env) || !profile.PRIVATE_MEDIA_ROOT) throw Error("SOCIAL_PRIVATE_DISK_PROFILE");
+    return createPrivateDiskStorage(profile.PRIVATE_MEDIA_ROOT, role);
+  }
   if (storageProvider(profile) === "cos") {
     const prefix = `COS_${role.toUpperCase()}_`;
     const specific = ["SECRET_ID", "SECRET_KEY", "SECURITY_TOKEN", "CREDENTIALS_EXPIRES_AT"].some(key => profile[prefix + key] !== undefined);
@@ -28,6 +33,10 @@ export function createSocialStorage(env: Readonly<Record<string, string | undefi
 /** Preserve the configured COS read transport when adding request cancellation. */
 export function socialReaderTransport(env: Readonly<Record<string, string | undefined>>): typeof fetch {
   const profile = socialStorageProfile(env);
+  if (profile.STORAGE_PROVIDER === "private-disk") {
+    if (!privateDiskEnabled(env)) throw Error("SOCIAL_PRIVATE_DISK_PROFILE");
+    return fetch; // Unused by the disk adapter; no transport is invoked.
+  }
   if (storageProvider(profile) === "cos" && profile.COS_READ_TRANSPORT === "native-https") {
     const endpoint = profile.COS_READ_ENDPOINT === "accelerate" ? "accelerate" : profile.COS_REGION;
     return createCosHttpsFetch(`${profile.COS_BUCKET}.cos.${endpoint}.myqcloud.com`);
