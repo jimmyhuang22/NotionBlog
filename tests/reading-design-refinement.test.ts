@@ -10,6 +10,7 @@ import { demoSocialWorks } from "../fixtures/social-works.ts";
 import * as format from "../src/lib/format.ts";
 import * as homeFeed from "../src/lib/home-feed.ts";
 import * as works from "../src/lib/works.ts";
+import { mergeNumberedHeadings } from "../src/lib/headings.ts";
 
 // Render the actual TSX views with their unrelated boundaries (pictures, platform signs, browser-only hooks)
 // replaced by explicit local ports; no application environment is loaded.
@@ -36,6 +37,9 @@ function outline(current = "") {
   return view("src/components/page-outline.tsx", {
     "./reading-outline": { useCurrentHeading: () => [current, () => {}], markArrival: () => {} },
     "./use-dismiss": { useModal: () => {}, closeOnBackdrop: () => {} },
+    "./course-tree": { CourseTreeNav: () => null },
+    "./directory-retry": { DirectoryRetry: () => null },
+    "./study-reading-context": { useStudyReadingTree: () => null },
   }).PageOutline;
 }
 
@@ -46,7 +50,9 @@ test("the in-page outline starts hidden and lists every heading as a real anchor
   assert.match(html, /aria-haspopup="dialog"/);
   assert.ok(html.includes('aria-label="本页目录，当前章节：第一章的小节"'));
   assert.match(html, /<dialog[^>]*class="page-outline"[^>]*aria-labelledby="([^"]+)"/);
-  assert.ok(html.includes('aria-label="关闭本页目录"'));
+  assert.ok(html.includes('aria-label="关闭目录"'));
+  // The course tab is added in the browser below 1100 only; the first markup is the plain outline.
+  assert.ok(!html.includes('role="tablist"'));
   for (const entry of toc) assert.ok(html.includes(`href="#${entry.id}"`), entry.id);
   // Only the chapter being read is marked, as a location; a deeper heading is set in.
   assert.equal(html.match(/aria-current="location"/g)?.length, 1);
@@ -99,4 +105,23 @@ test("a collection links to its newest episode and says what was added; a second
   const both = render(byId("demo-bilibili-3"));
   assert.equal(both.match(/work-line__more/g)?.length, 1);
   assert.ok(both.includes("小红书"));
+});
+
+test("a heading that is only a number joins the heading after it and leads to the number", () => {
+  const merged = mergeNumberedHeadings([
+    { id: "n1", title: "1.", level: 2 }, { id: "t1", title: "Datalink Layer（Ethernet II Header）大小", level: 2 },
+    { id: "n2", title: " 2 、", level: 2 }, { id: "t2", title: "IP Header", level: 3 },
+    { id: "plain", title: "小结", level: 2 },
+    { id: "n3", title: "3.", level: 2 }, { id: "n4", title: "4.", level: 2 },
+  ]);
+  assert.deepEqual(merged.map(entry => [entry.id, entry.title, entry.level, entry.covers ?? []]), [
+    ["n1", "1. Datalink Layer（Ethernet II Header）大小", 2, ["t1"]],
+    ["n2", "2 、 IP Header", 2, ["t2"]],
+    ["plain", "小结", 2, []],
+    // A number followed by another number, or by nothing, stays as it is.
+    ["n3", "3.", 2, []],
+    ["n4", "4.", 2, []],
+  ]);
+  // Headings with words and numbers are not numbers.
+  assert.equal(mergeNumberedHeadings([{ id: "a", title: "Week 3", level: 2 }, { id: "b", title: "2024", level: 2 }, { id: "c", title: "x", level: 2 }]).length, 2);
 });

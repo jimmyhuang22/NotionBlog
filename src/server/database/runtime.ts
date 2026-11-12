@@ -1,3 +1,4 @@
+import { createPrivateDiskStorage, privateDiskEnabled } from "./private-disk-storage.ts";
 import { createLibraryPageReader, readLibraryPageMode } from "./library-page.ts";
 import { createLibraryDisplayPreparation } from "./library-display.ts";
 import "server-only";
@@ -45,16 +46,19 @@ function createRuntime() {
   const thumbnailDb=mode==="qualified"?createThumbnailSql(db):db;
   const displayStore=selfHostedDisplayStore();
   const cloudDisplay=displayDeliveryMode(process.env.MEDIA_DELIVERY_MODE);
-  if(cloudDisplay&&(displayStore||process.env.DATABASE_CONTENT_VERSION!=="2"||process.env.MEDIA_PROVIDER!=="storage"||storageProvider(process.env)!=="supabase"))
+  const disk=privateDiskEnabled(process.env);
+  if(cloudDisplay&&(displayStore||process.env.DATABASE_CONTENT_VERSION!=="2"||process.env.MEDIA_PROVIDER!=="storage"||!disk&&storageProvider(process.env)!=="supabase"))
     throw new ContentServiceError("MISCONFIGURED","Cloud display delivery requires the explicit v2 Supabase media profile.");
   const project=(input: typeof db)=>displayStore?displayProjectionSql(input,displayStore):cloudDisplay?databaseDisplayProjectionSql(input,rawDb,mode):input;
   const contentDb=project(db);
   let token: ReturnType<typeof createStorageReaderToken> | undefined;
-  const objectProvider=storageProvider(process.env);
-  const variantProvider=thumbnailStorageProvider(process.env);
+  const objectProvider=disk?"private-disk":storageProvider(process.env);
+  const variantProvider=disk?"private-disk":thumbnailStorageProvider(process.env);
+  let privateStorage: ObjectStorage | undefined;
   let cosStorage: ObjectStorage | undefined;
   if (!["1","2"].includes(process.env.DATABASE_CONTENT_VERSION??"1")) throw new Error("Invalid database content version.");
-  function storageFor(provider: "supabase" | "cos"): ObjectStorage {
+  function storageFor(provider: "supabase" | "cos" | "private-disk"): ObjectStorage {
+    if(provider==="private-disk") return privateStorage??=createPrivateDiskStorage(process.env.PRIVATE_MEDIA_ROOT!,"reader");
     if (provider==="cos") return cosStorage??=configuredCosStorage(process.env,"reader",{onReadFailure:failure=>console.warn("COS_READ_FAILURE",JSON.stringify(failure))});
     if (process.env.DATABASE_MEDIA_DIRECTORY) return createLocalMediaStorage(process.env.DATABASE_MEDIA_DIRECTORY,process.env.DATABASE_READER_URL??"","reader");
     return createSupabaseStorage({

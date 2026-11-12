@@ -8,9 +8,11 @@ import { createFreezeStore, freezeQuery, FreezeError, type FreezePlan } from "..
 import type { SqlExecutor } from "../../src/server/database/sql.ts";
 import { acquireLock, privateDirectory, readPrivateFile } from "../notion-sync/state.ts";
 import { WorkerError } from "../notion-sync/errors.ts";
+import { courseBatches } from "./course-batches.ts";
 import { validateHostReport } from "../website-incremental-sync/host-state.ts";
 
 export interface ManagementConfig {
+  batchLimits?: {sourceRequests: number; sourceBytes: number; mediaBytes: number};
   version: 1; enabled: boolean; stateDir: string; lockDirectory: string; runtimeDirectory: string;
   sourceConfigPath: string; siteOrigin: string; durationMs: number; mediaBytes: number;
 }
@@ -18,7 +20,7 @@ export interface ManagementPorts {
   database(): Promise<SqlExecutor>;
   verifyMedia(media: StoredMedia, signal: AbortSignal, thumbnail: boolean): Promise<void>;
   inspectSource(plan: FreezePlan, signal: AbortSignal): Promise<{ fingerprint: string; missing: { title: string }[] }>;
-  runSync(input: { target: {sourceKey: string; pageKey: string} | null; refresh?: {groupId: string; generation: string}; expectedRevision?: string }, signal: AbortSignal): Promise<Record<string, unknown>>;
+  runSync(input: { target: {sourceKey: string; pageKey: string} | null; refresh?: {groupId: string; generation: string; pageIds?: string[]}; expectedRevision?: string; budget?: {sourceRequests: number; sourceBytes: number; mediaBytes: number} }, signal: AbortSignal): Promise<Record<string, unknown>>;
   enqueue(members: {id: string; sourceKey: string}[], operationId: string): Promise<void>;
   assertIdle(): Promise<void>;
   dispatch(id: string): Promise<void>;
@@ -34,6 +36,10 @@ const previewId = (value: string) => /^[a-f0-9]{64}$/.test(value);
 export function managementError(error: unknown): { code: string; message: string } {
   if (error instanceof WorkerError && error.code === "BUSY") return { code: "BUSY", message: "另一项操作正在进行。" };
   if (error instanceof FreezeError) {
+    if (error.code === "FREEZE_SYNC_INCOMPLETE") return {code: "RUN_FAILED", message: "本轮同步未完成，后续批次已停止。请查看操作记录。"};
+    if (error.code === "FREEZE_PAGE_TOO_LARGE") return {code: "RUN_FAILED", message: "单个页面超过 100 个图片资产，无法安全拆分正文；请缩小该页面后重试。"};
+    if (error.code === "FREEZE_BATCH_BUDGET") return {code: "RUN_FAILED", message: "本次操作已达到流量或请求预算，后续批次没有继续执行。"};
+    if (error.code === "FREEZE_BATCH_TOO_LARGE") return {code: "RUN_FAILED", message: "本批关联的正文、图片或结构变更仍超过单批限制，请先检查相关页面。"};
     const codes: Record<string, string> = { FREEZE_NOT_FOUND: "NOT_FOUND", FREEZE_ALREADY_FROZEN: "ALREADY_FROZEN", FREEZE_NOT_FROZEN: "NOT_FROZEN",
       FREEZE_PREVIEW_STALE: "PREVIEW_STALE", FREEZE_MEDIA_NOT_READY: "MEDIA_NOT_READY", FREEZE_INPUT_INVALID: "INVALID_INPUT", BUSY: "BUSY" };
     return { code: codes[error.code] ?? "UNAVAILABLE", message: "操作尚未确认完成，请核对当前状态。" };
@@ -95,6 +101,7 @@ export class ManagementBackend {
   async preview(input: unknown, mode: "freeze" | UnfreezeMode): Promise<FreezePreview | UnfreezePreview> {
     const db = await this.database(), plan = await createFreezeStore(db).preview(this.target(input), mode);
     const target = await this.resolve(plan.rootId);
+    if (mode !== "permanent") courseBatches(plan);
     let source: Awaited<ReturnType<ManagementPorts["inspectSource"]>> | null = null;
     if (mode !== "freeze") source = await this.ports.inspectSource(plan, AbortSignal.timeout(50000));
     const saved: SavedPreview = { digest: digest([plan.digest, source?.fingerprint ?? null]), plan, sourceFingerprint: source?.fingerprint ?? null, expiresAt: Date.now() + 15 * 60000 };
@@ -148,18 +155,35 @@ export class ManagementBackend {
           if (current.digest !== preview.plan.digest || (await this.ports.inspectSource(preview.plan, signal)).fingerprint !== preview.sourceFingerprint) throw new FreezeError("FREEZE_PREVIEW_STALE");
         }
         const task = request.target === null ? null : await freezeQuery<{sourceKey: string; pageKey: string}>(db, "SELECT nb_freeze_api.resolve_task($1) AS result", [request.target]);
-        record.submitted = true; await this.save("operations", id, record);
-        const report = validateHostReport(await this.ports.runSync({ target: task,
-          refresh: preview ? {groupId: preview.plan.groupId!, generation: preview.plan.generation} : undefined,
-          expectedRevision: preview?.plan.publicationRevision }, signal));
-        const queue = report.queue as {pending: number; retry: number; awaiting_verification: number; needs_review: number} | null;
-        if (!["updated", "unchanged", "partial"].includes(String(report.outcome))) {
-          if (queue?.awaiting_verification) throw new FreezeError("FREEZE_UNAVAILABLE");
-          record.submitted = false; throw new FreezeError("FREEZE_SYNC_INCOMPLETE");
+        const batches = preview ? courseBatches(preview.plan) : [null];
+        record.operation.steps = batches.map((pages, i) => ({label: pages ? `同步第 ${i + 1}/${batches.length} 批（${pages.length} 页）` : "同步内容", state: "pending"}));
+        let generation = preview?.plan.generation, revision = preview?.plan.publicationRevision;
+        const remaining = {...(this.config.batchLimits ?? {sourceRequests: 400, sourceBytes: 32 * 1024 ** 2, mediaBytes: this.config.mediaBytes})};
+        for (const [index, pages] of batches.entries()) {
+          signal.throwIfAborted();
+          record.operation.steps[index].state = "running";
+          if (preview && Object.values(remaining).some(n => n <= 0)) throw new FreezeError("FREEZE_BATCH_BUDGET");
+          record.submitted = true; await this.save("operations", id, record);
+          const report = validateHostReport(await this.ports.runSync({ target: task,
+            refresh: preview ? {groupId: preview.plan.groupId!, generation: generation!, pageIds: pages!} : undefined,
+            expectedRevision: revision, budget: preview ? {...remaining} : undefined }, signal));
+          if (preview) for (const key of ["sourceRequests", "sourceBytes", "mediaBytes"] as const) remaining[key] -= (report.budget as Record<string, number>)[key];
+          const queue = report.queue as {pending: number; retry: number; awaiting_verification: number; needs_review: number; retirement_pending: number} | null;
+          if (report.errorCode || !["updated", "unchanged", "partial"].includes(String(report.outcome)) ||
+              preview && (queue?.needs_review || queue?.retry || queue?.awaiting_verification || queue?.retirement_pending)) {
+            if (queue?.awaiting_verification) throw new FreezeError("FREEZE_UNAVAILABLE");
+            record.submitted = false; throw new FreezeError(report.errorCode === "STUDY_DELTA_BUDGET_REACHED" ? "FREEZE_BATCH_TOO_LARGE" : "FREEZE_SYNC_INCOMPLETE");
+          }
+          record.submitted = false;
+          if (preview) {
+            const current = await store.state();
+            generation = current.generation; revision = current.publicationRevision;
+            if (!current.members.some(m => m.groupId === preview.plan.groupId && m.id === preview.plan.rootId)) throw new FreezeError("FREEZE_UNAVAILABLE");
+          } else record.operation.steps[index].label = report.outcome === "partial" ? "本轮已处理，仍有待办；请查看同步队列" : "本轮处理完成";
+          record.operation.steps[index].state = "done";
+          await this.save("operations", id, record);
         }
-        record.operation.steps[0].label = report.outcome === "partial" ? "本轮已处理，仍有待办；请查看同步队列" : "本轮处理完成";
-        // The host reports submitted batches, not the number of pages in those batches.
-        record.operation.counts = null;
+        record.operation.counts = preview ? {pages: preview.plan.pages} : null;
       } else {
         release = await acquireLock(this.config.lockDirectory, id);
         await this.ports.assertIdle(); signal.throwIfAborted();
@@ -169,7 +193,14 @@ export class ManagementBackend {
           const current = await store.preview(plan.rootId, "freeze");
           if (current.digest !== plan.digest) throw new FreezeError("FREEZE_PREVIEW_STALE");
           if (plan.missingImages || plan.media.reduce((n, m) => n + m.byteSize, 0) > this.config.mediaBytes) throw new FreezeError("FREEZE_MEDIA_NOT_READY");
-          for (const media of plan.media) { signal.throwIfAborted(); await this.ports.verifyMedia(media, signal, plan.thumbnailIds.includes(media.assetId)); }
+          const chunks = Array.from({length: Math.ceil(plan.media.length / 50)}, (_, i) => plan.media.slice(i * 50, (i + 1) * 50));
+          record.operation.steps = [...chunks.map((_, i) => ({label: `核验图片第 ${i + 1}/${chunks.length} 批`, state: "pending" as const})), {label: "统一冻结课程", state: "pending"}];
+          for (const [index, chunk] of chunks.entries()) {
+            record.operation.steps[index].state = "running"; await this.save("operations", id, record);
+            for (const media of chunk) { signal.throwIfAborted(); await this.ports.verifyMedia(media, signal, plan.thumbnailIds.includes(media.assetId)); }
+            record.operation.steps[index].state = "done";
+          }
+          record.operation.steps.at(-1)!.state = "running";
           signal.throwIfAborted(); record.submitted = true; await this.save("operations", id, record);
           const result = await store.freeze(id.slice(7), plan, plan.media);
           confirmedWrite = true;
@@ -185,14 +216,14 @@ export class ManagementBackend {
           record.operation.counts = {pages: result.members.length};
         }
       }
-      record.operation.state = "succeeded"; record.operation.steps[0].state = "done";
+      record.operation.state = "succeeded"; for (const step of record.operation.steps) step.state = "done";
     } catch (e) {
       const error = managementError(e);
       const rejected = e instanceof FreezeError && !["FREEZE_UNAVAILABLE"].includes(e.code);
       record.operation.state = confirmedWrite || record.submitted && !rejected ? "unknown" : "failed";
-      record.operation.steps[0].state = "failed";
+      for (const step of record.operation.steps) if (step.state === "running") step.state = "failed";
       record.operation.error = record.operation.state === "unknown" ? {code: "OUTCOME_UNKNOWN", message: "操作可能已提交，请核对记录；不要重新执行。"} :
-        {code: error.code as "UNAVAILABLE", message: error.message};
+        {code: error.code as "UNAVAILABLE", message: record.operation.steps.some(s => s.state === "done") ? "操作未全部完成。已完成批次保持生效，其余内容保留原状态。" + error.message : error.message};
     } finally {
       clearTimeout(timer);
       process.removeListener("SIGTERM", abort); process.removeListener("SIGINT", abort);

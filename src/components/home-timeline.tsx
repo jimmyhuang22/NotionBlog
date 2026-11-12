@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HomeFeedV2Item, HomeFeedV2Page } from "../../contracts/social-timeline.ts";
 import { isNoticedActivity } from "../lib/home-feed.ts";
-import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
+import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, joinGames, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
 import { PlatformChips } from "./platform-chips";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
@@ -48,6 +48,34 @@ function GameLine({ event, priorityCover }: { event: WorkEvent; priorityCover: b
   return <div className={className}>{body}</div>;
 }
 
+/**
+ * Several games in one line: their small squares side by side, then one sentence naming each, every name a
+ * link to the game's own page as on its own line. One day reads "在玩", several "这几天在玩".
+ */
+/** A content entry that is a game, drawn as a light line on the home timeline. */
+const isGame = (item: HomeFeedV2Item): boolean => item.source === "content" && item.event.type !== "status" && item.event.type.startsWith("game-");
+
+function GamesLine({ events, sameDay, priorityCover }: { events: WorkEvent[]; sameDay: boolean; priorityCover: boolean }) {
+  return (
+    <div className="event event--game event--line event--games">
+      <span className="event__squares" aria-hidden="true">
+        {events.map((event, index) => event.cover
+          ? <CoverImage key={event.id} className="event__square" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy priority={priorityCover && index === 0} sized={false} fallback={<span className="event__square" />} />
+          : <span key={event.id} className="event__square" />)}
+      </span>
+      <span className="event__sentence">
+        <span className="event__lead">{sameDay ? "在玩" : "这几天在玩"}</span>{" "}
+        {events.map((event, index) => (
+          <span key={event.id}>
+            {index ? "、" : null}
+            {event.href ? <Link className="event__title event__name" href={event.href} prefetch={false}>{event.title}</Link> : <span className="event__title">{event.title}</span>}
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
   if (event.type.startsWith("game-")) return <GameLine event={event} priorityCover={priorityCover} />;
   const { kind, verb } = eventKinds[event.type];
@@ -82,10 +110,14 @@ function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: b
  */
 /** How many rows of the first screen take part in the timeline's entrance. */
 const DRAWN_ROWS = 8;
+/** Whether this visit has drawn the home timeline already: coming back to the home page shows it at once. */
+let drawnThisVisit = false;
 
 export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFeedV2Page; pageSize: number; timeZone: string }) {
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<HomeFeedV2Item>("/api/home/feed-v2", { limit: String(pageSize) }, initial, true);
   const today = useToday(timeZone);
+  const [draw] = useState(() => !drawnThisVisit);
+  useEffect(() => { drawnThisVisit = true; }, []);
   if (!items.length) return <div className="state"><p>还没有动态。</p></div>;
   const leadId = items.find(item => item.source === "content" && item.event.type === "status")?.id;
   // Real works can stand beside demo content, so then each demo entry says so itself; the footer covers a page that is all demo.
@@ -94,7 +126,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
   return (
     <>
       {restarted ? <p className="notice timeline__notice" role="status">内容有更新，已从最新一条重新加载。</p> : null}
-      {feedRuns(items, timeZone).map(({ first: index, items: run }, position) => {
+      {joinGames(feedRuns(items, timeZone), timeZone, isGame).map(({ first: index, items: run }, position) => {
         const item = run[0]!;
         // The entrance clips the row before it becomes visible. Let its first cover load during that wait.
         const priorityCover = index === 0;
@@ -110,9 +142,20 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
         return (
           <div key={item.id} className={appendedFrom !== null && index >= appendedFrom ? "is-appended" : undefined}
             /* The first screen's place in the ink line's entrance (motion.css); later rows arrive without it. */
-            style={position < DRAWN_ROWS ? { "--i": position } as CSSProperties : undefined}>
+            style={draw && position < DRAWN_ROWS ? { "--i": position } as CSSProperties : undefined}>
             {heading}
-            {item.source === "social" && run.length > 1 ? (
+            {run.length > 1 && run.every(isGame) ? (
+              <article className="entry entry--event entry--games">
+                <p className="entry__meta">
+                  {span ? <span className="entry__time"><EntryMoment moment={span} /></span> : null}
+                  {item.source === "content" && item.event.type !== "status" ? <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{eventKinds[item.event.type].section}</span> : null}
+                  <span className="entry__count">{run.length} 款</span>
+                  {markDemo && run.some(entry => entry.provider === "mock") ? <span className="tag tag--demo">演示</span> : null}
+                </p>
+                <GamesLine events={run.flatMap(entry => entry.source === "content" && entry.event.type !== "status" ? [entry.event as WorkEvent] : [])}
+                  sameDay={!span?.rest?.includes("至")} priorityCover={priorityCover} />
+              </article>
+            ) : item.source === "social" && run.length > 1 ? (
               <article className="entry entry--event entry--social">
                 <p className="entry__meta">
                   {/* The days the run covers; a time of day would belong to one work only. */}

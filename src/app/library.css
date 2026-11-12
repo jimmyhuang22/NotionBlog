@@ -398,3 +398,17 @@
 .work-loading .work__cover .cover { box-shadow: none; background: var(--soft); }
 .work-loading__title { width: 70%; height: 40px; margin-bottom: 26px; }
 .work-loading__line { height: 16px; margin-bottom: 14px; }
+
+/* Section loading states drawn as the section (section-waiting.tsx, design review 5 M-15). The tools are shells: in place, not pressable. */
+.waiting__years { width: min(440px, 72%); height: 48px; border-radius: var(--radius-lg); }
+.waiting__line { height: 12px; margin-top: 12px; border-radius: 999px; }
+.entry__card-body > .waiting__line:first-child { margin-top: 2px; }
+.page-loading :is(.segmented, .library__sort) a { cursor: default; }
+
+/*
+ * Detail titles on a phone come in two steps (design review 5, T-13; FRONTEND_GUIDE.md): a title alone on its line
+ * is 28 (games, albums, courses, notes), one beside a poster 24 (films and books, above).
+ */
+@media (max-width: 640px) {
+  .work--game .work__info h1, .album-head h1, .course-head h1, .reading__title { font-size: var(--text-3xl); }
+}

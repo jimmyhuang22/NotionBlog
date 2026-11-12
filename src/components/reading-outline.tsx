@@ -1,19 +1,22 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { TableOfContentsEntry } from "../../contracts/content.ts";
+import type { OutlineEntry } from "../lib/headings.ts";
 
 /**
  * The heading the reader is in: the last one above the line under the header, else the first. Shared by the
  * outline beside the article and the one opened from its button (page-outline.tsx).
  */
-export function useCurrentHeading(toc: TableOfContentsEntry[]) {
+export function useCurrentHeading(toc: OutlineEntry[]) {
   const [active, setActive] = useState("");
   useEffect(() => {
-    const headings = toc.flatMap(entry => {
-      const element = document.getElementById(entry.id);
+    // A heading folded into an entry (a number and its title, X-15) counts as reading that entry.
+    const owner = new Map<Element, string>();
+    const headings = toc.flatMap(entry => [entry.id, ...entry.covers ?? []].flatMap(id => {
+      const element = document.getElementById(id);
+      if (element) owner.set(element, entry.id);
       return element ? [element] : [];
-    });
+    }));
     let frame = 0;
     const update = () => {
       cancelAnimationFrame(frame);
@@ -22,7 +25,8 @@ export function useCurrentHeading(toc: TableOfContentsEntry[]) {
         const threshold = Math.max(0, header?.getBoundingClientRect().bottom ?? 0) + 40;
         const visible = headings.filter(heading => heading.getClientRects().length);
         const passed = visible.filter(heading => heading.getBoundingClientRect().top <= threshold);
-        setActive((passed.at(-1) ?? visible[0])?.id ?? "");
+        const heading = passed.at(-1) ?? visible[0];
+        setActive(heading ? owner.get(heading) ?? "" : "");
       });
     };
     // Read once a frame while scrolling, against the one line above: an observer's fixed margin cannot follow a header
@@ -53,7 +57,7 @@ export function markArrival(id: string) {
 }
 
 /** The outline follows the article, showing detail only for the current chapter. */
-export function ReadingOutline({ toc }: { toc: TableOfContentsEntry[] }) {
+export function ReadingOutline({ toc }: { toc: OutlineEntry[] }) {
   const [active, setActive] = useCurrentHeading(toc);
   const [expanded, setExpanded] = useState(false);
   const base = Math.min(...toc.map(entry => entry.level));

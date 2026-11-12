@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { PageLoading } from "./page-loading";
+import { SectionWaiting, waitingSections } from "./section-waiting";
 import { sectionLoadingTitle } from "../lib/section-loading.ts";
 
 /**
@@ -43,6 +44,7 @@ interface Switch {
 let current: Switch | null = null;
 let committedPath = "";
 let loadingTemplate: HTMLElement | null = null;
+let loadingTemplates: HTMLElement | null = null;
 
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -130,7 +132,8 @@ function drop(entry: Switch) {
 /** Show a section before its response arrives, then let Next stream its real
  * loading boundary/content. Never keep an opaque old-page copy over that boundary. */
 function enterSection(target: string, title: string) {
-  const template = loadingTemplate;
+  // The section's own drawing where it has one (M-15), so the frame and the loading state after it are one shape.
+  const template = loadingTemplates?.querySelector<HTMLElement>(`[data-for="${CSS.escape(target)}"] > *`) ?? loadingTemplate;
   if (!template) return false;
   const immediate = current?.progressive && !current.overlay.hidden;
   if (current) drop(current);
@@ -149,7 +152,8 @@ function enterSection(target: string, title: string) {
   const heading = document.createElement("h1");
   heading.textContent = title;
   header.append(heading);
-  shell.querySelector("[data-loading-heading]")?.replaceWith(header);
+  const slot = shell.querySelector("[data-loading-title]");
+  if (slot) slot.replaceWith(heading); else shell.querySelector("[data-loading-heading]")?.replaceWith(header);
   overlay.append(shell);
   document.body.append(overlay);
   const bar = document.createElement("div");
@@ -355,9 +359,12 @@ export function PageSwitch() {
   }, [pathname]);
   useEffect(() => {
     const own = template.current?.firstElementChild as HTMLElement | null;
+    const all = template.current;
     loadingTemplate = own;
+    loadingTemplates = all;
     return () => {
       if (loadingTemplate === own) loadingTemplate = null;
+      if (loadingTemplates === all) loadingTemplates = null;
       if (current?.progressive) drop(current);
     };
   }, []);
@@ -378,5 +385,10 @@ export function PageSwitch() {
     };
   }, []);
   // No hidden h1: the heading is inserted only into the visible pending shell.
-  return <div ref={template} hidden data-switch-template aria-hidden="true"><PageLoading title="" /></div>;
+  return (
+    <div ref={template} hidden data-switch-template aria-hidden="true">
+      <PageLoading title="" />
+      {waitingSections.map(path => <div key={path} data-for={path}>{SectionWaiting({ path, heading: <span data-loading-title /> })}</div>)}
+    </div>
+  );
 }
