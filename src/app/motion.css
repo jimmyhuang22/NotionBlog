@@ -150,6 +150,8 @@
 @media (prefers-reduced-motion: no-preference) {
   /* The header's ink mark glides to the section pressed, at the press (F43): it does not wait for the page. */
   .site-nav__mark.is-placed { transition: transform 0.36s cubic-bezier(0.3, 0.9, 0.3, 1); }
+  /* Apple's capsule also takes the width of the section it lands on. */
+  [data-skin="apple"] .site-nav__mark.is-placed { transition: transform 0.36s cubic-bezier(0.3, 0.9, 0.3, 1), width 0.36s cubic-bezier(0.3, 0.9, 0.3, 1), margin 0.36s cubic-bezier(0.3, 0.9, 0.3, 1); }
 }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*) { animation: none; }
