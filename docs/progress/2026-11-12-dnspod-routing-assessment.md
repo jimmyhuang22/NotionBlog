@@ -26,7 +26,24 @@
 
 ## 下一项
 
-用户确认方向后，先完成受保护预览入口迁移设计、新公开 HTTPS 和旧入口跳转配置、完整 DNS／规则备份与回退设计，再进行不切正式 DNS 的验收。海外正式节点需明确选定；试验节点不自动成为正式内容源。
+以以下补充评估为当前候选方向，等待用户决定；尚未授权实际配置。海外正式节点由另一项工作比较确定，试验节点不自动成为正式内容源。
+
+## 同日补充：国内直连、海外保留 Cloudflare
+
+- 用户澄清最终仅保留国内、海外两个正式站，旧云主机和未选中的海外节点不再承担预览站；因此不再要求迁移全部旧预览入口或长期保留旧站回退。首次切换仍需有限的恢复安排。
+- 前述 Partial 方案限制只适用于该产品，不能推导为外部 DNS 配合 Cloudflare 代理都必须付费。新增候选为 DNSPod 地区解析加 Cloudflare for SaaS Custom Hostnames；它是另一个官方产品。
+- 官方 Cloudflare for SaaS Free 计划包含 100 个主机名，超出后另行计费；非企业启用需要支付信息。使用量配额可能按区域或账户统计，不能把免费额度写成硬性零费用保障。评估没有启用订阅、录入支付信息或创建自定义主机名。
+- 网站权威解析迁入 DNSPod 后，境内线路指向国内直连源站，默认／境外线路以 CNAME 指向另一个持续由 Cloudflare 托管的域名中的专用接入名。正式网站主机名需在该 SaaS 区域分别登记并完成域名与边缘证书验证，不能仅复制普通橙云 CNAME 或硬编码公共边缘 IP。
+- 海外路径为浏览器到 Cloudflare，再到选定海外节点；地址栏可保持同一正式主机名。国内路径不经过该代理，不获得其防护。DNS 地区判断仍受递归解析器、VPN、缓存影响，免费 DNS TTL 限制不变。
+- SaaS 可提供缓存及所属区域套餐范围内的 WAF、DDoS 防护和分析；并不自动升级为付费安全功能。只缓存可安全共享的版本化静态资源，页面、API、鉴权图片与撤回资格仍遵循既有策略。规则应限定正式站主机名，避免影响管理域名既有应用。
+- 优先评估 Tunnel 作为海外回源，或严格 TLS、限制来源的 HTTPS 回源；正式站不沿用预览站邮箱登录门禁，管理应用保护不变。源站 Host/SNI、隧道 ingress 及 reader 公开范围需要单独验收。
+- DNSPod 官方允许根域名使用 `@` CNAME，同时说明可能影响 MX／TXT 等解析；免费版无 CNAME 展平。因而不能把根域同址方案判定为已验收，也不能仅因无展平就断言一定无法使用。子域名方案更直接；根域需验证多个递归解析器、A/AAAA、证书及未来邮箱兼容。如不满足要求，再由用户选择以 www 为主入口或其他付费根域接入，不能擅自更改规范域名。
+- Cloudflare 的 Apex Proxying 固定 IP 能力属于企业付费附加项；默认不支持拿任意 Cloudflare 边缘 IP 写入 A 记录来代替 SaaS CNAME。
+- 双路径 HTTPS 包含两套访客证书：国内源站须使用浏览器信任的证书，海外由 Cloudflare 管理边缘证书。需设计各自持续续期，不能假定一次 TXT 验证永久有效；SaaS 续期可能转为 HTTP 验证。分流可能令验证请求到达另一端，因此优先评估可协调的 DNS 验证。若采用 Delegated DCV，须避免与国内源站 DNS-01 使用同一 challenge 名发生冲突，不能一边委派一边独立覆盖 TXT。
+- 本次仅核对官方资料和本地记录，无项目云数据库／对象存储请求，未读取后台账单或确认账户剩余额度；公共资料读取估计数 MB。没有 DNS、服务器、凭据、订阅或调度修改。产品能力层面可行，当前账户激活、根域兼容、双端续期及真实分流仍待另行授权试验。
+- 下一步建议是先批准小范围验证方案：独立测试主机名、SaaS 额度及账单确认、双端 HTTPS、静态缓存 HIT、管理入口隔离、内容撤回与地区 DNS 检查；不得将测试授权扩大为正式主域切换。
+
+补充资料：[SaaS 套餐](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/plans/)、[启用要求](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/enable/)、[接入流程](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/)、[缓存](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/performance/cache-for-saas/)、[根域代理](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/apex-proxying/)、[DNSPod CNAME](https://cloud.tencent.com/document/product/302/3450)、[证书续期](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/security/certificate-management/issue-and-validate/renew-certificates/)、[SaaS DCV 委派](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/security/certificate-management/issue-and-validate/validate-certificates/delegated-dcv/)。
 
 ## 官方依据
 
