@@ -359,12 +359,43 @@
 .page-outline__item a:focus-visible { outline-offset: -2px; }
 /* A heading reached from the sheet takes focus without a ring drawn round it: the arrival mark says where it is. */
 .prose__h:focus:not(:focus-visible) { outline: none; }
+/* With the course tab (below 1100) the sheet keeps one height, so switching tabs does not move its edge. */
+.page-outline:has(.page-outline__tabs) { height: min(70dvh, 640px); }
+.page-outline__tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--soft); }
+.page-outline__tabs button { min-height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: none; font: inherit; font-family: var(--font-hand); font-size: var(--text-md); color: var(--muted); cursor: pointer; }
+.page-outline__tabs button[aria-selected="true"] { background: var(--picked); box-shadow: var(--shadow); color: var(--ink); }
+.page-outline__tabs button:not([aria-selected="true"]):active { background-color: var(--bloom); }
+.page-outline__tabs button:focus-visible { outline-offset: -2px; }
+.page-outline__course { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; padding-top: 8px; }
+.page-outline__course .tree__heading { display: none; }
+/*
+ * From 700 (X-17) the outline is a small panel growing up from its button, on the button's side, with nothing
+ * shading the page: a press outside still closes it. page-outline.tsx measures the button into --from-*.
+ */
+@media (min-width: 700px) {
+  .page-outline { position: fixed; inset: auto auto var(--from-bottom, 80px) var(--from-left, 18px); width: 360px; max-height: min(60dvh, 520px); margin: 0; border-radius: var(--radius-lg); box-shadow: 0 0 0 1px var(--rule), var(--shadow-lift); }
+  .page-outline[data-side="right"] { inset: auto var(--from-right, 74px) var(--from-bottom, 80px) auto; }
+  .page-outline:has(.page-outline__tabs) { height: min(60dvh, 520px); }
+  .page-outline::backdrop { background: transparent; }
+  .page-outline__sheet { padding-bottom: 16px; }
+}
+/*
+ * The sheet is paper from its first frame (M-17): it slides up whole from the foot of the screen while the
+ * shade behind fades on its own, and goes back down the same way. The panel from 700 is uncovered upward
+ * from its button instead. Reduced motion: both simply appear.
+ */
 @media (prefers-reduced-motion: no-preference) {
-  .page-outline, .page-outline::backdrop { opacity: 0; transition: opacity 0.2s ease, translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), overlay 0.2s allow-discrete, display 0.2s allow-discrete; }
-  .page-outline { translate: 0 24px; }
-  .page-outline[open], .page-outline[open]::backdrop { opacity: 1; translate: none; }
+  .page-outline { translate: 0 100%; transition: translate 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), overlay 0.3s allow-discrete, display 0.3s allow-discrete; }
+  .page-outline[open] { translate: none; }
+  .page-outline::backdrop { opacity: 0; transition: opacity 0.3s ease, overlay 0.3s allow-discrete, display 0.3s allow-discrete; }
+  .page-outline[open]::backdrop { opacity: 1; }
   @starting-style {
-    .page-outline[open], .page-outline[open]::backdrop { opacity: 0; }
-    .page-outline[open] { translate: 0 24px; }
+    .page-outline[open] { translate: 0 100%; }
+    .page-outline[open]::backdrop { opacity: 0; }
+  }
+  @media (min-width: 700px) {
+    .page-outline { translate: none; clip-path: inset(100% -60px -60px -60px); transition: clip-path 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), overlay 0.26s allow-discrete, display 0.26s allow-discrete; }
+    .page-outline[open] { clip-path: inset(-60px); }
+    @starting-style { .page-outline[open] { clip-path: inset(100% -60px -60px -60px); } }
   }
 }
