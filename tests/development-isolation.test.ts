@@ -45,10 +45,18 @@ test('actual build wrapper excludes inherited and dotenv credentials before its 
   await mkdir(join(root,'tests'));await mkdir(join(root,'scripts'));await mkdir(join(root,'node_modules/next/dist/bin'),{recursive:true});
   await writeFile(join(root,'.env.production.local'),'CONTENT_PROVIDER=database\nNEXT_PUBLIC_REMOTE=synthetic\nUNRELATED_SECRET=synthetic\n');
   await writeFile(join(root,'scripts/check-build-privacy.mjs'),'');
+  await writeFile(join(root,'tests/self-hosted-rewrite.integration.mjs'),`
+   import assert from 'node:assert/strict';
+   import {connect} from 'node:net';
+   assert.equal(process.env.CONTENT_PROVIDER,'mock');
+   assert.equal(process.env.NOTIONBLOG_DEVELOPMENT_MODE,'offline');
+   assert.ok(!process.env.DATABASE_READER_URL);
+   assert.throws(()=>connect(443,'fixture.invalid'),{code:'OFFLINE_NETWORK_BLOCKED'});
+  `);
   await writeFile(join(root,'node_modules/next/dist/bin/next'),`const {parseEnv}=require('node:util'),fs=require('node:fs');for(const[k,v]of Object.entries(parseEnv(fs.readFileSync('.env.production.local','utf8'))))if(!Object.hasOwn(process.env,k))process.env[k]=v;let blocked=false;try{require('node:net').connect(5432,'fixture.invalid')}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}const code="let blocked=false;try{require('node:net').connect(443,'fixture.invalid')}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}console.log(JSON.stringify({blocked}))";const child=require('node:child_process').spawnSync(process.execPath,['-e',code],{encoding:'utf8'});console.log(JSON.stringify({provider:process.env.CONTENT_PROVIDER,secret:!!process.env.UNRELATED_SECRET||!!process.env.DATABASE_READER_URL||!!process.env.NEXT_PUBLIC_REMOTE,blocked,descendant:JSON.parse(child.stdout).blocked}));`);
   const launcher=new URL('../scripts/development/run.mjs',import.meta.url);
   const result=await execute(process.execPath,[launcher.pathname,'build'],{cwd:root,env:{...process.env,VERCEL:'1',VERCEL_ENV:'production',GITHUB_ACTIONS:'true',DATABASE_READER_URL:'synthetic',UNRELATED_SECRET:'synthetic'}});
-  assert.deepEqual(JSON.parse(result.stdout.trim().split('\n').at(-1)!),{provider:'mock',secret:false,blocked:true,descendant:true});
+  assert.deepEqual(JSON.parse(result.stdout.split('\n').find(line=>line.startsWith('{'))!),{provider:'mock',secret:false,blocked:true,descendant:true});
  }finally{await rm(root,{recursive:true,force:true})}
 });
 

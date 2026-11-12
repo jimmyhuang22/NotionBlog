@@ -21,6 +21,9 @@ const tasks = {
 };
 if (!Object.hasOwn(tasks, task) || (task === 'check' && args.length)) throw new Error('Unsupported isolated task.');
 const production = ['build', 'start'].includes(task) && platformProduction(process.env);
+// Exercise the built app's actual middleware/custom-server path, only with
+// the isolated demo profile. Never start a production reader for a build test.
+if (task === 'build' && !production) tasks.build.push([node, ['--test', 'tests/self-hosted-rewrite.integration.mjs']]);
 const env = production ? { ...process.env } : cleanEnvironment();
 if (!production) {
   env.NOTIONBLOG_DEVELOPMENT_MODE = 'offline';
