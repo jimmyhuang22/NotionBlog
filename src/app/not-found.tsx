@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { alwaysFresh } from "@/lib/page-freshness";
 
-export default function NotFound() {
+/**
+ * Rendered per request (design review 5): built ahead of time, it was drawn with the build's settings, which carry
+ * no site profile, so the 404 page showed the default site name, a short header and the demo-content footer.
+ * The site's own name, sections and footer come from the running site, as on every other page.
+ */
+export default async function NotFound() {
+  await alwaysFresh();
   return (
     <div className="wrap state state--center not-found">
       {/* A blank sheet with one drop of ink: there is nothing written at this address. */}

@@ -100,6 +100,14 @@
 .reading-outline .toc__item--2 a { padding-left: 24px; }
 .reading-outline .toc__item--3 a { padding-left: 36px; }
 .toc-drawer { margin: 0 0 24px; border-block: 1px solid var(--rule); }
+/*
+ * Under the folded outline the note's first heading starts 32 below it (W-13): empty paragraphs the note opens
+ * with add nothing there, and the heading's own space above it is the gap. Only where the fold is shown.
+ */
+@media (max-width: 1179px) {
+  .reading__article .toc-drawer + .prose > .prose__blank:first-child, .reading__article .toc-drawer + .prose > .prose__blank:first-child + .prose__blank { display: none; }
+  .reading__article .toc-drawer + .prose > :is(.prose__h:first-child, .prose__blank:first-child + .prose__h, .prose__blank:first-child + .prose__blank + .prose__h) { margin-top: 32px; }
+}
 .toc-drawer summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: var(--text-sm); font-weight: 600; list-style: none; }
 /* Folded, it says how many chapters it holds and shows a small arrow that turns as it opens (round four, X-11). */
 .toc-drawer summary::-webkit-details-marker { display: none; }
