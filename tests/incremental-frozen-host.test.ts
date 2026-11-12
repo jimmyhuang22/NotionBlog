@@ -50,6 +50,12 @@ test("the actual host skips frozen pages, refreshes one group and recovers a los
   f.demo.blocks.set(DEMO.week, [demoParagraph(demoId(300), DEMO.week, "Refreshed frozen content")]);
   const selected = plan.members.find(m => m.id === DEMO.course)!;
   const once = await store.preview(DEMO.course, "once");
+  const sourceCallsBeforeInvalid = f.counts.sourceCalls;
+  const invalid = await runIncrementalHost({...f.options, command: "run", freezeEnabled: true,
+    target: {sourceKey: selected.sourceKey, pageKey: selected.id}, refreshFrozenGroup: frozen.groupId,
+    expectedFreezeGeneration: once.generation, refreshPageIds: [DEMO.private]}, deps);
+  assert.equal(invalid.errorCode, "HOST_REFRESH_SCOPE_CHANGED");
+  assert.equal(f.counts.sourceCalls, sourceCallsBeforeInvalid);
   let lost = false;
   const uncertain = {...deps, database: async (...args: Parameters<NonNullable<typeof f.deps.database>>) => {
     const db = await f.deps.database!(...args);
@@ -61,7 +67,7 @@ test("the actual host skips frozen pages, refreshes one group and recovers a los
   }};
   const result = await runIncrementalHost({...f.options, command: "run", freezeEnabled: true,
     target: {sourceKey: selected.sourceKey, pageKey: selected.id}, refreshFrozenGroup: frozen.groupId,
-    expectedFreezeGeneration: once.generation, expectedPublicationRevision: once.publicationRevision}, uncertain);
+    expectedFreezeGeneration: once.generation, expectedPublicationRevision: once.publicationRevision, refreshPageIds: [DEMO.week]}, uncertain);
   assert.equal(lost, true, JSON.stringify(result));
   assert.equal(result.outcome, "blocked", JSON.stringify(result));
   assert.equal(result.queue?.awaiting_verification, 1);
@@ -100,4 +106,8 @@ test("the CLI distinguishes a real targeted run from resume and refuses partial 
   assert.throws(() => parseIncrementalArguments(["run", ...common, "--source", "notes"]));
   assert.throws(() => parseIncrementalArguments(["recover", ...common, "--source", "notes", "--page", DEMO.week]));
   assert.throws(() => parseIncrementalArguments(["run", ...common, "--refresh-group", crypto.randomUUID()]));
+  const batched = parseIncrementalArguments(["run", ...common, "--source", "notes", "--page", DEMO.course,
+    "--refresh-group", crypto.randomUUID(), "--freeze-generation", "1", "--refresh-pages", DEMO.week]);
+  assert.deepEqual("refreshPageIds" in batched ? batched.refreshPageIds : null, [DEMO.week]);
+  assert.throws(() => parseIncrementalArguments(["run", ...common, "--source", "notes", "--page", DEMO.week, "--refresh-pages", DEMO.week]));
 });

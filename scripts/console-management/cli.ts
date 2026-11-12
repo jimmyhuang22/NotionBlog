@@ -114,9 +114,11 @@ export async function managementMain(args: string[], env: NodeJS.ProcessEnv = pr
     },
     async runSync(input, signal) {
       const args = ["run", "--config", config.sourceConfigPath, "--lock-dir", config.lockDirectory, "--runtime-dir", config.runtimeDirectory,
-        "--duration-ms", String(config.durationMs), "--media-bytes", String(config.mediaBytes)];
+        "--duration-ms", String(config.durationMs), "--media-bytes", String(input.budget?.mediaBytes ?? config.mediaBytes)];
+      if (input.budget) args.push("--source-requests", String(input.budget.sourceRequests), "--source-bytes", String(input.budget.sourceBytes));
       if (input.target) args.push("--source", input.target.sourceKey, "--page", input.target.pageKey);
       if (input.refresh) args.push("--refresh-group", input.refresh.groupId, "--freeze-generation", input.refresh.generation);
+      if (input.refresh?.pageIds) args.push("--refresh-pages", input.refresh.pageIds.join(","));
       if (input.expectedRevision) args.push("--expected-revision", input.expectedRevision);
       const workerEnv: NodeJS.ProcessEnv = {NODE_ENV: env.NODE_ENV ?? "production"};
       for (const [key, value] of Object.entries(env)) if (/^(SYNC_|STORAGE_|COS_|NOTION_|DATABASE_)/.test(key) || ["PATH", "HOME", "NODE_OPTIONS", "NOTIONBLOG_DEVELOPMENT_MODE"].includes(key)) workerEnv[key] = value;

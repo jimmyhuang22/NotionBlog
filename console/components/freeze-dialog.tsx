@@ -76,8 +76,8 @@ export function FreezeDialog({ request, onClose }: { request: DialogRequest; onC
   const blocked = preview?.kind === "freeze" && preview.data.mediaNotReady.length > 0;
   const title = request.kind === "freeze" ? `冻结「${item.title}」` : `解冻「${item.title}」`;
   const confirmLabel =
-    preview?.kind === "freeze"
-      ? `冻结 ${preview.data.pages} 个页面`
+    request.kind === "freeze"
+      ? preview?.kind === "freeze" ? `冻结 ${preview.data.pages} 个页面` : "冻结"
       : mode === "once"
         ? "同步一次"
         : "永久解冻";
@@ -114,7 +114,7 @@ export function FreezeDialog({ request, onClose }: { request: DialogRequest; onC
                 <label>
                   <input type="radio" name="mode" checked={mode === "once"} onChange={() => setMode("once")} />
                   <span>同步一次</span>
-                  <span className="hint">从 Notion 拉取最新内容，发布后自动重新冻结。适合改了个错字。</span>
+                  <span className="hint">从 Notion 分批获取最新内容，每批更新后保持冻结。只需提交一次，可查看处理进度。</span>
                 </label>
                 <label>
                   <input type="radio" name="mode" checked={mode === "permanent"} onChange={() => setMode("permanent")} />
@@ -124,7 +124,7 @@ export function FreezeDialog({ request, onClose }: { request: DialogRequest; onC
               </fieldset>
             ) : (
               <p className="small muted" style={{ margin: 0 }}>
-                冻结后，这个页面和它下面的所有子页面会一直留在网站上，同步不再读取它们；Notion 里的修改、移动或删除都不会影响网站。
+                后台会分批核对这个页面及其子页面的图片，全部通过后统一冻结。冻结后，常规同步不再读取它们；Notion 里的修改、移动或删除不会自动更新到网站。
               </p>
             )}
 

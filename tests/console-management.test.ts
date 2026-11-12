@@ -34,7 +34,7 @@ test("console management uses the database-backed plans, operation history and e
     assertIdle: async () => {}, dispatch: async () => {dispatched++;}, latestReport: async () => initialized,
     runSync: async (input, signal) => {synched++; const report = await runIncrementalHost({...f.options, command: "run", signal,
       target: input.target ?? undefined, freezeEnabled: true, expectedPublicationRevision: input.expectedRevision,
-      refreshFrozenGroup: input.refresh?.groupId, expectedFreezeGeneration: input.refresh?.generation}, f.deps); syncReport = report; return report;},
+      refreshFrozenGroup: input.refresh?.groupId, expectedFreezeGeneration: input.refresh?.generation, refreshPageIds: input.refresh?.pageIds}, f.deps); syncReport = report; return report;},
   };
   const backend = new ManagementBackend(config, ports);
   const item = await backend.resolve(DEMO.course);

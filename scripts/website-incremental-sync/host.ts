@@ -40,6 +40,8 @@ export interface IncrementalHostOptions extends HostBudgetOptions {
   database: Omit<IncrementalDatabaseOptions, "configDigest">; artifactPath?: string; maxTasks?: number; maxSources?: number;
   freezeEnabled?: boolean; target?: { sourceKey: string; pageKey: string };
   refreshFrozenGroup?: string; expectedFreezeGeneration?: string;
+  /** Internal bounded selection inside the verified frozen group. */
+  refreshPageIds?: readonly string[];
   expectedPublicationRevision?: string;
   maxBaselineReads?: number;
 }
@@ -90,6 +92,9 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
   if (options.target && (options.command !== "run" || !sourceKeys.includes(options.target.sourceKey) ||
       normalizeId(options.target.pageKey) !== options.target.pageKey) ||
       options.refreshFrozenGroup && (!options.freezeEnabled || !options.target || !/^[a-f0-9-]{36}$/.test(options.refreshFrozenGroup) || !/^[0-9]+$/.test(options.expectedFreezeGeneration ?? ""))) hostFail("HOST_INPUT_INVALID");
+  if (options.refreshPageIds !== undefined && (!options.refreshFrozenGroup || !Array.isArray(options.refreshPageIds) ||
+      !options.refreshPageIds.length || options.refreshPageIds.length > 100 || new Set(options.refreshPageIds).size !== options.refreshPageIds.length ||
+      options.refreshPageIds.some(id => normalizeId(id) !== id))) hostFail("HOST_INPUT_INVALID");
   const budget = createHostBudget({ ...options, durationMs: options.durationMs ?? (options.command === "initialize" ? 899000 : 120000) });
   const report = { format: "incremental-host-report-v1", outcome: "failed", phase: "lock", errorCode: null as string | null,
     startedAt: new Date().toISOString(), finishedAt: "", recovered: 0, published: 0, unchanged: 0, retired: 0,
@@ -162,6 +167,7 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
         if (!freezeState.enabled || freezeState.configDigest !== digest) hostFail("HOST_FREEZE_DISABLED");
         if (options.expectedFreezeGeneration !== undefined && freezeState.generation !== options.expectedFreezeGeneration) hostFail("HOST_FREEZE_PREVIEW_STALE");
         if (options.refreshFrozenGroup && !freezeState.members.some(m => m.groupId === options.refreshFrozenGroup && m.rootId === options.target!.pageKey && m.id === m.rootId)) hostFail("HOST_TARGET_FROZEN");
+        if (options.refreshPageIds?.some(id => !freezeState!.members.some(m => m.groupId === options.refreshFrozenGroup && m.id === id))) hostFail("HOST_REFRESH_SCOPE_CHANGED");
         frozenPageIds.clear();
         for (const member of freezeState.members) if (member.groupId !== options.refreshFrozenGroup) frozenPageIds.add(member.id);
         queue!.setFrozenPages(frozenPageIds);
@@ -173,7 +179,7 @@ export async function runIncrementalHost(options: IncrementalHostOptions, depend
         () => ({ groupId: options.refreshFrozenGroup!, generation: freezeState!.generation }) : undefined);
       const domain = createStudyDomainPort<QueueTicket>({ store: study, sourceKeys: studyKeys, assertPreparing: ticket => queue!.assertPreparing(ticket),
         frozenPageIds, maxReads: options.refreshFrozenGroup ? 2000 : undefined,
-        refreshPageIds: options.refreshFrozenGroup ? freezeState!.members.filter(m => m.groupId === options.refreshFrozenGroup).map(m => m.id) : undefined,
+        refreshPageIds: options.refreshFrozenGroup ? options.refreshPageIds ?? freezeState!.members.filter(m => m.groupId === options.refreshFrozenGroup).map(m => m.id) : undefined,
         source: (state, signal) => sources().study(state, signal), verify: (receipt, signal) => db!.verify(receipt, signal),
         incomingLinks: async (changes, state, signal) => { signal.throwIfAborted(); const links = cache!.incomingLinks(changes, state);
           return { ...links, records: links.records.filter(r => !frozenPageIds.has(r.detail.item.id)) }; },
