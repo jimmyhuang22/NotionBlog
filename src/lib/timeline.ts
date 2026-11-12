@@ -83,6 +83,25 @@ export function feedRuns<T extends { source: string; occurredAt: DateRange | nul
 }
 
 /**
+ * Neighbouring games in one line (design review 5, H-11): runs of one game each that follow one another in the
+ * same month, with nothing between them, become one run. The order, the months and the de-duplication stay the
+ * feed's; this only draws them together. `isGame` says which entries are games.
+ */
+export function joinGames<T extends { source: string; occurredAt: DateRange | null }>(runs: FeedRun<T>[], timeZone: string, isGame: (item: T) => boolean): FeedRun<T>[] {
+  const joined: FeedRun<T>[] = [];
+  let month: string | undefined;
+  for (const run of runs) {
+    const item = run.items[0]!;
+    const key = eventMoment(item, timeZone).month?.key ?? "unknown";
+    const last = joined.at(-1);
+    if (last && run.items.length === 1 && isGame(item) && last.items.every(isGame) && key === month) last.items.push(item);
+    else joined.push({ first: run.first, items: [...run.items] });
+    month = key;
+  }
+  return joined;
+}
+
+/**
  * The days a run of entries covers, earliest first, as it reads today: one day, or "… 至 …"; entries without
  * a date are left out and a run with none has no span. A run within one day is named like any entry of that day, without
  * a time of day because it belongs to one work only; a run over several days stays plain dates.

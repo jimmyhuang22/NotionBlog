@@ -41,6 +41,15 @@
 .entry__card { width: fit-content; min-width: min(280px, 100%); max-width: 100%; margin-top: 8px; padding: 20px 24px; }
 .entry__card--brief { min-width: 0; padding: 14px 24px; }
 .entry__card--full { width: auto; }
+/*
+ * On the status page a line of words stops at about 42 characters (design review 5, T-12): the paragraphs carry
+ * the measure in the width of one character of their own type, so a card of words is no wider than that and
+ * still hugs a shorter text; unfolded it keeps the same measure. Pictures, videos and tables keep their own
+ * width. The home column is narrower than this already.
+ */
+.status-page .entry__card p { max-width: 42ic; }
+/* Unfolded, a card of words only still hugs its measure instead of taking the column. */
+.status-page .entry__card--full:not(:has(img, video, iframe, table)) { width: fit-content; }
 /* The card's contents, whose height eases on opening and closing (size-motion.ts). Its own block context keeps the margins
    inside it, so nothing moves when the motion sets a height; the control's pull into the bottom padding is the body's own. */
 .entry__card-body { display: flow-root; }
@@ -155,6 +164,15 @@ a.work-line__main:hover .work-line__title, a.work-line__more:hover { color: var(
 a.work-line__main:focus-visible, a.work-line__more:focus-visible { outline-offset: 4px; border-radius: var(--radius-sm); }
 /* Updates that are not status entries take a little less room under them. */
 .timeline--home .entry--event { padding-bottom: 24px; }
+/* A light record sits close under its date line, so the first screen reaches the newest status sooner (H-11). */
+.timeline--home .entry--event > :is(.event--line, .work-line) { margin-top: 6px; }
+/* Neighbouring games in one line (home-timeline.tsx): their squares side by side, each name its own link. */
+.event__squares { display: flex; flex: none; gap: 4px; }
+.event--games .event__sentence { line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+.event__name { color: inherit; border-radius: var(--radius-xs); }
+.event__name:hover { color: var(--accent); }
+.event__name:active { background-color: var(--bloom); box-shadow: 0 0 0 3px var(--bloom); }
+@media (max-width: 520px) { .event--games { flex-wrap: wrap; } }
 /*
  * A work published on other platforms, drawn the way its own platform draws it: a video frame with the
  * figures along its foot, or an upright note with its likes under the title. Without a cover it is
@@ -307,6 +325,15 @@ a.home-works__row:focus-visible { outline-offset: -3px; border-radius: var(--rad
 @media (max-width: 720px) { .works__grid, .works__grid--xiaohongshu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
 /* A cell holds its card at the row's height, so cards side by side end level when one day line wraps and another does not (S13-2: 320 wide, a collection's "最后更新" and its date). Its one column may shrink to the cell: an auto column would grow to the card's widest unbreakable line (a stats corner such as "共15 个视频"), and at 320 that pushed the page 16px wide (live, 2026-10-23). */
 .works__grid > li { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+/*
+ * The cards of one row share their lines (design review 5, W-11, replacing the fixed two title lines of
+ * 2026-11-11): picture, title and date are each a row of the grid, so a title that wraps to two lines makes
+ * room in its row only, and the dates of a row stay level.
+ */
+@supports (grid-template-rows: subgrid) {
+  .works__grid > li { grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; }
+  .works__grid > li > .works-card { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 4px; align-content: start; }
+}
 /* The card: its cover, then title and day, with no card behind; positioned so screen-reader words stay inside it. */
 .works-card { position: relative; display: flex; flex-direction: column; gap: 4px; color: inherit; }
 .works-card__frame { order: -1; position: relative; display: block; overflow: hidden; border-radius: var(--radius-md); background: var(--soft); box-shadow: var(--shadow); }
@@ -320,10 +347,9 @@ a.home-works__row:focus-visible { outline-offset: -3px; border-radius: var(--rad
 .works-card__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; font-family: var(--font-hand); font-size: var(--text-body); line-height: 1.4; overflow-wrap: anywhere; }
 /* So days line up across a row (the owner's choice, 2026-10-18): a Bilibili title keeps to one line, the whole title in its hover hint; a Xiaohongshu title always takes two lines' height. */
 .works-card--wide .works-card__title { display: block; white-space: nowrap; text-overflow: ellipsis; }
-.works-card--tall .works-card__title { min-height: calc(2 * 1.4em); }
 /* On a phone a Bilibili title takes two lines' height as well (2026-11-11): two columns leave too little room for one line to say much. Days still line up. */
 @media (max-width: 720px) {
-  .works-card--wide .works-card__title { display: -webkit-box; min-height: calc(2 * 1.4em); white-space: normal; }
+  .works-card--wide .works-card__title { display: -webkit-box; white-space: normal; }
 }
 .works-card__day { font-size: var(--text-xs); color: var(--muted); }
 a.works-card:hover .works-card__title { color: var(--accent); }
