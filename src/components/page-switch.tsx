@@ -20,6 +20,8 @@ const SLOW_AFTER = 60;
 /** The old page's dim, and the new page's rise from the same 55%. */
 const DIM_MS = 80;
 const RISE_MS = 160;
+/** A section's list developing under its title once it has arrived. */
+const ARRIVE_MS = 220;
 const GIVE_UP_AFTER = 15000;
 const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 
@@ -188,6 +190,8 @@ function enterSection(target: string, title: string) {
   entry.giveUpTimer = window.setTimeout(() => { if (current === entry) drop(entry); }, GIVE_UP_AFTER);
   const show = () => {
     if (current !== entry) return;
+    // The frame's faint shapes hold back a moment (globals.css); the loading state that takes over carries on from this clock.
+    overlay.style.setProperty("--waited", `${Math.round(performance.now() - entry.started)}ms`);
     for (const element of [document.getElementById("main"), document.querySelector<HTMLElement>(".site-footer")]) {
       if (!element) continue;
       hidden.push({ element, aria: element.getAttribute("aria-hidden"), inert: element.inert });
@@ -200,6 +204,35 @@ function enterSection(target: string, title: string) {
   // A cached page can commit in this brief interval without flashing a skeleton.
   if (immediate) show(); else entry.slowTimer = window.setTimeout(show, SLOW_AFTER);
   return true;
+}
+
+/**
+ * A section frame has given way to its page. What stands under the title develops in place (2026-11-13): the
+ * loading state first carries on the frame's clock, so its shapes neither blink nor start over, and the list
+ * that replaces it fades in rather than cutting in. The title and the tools beside it do not move or fade.
+ */
+function arrive(entry: Switch) {
+  const main = document.getElementById("main");
+  if (!main) return;
+  const shown = !entry.overlay.hidden;
+  if (shown) main.style.setProperty("--waited", `${Math.round(performance.now() - entry.started)}ms`); else main.style.removeProperty("--waited");
+  if (!shown || still() || entry.target === "/") return;
+  const waiting = () => [...main.querySelectorAll(".page-loading, [data-page-loading]")].some(element => !element.closest("[data-switch-template]"));
+  const develop = () => {
+    for (const part of main.querySelectorAll<HTMLElement>(".wrap > :not(.page-head)")) {
+      if (part.closest("[data-switch-template]")) continue;
+      part.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ARRIVE_MS, easing: "ease-out" });
+    }
+  };
+  if (!waiting()) { develop(); return; }
+  const watch = new MutationObserver(() => {
+    if (waiting()) return;
+    watch.disconnect();
+    window.clearTimeout(end);
+    develop();
+  });
+  const end = window.setTimeout(() => watch.disconnect(), GIVE_UP_AFTER);
+  watch.observe(main, { childList: true, subtree: true });
 }
 
 function start(from: string, target: string) {
@@ -355,7 +388,11 @@ export function PageSwitch() {
     shown.current = pathname;
     committedPath = pathname;
     if (current?.progressive && (current.target === pathname ||
-        pathname === "/content-not-found" || pathname === "/content-unavailable")) drop(current);
+        pathname === "/content-not-found" || pathname === "/content-unavailable")) {
+      const entry = current;
+      if (entry.target === pathname) arrive(entry);
+      drop(entry);
+    } else if (!current) document.getElementById("main")?.style.removeProperty("--waited");
   }, [pathname]);
   useEffect(() => {
     const own = template.current?.firstElementChild as HTMLElement | null;

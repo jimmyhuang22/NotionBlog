@@ -5,6 +5,20 @@
 .segmented :is(a, button) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: var(--text-sm); color: var(--muted); cursor: pointer; }
 .segmented :is(a[aria-current], button[aria-pressed="true"]) { background: var(--picked); box-shadow: var(--shadow); color: var(--ink); font-weight: 600; }
 /*
+ * Filters that change the address (scrolling-segments.tsx): the chosen look is one block that slides to the link
+ * pressed, at the press. Until it is placed, before the page is interactive, the chosen link keeps its own look.
+ */
+.segmented--slide { position: relative; isolation: isolate; }
+.segmented--slide > a { position: relative; z-index: 1; }
+.segmented__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
+.segmented--slide[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
+/* While the list pressed for is on its way the names have already changed places: the one pressed reads as chosen, the one left as any other. */
+.segmented--slide > a[data-picked] { color: var(--ink); font-weight: 600; }
+.segmented--slide[data-moving] > a[aria-current]:not([data-picked]) { color: var(--muted); font-weight: inherit; }
+@media (prefers-reduced-motion: no-preference) {
+  .segmented__pill { transition: transform 0.32s cubic-bezier(0.3, 1.15, 0.4, 1), width 0.32s cubic-bezier(0.3, 1.15, 0.4, 1); }
+}
+/*
  * The year filter stays on one row and scrolls sideways when it does not fit. Its edges fade only on
  * the side that has more to show, following the scroll position.
  */

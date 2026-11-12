@@ -18,7 +18,7 @@ export function PageLoading({ title }: { title?: string } = {}) {
     <div className={`wrap${heading !== undefined ? "" : " wrap--narrow"} page-loading`} role="status" aria-label={heading ? `正在加载${heading}` : "正在加载"}>
       {heading ? <header className="page-head"><h1>{heading}</h1></header>
         : <span className="skeleton" data-loading-heading style={{ width: "38%", height: 40, marginBottom: 28 }} />}
-      {[92, 80, 86, 60].map(width => <span key={width} className="skeleton" style={{ width: `${width}%`, height: 18, marginBottom: 16 }} />)}
+      <div className="page-loading__bars">{[92, 80, 86, 60].map(width => <span key={width} className="skeleton" style={{ width: `${width}%`, height: 18, marginBottom: 16 }} />)}</div>
     </div>
   );
 }

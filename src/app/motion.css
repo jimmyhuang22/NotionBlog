@@ -88,6 +88,9 @@
   /* They rise from the 45% the old list was dimmed to, never from nothing, so the list is never blank in between (round four, M-12). */
   .is-arriving { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
   @keyframes arrive-row { from { opacity: 0.45; transform: translateY(6px); } }
+  /* A timeline entry carries the line and its ring: those stay, and what the entry holds rises (the status page after a year is chosen). */
+  .entry.is-arriving { animation: none; }
+  .entry.is-arriving > * { animation: arrive-row 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
   /* The study overview fades a copy of its old rows out over the new ones instead (study-overview.tsx): its new rows still start from nothing, or the two would show through each other. */
   .study-entries > .is-arriving { animation-name: arrive-row-clear; animation-delay: calc(60ms + var(--i, 0) * 25ms); }
   @keyframes arrive-row-clear { from { opacity: 0; transform: translateY(6px); } }
@@ -131,16 +134,6 @@
   @keyframes ring-in { from { transform: scale(0.55); } }
   @keyframes bars-out { to { background-image: none; } }
   @keyframes arrive { from { opacity: 0; transform: translateY(4px); } }
-}
-
-/*
- * Changing a filter: the selected segment slides to its new place instead of jumping. The two
- * controls have their own names so a segment never flies from one page's control to another's.
- */
-@media (prefers-reduced-motion: no-preference) {
-  .segmented--scroll a[aria-current] { view-transition-name: segment-year; }
-  .library__head .segmented:not(.works__platforms) a[aria-current] { view-transition-name: segment-status; }
-  ::view-transition-group(segment-year), ::view-transition-group(segment-status) { animation-duration: 0.3s; animation-timing-function: cubic-bezier(0.3, 0.9, 0.3, 1); }
 }
 
 /*
