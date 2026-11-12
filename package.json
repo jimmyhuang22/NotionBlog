@@ -37,6 +37,7 @@
     "media:self-hosted": "node scripts/self-hosted-media/run.mjs"
   },
   "dependencies": {
+    "@chinese-fonts/hcqyt": "2.0.0",
     "@notionhq/client": "5.27.0",
     "@vercel/functions": "3.9.11",
     "@vercel/oidc": "4.0.0",

@@ -2,7 +2,8 @@
  * The other skins. Ink is the default in globals.css; a skin is switched on by `data-skin` on the
  * root (src/lib/skins.ts) and only changes variables and a few component details, never structure.
  * Y2k is drawn light only; the menu pins `data-theme` for it.
- * Skins use the fonts already loaded for ink, or system faces; none adds a font of its own.
+ * Skins use the fonts already loaded for ink, or system faces. The one exception is the island's headings:
+ * a rounded Chinese face (寒蝉全圆体, loaded in globals.css) beside Nunito, the owner's choice of 2026-11-13.
  */
 
 /* ---------- Apple: light grey ground, white cards, system type, one blue ---------- */
@@ -76,7 +77,17 @@
 /* Hovering deepens the button rather than lightening it, so the white text only gains contrast. */
 [data-skin="apple"] .pill-button:hover { color: #fff; background: color-mix(in srgb, var(--button) 88%, #000); }
 [data-skin="apple"] .pill-button:disabled, [data-skin="apple"] .pill-button[aria-disabled="true"] { background: var(--soft); color: var(--muted); }
-[data-skin="apple"] .segmented { background: var(--soft); }
+/*
+ * Apple's own parts (design review 5, S-7; the owner's choice of 2026-11-13). The current section stands on a
+ * soft grey capsule that slides to the section pressed (the header's one mark, nav-links.tsx), in ink rather
+ * than blue; filters are the system's segmented control: a rounded-rectangle track with a white thumb.
+ */
+[data-skin="apple"] .site-nav { isolation: isolate; }
+[data-skin="apple"] .site-nav__mark:not([hidden]) { display: block; position: absolute; z-index: -1; left: 0; top: 0; width: calc(var(--spot-w, 0px) - 4px); height: 28px; margin: calc(-3px - var(--spot-h, 0px) / 2) 0 0 calc(15px - var(--spot-w, 0px) / 2); border-radius: 999px; background: var(--soft); pointer-events: none; }
+[data-skin="apple"] .site-nav:has(> .site-nav__mark:not([hidden])) :is(.site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current) { color: var(--ink); }
+[data-skin="apple"] .segmented { padding: 2px; border-radius: var(--radius-sm); background: var(--soft); }
+[data-skin="apple"] .segmented :is(a, button), [data-skin="apple"] :is(.segmented__pill, .works__pill, .study-views__pill) { border-radius: calc(var(--radius-sm) - 2px); }
+[data-skin="apple"] .segmented--scroll a:focus-visible { border-radius: calc(var(--radius-sm) - 2px); }
 [data-skin="apple"] .segmented :is(a[aria-current], button[aria-pressed="true"]) { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
 [data-skin="apple"] .segmented__pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
 [data-skin="apple"] .segmented--slide[data-pill] > a[aria-current] { box-shadow: none; }
@@ -114,6 +125,8 @@
   --radius-lg: 24px; --radius-md: 18px; --radius-sm: 12px; --radius-xs: 8px;
   --font-sans: var(--font-nunito, "Nunito"), -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-hand: var(--font-nunito, "Nunito"), -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  /* Headings only: the rounded face has one weight (bold), so text set at other weights keeps the system face. */
+  --font-round: var(--font-nunito, "Nunito"), "寒蝉全圆体 Bold", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --island-bar: #19c8b9; --island-bar-edge: #11a89b; --island-bar-ink: #3d2a12;
   --island-bar-button: #fffdf2; --island-bar-button-ink: #0b5f56; --island-bar-button-edge: #0e8f84;
   --island-ledge: #e4d9bd; --island-press: #bdaea0;
@@ -314,6 +327,8 @@
 [data-skin="y2k"] .segmented--slide[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
 [data-skin="y2k"] .segmented--slide > a[data-picked] { color: #fff; }
 [data-skin="y2k"] .segmented--slide[data-moving] > a[aria-current]:not([data-picked]) { color: var(--muted); }
+/* The pressed name turns white as the blue block reaches it, not before: white on the pale track would vanish for a moment. */
+@media (prefers-reduced-motion: no-preference) { [data-skin="y2k"] .segmented--slide > a { transition: color 0.18s ease 0.1s, background-color 0.22s ease, box-shadow 0.22s ease; } }
 /* A tile without a cover keeps its spine line, in the skin's blue. */
 [data-skin="y2k"] .cover--empty, [data-skin="y2k"] .album-card__cover.album-card__cover--empty { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent), 0 6px 14px -6px rgba(30, 110, 205, 0.4); }
 [data-skin="y2k"] .library__item:hover .cover--empty, [data-skin="y2k"] .album-card:hover .album-card__cover.album-card__cover--empty { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent); }
@@ -362,6 +377,8 @@
 /* Island: headings of one weight (S-3, without a new typeface): months, note headings and outline titles at 700, so the
    Chinese of a heading falls on the system's semibold next to the rounded Latin instead of reading thin. */
 [data-skin="island"] :is(.timeline__month-name, .prose__h, .reading__toc-head, .tree__heading, .page-outline__head h2, .toc-drawer summary) { font-weight: 700; }
+/* The headings' Chinese is as round and thick as their Latin (design review 5, S-3): every heading that is set bold takes the rounded face. */
+[data-skin="island"] :is(.hero h1, .page-head h1, .reading__title, .course-head h1, .work__info h1, .album-head h1, .section-title, .timeline__head h2, .entry__card-title, .event__title, .work-line__title, .site-header__brand, .bili-card__title, .works-card__title, .library__title, .timeline__month-name, .prose__h, .reading__toc-head, .tree__heading, .page-outline__head h2, .toc-drawer summary, .state--center h1, .about-dialog__head h2) { font-family: var(--font-round); }
 
 /* Y2K bubbles keep to the page's margins (S-5): beside a note's outline or course directory the big right bubble moves up behind the header. */
 [data-skin="y2k"] body:has(.reading__toc, .reading__side) { --bubble-y: 26px; --bubble-r: 40px; --bubble-x: calc(100% - 40px); }

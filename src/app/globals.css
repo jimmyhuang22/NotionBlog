@@ -1,4 +1,6 @@
 @import "lxgw-wenkai-screen-webfont/lxgwwenkaiscreen.css";
+/* The island skin's headings (skins.css): a rounded Chinese face to go with Nunito. Cut into slices by Unicode range, so only the slices a page's headings use are fetched, and only under that skin. */
+@import "@chinese-fonts/hcqyt/dist/ChillRoundFBold/result.css";
 
 /*
  * Until the hand font has loaded, headings fall back to the system Kai. Its Latin letters are

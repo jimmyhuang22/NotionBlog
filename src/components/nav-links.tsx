@@ -48,6 +48,9 @@ export function NavLinks({ items }: { items: NavItem[] }) {
       const spot = shown.getBoundingClientRect();
       mark.current.hidden = false;
       mark.current.style.transform = `translate(${spot.left - box.left + spot.width / 2 - 13}px, ${spot.bottom - box.top - 11}px)`;
+      // The size of the section it stands under, for a skin that draws the mark as a capsule behind the name (apple, skins.css).
+      mark.current.style.setProperty("--spot-w", `${spot.width}px`);
+      mark.current.style.setProperty("--spot-h", `${spot.height}px`);
       const placed = mark.current;
       if (!placed.classList.contains("is-placed")) requestAnimationFrame(() => placed.classList.add("is-placed"));
     };
