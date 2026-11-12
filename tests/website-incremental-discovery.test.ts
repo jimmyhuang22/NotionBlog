@@ -281,3 +281,56 @@ test("fenced directory discovery does not grow the external event ledger", async
     const ticket = s.q.claim()[0]; assert.equal(ticket.generation, n); s.q.completeUnchanged(ticket);
   }
 });
+
+function computedFixture(type: "rollup" | "formula") {
+  const f = fixture(), s = f.config.sources[0];
+  s.kind = "game"; s.fields = { title: s.fields.title, platformMinutes: "Minutes" };
+  const getSchema = f.client.getDataSource;
+  f.client.getDataSource = async (...args) => {
+    const schema = await getSchema(...args);
+    schema.properties.Minutes = (type === "rollup"
+      ? { id: "minutes", name: "Minutes", type, rollup: { function: "sum", relation_property_id: "games", relation_property_name: "Platforms", rollup_property_id: "total", rollup_property_name: "Total" } }
+      : { id: "minutes", name: "Minutes", type, formula: { expression: "1" } }) as typeof schema.properties[string];
+    return schema;
+  };
+  const setMinutes = (n: number) => {
+    for (const p of f.pages) p.properties.Minutes = (type === "rollup"
+      ? { id: "minutes", type, rollup: { type: "number", number: n, function: "sum" } }
+      : { id: "minutes", type, formula: { type: "number", number: n } }) as typeof p.properties[string];
+  };
+  setMinutes(100); return { ...f, setMinutes };
+}
+
+for (const type of ["rollup", "formula"] as const) test(`${type} changes discover old parent timestamps on normal cycles, without requeueing unchanged values`, async t => {
+  const f = computedFixture(type), s = await setup(t, configDigest(f.config));
+  const run = (now: number, maxSteps = 10) => runDirectoryDiscovery({ queue: s.q, sourceKey: "status", now: () => now, overlapMs: 0, maxSteps }, f.source());
+  assert.equal((await run(5000)).outcome, "completed"); drain(s.q);
+  assert.equal((await run(6000)).hints, 0);
+  const edited = f.pages.map(p => p.last_edited_time); f.setMinutes(120);
+  const changed = await run(7000);
+  assert.equal(changed.outcome, "completed"); assert.equal(changed.hints, 2);
+  assert.deepEqual(f.pages.map(p => p.last_edited_time), edited);
+  assert.ok(f.queryInputs.every(q => q.filter === undefined));
+  assert.deepEqual(s.q.claim().map(ticket => { assert.deepEqual(ticket.reasons, ["content"]); s.q.completeUnchanged(ticket); return ticket.pageKey; }).sort(), f.pages.map(p => p.id).sort());
+  assert.equal((await run(8000)).hints, 0); assert.equal(s.q.status().pending, 0);
+});
+
+test("computed metadata pagination resumes after restart and admits only changed allowed parents", async t => {
+  const f = computedFixture("rollup"); f.config.sources[0].publication = { mode: "allowlist", allowlistPageIds: [f.pages[0].id] };
+  const s = await setup(t, configDigest(f.config));
+  assert.equal((await runDirectoryDiscovery({ queue: s.q, sourceKey: "status", now: () => 5000, overlapMs: 0 }, f.source())).hints, 1); drain(s.q);
+  f.setMinutes(200);
+  f.client.queryDataSource = async input => { f.queryInputs.push(input); return input.start_cursor ? f.response([f.pages[1]]) : f.response([f.pages[0]], "next"); };
+  const result = await runDirectoryDiscovery({ queue: s.q, sourceKey: "status", now: () => 6000, overlapMs: 0, maxSteps: 1 }, f.source());
+  assert.equal(result.outcome, "partial"); assert.equal(result.hints, 1); assert.equal(s.q.discoveryState("status").watermark, 5000);
+  await s.reopen();
+  const finished = await runDirectoryDiscovery({ queue: s.q, sourceKey: "status", now: () => 7000, overlapMs: 0 }, f.source());
+  assert.equal(finished.outcome, "completed"); assert.equal(finished.hints, 0);
+  assert.equal(s.q.discoveryState("status").watermark, 6000); assert.equal(s.q.claim()[0].pageKey, f.pages[0].id);
+});
+
+test("unmapped computed properties do not widen the ordinary timestamp query", async () => {
+  const f = computedFixture("formula"); f.config.sources[0].fields = { title: f.config.sources[0].fields.title };
+  await f.source().read("status", { id: "scan", mode: "changes", phase: "query", startedAt: 5000, since: 1000, cursor: null, afterKey: null, pages: 0 }, new AbortController().signal);
+  assert.ok(f.queryInputs[0].filter);
+});

@@ -58,22 +58,27 @@ export function createNotionDirectorySource(client: DirectoryNotionClient, confi
     if (!s?.dataSourceId || s.kind === "page" || s.publication.mode === "course-descendants") fail("DISCOVERY_SOURCE_UNSUPPORTED");
     return s;
   }
-  const validate = async (sourceKey: string, signal: AbortSignal) => {
+  const inspect = async (sourceKey: string, signal: AbortSignal) => {
     guard(signal); const s = source(sourceKey);
     const schema = await client.getDataSource(s.dataSourceId!, signal); guard(signal);
     if (!schema || identity(schema.id) !== s.dataSourceId) fail("DISCOVERY_SCOPE_CHANGED");
     try { assertWebsiteSourceSchema(s, schema); } catch { fail("DISCOVERY_SCHEMA_INVALID"); }
+    // Related records can change these values without editing the parent page.
+    return Object.values(s.fields).some(name => ["rollup", "formula"].includes(schema.properties[name]?.type));
   };
   return {
     scopeDigest: expectedDigest,
-    validate,
+    async validate(sourceKey, signal) { await inspect(sourceKey, signal); },
     async read(sourceKey, scan, signal) {
-      await validate(sourceKey, signal); const s = source(sourceKey);
+      const computed = await inspect(sourceKey, signal), s = source(sourceKey);
+      const timestampFiltered = scan.mode === "changes" && !computed;
       const result = await client.queryDataSource({ data_source_id: s.dataSourceId!, page_size: 100,
         sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
         ...(scan.cursor ? { start_cursor: scan.cursor } : {}),
-        // Membership must include pages edited during pagination; do not use the changes cutoff here.
-        ...(scan.mode === "changes" ? { filter: { and: [
+        // Computed fields need a paginated metadata sweep every cycle. The queue
+        // still admits only changed fingerprints; bodies/media are not fetched here.
+        // Membership also includes pages edited during pagination.
+        ...(timestampFiltered ? { filter: { and: [
           { timestamp: "last_edited_time", last_edited_time: { on_or_after: new Date(scan.since!).toISOString() } },
           { timestamp: "last_edited_time", last_edited_time: { on_or_before: new Date(scan.startedAt).toISOString() } },
         ] } } : {}),
@@ -87,7 +92,7 @@ export function createNotionDirectorySource(client: DirectoryNotionClient, confi
         if (!isFullPage(page) || !page.parent || page.parent.type !== "data_source_id" || identity(page.parent.data_source_id) !== s.dataSourceId) fail("DISCOVERY_RESPONSE_INVALID");
         const pageKey = identity(page.id), lastEditedAt = timestamp(page.last_edited_time);
         if (keys.has(pageKey)) fail("DISCOVERY_RESPONSE_INVALID"); keys.add(pageKey);
-        if (scan.mode === "changes" && (lastEditedAt < scan.since! || lastEditedAt > scan.startedAt)) fail("DISCOVERY_WINDOW_INVALID");
+        if (timestampFiltered && (lastEditedAt < scan.since! || lastEditedAt > scan.startedAt)) fail("DISCOVERY_WINDOW_INVALID");
         if (s.publication.mode === "allowlist" && !s.publication.allowlistPageIds.includes(pageKey)) continue;
         members.push(directoryPageMember(page, s.cover.strategy === "native-page-cover"));
       }
