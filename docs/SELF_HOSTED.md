@@ -1,5 +1,7 @@
 # 独立自托管入口
 
+当前生产目标及安装顺序以[生产部署与交接](PRODUCTION_DEPLOYMENT.md)为准：新加坡 Oracle 为主，AWS 保留但不再更新。本文的云端数据库、Nginx 8443 与默认配置示例描述可选拓扑和旧 AWS 用法，不是新加坡现役配置，不能据此改写线上入口。
+
 专用入口为同一 Next.js 工程提供常驻 Node 服务。普通开发、检查、构建、启动和 Preview 继续使用[离线隔离](DEVELOPMENT_ISOLATION.md)，Vercel Production 保持现有行为。普通构建不读取线上配置。本入口提供服务程序，不自行安装数据库、迁移数据或切换域名。
 
 ## 复用现有云端数据库的公开网站
@@ -25,11 +27,11 @@ Nginx 需启用 `http_realip_module`。网站监听只信任来自 [Cloudflare �
 
 ## 正式版本安装
 
-AWS当前使用完整Node产物人工部署，没有Git自动发布任务。完成main发布后，核对正式提交与受检文件树一致，在对应Linux架构离线构建公开产物，再安装到独立release目录并切换服务；合并main本身不会更新AWS程序。保留受保护运行配置在代码之外，图片继续由既有云端存储读取，不打包私人配置、后台任务或媒体库。启用systemd开机启动，重启后仍须使用专用入口，普通 `npm start` 仍是离线演示。
+新加坡 Oracle 当前使用完整 Node/Linux ARM64 产物人工部署，没有 Git 自动安装任务。得到当次授权并完成 main 发布核对后，再按[统一部署入口](PRODUCTION_DEPLOYMENT.md)准备产物与独立 release；合并 main 不会自动更新主机。现役使用 published/scoped 数据库读取与本地 display-only/private-disk 展示媒体，数据库页面保持 legacy。受保护配置、数据库、媒体库和私人后台任务均在代码发布之外，不从 AWS 包复制或覆盖。重启后仍须使用专用入口，普通 `npm start` 是离线演示。AWS 保留且不再更新，任何恢复或退役另需明确授权。
 
 安装校验应在待发布目录内以网站账号运行；从部署用户的私有家目录启动Node校验，可能在模块解析时就因目录权限失败，应修正工作目录而不是放宽家目录权限。启动先核对只读身份／权限并准备Next，不能把端口尚未监听等同于版本损坏。公开且启用 tagged-v1 缓存的配置会在对外监听前，用临时回环端口先读取内容版本、再完整读取首页；启动预热最多等待十秒、累计响应正文最多 1 MiB，不取图片或其他栏目。只有首页成功读出首屏动态才记录 `self_hosted_home_warmup` 的 `ready`，失败则记录 `unavailable` 并继续启动，不延长现有访客／SQL 期限或反复重试。预热仍走正常版本、资格和撤回检查，缓存内的页面也必须先核对版本；这是把首次准备工作提前，不能宣称冷数据库计算消失。部署启动宽限须覆盖身份核验、Next 准备及这十秒上限。等待 `self_hosted_ready` 或给予明确的部署启动宽限再探测健康；连接被拒会立即返回，一秒间隔尝试三次实际上只等待约两秒。早期图片修复曾使用十秒部署启动宽限，见[历史验收](progress/2026-11-02-cover-request-fix.md)；首页预热发布改用二十五秒，覆盖新增预热，见[冷启动验收](progress/2026-11-03-home-cold-start.md)。部署宽限不改变访客请求或 SQL 期限。
 
-入口变化先保留临时回退，逐项核对源站TLS、两层防火墙、代理目标端口和DNS，最后撤回临时跳转。首次切换如失败，先恢复回退，再修正并有限复验；不要停掉已有其他服务或关闭整层防火墙。
+任何新的入口切换须单独获准，并按实际拓扑核对 TLS、Tunnel／代理和 DNS。网站版本回退优先使用新加坡已验证的前一 release，不回退内容数据库或启动旧同步；AWS DNS 回退不是普通发布的默认动作，须按当次明确授权执行。用户要求失败停止时，不修复后自动重试。
 
 ## 构建与配置
 
@@ -41,7 +43,7 @@ npm run build:self-hosted
 
 参考[配置示例](../config/self-hosted.example.json)，把真实 JSON 保存到代码之外或忽略的 `.local` 中。文件须为当前用户所有、权限0600、普通文件且只有一份硬链接；不接受符号链接。数据库 URL 不能附带覆盖 TLS 的查询参数；CA 为 PEM 字符串，必须匹配服务器证书和实际主机名。
 
-初始版本只接受 database v2、qualified 发布读取和 configured 连接。网站 LOGIN 为 nb_website_reader，继承冻结的 nb_reader，不能有额外角色、私表或写入权限。社交可选，使用独立 nb_social_reader，沿用其严格身份检查。启动先完成有时限的身份/权限核验，失败不监听网站，也不回退 mock。
+仓库通用配置校验仍以 database v2、qualified 发布读取和 configured 连接为初始默认。新加坡现役额外保留严格限定 published/private-disk/display-only 的 profile 适配，尚未纳入 main；更新前必须核对该差异和兼容性，不能用纯 main 文件直接覆盖。网站 LOGIN 为 nb_website_reader，继承冻结的 nb_reader，不能有额外角色、私表或写入权限。社交可选，使用独立 nb_social_reader，沿用其严格身份检查。启动先完成有时限的身份/权限核验，失败不监听网站，也不回退 mock。
 
 作品首屏共同读取的 `DATABASE_LIBRARY_PAGE` 默认 `legacy`，保留原列表、年份读取与缓存。受保护配置允许显式设置 `compact`，但须同时使用 `DATABASE_READ_PROJECTION=scoped`，并先安装及登记独立的 `database/library-page-protocol.json` 协议。白名单支持不代表已安装协议或已启用；本项默认关闭，云端验收和启用仍需另行授权。
 
@@ -73,4 +75,4 @@ npm run start:self-hosted -- --config /private/notionblog/fixture-reader.json --
 
 验证应覆盖真实HTTP→TLS reader→PostgreSQL→DTO、失败不回退、坏证书/身份拒绝、在途排空与池关闭。本机演练不证明目标服务器容量、真实数据/图片迁移及国内外可达性；这些操作另行确认。
 
-静态构建资源可按[独立静态入口方案](STATIC_ASSET_CACHE.md)走 8444，避免 Cloudflare 对既有 8443 的默认缓存限制。本站已于 2026-11-03 经用户批准启用，只开放 `/_next/static/`，动态页面与媒体仍走原入口；两层防火墙限 Cloudflare 网段，公网 JS/CSS/字体双读 HIT 已验证。其他安装仍须按各自发布批准启用并验收，见[本轮记录](progress/2026-11-03-static-media-cache.md)。
+静态构建资源可按[独立静态入口方案](STATIC_ASSET_CACHE.md)走 8444，避免 Cloudflare 对既有 8443 的默认缓存限制。旧 AWS 站点已于 2026-11-03 经用户批准启用，只开放 `/_next/static/`，动态页面与媒体仍走原入口；两层防火墙限 Cloudflare 网段，公网 JS/CSS/字体双读 HIT 已验证。其他安装仍须按各自发布批准启用并验收，见[本轮记录](progress/2026-11-03-static-media-cache.md)。
