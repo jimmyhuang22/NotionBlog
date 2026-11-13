@@ -51,8 +51,13 @@ test('runtime reasserts the protected profile after dotenv and module copies sha
 test('the real self-hosted build launcher excludes inherited/dotenv secrets and guards descendants without loading a reader', async () => {
   const dir = await fixture();
   try {
+    for (const base of [dir, join(dir, 'scripts/game-sync')]) {
+      await mkdir(base, { recursive: true });
+      await writeFile(join(base, 'package.json'), '{}');
+      await writeFile(join(base, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages: { '': {} } }));
+    }
     await mkdir(join(dir, 'node_modules/next/dist/bin'), { recursive: true });
-    await mkdir(join(dir, 'scripts'));
+    await mkdir(join(dir, 'scripts'), { recursive: true });
     await writeFile(join(dir, 'scripts/check-build-privacy.mjs'), '');
     await writeFile(join(dir, '.env.production.local'), 'CONTENT_PROVIDER=database\nDATABASE_READER_URL=fixture\nUNRELATED_SECRET=fixture\n');
     await writeFile(join(dir, 'node_modules/next/dist/bin/next'), `const fs=require('node:fs');for(const[k,v]of Object.entries(require('node:util').parseEnv(fs.readFileSync('.env.production.local','utf8'))))if(!Object.hasOwn(process.env,k))process.env[k]=v;let blocked=false;try{require('node:net').connect(5432,'fixture.invalid')}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}const code="let blocked=false;try{require('node:net').connect(443,'fixture.invalid')}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}console.log(JSON.stringify({blocked}))";const child=require('node:child_process').spawnSync(process.execPath,['-e',code],{encoding:'utf8'});console.log(JSON.stringify({provider:process.env.CONTENT_PROVIDER,secret:!!process.env.UNRELATED_SECRET||!!process.env.DATABASE_READER_URL,blocked,descendant:JSON.parse(child.stdout).blocked}));`);

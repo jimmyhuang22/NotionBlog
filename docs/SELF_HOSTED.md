@@ -35,6 +35,8 @@ Nginx 需启用 `http_realip_module`。网站监听只信任来自 [Cloudflare �
 
 ## 构建与配置
 
+构建前按[部署预检](PRODUCTION_DEPLOYMENT.md#构建与切换前预检)检查双锁依赖、构建用户目录权限和实际 Linux 内存约束；专用构建入口自动拦截这些失败。构建后另用网站运行账号执行 runtime 预检，不能用 root 的读取结果替代。
+
 ```sh
 npm run build:self-hosted
 ```

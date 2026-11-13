@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { cleanEnvironment } from '../development/clean-environment.mjs';
 import context from './context.cjs';
 import files from './profile.cjs';
+import { preflight } from './preflight.ts';
 
 context.refusePlatform(process.env);
 const args = process.argv.slice(2);
 const publicWebsite = args.length === 1 && args[0] === '--public-website';
 if (args.length && !publicWebsite) throw Error('SELF_HOSTED_BUILD_ARGUMENTS');
+console.log('Self-hosted preflight:', JSON.stringify(await preflight({ root: process.cwd(), stage: 'build' })));
 const env = cleanEnvironment();
 delete env.NODE_EXTRA_CA_CERTS;
 Object.assign(env, { NB_SELF_HOST_ROOT: process.cwd(), NB_SELF_HOST_PHASE: 'build',
