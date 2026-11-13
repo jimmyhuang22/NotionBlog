@@ -1,3 +1,4 @@
+import { diagnosticError, diagnosticRef, logCollectionDiagnostic } from "./failure-diagnostics.ts";
 import { createHash } from "node:crypto";
 import { isFullPage, type Client, type DataSourceObjectResponse, type PageObjectResponse } from "@notionhq/client";
 import { normalizeId } from "../../src/server/notion/config.ts";
@@ -181,19 +182,24 @@ export async function runDirectoryDiscovery(options: DirectoryDiscoveryOptions, 
   const controller = new AbortController(), cancel = () => controller.abort(), signal = controller.signal;
   options.signal?.addEventListener("abort", cancel, { once: true });
   if (options.signal?.aborted) cancel();
-  const timer = setTimeout(cancel, duration);
+  let deadlineExpired = false;
+  const started = performance.now();
+  let diagnosticScan: DiscoveryScan | null = null, stage = "scope";
+  const timer = setTimeout(() => { deadlineExpired = true; cancel(); }, duration);
   const result = { outcome: "partial" as "partial" | "completed" | "retry" | "needs_review" | "cancelled", pages: 0, hints: 0, errorCode: null as string | null };
   try {
     guard(signal);
     if (source.scopeDigest !== options.queue.scopeDigest) fail("DISCOVERY_SCOPE_CHANGED");
     let state = options.queue.discoveryState(options.sourceKey);
     if (!state.scan) {
+      stage = "validate";
       await bounded(s => source.validate(options.sourceKey, s), signal);
       const now = (options.now ?? Date.now)();
       const mode = options.mode === "membership" || state.lastReconciledAt === null || now - state.lastReconciledAt >= interval ? "membership" : "changes";
       state = options.queue.beginDiscovery(options.sourceKey, state.revision, { mode, startedAt: now, overlapMs: overlap });
     }
     for (let step = 0; step < maxSteps && state.scan; step++) {
+      diagnosticScan = state.scan; stage = state.scan.phase;
       guard(signal);
       const committed = state.scan.phase === "missing" ? options.queue.reconcileDirectoryAbsences(options.sourceKey, state.revision) :
         await (async () => {
@@ -207,6 +213,15 @@ export async function runDirectoryDiscovery(options: DirectoryDiscoveryOptions, 
   } catch (error) {
     const code = error instanceof DirectoryDiscoveryError || error instanceof IncrementalQueueError ? error.code : "DISCOVERY_UNAVAILABLE";
     result.errorCode = signal.aborted ? "DISCOVERY_CANCELLED" : code;
+    let offset: number | null = null;
+    try { const n: unknown = JSON.parse(diagnosticScan?.cursor ?? "null")?.offset;
+      if (Number.isSafeInteger(n) && Number(n) >= 0) offset = Number(n); } catch { /* Opaque cursor stays hashed. */ }
+    logCollectionDiagnostic("directory-discovery", { sourceRef: diagnosticRef(options.sourceKey), stage,
+      scanRef: diagnosticScan ? diagnosticRef(JSON.stringify([diagnosticScan.mode, diagnosticScan.startedAt])) : null,
+      cursorRef: diagnosticScan?.cursor ? diagnosticRef(diagnosticScan.cursor) : null, offset,
+      pages: result.pages, hints: result.hints, elapsedMs: Math.round(performance.now() - started),
+      durationMs: duration, deadlineExpired, parentCancelled: options.signal?.aborted ?? false,
+      discoveryCode: result.errorCode, ...diagnosticError(error) });
     result.outcome = signal.aborted ? "cancelled" : ["DISCOVERY_SCOPE_CHANGED", "DISCOVERY_SCHEMA_INVALID", "DISCOVERY_SOURCE_UNSUPPORTED",
       "DISCOVERY_RESPONSE_INCOMPLETE", "DISCOVERY_RESPONSE_INVALID", "DISCOVERY_WINDOW_INVALID", "DISCOVERY_CURSOR_LOOP",
       "DISCOVERY_LIMIT_EXCEEDED", "DISCOVERY_CLOCK_INVALID", "DISCOVERY_CATALOG_CHANGED", "DISCOVERY_CATALOG_INVALID",
