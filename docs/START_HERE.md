@@ -19,7 +19,7 @@
 - **仓库**：干净的新仓库 2026-10-23 按用户授权公开；旧归档仓库保持私人。原创源码使用 MIT 许可证，个人内容与配置不随源码提交。
 - **分支**：`develop` 日常集成，`main` 线上。每项工作从最新的 develop 开短期分支或工作树，不在落后的检出上直接改共享规则或记录。
 - **检查**：合并请求在 GitHub 托管 Ubuntu 上运行 check／build 与隐私历史检查。合并到 develop 按影响完成本机验证即可，不等平台检查；发布到 main 要求完整检查通过。私人阶段用过的 Mac mini 运行器已于 2026-10-22 退役。
-- **部署**：默认生产目标已改为新加坡 Oracle；正式域名已切到新加坡。main 仍是发布源码，手工安装对应 Linux ARM64 产物，合并 main 不会自动更新主机。AWS 旧网站已退役，实例继续运行，磁盘、公网 IP、其他服务与受限恢复资料保留，仍有资源费用；见[退役记录](progress/2026-11-13-aws-website-retirement.md)。旧 Vercel 投递不是主站上线证据。入口统一为[生产部署与交接](PRODUCTION_DEPLOYMENT.md)，底层机制见[自托管说明](SELF_HOSTED.md)。新加坡现役数据库页面模式为 legacy，媒体为 display-only/private-disk，published 读取依赖一处现役 profile 适配；不能直接套用旧 AWS 双 legacy 配置或 amd64 产物。
+- **部署**：默认生产目标已改为新加坡 Oracle；正式域名已切到新加坡。main 仍是发布源码，手工安装对应 Linux ARM64 产物，合并 main 不会自动更新主机。AWS 旧网站已退役，实例继续运行，磁盘、公网 IP 与其他服务保留，仍有资源费用；旧站专用文件已按后续授权删除，不再保留原地恢复包，见[清理记录](progress/2026-11-13-aws-blog-files-cleanup.md)。旧 Vercel 投递不是主站上线证据。入口统一为[生产部署与交接](PRODUCTION_DEPLOYMENT.md)，底层机制见[自托管说明](SELF_HOSTED.md)。新加坡现役数据库页面模式为 legacy，媒体为 display-only/private-disk，published 读取依赖一处现役 profile 适配；不能直接套用旧 AWS 双 legacy 配置或 amd64 产物。
 - **栏目**：由运行配置 `CONTENT_FEATURES_JSON` 开启，代码默认只开动态与学习。据前端记录，正式站点还开启了作品、影视、书籍、游戏和相册；博客与“项目”关闭，正式 HTTPS 下 GET/HEAD 返回 404 已有验收记录。
 - **后台任务**：网站内容采集、发布与游戏任务已迁到新加坡独立私人运行根；其他私人任务按各自最新交接维护。网站发布不安装、覆盖或启动这些程序，不恢复旧 Mac／东京排程。身份、路径及调度细节只在私人交接中核对。
 
