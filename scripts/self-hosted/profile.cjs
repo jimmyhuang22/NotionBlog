@@ -15,6 +15,7 @@ const allowed = new Set([
 // An explicit public deployment reuses the website's existing read-only cloud
 // integrations. Neither profile accepts a database owner or synchronization login.
 const publicAllowed = new Set([...allowed,
+  'SITE_ANALYTICS_JSON',
   'PUBLIC_CONTENT_CACHE', 'PUBLIC_CACHE_ORIGIN', 'PUBLIC_CACHE_SITE_KEY', 'CACHE_PURGE_SECRET',
   'SITE_INDEXING_ENABLED', 'SITE_DISCOVERY_KINDS_JSON', 'NOTION_SOURCES_JSON',
   'NOTION_TOKEN', 'NOTION_API_VERSION', 'MEDIA_SIGNING_SECRET',
@@ -89,6 +90,7 @@ function loadProfile(filename, localOnly) {
     SOCIAL_COLLECTION_PLAYBACK: 'disabled', SOCIAL_COLLECTION_DAY_ADDITIONS: 'disabled',
   } : {}), ...raw.environment };
   if (publicWebsite) env.SELF_HOSTED_DEPLOYMENT = 'public-website';
+  if (env.SITE_ANALYTICS_JSON) require('../../src/server/analytics/config.ts').parseVisitorAnalyticsConfig(env.SITE_ANALYTICS_JSON);
   if (env.DATABASE_CONTENT_VERSION !== '2' || env.DATABASE_PUBLICATION_MODE !== 'qualified' ||
       !['legacy', 'compact'].includes(env.DATABASE_LIBRARY_PAGE) ||
       env.DATABASE_LIBRARY_PAGE === 'compact' && env.DATABASE_READ_PROJECTION !== 'scoped' ||
