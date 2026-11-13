@@ -33,7 +33,7 @@ export function thumbnailQualification(value: string | undefined): "live-notion"
   throw new ContentServiceError("MISCONFIGURED", "Thumbnail qualification is invalid.");
 }
 
-export interface ThumbnailMediaPorts {
+export interface ThumbnailMediaPorts<Original = Response> {
   /** Only supplied by the v2 route when conditional public HTTP mode is active. */
   ifNoneMatch?: string | null;
   /** Explicit v2 opt-in: source changes propagate with publication, as pages do. */
@@ -42,7 +42,7 @@ export interface ThumbnailMediaPorts {
   resolve(binding: MediaSourceBinding): Promise<{ url: string; sourceFingerprint: string } | null>;
   storage(): ObjectStorage;
   /** Missing variants or classified transient transport failures re-enter the qualified original path. */
-  original(): Promise<Response>;
+  original(): Promise<Original>;
 }
 
 function safeSource(source: { url: string; sourceFingerprint: string } | null, binding: MediaSourceBinding): boolean {
@@ -52,7 +52,7 @@ function safeSource(source: { url: string; sourceFingerprint: string } | null, b
 }
 
 /** Current database scope always qualifies each read. Live Notion remains the default. */
-export async function thumbnailMediaResponse(assetId: string, width: ThumbnailWidth, ports: ThumbnailMediaPorts): Promise<Response> {
+export async function thumbnailMediaResponse<Original = Response>(assetId: string, width: ThumbnailWidth, ports: ThumbnailMediaPorts<Original>): Promise<Response | Original> {
   const missing = () => new Response(null, { status: 404, headers });
   if (!/^a1\.[a-f0-9]{64}$/.test(assetId)) return missing();
   if (![400, 800, 1600].includes(width)) throw new ContentServiceError("INVALID_QUERY", "Thumbnail size is invalid.");
