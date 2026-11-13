@@ -140,6 +140,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.
     // Request cancellation is a website-reader change, never an admission of new
     // storage/thumbnail bytes into the frozen media-reuse producer transition.
+    // Bounded legacy website admission likewise does not extend frozen compatibility.
     const expected = pair.path === ".env.example"
       ? "cc29ee0ed623a1c29a6f86e7b52f890ff642f056d225a9c9be5d4d0ffa853a19"
       : pair.path === "scripts/dev-real.mjs"
@@ -153,11 +154,11 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/server/database/cos-config.ts"
         ? "75314feb52e05f2fa6606698e38c9e9abf51cc2ecc12267e71b80e83cb9b866f"
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
-        ? "3a3a4c7b5b31176dfc2c68cc9721fbbd0b4e5dc0d9fa4314110c1a158d267e8b"
+        ? "bd5c755850f3c3e4122cc93df4b5b224d9aeec7c13ef81f095a3c26a37961d8c"
       : pair.path === "src/server/database/runtime.ts"
         ? "84ddbb8f5ec6ac71bb74e58c6b9103bf7633d88edd65dd4b9c6342335ce3f916"
       : pair.path === "src/server/media/thumbnail.ts"
-        ? "a098022ed0a6f32473225330b1ffa265c8191c30373c9723af995504faae13c0"
+        ? "cf5aea5e9c4ebfc20a8474ea72a92e39704cb4c5ba854dedbbfc62ee6701d995"
         : null;
     if(expected) {
       assert.equal(current,expected,pair.path);
