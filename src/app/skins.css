@@ -187,6 +187,8 @@
 @media (max-width: 540px) { [data-skin="island"] .site-header__tools { gap: 6px; } }
 @media (max-width: 329px) { [data-skin="island"] .site-header__tools .icon-button { width: 36px; height: 36px; } }
 /* The current section is picked out like a selection on the island phone: a yellow pill on a ledge. */
+/* Round on every section, not only the current one: the yellow fades out of the section just left, and with square corners it showed as a box behind the word (2026-11-13). */
+[data-skin="island"] :is(.site-nav__list > li > a, .site-nav__more > button) { border-radius: 999px; }
 [data-skin="island"] :is(.site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current) { background: var(--island-pick); color: var(--island-pick-ink); border-radius: 999px; font-weight: 800; box-shadow: 0 3px 0 var(--island-pick-edge); }
 [data-skin="island"] .site-nav__menu a[aria-current="page"] { color: var(--ink); background: var(--marker); }
 /* Chunky buttons that press down onto their ledge. */

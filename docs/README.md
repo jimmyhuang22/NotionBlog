@@ -7,6 +7,7 @@
 | 目标 | 文档 |
 | --- | --- |
 | 刚接手、不知道从哪读 | [入口说明](START_HERE.md) |
+| 正式发布目标、现役交接与回退边界 | [生产部署与交接](PRODUCTION_DEPLOYMENT.md) |
 | 了解范围与协作方式 | [项目需求](REQUIREMENTS.md)、[开发约定](../AGENTS.md) |
 | 本机开发、离线构建、有限真实联调 | [开发隔离](DEVELOPMENT_ISOLATION.md) |
 | 配置 Notion 来源与字段 | [Notion 接入](NOTION_SETUP.md)、[内容能力](WEBSITE_CAPABILITIES.md) |

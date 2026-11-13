@@ -1,14 +1,14 @@
 # 开发接手说明
 
-最后更新：2026-10-13（2026-10-26 修正仓库与检查现状）。后续开发集中到 Mac mini；GitHub 仓库保存公共源码、测试与文档（干净新仓库 2026-10-23 起公开），设备私有背景和输入单独迁移。当前事实与读法先看[入口说明](START_HERE.md)；本文件是新开发环境的入口；当前上线与重构接线顺序先读 [重构上线准备](REFACTOR_ROLLOUT.md)。
+最后更新：2026-11-13（生产部署入口统一；较早能力清单保留历史语境）。后续开发集中到 Mac mini；GitHub 仓库保存公共源码、测试与文档（干净新仓库 2026-10-23 起公开），设备私有背景和输入单独迁移。当前事实与读法先看[入口说明](START_HERE.md)；本文件是新开发环境的入口；当前上线与重构接线顺序先读 [重构上线准备](REFACTOR_ROLLOUT.md)。
 
 ## 开始顺序
 
-先读 `AGENTS.md`、`README.md`、`docs/REQUIREMENTS.md`、`docs/decisions/` 与 `docs/progress/` 下的记录，以及存档 `docs/DECISIONS.md`、`docs/PROGRESS.md`；若存在，继续读 `.local/DEVELOPMENT_TRANSFER.md` 和 `.local/PROJECT_MEMORY.md`。进度记录是历史记录，新状态按最新交接及实际证据核对，不把旧的“未配置”当作当前阻塞。
+先读 `AGENTS.md` 和 `docs/START_HERE.md`，再按任务检索；部署先读 [生产部署与交接](PRODUCTION_DEPLOYMENT.md)。若存在，读 `.local/PROJECT_MEMORY.md` 开头的当前要求和最新私人部署交接。不要通读存档或把历史 AWS 交接当成当前部署指令。进度记录是历史记录，新状态按最新交接及实际证据核对，不把旧的“未配置”当作当前阻塞。
 
 在目标工程目录先检查本地改动、当前分支和远端。已有 worker 分支可能与主线分叉，不能用旧补丁覆盖新代码。保存本机未推送提交与改动后再合并，冲突保留双方已完成工作。
 
-遵守最新 `AGENTS.md` 的分支约定：`develop` 是日常集成分支，`main` 是线上分支。每项工作从最新 develop 建短期分支，提交与合并请求使用英文；按改动影响完成本机验证、无冲突、PR 正文写明受检提交／验证方式／限制并核对实际差异后自行合并 develop，不等待平台 CI。当前 Mac mini 运行器已退役，私人 PR 的平台应用检查跳过，`SKIPPED` 不算通过，没有两小时集中检查；恢复另行约定，已知代码、协议或构建失败仍须先解决，详见[本机验证合并决定](decisions/2026-10-22-develop-merge-local-verification.md)。不为无关 develop 更新反复同步与重跑；冲突、同一逻辑或依赖／契约／配置／迁移／检查环境变化时先整合验证。纯说明／记录文档做记录格式、相关链接、差异和隐私检查，应用或构建输入改变集中 check／build。发布到 main 仍检查当前完整集成版本并通过平台 CI，只由用户合并或按单次明确委托执行。
+遵守最新 `AGENTS.md` 的分支约定：`develop` 是日常集成分支，`main` 是线上分支。每项工作从最新 develop 建短期分支，提交与合并请求使用英文；按改动影响完成本机验证、无冲突、PR 正文写明受检提交／验证方式／限制并核对实际差异后自行合并 develop，不等待平台 CI。Mac mini 私人运行器已退役，当前公共仓库使用 GitHub 托管 Ubuntu，`SKIPPED` 不算通过，不恢复私人运行器；已知代码、协议或构建失败仍须先解决，详见[本机验证合并决定](decisions/2026-10-22-develop-merge-local-verification.md)。不为无关 develop 更新反复同步与重跑；冲突、同一逻辑或依赖／契约／配置／迁移／检查环境变化时先整合验证。纯说明／记录文档做记录格式、相关链接、差异和隐私检查，应用或构建输入改变集中 check／build。发布到 main 仍检查当前完整集成版本并通过平台 CI，只由用户合并或按单次明确委托执行。
 
 合入 develop 前先核对是否有打开的 develop → main 发布请求。有的话暂缓合入，继续在独立工作分支开发、验证和推送；等发布合并后恢复，避免发布检查因 develop 的新变化重排。用户另行明确解除暂停时按其指令执行，见 [发布窗口决定](decisions/2026-10-13-develop-hold-during-release.md)。
 
@@ -37,7 +37,11 @@ Vercel 的 `vercel.json` 同样安装根工程和游戏模块独立依赖。Next
 
 提交作者与邮箱由用户指定，仅在当前仓库配置；具体值见私有接手说明。不要复制另一台设备的 `node_modules`、`.next`、`.git`、认证缓存或工具配置来代替安装／登录。代码从 GitHub 获取；已有本地历史单独保留。
 
-## 当前实现与下一项
+## 当前生产交接
+
+新加坡 Oracle 是默认生产目标，AWS 保留但不再更新、不删除。正式源码与已安装程序分别核对；旧受保护测试站不是正式站。新加坡的数据库页面 legacy、媒体 display-only/private-disk 与 AWS 双 legacy 不同，私人采集／游戏运行根也不随网站更新。具体步骤统一见 [生产部署与交接](PRODUCTION_DEPLOYMENT.md)。
+
+## 较早实现与下一项清单（历史）
 
 | 部分 | 已完成 | 待完成 |
 | --- | --- | --- |
@@ -49,11 +53,11 @@ Vercel 的 `vercel.json` 同样安装根工程和游戏模块独立依赖。Next
 | 社交采集 | 独立 SQLite/outbox、受限云接入、有界周期与 Mac 启动器；retained 正式展示与采样标签已验收 | 自然刷新监测，按既定审核规则接纳新作品／成员 |
 | 媒体与运行 | 既有原件与小图可复用；正式站真实读库，网站／游戏调度由 Dagu 管理 | 新独立原件／变体覆盖、切换回滚与国内／海外网络；不重复下载或重压已有资产 |
 
-正式站已读真实数据库，仍使用 qualified 内容批次和混合图片；社交已显式启用 retained 展示。已授权全部课程与自动拥有后代，不等于当前运行来源和线上批次已完成扩大。搬迁、Git 合并与安装代码均不自动改变公开范围或运行模式。
+上述清单形成时正式站使用 qualified 内容批次和混合图片；当前新加坡已采用 published 与本地展示媒体，社交已显式启用 retained 展示。已授权全部课程与自动拥有后代，不等于当前运行来源和线上批次已完成扩大。搬迁、Git 合并与安装代码均不自动改变公开范围或运行模式。
 
 ## 同步程序与当前运行
 
-`scripts/notion-sync/` 保留冻结 v1；当前网站完整 v2 同步在 `scripts/website-sync/`，新的 `scripts/website-incremental-sync/` 提供 initialize/recover/run/status，尚未替换旧运行入口。`scripts/game-sync/` 从游戏平台读取账户数据，再用独立 Notion writer 维护平台记录；`scripts/social-sync/` 独立采样并上传已审核作品投影。网站 reader、Notion 只读 Token、游戏 writer、内容 writer 和社交身份用途独立。
+`scripts/notion-sync/` 保留冻结 v1；当前网站完整 v2 同步在 `scripts/website-sync/`，`scripts/website-incremental-sync/` 提供 initialize/recover/run/status；新加坡已安装独立增量运行程序，不能依据本节早期准备记录重装或恢复旧调度。`scripts/game-sync/` 从游戏平台读取账户数据，再用独立 Notion writer 维护平台记录；`scripts/social-sync/` 独立采样并上传已审核作品投影。网站 reader、Notion 只读 Token、游戏 writer、内容 writer 和社交身份用途独立。
 
 内容 worker 的固定协议与验证命令：
 
