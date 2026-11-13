@@ -12,7 +12,7 @@
 
 ## 现役源码与运行适配
 
-2026-11-13 部署 #336（main `852d1262d39d94ffbedd7a850d097eebe07b0071`）后，现役源码已更新；原 #329 release 保留用于代码回退，详见[部署记录](progress/2026-11-13-oracle-release-336.md)。现役继续保留下述 profile 适配。
+2026-11-13 按当次双站授权，先新加坡、后上海部署 #341（main `cdae23b370bbc77e9a397b2a00476bbcbfea5d7b`）；两站各保留 #336 作为代码回退。上海一次自然内容交付后仍运行 #341。HTTP 验收通过，视觉抽查及未完整覆盖的项目见[双站部署记录](progress/2026-11-13-release-341-dual-site.md)。两站使用同一源码、各自架构的产物，BUILD_ID 不同；现役继续保留下述 profile 适配。
 
 此前 #329 基线：main `5ee3e51d1872f72ec0706d288cecb71fc05b3983` 与受检 develop `c2c14bb320687bd631887ddc2fd3cb3519a9bb60` 同树。新加坡现役的 2397 个受版本控制文件中，2396 个与该树一致，仅 `scripts/self-hosted/profile.cjs` 保留原有运行适配；构建标识与实际路径以最新私人交接和只读核对为准。
 
