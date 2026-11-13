@@ -1,6 +1,6 @@
 import { loadAccessConfig, previewAccessAllowed } from "./access-jwt.ts";
 import { createServer } from 'node:http';
-import next from 'next';
+import { createSelfHostedNextApp } from './next-app.mjs';
 import context from './context.cjs';
 import { verifySelfHostedReaders } from './reader.ts';
 import { drainSelfHostedServer } from './lifecycle.mjs';
@@ -13,7 +13,7 @@ try {
   const access = loadAccessConfig(process.env);
   await verifySelfHostedReaders(process.env);
   await selfHostedDisplayStore()?.verifyRoot();
-  app = next({ dev: false, dir: process.cwd(), hostname: process.env.HOSTNAME, port: Number(process.env.PORT) });
+  app = createSelfHostedNextApp({ dir: process.cwd(), port: Number(process.env.PORT) });
   await app.prepare();
   const handle = app.getRequestHandler();
   const warmup = await warmSelfHostedHome(handle, process.env);
