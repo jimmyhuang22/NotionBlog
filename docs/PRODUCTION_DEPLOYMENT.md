@@ -16,7 +16,7 @@
 
 此前 #329 基线：main `5ee3e51d1872f72ec0706d288cecb71fc05b3983` 与受检 develop `c2c14bb320687bd631887ddc2fd3cb3519a9bb60` 同树。新加坡现役的 2397 个受版本控制文件中，2396 个与该树一致，仅 `scripts/self-hosted/profile.cjs` 保留原有运行适配；构建标识与实际路径以最新私人交接和只读核对为准。
 
-该适配只在现有 public-website、published、private-disk/display-only 等受限组合下放行读取。它尚未并入 main，不能宣称现役产物与 main 逐字相同，也不能直接用纯 main 文件覆盖。后续应独立审查、测试并纳入源码；本文不实施此修复或授权配置变更。
+该适配只在现有 public-website、published、private-disk/display-only 等受限组合下放行读取。[源码收敛工作](progress/2026-11-14-published-private-profile.md)已提供显式 scoped 读取、legacy 数据库页面的受限支持，但尚未发布到 main 或安装到主机。不能宣称现役产物与 main 逐字相同，也不能直接用旧 main 文件覆盖。下一次获准发布先确认目标源码包含该支持，核对最新现役补丁差异及配置兼容，再替换为正式源码；不能从本段推断线上已经更新。
 
 ## 下一次获准发布的顺序
 
@@ -57,7 +57,7 @@
 
 两站可在资源和当次授权允许时并行准备产物，切换保持先新加坡验收、再上海。只传必要源码差异和依赖补充，不为省时间修改现役依赖或跨架构整包复制。预检失败不自动放宽权限或扩容；失败回退及停止按当次批准执行，不回滚内容数据。
 
-待核对的后续工程方案见 [profile 与应用版本选择优化](DEPLOYMENT_OPTIMIZATION_PROPOSAL.md)。该稿不表示已经改代码、安装接收器或获得线上授权。
+后续工程方案与分项状态见 [profile 与应用版本选择优化](DEPLOYMENT_OPTIMIZATION_PROPOSAL.md)。profile 只获准本机源码工作；上海应用选择仍待批准，未安装接收器，也没有线上授权。
 
 ## 构建与切换前预检
 
