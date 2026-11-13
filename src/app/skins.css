@@ -386,3 +386,30 @@
 [data-skin="y2k"] body:has(.reading__toc, .reading__side) { --bubble-y: 26px; --bubble-r: 40px; --bubble-x: calc(100% - 40px); }
 /* Y2K has only a light scheme, so its moon is faint (S-6); pressing it still says so. */
 [data-skin="y2k"] .scheme-toggle .icon-button > span { opacity: 0.4; }
+
+/*
+ * Ink, held back (the owner's pick from a side-by-side, 2026-11-13). The hand-drawn stroke is the skin's
+ * signature, so it stays only under the header's current section and the owner's name: the link to all
+ * updates, links in running text and the line under a coloured heading are straight. And only what goes down
+ * under a press keeps a lifted shadow (cards, round buttons); covers and the chosen segment of a filter lie
+ * flat on the paper with a hairline, and covers still lift under the pointer. Tags and platform chips keep
+ * their colours (the owner, same day).
+ */
+:root:not([data-skin]) { --edge: 0 0 0 1px color-mix(in srgb, var(--ink) 13%, transparent); }
+:root:not([data-skin]) .timeline__head a { text-decoration: none; }
+:root:not([data-skin]) .timeline__head a::after { content: " →"; }
+/* "最新动态" stands a line under the name on the home page: the word in the accent is enough. */
+:root:not([data-skin]) .entry__latest { padding-bottom: 0; }
+:root:not([data-skin]) .entry__latest::after { content: none; }
+:root:not([data-skin]) .rt-link { text-decoration: underline 1px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 4px; }
+:root:not([data-skin]) .entry__more:hover { text-decoration: underline 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+:root:not([data-skin]) .prose__h:has(.rt-warning)::before { bottom: -5px; width: min(2.4em, 100%); height: 2px; border-radius: 999px; opacity: 0.75; -webkit-mask: none; mask: none; }
+:root:not([data-skin]) :is(.cover, .album-card__cover, .works-card__frame, .bili-card__frame) { box-shadow: var(--edge); }
+:root:not([data-skin]) :is(.cover--empty, .album-card__cover.album-card__cover--empty) { box-shadow: var(--edge), inset 3px 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+:root:not([data-skin]) :is(.library__item:hover .cover, .album-card:hover .album-card__cover, a.works-card:hover .works-card__frame) { box-shadow: var(--shadow-lift); }
+:root:not([data-skin]) :is(.library__item:hover .cover--empty, .album-card:hover .album-card__cover.album-card__cover--empty) { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent); }
+:root:not([data-skin]) :is(.segmented :is(a[aria-current], button[aria-pressed="true"]), .segmented__pill, .works__pill, .study-views__pill) { box-shadow: var(--edge); }
+:root:not([data-skin]) .segmented--slide[data-pill] > a[aria-current] { box-shadow: none; }
+/* A cover still on its way keeps no edge, as before (library.css). */
+:root:not([data-skin]) .cover--waiting + .cover { box-shadow: none; }
+:root:not([data-skin]) :is(.cover-slot > .cover--empty.cover--waiting, .library__item:hover .cover-slot > .cover--empty.cover--waiting) { box-shadow: none; }
