@@ -19,6 +19,8 @@ import { themeScript } from "@/lib/skins";
 import { discoveryOptions } from "@/lib/seo/discovery";
 import { siteMetadata } from "@/lib/seo/metadata";
 import { publicCacheEnabled } from "@/server/public-cache/policy";
+import { visitorAnalyticsConfig } from "@/server/analytics/config";
+import { VisitorAnalytics } from "@/components/visitor-analytics";
 import "./globals.css";
 import "./timeline.css";
 import "./prose.css";
@@ -108,6 +110,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </footer>
         <BackToTop />
+        {visitorAnalyticsConfig() ? <VisitorAnalytics /> : null}
       </body>
     </html>
   );
