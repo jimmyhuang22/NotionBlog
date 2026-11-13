@@ -12,6 +12,22 @@ function profile(extra = {}) {
   return { version: 1, environment: { DATABASE_READER_URL: 'postgresql://nb_website_reader:fixture@localhost:5432/example',
     DATABASE_CA_CERT: certificate, SITE_URL: 'http://localhost:3100', ...extra } };
 }
+test('analytics is accepted only in the public profile and malformed configuration fails without echoing secrets', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'analytics-profile-')), path = join(root, 'reader.json');
+  const analytics = JSON.stringify({ websiteId: '11111111-1111-4111-8111-111111111111', hostname: 'site.example.invalid',
+    origins: ['https://site.example.invalid'], node: 'region-a', endpoint: 'http://127.0.0.1:3106/collect',
+    secret: 'a'.repeat(64), clientIpHeader: 'x-real-ip' });
+  try {
+    const value = { ...profile({ SITE_URL: 'https://site.example.invalid', SITE_ANALYTICS_JSON: analytics }), deployment: 'public-website' };
+    await writeFile(path, JSON.stringify(value), { mode: 0o600 });
+    assert.equal(files.readProfile(path).SITE_ANALYTICS_JSON, analytics);
+    await writeFile(path, JSON.stringify(profile({ SITE_ANALYTICS_JSON: analytics })), { mode: 0o600 });
+    assert.throws(() => files.readProfile(path), { message: 'SELF_HOSTED_PROFILE_INVALID' });
+    await writeFile(path, JSON.stringify({ ...value, environment: { ...value.environment, SITE_ANALYTICS_JSON: '{private-invalid-input' } }), { mode: 0o600 });
+    assert.throws(() => files.readProfile(path), { message: 'SELF_HOSTED_PROFILE_INVALID' });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('self-hosted profile accepts only protected reader configuration and fixes indexing/cache/media defaults', async () => {
   const root = await mkdtemp(join(tmpdir(), 'host-profile-')), path = join(root, 'reader.json');
   try {
