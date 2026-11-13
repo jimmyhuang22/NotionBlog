@@ -45,7 +45,9 @@ npm run build:self-hosted
 
 参考[配置示例](../config/self-hosted.example.json)，把真实 JSON 保存到代码之外或忽略的 `.local` 中。文件须为当前用户所有、权限0600、普通文件且只有一份硬链接；不接受符号链接。数据库 URL 不能附带覆盖 TLS 的查询参数；CA 为 PEM 字符串，必须匹配服务器证书和实际主机名。
 
-仓库通用配置校验仍以 database v2、qualified 发布读取和 configured 连接为初始默认。新加坡现役额外保留严格限定 published/private-disk/display-only 的 profile 适配，尚未纳入 main；更新前必须核对该差异和兼容性，不能用纯 main 文件直接覆盖。网站 LOGIN 为 nb_website_reader，继承冻结的 nb_reader，不能有额外角色、私表或写入权限。社交可选，使用独立 nb_social_reader，沿用其严格身份检查。启动先完成有时限的身份/权限核验，失败不监听网站，也不回退 mock。
+仓库通用配置校验仍以 database v2、qualified 发布读取和 configured 连接为初始默认。源码另支持严格限定的 published 组合：必须是 public-website、数据库 v2、scoped 读取、legacy 数据库页面、storage/display-only 媒体、原图与缩略图均 private-disk、SELF_HOSTED_MEDIA_MODE 和共享内容缓存均 disabled。published 不支持 compact 页面、legacy 读取投影或云端媒体；已有 qualified 配置行为不变。仍须提供受保护的 PRIVATE_MEDIA_ROOT，启用社交媒体时也必须使用独立校验的 private-disk 目录；统计配置继续按原规则校验。
+
+这项源码适配尚未发布到 main 或安装到主机，现役仍保留旧补丁；下一次获准发布须核对候选源码包含本项及现役实际差异，再使用正式源码替代补丁，不能因为开发分支支持就直接覆盖旧 main。实施与验证见[进度](progress/2026-11-14-published-private-profile.md)。网站 LOGIN 为 nb_website_reader，继承冻结的 nb_reader，不能有额外角色、私表或写入权限。社交可选，使用独立 nb_social_reader，沿用其严格身份检查。profile 接受配置不授予内容公开资格；启动仍先完成有时限的身份/权限核验，失败不监听网站，也不回退 mock。
 
 作品首屏共同读取的 `DATABASE_LIBRARY_PAGE` 默认 `legacy`，保留原列表、年份读取与缓存。受保护配置允许显式设置 `compact`，但须同时使用 `DATABASE_READ_PROJECTION=scoped`，并先安装及登记独立的 `database/library-page-protocol.json` 协议。白名单支持不代表已安装协议或已启用；本项默认关闭，云端验收和启用仍需另行授权。
 
