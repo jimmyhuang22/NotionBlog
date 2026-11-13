@@ -1,3 +1,4 @@
+import { diagnosticError, diagnosticRef, logCollectionDiagnostic } from "./failure-diagnostics.ts";
 import { canonicalJson, configDigest, validateWebsiteRecord } from "../../src/server/database/website-validation.ts";
 import { normalizeId } from "../../src/server/notion/config.ts";
 import { validateStudyCheckpoint, type StudyCheckpoint, type StudyChangeSource, type StudyEntry, type StudyObservation } from "../../src/server/notion/study-incremental.ts";
@@ -144,6 +145,8 @@ export async function runStudyChildDiscovery(options: StudyChildDiscoveryOptions
       let current: StudyObservation | undefined, unavailable = false;
       try { current = await bounded(() => source.read(pageKey, { document: false, children: true }), signal); }
       catch (error) {
+        logCollectionDiagnostic("study-child-discovery", { sourceRef: diagnosticRef(options.sourceKey), pageRef: diagnosticRef(pageKey),
+          stage: "read-parent", ...diagnosticError(error), deadlineExpired: expired, parentCancelled: options.signal?.aborted ?? false });
         signal.throwIfAborted();
         if (error instanceof StudyDiscoveryError || error instanceof IncrementalQueueError) throw error;
         if ((error as { code?: string } | null)?.code === "MISCONFIGURED") fail("STUDY_DISCOVERY_SOURCE_UNSUPPORTED");
@@ -192,6 +195,9 @@ export async function runStudyChildDiscovery(options: StudyChildDiscoveryOptions
   } catch (error) {
     const code = error instanceof StudyDiscoveryError || error instanceof IncrementalQueueError ? error.code : "STUDY_DISCOVERY_UNAVAILABLE";
     result.errorCode = expired ? "STUDY_DISCOVERY_DEADLINE" : signal.aborted ? "STUDY_DISCOVERY_CANCELLED" : code;
+    logCollectionDiagnostic("study-child-discovery", { sourceRef: diagnosticRef(options.sourceKey), stage: "scan",
+      parents: result.parents, hints: result.hints, unavailable: result.unavailable, discoveryCode: result.errorCode,
+      deadlineExpired: expired, parentCancelled: options.signal?.aborted ?? false, ...diagnosticError(error) });
     result.outcome = signal.aborted ? expired ? "retry" : "cancelled" :
       ["STUDY_DISCOVERY_SCOPE_CHANGED", "STUDY_DISCOVERY_SOURCE_UNSUPPORTED", "STUDY_DISCOVERY_RESPONSE_INVALID", "STUDY_DISCOVERY_CURSOR_INVALID",
         "STUDY_DISCOVERY_CHILD_LIMIT", "STUDY_DISCOVERY_CLOCK_INVALID", "STUDY_DISCOVERY_LIMIT_INVALID", "QUEUE_SCOPE_MISMATCH", "QUEUE_SCHEMA_MISMATCH"].includes(code) ? "needs_review" : "retry";
