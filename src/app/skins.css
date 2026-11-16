@@ -410,6 +410,19 @@
 :root:not([data-skin]) :is(.library__item:hover .cover--empty, .album-card:hover .album-card__cover.album-card__cover--empty) { box-shadow: var(--shadow-lift), inset 3px 0 0 var(--accent); }
 :root:not([data-skin]) :is(.segmented :is(a[aria-current], button[aria-pressed="true"]), .segmented__pill, .works__pill, .study-views__pill) { box-shadow: var(--edge); }
 :root:not([data-skin]) .segmented--slide[data-pill] > a[aria-current] { box-shadow: none; }
+/*
+ * Second round (the owner's picks, 2026-11-16). On the shelves the status stays a pill and the years under it are
+ * plain words, the chosen one in ink over a short line, so the two filters no longer weigh the same; the sliding
+ * block keeps moving at the press, only drawn as that line. The sort beside them loses its grey ground. The feed
+ * (status-filters) keeps its pill. In a course directory only assignments keep their mark; the other marks keep
+ * their place, so the titles stay in one column.
+ */
+:root:not([data-skin]) .library__filters:not(.status-filters) .segmented--scroll { gap: 0; padding: 4px 0; background: none; }
+:root:not([data-skin]) .library__filters:not(.status-filters) .segmented--scroll > a { padding: 0 14px; }
+:root:not([data-skin]) .library__filters:not(.status-filters) .segmented--scroll > a[aria-current] { background: none; box-shadow: none; }
+:root:not([data-skin]) .library__filters:not(.status-filters) .segmented--scroll .segmented__pill { border-radius: 0; background: linear-gradient(var(--accent), var(--accent)) center bottom 6px / calc(100% - 28px) 2px no-repeat; box-shadow: none; }
+:root:not([data-skin]) .library__filters .library__sort a { background: none; }
+:root:not([data-skin]) .tree__icon:not(.study-type--assignment, .study-type--efolio) { visibility: hidden; }
 /* A cover still on its way keeps no edge, as before (library.css). */
 :root:not([data-skin]) .cover--waiting + .cover { box-shadow: none; }
 :root:not([data-skin]) :is(.cover-slot > .cover--empty.cover--waiting, .library__item:hover .cover-slot > .cover--empty.cover--waiting) { box-shadow: none; }
