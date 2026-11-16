@@ -62,11 +62,13 @@ test('the real self-hosted build launcher excludes inherited/dotenv secrets and 
     await writeFile(join(dir, '.env.production.local'), 'CONTENT_PROVIDER=database\nDATABASE_READER_URL=fixture\nUNRELATED_SECRET=fixture\n');
     await writeFile(join(dir, 'node_modules/next/dist/bin/next'), `const fs=require('node:fs');for(const[k,v]of Object.entries(require('node:util').parseEnv(fs.readFileSync('.env.production.local','utf8'))))if(!Object.hasOwn(process.env,k))process.env[k]=v;let blocked=false;try{require('node:net').connect(5432,'fixture.invalid')}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}const code="let blocked=false;try{require('node:net').connect(443,'fixture.invalid')}catch(e){blocked=e.code==='OFFLINE_NETWORK_BLOCKED'}console.log(JSON.stringify({blocked}))";const child=require('node:child_process').spawnSync(process.execPath,['-e',code],{encoding:'utf8'});console.log(JSON.stringify({provider:process.env.CONTENT_PROVIDER,secret:!!process.env.UNRELATED_SECRET||!!process.env.DATABASE_READER_URL,blocked,descendant:JSON.parse(child.stdout).blocked}));`);
     const launcher = fileURLToPath(new URL('../scripts/self-hosted/build.mjs', import.meta.url));
-    const result = await execute(process.execPath, [launcher], { cwd: dir, env: environment({ CONTENT_PROVIDER: 'database',
-      DATABASE_READER_URL: 'fixture', UNRELATED_SECRET: 'fixture', NB_SELF_HOST_PROFILE: 'must-not-open' }) });
-    assert.deepEqual(JSON.parse(result.stdout.split('\n').find(line => line.startsWith('{'))!),
-      { provider: 'mock', secret: false, blocked: true, descendant: true });
-    files.verifyBuild(dir);
+    for (const publicWebsite of [false, true]) {
+      const result = await execute(process.execPath, [launcher, ...(publicWebsite ? ['--public-website'] : [])], { cwd: dir, env: environment({ CONTENT_PROVIDER: 'database',
+        DATABASE_READER_URL: 'fixture', UNRELATED_SECRET: 'fixture', NB_SELF_HOST_PROFILE: 'must-not-open' }) });
+      assert.deepEqual(JSON.parse(result.stdout.split('\n').find(line => line.startsWith('{'))!),
+        { provider: 'mock', secret: false, blocked: true, descendant: true });
+      files.verifyBuild(dir, publicWebsite);
+    }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 test('Preview and CI reject the self-hosted bootstrap before opening a profile; incompatible artifacts reject startup', async () => {

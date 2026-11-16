@@ -50,6 +50,16 @@ const defaults = Object.freeze({
 });
 function fail() { throw Error('SELF_HOSTED_PROFILE_INVALID'); }
 function record(value) { return value && typeof value === 'object' && !Array.isArray(value); }
+// This runtime combination still passes every identity, TLS, storage and access
+// check below. It does not grant publication rights or enable a writer.
+function publishedPrivateDisk(env, publicWebsite) {
+  return publicWebsite && env.DATABASE_CONTENT_VERSION === '2' &&
+    env.DATABASE_PUBLICATION_MODE === 'published' && env.DATABASE_READ_PROJECTION === 'scoped' &&
+    env.DATABASE_LIBRARY_PAGE === 'legacy' && env.MEDIA_PROVIDER === 'storage' &&
+    env.MEDIA_DELIVERY_MODE === 'display-only' && env.STORAGE_PROVIDER === 'private-disk' &&
+    env.THUMBNAIL_STORAGE_PROVIDER === 'private-disk' && env.SELF_HOSTED_MEDIA_MODE === 'disabled' &&
+    env.PUBLIC_CONTENT_CACHE === 'disabled';
+}
 function readerLogin(url, username, publicWebsite = false) {
   const value = new URL(url), login = decodeURIComponent(value.username);
   const parts = login.split('.');
@@ -91,7 +101,8 @@ function loadProfile(filename, localOnly) {
   } : {}), ...raw.environment };
   if (publicWebsite) env.SELF_HOSTED_DEPLOYMENT = 'public-website';
   if (env.SITE_ANALYTICS_JSON) require('../../src/server/analytics/config.ts').parseVisitorAnalyticsConfig(env.SITE_ANALYTICS_JSON);
-  if (env.DATABASE_CONTENT_VERSION !== '2' || env.DATABASE_PUBLICATION_MODE !== 'qualified' ||
+  if (env.DATABASE_CONTENT_VERSION !== '2' ||
+      (env.DATABASE_PUBLICATION_MODE !== 'qualified' && !publishedPrivateDisk(env, publicWebsite)) ||
       !['legacy', 'compact'].includes(env.DATABASE_LIBRARY_PAGE) ||
       env.DATABASE_LIBRARY_PAGE === 'compact' && env.DATABASE_READ_PROJECTION !== 'scoped' ||
       !['legacy', 'scoped'].includes(env.DATABASE_READ_PROJECTION) || !['disabled', 'database'].includes(env.SOCIAL_PROVIDER) ||
