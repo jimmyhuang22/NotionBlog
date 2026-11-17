@@ -24,7 +24,7 @@ git merge --ff-only origin/develop
 
 不能快进时先核对分叉内容并保留本机历史，完成普通合并和验证；不为拉取主线清除工作目录或丢弃私人文件。整合后的主线已包含原 worker 和来源范围修正，已有相同修正不重复应用历史交接补丁。
 
-Node 24 为推荐基线，根工程支持 >=24 <27。安装锁定依赖，再做检查：
+根工程应用支持 >=24 <27，但完整 check/test 的私有运行包门禁固定 Node 24，本机离线 build 也使用同一版本。先选择独立 Node 24，再安装锁定依赖并检查：
 
 ```sh
 npm ci
@@ -32,6 +32,15 @@ npm ci --prefix scripts/game-sync --ignore-scripts
 git config core.hooksPath .githooks
 npm run check
 ```
+
+若全局 Node 是其他版本，可仅为本次命令指定已有的独立 Node 24，启动器会把它用于直接子进程及 PATH 后代，不更改全局 Node 或业务任务：
+
+```sh
+NOTIONBLOG_CHECK_NODE=/absolute/path/to/node24/bin/node npm run check
+NOTIONBLOG_CHECK_NODE=/absolute/path/to/node24/bin/node npm run build
+```
+
+此路径由开发者显式提供，不自动下载或安装运行时。check/test 开始前验证 Node 24、复制后可独立启动，以及当前目录是拥有必要跟踪文件的 Git checkout/worktree 根。复制源码但遗漏 Git 索引的目录不能代替工作树；Homebrew 可执行文件可能依赖相邻动态库，也不能仅复制该文件用作私有运行包。预检失败应修正环境，不放宽运行门禁。正式平台 build/start 的环境与运行时选择保持原逻辑。
 
 Vercel 的 `vercel.json` 同样安装根工程和游戏模块独立依赖。Next.js 的类型检查覆盖这些 CLI 源码；仅运行根目录 `npm ci` 会缺少 `psn-api`。此配置只调整安装步骤，游戏程序仍单独运行。
 
