@@ -3,9 +3,20 @@ import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cleanEnvironment, platformProduction } from './clean-environment.mjs';
 import { configureDevelopmentEnvironment } from './environment.ts';
+import { prepareCheckRuntime } from './check-runtime.ts';
 
 const [task, ...args] = process.argv.slice(2);
-const node = process.execPath;
+if (!['test', 'check', 'build', 'start'].includes(task) || (task === 'check' && args.length)) throw new Error('Unsupported isolated task.');
+const production = ['build', 'start'].includes(task) && platformProduction(process.env);
+const env = production ? { ...process.env } : cleanEnvironment();
+if (!production) {
+  env.NOTIONBLOG_DEVELOPMENT_MODE = 'offline';
+  env.NODE_OPTIONS = `--require=${JSON.stringify(fileURLToPath(new URL('./offline-network.cjs', import.meta.url)))}`;
+  configureDevelopmentEnvironment(env);
+}
+const node = !production && task !== 'start'
+  ? prepareCheckRuntime(task, env, process.env.NOTIONBLOG_CHECK_NODE || process.execPath)
+  : process.execPath;
 const script = name => [node, [name]];
 const tests = ['test','check'].includes(task) ? readdirSync('tests').filter(name => name.endsWith('.test.ts')).sort().map(name => `tests/${name}`) : [];
 const typecheck = script('node_modules/typescript/bin/tsc'); typecheck[1].push('--noEmit');
@@ -19,17 +30,9 @@ const tasks = {
   build: [[node, ['node_modules/next/dist/bin/next', 'build', ...args]], script('scripts/check-build-privacy.mjs')],
   start: [[node, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', ...args]]],
 };
-if (!Object.hasOwn(tasks, task) || (task === 'check' && args.length)) throw new Error('Unsupported isolated task.');
-const production = ['build', 'start'].includes(task) && platformProduction(process.env);
 // Exercise the built app's actual middleware/custom-server path, only with
 // the isolated demo profile. Never start a production reader for a build test.
 if (task === 'build' && !production) tasks.build.push([node, ['--test', 'tests/self-hosted-rewrite.integration.mjs']]);
-const env = production ? { ...process.env } : cleanEnvironment();
-if (!production) {
-  env.NOTIONBLOG_DEVELOPMENT_MODE = 'offline';
-  env.NODE_OPTIONS = `--require=${JSON.stringify(fileURLToPath(new URL('./offline-network.cjs', import.meta.url)))}`;
-  configureDevelopmentEnvironment(env);
-}
 console.log(production ? 'Platform production configuration retained.' : 'Isolated task: local fixtures, PGlite and local media; external Node connections blocked.');
 let child;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child?.kill(signal));

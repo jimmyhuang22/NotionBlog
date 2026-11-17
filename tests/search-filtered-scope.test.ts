@@ -287,18 +287,19 @@ test("filtered-scope avoids repeat eligibility only for statement-local study-no
       LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN
       PERFORM nextval('nb_read.scope_test_calls'); RETURN nb_read.scope_test_eligible(p_run,p_id); END $$;`);
     try {
+      for (const probes of [searchFilterPatterns("Java"), []])
       for (const mode of modes) for (const kinds of [["status"], ["course", "study-note"]]) {
         const counts: number[] = []; let expected: unknown;
         for (const fn of ["read_search_filtered", "read_search_filtered_scope"]) {
           await f.db.query("SELECT setval('nb_read.scope_test_calls',1,false)");
           const value = (await f.reader.query<{ result: { records: unknown[]; links: string[]; mediaIds: string[] } }>(
-            `SELECT nb_read_api.${fn}($1,$2,$3) AS result`, [mode, kinds, searchFilterPatterns("Java")])).rows[0].result;
+            `SELECT nb_read_api.${fn}($1,$2,$3) AS result`, [mode, kinds, probes])).rows[0].result;
           const count = (await f.db.query<{ count: string }>("SELECT last_value::text AS count FROM nb_read.scope_test_calls")).rows[0].count;
           counts.push(Number(count)); const normalized = { ...value, links: [...value.links].sort(), mediaIds: [...value.mediaIds].sort() };
           expected ??= normalized; assert.deepEqual(normalized, expected);
         }
-        if (kinds.includes("study-note")) assert(counts[1] < counts[0], "Known note eligibility should not be recomputed for its own href");
-        else assert.equal(counts[1], counts[0], "Flat search keeps its original projection");
+        if (probes.length && kinds.includes("study-note")) assert(counts[1] < counts[0], "Known note eligibility should not be recomputed for its own href");
+        else assert.equal(counts[1], counts[0], "Flat search and empty-probe safety fallback keep their original projection");
       }
     } finally { await f.db.exec(original); }
   } finally { await f.db.close(); }
