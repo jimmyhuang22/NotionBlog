@@ -85,7 +85,7 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
 
 /**
  * A work standing alone on the home timeline, as one light line (the owner's choice, 2026-11-11): a small
- * picture in its platform's shape, then the title, what is new about it (a collection's added videos) as a
+ * square picture, as a game's (2026-11-18), then the title, what is new about it (a collection's added videos) as a
  * small mark beside the title, and one quiet line of where it lives, its kind and its figures. The status entries stay the timeline's main reading; this only says what was published. A further
  * platform of the same work gets its own short line under it with that platform's figures and address. The
  * picture comes after the words in the source, so the link reads its title first. The figures keep to the
