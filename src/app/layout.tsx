@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { contentFeatures } from "../../config/features.ts";
 import type { ContentKind } from "../../contracts/content.ts";
 import { BackToTop } from "@/components/back-to-top";
+import { ContactCard } from "@/components/contact-card";
 import { NavLinks, type NavItem } from "@/components/nav-links";
 import { penScript } from "@/lib/pen-once";
 import { SearchPalette } from "@/components/search-palette";
@@ -14,6 +15,7 @@ import { notionIconPath } from "@/components/social-icon-paths";
 import { getContentProvider } from "@/lib/content";
 import { isSocialEnabled } from "@/lib/content/social";
 import { getSiteConfig } from "@/lib/site";
+import { contactCode } from "@/lib/contact";
 import { inputModeScript } from "@/lib/input-mode";
 import { themeScript } from "@/lib/skins";
 import { discoveryOptions } from "@/lib/seo/discovery";
@@ -68,6 +70,7 @@ function hasFeed(): boolean {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const site = getSiteConfig();
+  const contact = contactCode(site.socials);
   const nav: NavItem[] = sections.filter(section => contentFeatures[section.kind]).map(({ href, label, more }) => ({ href, label, more }));
   // Works published elsewhere are a section of their own while the social source is on. It sits before the
   // library sections, which fold under "更多" once the row holds more than fits a phone.
@@ -97,6 +100,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <div className="wrap wrap--wide site-footer__inner">
             <span className="site-footer__name">{site.siteName}<PenStroke className="site-footer__stroke" /></span>
             <nav className="site-footer__links" aria-label="页脚">
+              {/* The same card as the profile's envelope, opened upwards; only when an email is configured. */}
+              {contact ? <ContactCard code={contact} place="above" label="联系我" className="site-footer__contact">联系我</ContactCard> : null}
               {hasFeed() ? <a href="/feed.xml">订阅</a> : null}
               {site.notionSiteUrl ? <a className="site-footer__notion" href={site.notionSiteUrl} target="_blank" rel="noopener noreferrer" aria-label="Notion 源站（新标签页打开）">
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d={notionIconPath} /></svg>

@@ -1,4 +1,6 @@
 import type { SocialLink } from "@/lib/site/parse";
+import { contactCode } from "@/lib/contact";
+import { ContactCard } from "./contact-card";
 import { socialIconPaths } from "./social-icon-paths";
 
 const WORD_MARKS: ReadonlySet<SocialLink["platform"]> = new Set(["xiaohongshu"]);
@@ -17,12 +19,16 @@ function Icon({ platform }: { platform: SocialLink["platform"] }) {
 
 export function SocialLinks({ links }: { links: SocialLink[] }) {
   if (!links.length) return null;
+  const code = contactCode(links);
   return (
     <ul className="socials" aria-label="社交媒体">
       {links.map(link => (
-        <li key={`${link.platform}:${link.url}`}>
-          {/* A web profile opens beside the site; an email address goes to the mail app and needs no blank tab. */}
-          <a href={link.url} {...(/^https?:/iu.test(link.url) ? { target: "_blank" } : {})} rel="noopener noreferrer me" aria-label={link.label} title={link.label} data-platform={link.platform}><Icon platform={link.platform} /></a>
+        // The key travels with the page data too, so the email entry is keyed by its platform alone, never its address.
+        <li key={link.platform === "email" ? "email" : `${link.platform}:${link.url}`}>
+          {/* A web profile opens beside the site; the email address opens the contact card, so the page carries no plain address (2026-11-18). */}
+          {link.platform === "email"
+            ? (code ? <ContactCard code={code} place="below" label={link.label}><Icon platform="email" /></ContactCard> : null)
+            : <a href={link.url} {...(/^https?:/iu.test(link.url) ? { target: "_blank" } : {})} rel="noopener noreferrer me" aria-label={link.label} title={link.label} data-platform={link.platform}><Icon platform={link.platform} /></a>}
         </li>
       ))}
     </ul>
