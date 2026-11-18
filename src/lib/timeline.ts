@@ -65,19 +65,21 @@ export interface FeedRun<T> {
 }
 
 /**
- * Works published elsewhere that follow one another with nothing between them are read as one run,
- * so a stretch of them is one list and not a column of cards. A run never crosses into another
- * month, because the month headings stand between entries. Everything else is a run of one.
+ * Works published elsewhere on the same day that follow one another with nothing between them are read as one run,
+ * so a busy day is one list and not a column of cards. A run never crosses into another day (2026-11-18): the row
+ * above it names one day like any entry, and works of different days stand apart as other entries do. Works without
+ * a date that follow one another are one run as well. Everything else is a run of one.
  */
 export function feedRuns<T extends { source: string; occurredAt: DateRange | null }>(items: T[], timeZone: string): FeedRun<T>[] {
   const runs: FeedRun<T>[] = [];
-  let month: string | undefined;
+  let day: string | undefined;
   items.forEach((item, index) => {
-    const key = eventMoment(item, timeZone).month?.key ?? "unknown";
+    const parts = item.occurredAt ? dateParts(item.occurredAt.start, item.occurredAt.precision, timeZone) : null;
+    const key = parts ? `${parts.year}-${parts.month}-${parts.day}` : "unknown";
     const last = runs.at(-1);
-    if (item.source === "social" && last && last.items[0]!.source === "social" && key === month) last.items.push(item);
+    if (item.source === "social" && last && last.items[0]!.source === "social" && key === day) last.items.push(item);
     else runs.push({ first: index, items: [item] });
-    month = key;
+    day = key;
   });
   return runs;
 }
