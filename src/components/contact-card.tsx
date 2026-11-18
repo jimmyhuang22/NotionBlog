@@ -71,7 +71,8 @@ export function ContactCard({ code, place, label, className, children }: { code:
           <span ref={address} className="contact__address">{email}</span>
           <span className="contact__actions">
             <a ref={first} className="contact__action contact__action--main" href={`mailto:${email}`} onClick={write}>写邮件</a>
-            <button type="button" className="contact__action" onClick={copy}>{copied === "ok" ? "已复制" : copied === "fail" ? "请手动复制" : "复制"}</button>
+            {/* The longest word sits unseen in the same place, so the button and the card keep their size when the word changes. */}
+            <button type="button" className="contact__action" onClick={copy}><span className="contact__swap"><span className="contact__sizer" aria-hidden="true">已复制</span><span>{copied === "ok" ? "已复制" : copied === "fail" ? "已选中" : "复制"}</span></span></button>
           </span>
           {noMail && !copied ? <span className="contact__note">没有打开邮件应用？复制地址后用自己的邮箱发就好。</span> : null}
           <span className="visually-hidden" role="status">{copied === "ok" ? "邮箱地址已复制" : copied === "fail" ? "无法自动复制，地址已选中" : noMail ? "没有打开邮件应用，可以复制地址" : ""}</span>
