@@ -107,6 +107,41 @@ test("a collection links to its newest episode and says what was added; a second
   assert.ok(both.includes("小红书"));
 });
 
+function homeWorks() {
+  return view("src/components/home-works.tsx", {
+    "../lib/home-feed.ts": homeFeed, "../lib/format.ts": format, "../lib/works.ts": works,
+    "./cover-image": { CoverImage: ({ className }: { className: string }) => React.createElement("img", { className }) },
+    "./entry-moment": { EntryMoment: ({ moment }: { moment: { label?: string } }) => React.createElement("time", null, "DAY") },
+    "./platform-signs": { PlatformMark: () => React.createElement("svg"), PlatformExitNote: () => null },
+    "./bili-card": { BiliCard: ({ showDay }: { showDay: boolean }) => React.createElement("i", { className: "bili", "data-day": String(showDay) }), isBiliCard: (work: { id: string }) => work.id.startsWith("demo-bilibili") },
+    "./social-work-card": { SocialWorkCard: ({ showDay }: { showDay: boolean }) => React.createElement("i", { className: "social", "data-day": String(showDay) }) },
+    "./work-strip": { WorkStrip: ({ children }: { children: React.ReactNode }) => React.createElement("ol", { className: "strip" }, children) },
+  }).HomeWorks;
+}
+const onDay = (work: (typeof demoSocialWorks)[number], at: string) => ({ ...work, occurredAt: at, collection: null });
+const renderRun = (run: (typeof demoSocialWorks)[number][]) => renderToStaticMarkup(React.createElement(homeWorks(), { works: run, timeZone: "UTC" }));
+
+test("two or three works in a row are light lines one under another, four or more a strip (F57)", () => {
+  const four = ["demo-bilibili-1", "demo-xiaohongshu-1", "demo-bilibili-2", "demo-xiaohongshu-2"].map(id => onDay(byId(id), "2026-11-17T05:00:00.000Z"));
+  for (const size of [2, 3]) {
+    const html = renderRun(four.slice(0, size));
+    assert.equal(html.match(/class="work-line"/g)?.length, size, String(size));
+    assert.ok(html.startsWith(`<ul class="work-lines" aria-label="${size} 件作品">`));
+    assert.ok(!html.includes("strip"));
+  }
+  const strip = renderRun(four);
+  assert.ok(strip.includes('class="strip"') && !strip.includes("work-line"));
+  // One day: the row above names it, so neither card in the strip repeats it.
+  assert.ok(!strip.includes('data-day="true"'));
+});
+
+test("light lines name their own day only when the works fall on different days (F57)", () => {
+  const same = renderRun([onDay(byId("demo-bilibili-1"), "2026-11-17T05:00:00.000Z"), onDay(byId("demo-xiaohongshu-1"), "2026-11-17T09:00:00.000Z")]);
+  assert.ok(!same.includes("DAY"));
+  const apart = renderRun([onDay(byId("demo-bilibili-1"), "2026-11-17T05:00:00.000Z"), onDay(byId("demo-xiaohongshu-1"), "2026-11-15T09:00:00.000Z")]);
+  assert.equal(apart.match(/DAY/g)?.length, 2);
+});
+
 test("a heading that is only a number joins the heading after it and leads to the number", () => {
   const merged = mergeNumberedHeadings([
     { id: "n1", title: "1.", level: 2 }, { id: "t1", title: "Datalink Layer（Ethernet II Header）大小", level: 2 },

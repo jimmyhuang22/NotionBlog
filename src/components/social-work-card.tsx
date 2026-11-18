@@ -42,16 +42,17 @@ function Figures({ line, signs, hint }: { line: WorkLine; signs: boolean; hint?:
  * checked address is a link and it is used exactly as given. When the figures were read is only a
  * hint on hovering them; a visitor is not told about the reading schedule. A work on further platforms adds a line for each under the card.
  */
-export function SocialWorkCard({ work, timeZone, today = null, small = false, priorityCover = false }: { work: SocialTimelineWork; timeZone: string;
+export function SocialWorkCard({ work, timeZone, today = null, small = false, showDay = true, priorityCover = false }: { work: SocialTimelineWork; timeZone: string;
   /** Today in the site's time zone, for naming a recent day the way status entries do. */
-  today?: CalendarDay | null; /** One of many, in a strip or on the works page: narrower, told by its day, its figures on the cover, and a missing cover keeps its place. */ small?: boolean; priorityCover?: boolean }) {
+  today?: CalendarDay | null; /** One of many, in a strip or on the works page: narrower, told by its day, its figures on the cover, and a missing cover keeps its place. */ small?: boolean;
+  /** In a strip whose works share the day the row above names, the card names its platform instead (F57). */ showDay?: boolean; priorityCover?: boolean }) {
   const [lead, ...more] = workLines(work);
   const shape = lead ? coverShapes[lead.platform] : "wide";
   const framed = Boolean(work.cover) || small;
   // Only a real cover is dark enough at its foot to carry the figures. A narrow upright card has no room for them under its title.
   const onCover = Boolean(work.cover) && (shape === "wide" || small);
   const update = work.collection ? collectionAddition(work.collection, timeZone) : null;
-  const day = small ? workDayMoment(work, timeZone, today) : null;
+  const day = small && showDay ? workDayMoment(work, timeZone, today) : null;
   const hint = (line: WorkLine, total: boolean) => {
     const sample = line.observedAt ? sampleTime(line.observedAt, timeZone, today) : null;
     return [total ? `整个${line.kind}的合计` : null, sample ? `数据截至 ${sample.label}` : null].filter(Boolean).join(" · ") || undefined;

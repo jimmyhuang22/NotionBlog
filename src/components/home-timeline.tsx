@@ -76,7 +76,8 @@ function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: b
  * Home only: status entries carry the timeline; other sections' updates and works published on other
  * platforms sit between them as cards. The merged order, the daily de-duplication and the paging all
  * come from the home feed endpoint. A work standing alone is one light line with a small picture, and so is a game
- * (2026-11-11); works that follow one another share one entry, as a strip of cards or, without covers, a list. The first batch and every later page come from the same version
+ * (2026-11-11); works that follow one another share one entry: two or three as light lines one under another (F57,
+ * 2026-11-18), four or more as a strip of cards or, without covers, a list. The first batch and every later page come from the same version
  * of it, because a cursor of one version is refused by the other. Entries of the last week are named by
  * today ("昨天 · …"), by this device's clock once the page is running (the cached markup writes dates
  * out in full), so a page
@@ -137,7 +138,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                   {/* Placed at the moment a change was noticed: said here, so the time is not read as a publication date. */}
                   {item.work.collection && isNoticedActivity(item.work.collection) ? <span className="tag">发现更新</span> : null}
                 </p>
-                {/* One light line, so the status entries stay the main reading (2026-11-11); a run of works keeps its strip. */}
+                {/* One light line, so the status entries stay the main reading (2026-11-11); so are two or three in a row (F57). */}
                 <HomeWorkLine work={item.work} timeZone={timeZone} priorityCover={priorityCover} />
               </article>
             ) : item.event.type === "status" ? (
