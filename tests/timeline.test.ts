@@ -51,22 +51,27 @@ test("paging message shows a total only when it is consistent with what is on sc
 
 const dated = (source: "content" | "social", start: string | null) => ({ source, occurredAt: start ? { start, end: null, precision: "datetime" as const } : null });
 
-test("works that follow one another are one run; anything between them, or a new month, ends it", () => {
+test("works of one day that follow one another are one run; anything between them, or another day, ends it", () => {
   const items = [
     dated("content", "2026-08-05T09:00:00.000Z"), dated("social", "2026-08-02T02:00:00.000Z"), dated("content", "2026-07-30T11:00:00.000Z"),
-    dated("social", "2026-07-25T08:00:00.000Z"), dated("social", "2026-07-22T02:00:00.000Z"), dated("social", "2026-07-21T04:00:00.000Z"),
+    dated("social", "2026-07-25T08:00:00.000Z"), dated("social", "2026-07-25T02:00:00.000Z"), dated("social", "2026-07-25T01:00:00.000Z"),
+    // The stretch runs on into the day before: that day is an entry of its own.
+    dated("social", "2026-07-24T04:00:00.000Z"),
     dated("content", "2026-07-18T10:00:00.000Z"), dated("content", "2026-07-17T10:00:00.000Z"),
-    // The same stretch of works runs on into June: the month heading stands between them.
-    dated("social", "2026-07-02T04:00:00.000Z"), dated("social", "2026-06-30T04:00:00.000Z"), dated("social", "2026-06-29T04:00:00.000Z"),
+    // One work a day for three days is three entries, as the home feed showed "… 至 …" for them before.
+    dated("social", "2026-07-03T04:00:00.000Z"), dated("social", "2026-07-02T04:00:00.000Z"), dated("social", "2026-07-01T04:00:00.000Z"),
+    // The last day of June stands apart from the first of July as well.
+    dated("social", "2026-06-30T04:00:00.000Z"),
     dated("social", null), dated("social", null),
   ];
   const runs = feedRuns(items, "UTC");
-  assert.deepEqual(runs.map(run => [run.first, run.items.length]), [[0, 1], [1, 1], [2, 1], [3, 3], [6, 1], [7, 1], [8, 1], [9, 2], [11, 2]]);
+  assert.deepEqual(runs.map(run => [run.first, run.items.length]), [[0, 1], [1, 1], [2, 1], [3, 3], [6, 1], [7, 1], [8, 1], [9, 1], [10, 1], [11, 1], [12, 1], [13, 2]]);
   // Nothing is dropped or reordered.
   assert.deepEqual(runs.flatMap(run => run.items), items);
-  // A month is judged in the site's zone: 14:30 UTC on 30 June is already 1 July in Melbourne.
-  assert.deepEqual(feedRuns([dated("social", "2026-07-02T04:00:00.000Z"), dated("social", "2026-06-30T14:30:00.000Z")], "Australia/Melbourne").map(run => run.items.length), [2]);
-  assert.deepEqual(feedRuns([dated("social", "2026-07-02T04:00:00.000Z"), dated("social", "2026-06-30T14:30:00.000Z")], "UTC").map(run => run.items.length), [1, 1]);
+  // A day is judged in the site's zone: 14:30 UTC on 17 November is already the 18th in Melbourne, the day of 18:00 UTC.
+  const evening = [dated("social", "2026-11-17T18:00:00.000Z"), dated("social", "2026-11-17T14:30:00.000Z"), dated("social", "2026-11-17T03:04:00.000Z")];
+  assert.deepEqual(feedRuns(evening, "Australia/Melbourne").map(run => run.items.length), [2, 1]);
+  assert.deepEqual(feedRuns(evening, "UTC").map(run => run.items.length), [3]);
   // Entries arriving with a later page extend the run they continue.
   assert.deepEqual(feedRuns([...items.slice(0, 5)], "UTC").at(-1)!.items.length, 2);
   assert.deepEqual(feedRuns([], "UTC"), []);
