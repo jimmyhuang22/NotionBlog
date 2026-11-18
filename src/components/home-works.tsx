@@ -10,25 +10,37 @@ import { SocialWorkCard } from "./social-work-card";
 import { WorkStrip } from "./work-strip";
 
 /**
- * Works that follow one another on the home timeline. With covers they are a strip of small cards moved
- * sideways (the owner's choice among three ways of showing covers): a Bilibili work as on its Bilibili
- * page (`BiliCard`, the owner's choice of 2026-10-17), any other in its platform's shape.
- * While none of them has a cover they stay one list, a line each: the title, where it lives, its day,
- * views and likes and the way out. Either way every work keeps to its own platform's figures and
- * address, an unknown figure is left out and only a checked address is a link. Days are named the way
- * status entries name them.
+ * Works that follow one another on the home timeline. Two or three are light lines, one under another,
+ * each as a work standing alone is drawn (the owner's choice, F57, 2026-11-18: a strip with an upright
+ * note beside a video frame took a whole screen for one more work). From four on they are a strip of
+ * small cards moved sideways: a Bilibili work as on its Bilibili page (`BiliCard`, the owner's choice of
+ * 2026-10-17), any other in its platform's shape. While none of them has a cover the strip is one list
+ * instead, a line each: the title, where it lives, its day, views and likes and the way out. Either way
+ * every work keeps to its own platform's figures and address, an unknown figure is left out and only a
+ * checked address is a link. The row above names the day; a work names its own only when the works here
+ * fall on different days. Days are named the way status entries name them.
  */
+/** Up to this many works in a row are light lines; more make a strip (F57). */
+export const LINED_RUN = 3;
+
 export function HomeWorks({ works, timeZone, today = null, priorityCover = false }: { works: SocialTimelineWork[]; timeZone: string; today?: CalendarDay | null; priorityCover?: boolean }) {
+  const days = new Set(works.map(work => { const moment = workMoment(work); const day = moment ? calendarDay(moment, timeZone) : null; return day ? `${day.year}-${day.month}-${day.day}` : "?"; }));
+  const showDay = days.size > 1;
+  if (works.length <= LINED_RUN) {
+    return (
+      <ul className="work-lines" aria-label={`${works.length} 件作品`}>
+        {works.map((work, index) => <li key={work.id}><HomeWorkLine work={work} timeZone={timeZone} today={today} showDay={showDay} priorityCover={priorityCover && index === 0} /></li>)}
+      </ul>
+    );
+  }
   if (works.some(work => work.cover)) {
-    // The row above names the day; a card repeats it only when the works here fall on different days.
-    const days = new Set(works.map(work => { const moment = workMoment(work); const day = moment ? calendarDay(moment, timeZone) : null; return day ? `${day.year}-${day.month}-${day.day}` : "?"; }));
     return (
       <WorkStrip label={works.length > 1 ? `${works.length} 件作品，可左右滚动` : "1 件作品"}>
         {works.map((work, index) => (
           <li key={work.id}>
             {isBiliCard(work)
-              ? <BiliCard work={work} timeZone={timeZone} today={today} showDay={days.size > 1} priorityCover={priorityCover && index === 0} />
-              : <SocialWorkCard work={work} timeZone={timeZone} today={today} small priorityCover={priorityCover && index === 0} />}
+              ? <BiliCard work={work} timeZone={timeZone} today={today} showDay={showDay} priorityCover={priorityCover && index === 0} />
+              : <SocialWorkCard work={work} timeZone={timeZone} today={today} small showDay={showDay} priorityCover={priorityCover && index === 0} />}
           </li>
         ))}
       </WorkStrip>
@@ -77,13 +89,15 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
  * small mark beside the title, and one quiet line of where it lives, its kind and its figures. The status entries stay the timeline's main reading; this only says what was published. A further
  * platform of the same work gets its own short line under it with that platform's figures and address. The
  * picture comes after the words in the source, so the link reads its title first. The figures keep to the
- * platform's own and an unknown one is left out; only a checked address is a link.
+ * platform's own and an unknown one is left out; only a checked address is a link. Among two or three works
+ * of different days (`showDay`) the quiet line also names the work's own day, as a card in a strip does.
  */
-export function HomeWorkLine({ work, timeZone, priorityCover = false }: { work: SocialTimelineWork; timeZone: string; priorityCover?: boolean }) {
+export function HomeWorkLine({ work, timeZone, today = null, showDay = false, priorityCover = false }: { work: SocialTimelineWork; timeZone: string; today?: CalendarDay | null; showDay?: boolean; priorityCover?: boolean }) {
   const [lead, ...more] = workLines(work);
   const shape = lead ? coverShapes[lead.platform] : "wide";
   const update = work.collection ? collectionAddition(work.collection, timeZone) : null;
   const name = lead ? platformNames[lead.platform] : null;
+  const day = showDay ? workDayMoment(work, timeZone, today) : null;
   const blank = <span className="work-line__blank">{lead ? <PlatformMark platform={lead.platform} size={16} /> : null}<span className="visually-hidden">封面未记录</span></span>;
   const main = (
     <>
@@ -97,6 +111,7 @@ export function HomeWorkLine({ work, timeZone, priorityCover = false }: { work: 
           <span className="work-line__meta">
             <PlatformMark platform={lead.platform} />
             <span>{name}</span>
+            {day ? <span className="work-line__part"><EntryMoment moment={day} /></span> : null}
             {[lead.kind, lead.size].filter(Boolean).map(part => <span key={part} className="work-line__part">{part}</span>)}
             {lead.figures.map(figure => <span key={figure.metric} className="work-line__part work-line__figure">{figure.label} {figure.value}</span>)}
           </span>
