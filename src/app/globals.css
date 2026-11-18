@@ -574,6 +574,9 @@ a.card:hover { box-shadow: var(--shadow-lift); }
 /* Its words stay on the accent under the pointer: the site-wide a:hover would turn them the colour of the button itself. */
 .contact__action--main, .contact__action--main:hover { background: var(--accent); color: var(--card); }
 .contact__action:hover { filter: brightness(1.06); }
+.contact__swap { display: inline-grid; justify-items: center; }
+.contact__swap > span { grid-area: 1 / 1; }
+.contact__sizer { visibility: hidden; }
 .contact__note { max-width: 15em; margin-top: 10px; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); white-space: normal; }
 .contact__action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .contact__card { animation: contact-in 0.16s ease-out; } }
