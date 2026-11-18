@@ -170,6 +170,11 @@ a.work-line__main:focus-visible, a.work-line__more:focus-visible { outline-offse
 .timeline--home .entry--event { padding-bottom: 24px; }
 /* A light record sits close under its date line, so the first screen reaches the newest status sooner (H-11). */
 .timeline--home .entry--event > :is(.event--line, .work-line) { margin-top: 6px; }
+/* Two or three works of a row: their light lines one under another (F57). */
+.work-lines { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 0; padding: 0; list-style: none; }
+.work-lines .work-line { margin-top: 0; }
+/* An upright cover is often a long screenshot: crop it from the top, so its opening stays (F57). */
+:is(.work-card--tall .work-card__cover, .work-line__thumb--tall .work-line__cover) { object-position: top; }
 /*
  * A work published on other platforms, drawn the way its own platform draws it: a video frame with the
  * figures along its foot, or an upright note with its likes under the title. Without a cover it is
