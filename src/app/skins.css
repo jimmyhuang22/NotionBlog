@@ -57,7 +57,7 @@
 [data-skin="apple"] .hero__name { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #8ec5ff)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 [data-skin="apple"] .avatar { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); background: linear-gradient(135deg, var(--soft), var(--card)); color: var(--ink); font-weight: 600; }
 [data-skin="apple"] .hero__bio { font-size: var(--text-xl); letter-spacing: -0.01em; }
-[data-skin="apple"] .socials a { box-shadow: none; background: var(--soft); color: var(--ink); }
+[data-skin="apple"] .socials :is(li > a, .contact > button) { box-shadow: none; background: var(--soft); color: var(--ink); }
 [data-skin="apple"] .timeline__head a { text-decoration: none; font-size: var(--text-base); }
 [data-skin="apple"] .timeline__head a::after { content: " ›"; }
 [data-skin="apple"] .timeline__month { font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.02em; color: var(--muted); }
@@ -192,8 +192,8 @@
 [data-skin="island"] :is(.site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current) { background: var(--island-pick); color: var(--island-pick-ink); border-radius: 999px; font-weight: 800; box-shadow: 0 3px 0 var(--island-pick-edge); }
 [data-skin="island"] .site-nav__menu a[aria-current="page"] { color: var(--ink); background: var(--marker); }
 /* Chunky buttons that press down onto their ledge. */
-[data-skin="island"] :is(.pill-button, .icon-button, .socials a, .to-top, .page-outline__open) { border: 2px solid var(--rule); box-shadow: 0 4px 0 var(--island-press); }
-[data-skin="island"] :is(.pill-button, .icon-button, .socials a, .to-top, .page-outline__open):active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); }
+[data-skin="island"] :is(.pill-button, .icon-button, .socials :is(li > a, .contact > button), .to-top, .page-outline__open) { border: 2px solid var(--rule); box-shadow: 0 4px 0 var(--island-press); }
+[data-skin="island"] :is(.pill-button, .icon-button, .socials :is(li > a, .contact > button), .to-top, .page-outline__open):active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); }
 [data-skin="island"] .tag { border-radius: 999px; font-weight: 700; }
 [data-skin="island"] .entry__latest { background: var(--island-pick); color: var(--island-pick-ink); border-radius: 999px; padding: 1px 10px; font-weight: 800; }
 /* Timeline: a quiet line, yellow beads, and cards that speak like a villager's bubble. */
@@ -288,7 +288,7 @@
 [data-skin="y2k"] .site-nav__list > li > a[aria-current="page"], [data-skin="y2k"] .site-nav__more > button.is-current { background: var(--y2k-button) #1a6ace; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 6px 14px -6px rgba(22, 103, 199, 0.7); }
 [data-skin="y2k"] .site-nav__list > li > a:hover, [data-skin="y2k"] .site-nav__more > button:hover { color: var(--accent); }
 [data-skin="y2k"] .site-nav__list > li > a[aria-current="page"]:hover, [data-skin="y2k"] .site-nav__more > button.is-current:hover { color: #fff; }
-[data-skin="y2k"] .icon-button, [data-skin="y2k"] .socials a { background: linear-gradient(180deg, #fff, #e6f1fb); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #cfe2f4, 0 4px 10px -4px rgba(30, 110, 205, 0.35); color: var(--accent); }
+[data-skin="y2k"] .icon-button, [data-skin="y2k"] .socials :is(li > a, .contact > button) { background: linear-gradient(180deg, #fff, #e6f1fb); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #cfe2f4, 0 4px 10px -4px rgba(30, 110, 205, 0.35); color: var(--accent); }
 /* The bubble buttons need room between them (F35): 8 on a computer, 6 on a phone, and the old 2 below 360 so the three keep the name's row at 320. */
 [data-skin="y2k"] .site-header__tools { gap: 8px; }
 @media (max-width: 540px) { [data-skin="y2k"] .site-header__tools { gap: 6px; } }
@@ -348,13 +348,13 @@
  * round buttons its own way of going down.
  * Apple: a neutral grey under rows; cards and buttons shrink a little onto the same grey, no sinking, no shade.
  */
-[data-skin="apple"] :is(.pill-button, a.card, .to-top, .page-outline__open):active, [data-skin="apple"] .socials li:nth-child(n) a:active { box-shadow: var(--shadow); background-image: linear-gradient(var(--press-fill), var(--press-fill)); }
+[data-skin="apple"] :is(.pill-button, a.card, .to-top, .page-outline__open):active, [data-skin="apple"] .socials li:nth-child(n) :is(li > a, .contact > button):active { box-shadow: var(--shadow); background-image: linear-gradient(var(--press-fill), var(--press-fill)); }
 [data-skin="apple"] .icon-button:active { box-shadow: none; background-image: linear-gradient(var(--press-fill), var(--press-fill)); }
 @media (prefers-reduced-motion: no-preference) {
-  [data-skin="apple"] :is(.pill-button, .icon-button, a.card, .to-top, .page-outline__open):active, [data-skin="apple"] .socials li:nth-child(n) a:active { transform: scale(0.97); }
+  [data-skin="apple"] :is(.pill-button, .icon-button, a.card, .to-top, .page-outline__open):active, [data-skin="apple"] .socials li:nth-child(n) :is(li > a, .contact > button):active { transform: scale(0.97); }
 }
 /* Island: its step-down reaches the social buttons, the yellow pill of the header and the chosen segment. */
-[data-skin="island"] .socials li:nth-child(n) a:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); }
+[data-skin="island"] .socials li:nth-child(n) :is(li > a, .contact > button):active { transform: translateY(3px); box-shadow: 0 1px 0 var(--island-press); }
 [data-skin="island"] :is(.site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current):active { transform: translateY(2px); box-shadow: 0 1px 0 var(--island-pick-edge); }
 [data-skin="island"] .segmented :is(a[aria-current], button[aria-pressed="true"]):active { transform: translateY(3px); background-color: var(--picked); box-shadow: 0 1px 0 var(--island-ledge); }
 @media (prefers-reduced-motion: no-preference) {
@@ -363,7 +363,7 @@
 }
 /* Y2K: a pale blue under rows; a glossy button is pushed in, its highlight moving from the top edge to the bottom and its glow gone. */
 [data-skin="y2k"] :is(.pill-button, .site-nav__list > li > a[aria-current="page"], .site-nav__more > button.is-current, .segmented :is(a[aria-current], button[aria-pressed="true"])):active { transform: none; box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.5), inset 0 2px 5px rgba(10, 50, 110, 0.45); }
-[data-skin="y2k"] :is(.icon-button, .to-top, .page-outline__open):active, [data-skin="y2k"] .socials li:nth-child(n) a:active { transform: none; box-shadow: inset 0 -1px 0 #fff, 0 0 0 1px #cfe2f4, inset 0 2px 4px rgba(30, 110, 205, 0.3); }
+[data-skin="y2k"] :is(.icon-button, .to-top, .page-outline__open):active, [data-skin="y2k"] .socials li:nth-child(n) :is(li > a, .contact > button):active { transform: none; box-shadow: inset 0 -1px 0 #fff, 0 0 0 1px #cfe2f4, inset 0 2px 4px rgba(30, 110, 205, 0.3); }
 
 /*
  * A heading the author coloured (design review 5, S-1, S-7): every skin keeps its own heading colour and carries the
