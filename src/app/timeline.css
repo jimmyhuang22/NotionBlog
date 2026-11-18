@@ -142,8 +142,8 @@ a.event--line:focus-visible { outline-offset: 4px; }
  * over one quiet line. The picture follows the words in the source and is drawn first. Since 2026-11-18 it is a 48
  * square like a game's, whatever the platform (the owner's pick from a side-by-side): with three widths the titles
  * of neighbouring lines started in three places. A wide cover is cropped to its middle, an upright one from its top.
- * Since 2026-11-13 what is new (a collection's added videos) stands right after the title as a small mark, where a
- * game has its platform and hours, instead of last in the quiet line.
+ * Since 2026-11-18 the quiet line starts with the platform's sign alone, and a collection's addition is "+N" after
+ * its size (home-works.tsx quietParts), not a pill beside the title.
  */
 .work-line { display: flex; flex-direction: column; gap: 6px; max-width: 520px; margin-top: 10px; }
 .work-line__main { display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; border-radius: var(--radius-sm); color: inherit; }
@@ -153,13 +153,15 @@ a.event--line:focus-visible { outline-offset: 4px; }
 .work-line__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .work-line__head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; }
 .work-line__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 0; font-family: var(--font-hand); font-size: var(--text-body); line-height: 1.4; overflow-wrap: anywhere; }
-.work-line__update { flex: none; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: var(--text-xs); line-height: 1.5; color: var(--accent); white-space: nowrap; }
 /* Parts are parted by dots hung in the gap before each, so a wrapped line never starts with one (as on the work cards). */
 .work-line__meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-width: 0; overflow-x: clip; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }
 .work-line__meta > svg { flex: none; margin-right: -10px; }
 .work-line__part { position: relative; }
 .work-line__part::before { content: "·"; content: "·" / ""; position: absolute; left: -10px; }
 .work-line__figure { font-variant-numeric: tabular-nums; }
+/* The first part follows the platform's sign with no dot; a collection's addition is a small "+N" right after its size. */
+.work-line__part--first::before { content: none; }
+.work-line__added { margin-left: 5px; font-weight: 600; color: var(--accent); }
 /* A further platform of the same work, under the words, not under the picture. */
 .work-line__more { align-self: flex-start; padding-left: 60px; color: var(--muted); }
 a.work-line__main:hover .work-line__title, a.work-line__more:hover { color: var(--accent); }
