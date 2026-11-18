@@ -1,7 +1,8 @@
 import type { SocialTimelineWork } from "../../contracts/social-timeline.ts";
-import { collectionAddition, platformNames } from "../lib/home-feed.ts";
-import { calendarDay, type CalendarDay } from "../lib/format.ts";
-import { coverShapes, workDayMoment, workLines, workMoment } from "../lib/works.ts";
+import type { ReactNode } from "react";
+import { collectionBadge, platformNames } from "../lib/home-feed.ts";
+import { calendarDay, type CalendarDay, type MomentLabel } from "../lib/format.ts";
+import { coverShapes, workDayMoment, workLines, workMoment, type WorkLine } from "../lib/works.ts";
 import { CoverImage } from "./cover-image";
 import { EntryMoment } from "./entry-moment";
 import { PlatformExitNote, PlatformMark } from "./platform-signs";
@@ -84,18 +85,37 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
 }
 
 /**
+ * What a light line's quiet line says after the platform's sign (2026-11-18, the owner's pick): the sign stands
+ * for the platform, whose name is only read out; a single post's kind (视频, 图文) is left out; a collection's
+ * kind and size are one phrase ("合集 179 个视频") followed by what was added as "+N" ("新" when the count is
+ * unknown, the full words read out, as on a strip card); then the figures. The day comes first when asked for.
+ * A line that would say nothing after the sign keeps its kind.
+ */
+function quietParts(line: WorkLine, day: MomentLabel | null, badge: { count: number | null; words: string } | null) {
+  const parts: { key: string; node: ReactNode; figure?: boolean }[] = [];
+  if (day) parts.push({ key: "day", node: <EntryMoment moment={day} /> });
+  const collection = line.key.startsWith("collection:");
+  if (collection) {
+    parts.push({ key: "size", node: <>{[line.kind, line.size].filter(Boolean).join(" ")}{badge ? <><span className="work-line__added" aria-hidden="true">{badge.count ? `+${badge.count}` : "新"}</span><span className="visually-hidden">，{badge.words}</span></> : null}</> });
+  }
+  for (const figure of line.figures) parts.push({ key: figure.metric, node: `${figure.label} ${figure.value}`, figure: true });
+  if (!parts.length) parts.push({ key: "kind", node: line.kind });
+  return parts.map((part, index) => <span key={part.key} className={`work-line__part${part.figure ? " work-line__figure" : ""}${index === 0 ? " work-line__part--first" : ""}`}>{part.node}</span>);
+}
+
+/**
  * A work standing alone on the home timeline, as one light line (the owner's choice, 2026-11-11): a small
- * square picture, as a game's (2026-11-18), then the title, what is new about it (a collection's added videos) as a
- * small mark beside the title, and one quiet line of where it lives, its kind and its figures. The status entries stay the timeline's main reading; this only says what was published. A further
- * platform of the same work gets its own short line under it with that platform's figures and address. The
- * picture comes after the words in the source, so the link reads its title first. The figures keep to the
- * platform's own and an unknown one is left out; only a checked address is a link. Among two or three works
- * of different days (`showDay`) the quiet line also names the work's own day, as a card in a strip does.
+ * square picture, as a game's (2026-11-18), then the title over one quiet line: the platform's sign, then what
+ * it is and its figures (`quietParts`). The status entries stay the timeline's main reading; this only says what
+ * was published. A further platform of the same work gets its own short line under it with that platform's
+ * figures and address. The picture comes after the words in the source, so the link reads its title first. The
+ * figures keep to the platform's own and an unknown one is left out; only a checked address is a link. Among two
+ * or three works of different days (`showDay`) the quiet line also names the work's own day, as a card in a strip does.
  */
 export function HomeWorkLine({ work, timeZone, today = null, showDay = false, priorityCover = false }: { work: SocialTimelineWork; timeZone: string; today?: CalendarDay | null; showDay?: boolean; priorityCover?: boolean }) {
   const [lead, ...more] = workLines(work);
   const shape = lead ? coverShapes[lead.platform] : "wide";
-  const update = work.collection ? collectionAddition(work.collection, timeZone) : null;
+  const badge = work.collection ? collectionBadge(work.collection, timeZone) : null;
   const name = lead ? platformNames[lead.platform] : null;
   const day = showDay ? workDayMoment(work, timeZone, today) : null;
   const blank = <span className="work-line__blank">{lead ? <PlatformMark platform={lead.platform} size={16} /> : null}<span className="visually-hidden">封面未记录</span></span>;
@@ -104,16 +124,12 @@ export function HomeWorkLine({ work, timeZone, today = null, showDay = false, pr
       <span className="work-line__text">
         <span className="work-line__head">
           <span className="work-line__title">{work.title}</span>
-          {/* What is new comes right after the name, as a game's platform and hours do; the quiet line under it only says where and how much. */}
-          {update ? <span className="work-line__update"><span className="visually-hidden">，</span>{update.text}</span> : null}
         </span>
         {lead ? (
           <span className="work-line__meta">
             <PlatformMark platform={lead.platform} />
-            <span>{name}</span>
-            {day ? <span className="work-line__part"><EntryMoment moment={day} /></span> : null}
-            {[lead.kind, lead.size].filter(Boolean).map(part => <span key={part} className="work-line__part">{part}</span>)}
-            {lead.figures.map(figure => <span key={figure.metric} className="work-line__part work-line__figure">{figure.label} {figure.value}</span>)}
+            <span className="visually-hidden">，{name}，</span>
+            {quietParts(lead, day, badge)}
           </span>
         ) : null}
       </span>
@@ -134,9 +150,8 @@ export function HomeWorkLine({ work, timeZone, today = null, showDay = false, pr
           <>
             <span className="visually-hidden">{work.title}，</span>
             <PlatformMark platform={line.platform} />
-            <span>{lineName}</span>
-            <span className="work-line__part">{line.kind}</span>
-            {line.figures.map(figure => <span key={figure.metric} className="work-line__part work-line__figure">{figure.label} {figure.value}</span>)}
+            <span className="visually-hidden">{lineName}，</span>
+            {quietParts(line, null, null)}
             {line.url ? <PlatformExitNote name={lineName} /> : null}
           </>
         );

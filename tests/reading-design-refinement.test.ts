@@ -85,7 +85,11 @@ test("a single work on the home timeline is one light line that keeps its platfo
   // Title first in the source, the picture after it (drawn first by the style sheet).
   assert.ok(html.indexOf("work-line__title") < html.indexOf("work-line__thumb"));
   assert.ok(html.includes("work-line__thumb--wide"));
-  assert.ok(html.includes("B 站") && html.includes("视频") && html.includes("播放 0"));
+  assert.ok(html.includes("B 站") && html.includes("播放 0"));
+  // The platform's sign stands for it: its name is only read out, and a single post's kind is left out (2026-11-18).
+  assert.match(html, /<span class="visually-hidden">，B 站，<\/span>/);
+  assert.ok(!html.includes(">视频<"));
+  assert.match(html, /<span class="work-line__part work-line__figure work-line__part--first">播放 0<\/span>/);
   // Bilibili shows no likes; an address that was never checked is no link.
   assert.ok(!html.includes("点赞"));
   assert.ok(!html.includes("<a "));
@@ -101,7 +105,8 @@ test("a Xiaohongshu work keeps its upright picture and its likes", () => {
 test("a collection links to its newest episode and says what was added; a second platform gets its own line", () => {
   const collection = render(byId("demo-bilibili-2"));
   assert.match(collection, /<a class="work-line__main" href="https:\/\/www\.bilibili\.com\/video\/BV0000000002\/"[^>]*title="打开最新一集"/);
-  assert.ok(collection.includes("work-line__update"));
+  // Kind and size are one phrase, and what was added is "+N" right after it, the words read out.
+  assert.match(collection, /work-line__part--first">合集 \d+ 个视频<span class="work-line__added" aria-hidden="true">\+1<\/span><span class="visually-hidden">，[^<]*新增 1 个视频/);
   const both = render(byId("demo-bilibili-3"));
   assert.equal(both.match(/work-line__more/g)?.length, 1);
   assert.ok(both.includes("小红书"));
