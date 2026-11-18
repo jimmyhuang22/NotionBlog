@@ -377,7 +377,9 @@ main { flex: 1 0 auto; }
 .site-footer__stroke { position: absolute; left: -2%; bottom: -0.2em; width: 104%; height: 0.26em; overflow: visible; }
 .site-footer__stroke path { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; }
 .site-footer__links { display: flex; flex-wrap: wrap; gap: 28px 22px; margin-left: auto; font-family: var(--font-hand); font-size: var(--text-sm); }
-.site-footer__links a { display: inline-flex; align-items: center; min-height: 44px; margin-block: -14px; }
+.site-footer__links > a, .site-footer__contact { display: inline-flex; align-items: center; min-height: 44px; margin-block: -14px; }
+.site-footer__contact { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.site-footer__contact:hover, .site-footer__contact[aria-expanded="true"] { color: var(--accent); }
 .site-footer__notion { gap: 6px; }
 .site-footer__notion svg { flex: none; }
 .site-footer__external { opacity: 0.75; }
@@ -543,12 +545,38 @@ a.card:hover { box-shadow: var(--shadow-lift); }
   .hero__avatar:has(.hero__about:active) .avatar { transform: scale(0.97); }
 }
 .socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 4px 0 0; margin: 0; list-style: none; }
-.socials a {
+.socials :is(li > a, .contact > button) {
   display: inline-flex; align-items: center; justify-content: center;
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--card); box-shadow: var(--shadow); color: var(--muted);
+  padding: 0; border: 0; font: inherit; cursor: pointer;
 }
-.socials a:hover { color: var(--accent); }
+/*
+ * The contact card (contact-card.tsx, the owner's pick of 2026-11-18): the email address with a button to write and
+ * one to copy, opened from the profile's envelope (below, centred on the row of icons, so it never leaves a narrow
+ * screen) or from the footer's "联系我" (above it, at its end; on a phone above the footer, at its left edge). Plain on every skin: it takes each skin's card colour and accent.
+ */
+.socials { position: relative; }
+.socials .contact { position: static; display: contents; }
+.contact { position: relative; display: inline-flex; }
+.contact__card { position: absolute; z-index: 30; top: calc(100% + 12px); left: 50%; translate: -50% 0; display: flex; flex-direction: column; align-items: flex-start; width: max-content; max-width: calc(100vw - 32px); padding: 14px 16px 16px; border-radius: var(--radius-md); background: var(--card); box-shadow: 0 0 0 1px var(--rule), var(--shadow-lift); font-family: var(--font-sans); font-size: var(--text-sm); line-height: 1.5; color: var(--ink); text-align: start; white-space: nowrap; }
+.contact[data-place="above"] .contact__card { top: auto; bottom: calc(100% + 14px); left: auto; right: 0; translate: none; }
+/* On a phone the footer's card stands at the footer's own left edge, wherever its words fall in the row. */
+@media (max-width: 699.98px) {
+  .site-footer__inner { position: relative; }
+  .site-footer__links .contact { position: static; }
+  .contact[data-place="above"] .contact__card { right: auto; left: 16px; bottom: calc(100% + 6px); }
+}
+.contact__label { font-size: var(--text-xs); color: var(--muted); }
+.contact__address { margin: 2px 0 12px; font-size: var(--text-body); font-weight: 600; letter-spacing: 0.01em; user-select: all; overflow-wrap: anywhere; white-space: normal; }
+.contact__actions { display: flex; gap: 8px; }
+.contact__action { display: inline-flex; align-items: center; min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--soft); font: inherit; font-size: var(--text-sm); color: var(--ink); cursor: pointer; }
+.contact__action--main { background: var(--accent); color: var(--card); }
+.contact__action:hover { filter: brightness(1.06); }
+.contact__action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .contact__card { animation: contact-in 0.16s ease-out; } }
+@keyframes contact-in { from { opacity: 0; transform: translateY(4px); } }
+.socials :is(li > a, .contact > button):hover { color: var(--accent); }
 /*
  * Pointed at, or reached with the keyboard, a platform's icon takes its own colour (F38); the button and
  * the motion stay as they are. Steam's dark blue disappears on a dark card, so it turns bright blue
@@ -556,16 +584,16 @@ a.card:hover { box-shadow: var(--shadow-lift); }
  * use a deeper one (the owner's choice). light-dark() follows each theme's color-scheme. GitHub, mail and links keep the accent.
  */
 :root { --brand-bilibili: light-dark(#0087b8, #00a1d6); --brand-xiaohongshu: #ff2442; --brand-steam: light-dark(#1b2838, #1a9fff); }
-:root:not([data-input="pointer"]) .socials a:focus-visible { color: var(--accent); }
-.socials a[data-platform="bilibili"]:hover, :root:not([data-input="pointer"]) .socials a[data-platform="bilibili"]:focus-visible { color: var(--brand-bilibili); }
-.socials a[data-platform="xiaohongshu"]:hover, :root:not([data-input="pointer"]) .socials a[data-platform="xiaohongshu"]:focus-visible { color: var(--brand-xiaohongshu); }
-.socials a[data-platform="steam"]:hover, :root:not([data-input="pointer"]) .socials a[data-platform="steam"]:focus-visible { color: var(--brand-steam); }
-.socials li:nth-child(n) a:active { box-shadow: var(--shadow-press); }
+:root:not([data-input="pointer"]) .socials :is(li > a, .contact > button):focus-visible { color: var(--accent); }
+.socials :is(li > a, .contact > button)[data-platform="bilibili"]:hover, :root:not([data-input="pointer"]) .socials :is(li > a, .contact > button)[data-platform="bilibili"]:focus-visible { color: var(--brand-bilibili); }
+.socials :is(li > a, .contact > button)[data-platform="xiaohongshu"]:hover, :root:not([data-input="pointer"]) .socials :is(li > a, .contact > button)[data-platform="xiaohongshu"]:focus-visible { color: var(--brand-xiaohongshu); }
+.socials :is(li > a, .contact > button)[data-platform="steam"]:hover, :root:not([data-input="pointer"]) .socials :is(li > a, .contact > button)[data-platform="steam"]:focus-visible { color: var(--brand-steam); }
+.socials li:nth-child(n) :is(li > a, .contact > button):active { box-shadow: var(--shadow-press); }
 @media (prefers-reduced-motion: no-preference) {
-  .socials a { transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), color 0.2s, box-shadow 0.2s ease; }
-  .socials li:nth-child(odd) a:hover { transform: rotate(-6deg) translateY(-2px); }
-  .socials li:nth-child(even) a:hover { transform: rotate(6deg) translateY(-2px); }
-  .socials li:nth-child(n) a:active { transform: translateY(var(--press-depth, 1.5px)); transition-duration: 0.05s; }
+  .socials :is(li > a, .contact > button) { transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), color 0.2s, box-shadow 0.2s ease; }
+  .socials li:nth-child(odd) :is(li > a, .contact > button):hover { transform: rotate(-6deg) translateY(-2px); }
+  .socials li:nth-child(even) :is(li > a, .contact > button):hover { transform: rotate(6deg) translateY(-2px); }
+  .socials li:nth-child(n) :is(li > a, .contact > button):active { transform: translateY(var(--press-depth, 1.5px)); transition-duration: 0.05s; }
 }
 
 /* About: the home hero, one card with the page, and its last-edited day. */
