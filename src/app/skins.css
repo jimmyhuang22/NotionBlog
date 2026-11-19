@@ -51,7 +51,7 @@
 @media (max-width: 380px) { [data-skin="apple"] .site-header__brand { font-size: var(--text-base); } }
 [data-skin="apple"] .site-nav__list > li > a, [data-skin="apple"] .site-nav__more > button { min-height: 40px; font-size: var(--text-sm); color: var(--ink); opacity: 0.8; }
 [data-skin="apple"] .site-nav__list > li > a[aria-current="page"], [data-skin="apple"] .site-nav__more > button.is-current { color: var(--accent); opacity: 1; background: none; }
-[data-skin="apple"] .page-head h1, [data-skin="apple"] .hero h1, [data-skin="apple"] .timeline__head h2, [data-skin="apple"] .section-title, [data-skin="apple"] .reading__title, [data-skin="apple"] .course-head h1, [data-skin="apple"] .work__info h1, [data-skin="apple"] .album-head h1, [data-skin="apple"] .reading__side-name, [data-skin="apple"] .state--center h1 { font-weight: 600; letter-spacing: -0.025em; }
+[data-skin="apple"] .page-head h1, [data-skin="apple"] .hero h1, [data-skin="apple"] .timeline__head h2, [data-skin="apple"] .section-title, [data-skin="apple"] .reading__title, [data-skin="apple"] .course-head h1, [data-skin="apple"] .work-band__title, [data-skin="apple"] .work-book__title, [data-skin="apple"] .game-band__title, [data-skin="apple"] .album-head h1, [data-skin="apple"] .reading__side-name, [data-skin="apple"] .state--center h1 { font-weight: 600; letter-spacing: -0.025em; }
 [data-skin="apple"] .hero h1 { font-size: clamp(34px, 4.8vw, 56px); }
 [data-skin="apple"] .hero__stroke { display: none; }
 [data-skin="apple"] .hero__name { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #8ec5ff)); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -166,7 +166,7 @@
   }
 }
 [data-skin="island"] body { font-weight: 500; letter-spacing: 0.01em; }
-[data-skin="island"] :is(.hero h1, .page-head h1, .reading__title, .course-head h1, .work__info h1, .album-head h1, .section-title, .timeline__head h2, .entry__card-title, .event__title, .work-line__title, .site-header__brand, .bili-card__title, .works-card__title, .library__title) { font-weight: 800; letter-spacing: 0.015em; }
+[data-skin="island"] :is(.hero h1, .page-head h1, .reading__title, .course-head h1, .work-band__title, .work-book__title, .game-band__title, .album-head h1, .section-title, .timeline__head h2, .entry__card-title, .event__title, .work-line__title, .site-header__brand, .bili-card__title, .works-card__title, .library__title) { font-weight: 800; letter-spacing: 0.015em; }
 /* At 320 the bold name's extra tracking pushed the three buttons onto a row of their own (a three-row header); narrow phones set the name without it. */
 /* With F50's wider button gaps, 381–389 also needs the smaller name, as Y2K has (#67): from 381 to 385 the header otherwise took three rows. */
 @media (max-width: 389px) { [data-skin="island"] .site-header .site-header__brand { font-size: var(--text-base); letter-spacing: 0; } }
@@ -293,7 +293,7 @@
 [data-skin="y2k"] .site-header__tools { gap: 8px; }
 @media (max-width: 540px) { [data-skin="y2k"] .site-header__tools { gap: 6px; } }
 @media (max-width: 360px) { [data-skin="y2k"] .site-header__tools { gap: 2px; } }
-[data-skin="y2k"] .hero h1, [data-skin="y2k"] .page-head h1, [data-skin="y2k"] .timeline__head h2, [data-skin="y2k"] .section-title, [data-skin="y2k"] .reading__title, [data-skin="y2k"] .course-head h1, [data-skin="y2k"] .work__info h1, [data-skin="y2k"] .album-head h1, [data-skin="y2k"] .state--center h1 { font-weight: 800; letter-spacing: -0.01em; }
+[data-skin="y2k"] .hero h1, [data-skin="y2k"] .page-head h1, [data-skin="y2k"] .timeline__head h2, [data-skin="y2k"] .section-title, [data-skin="y2k"] .reading__title, [data-skin="y2k"] .course-head h1, [data-skin="y2k"] .work-band__title, [data-skin="y2k"] .work-book__title, [data-skin="y2k"] .game-band__title, [data-skin="y2k"] .album-head h1, [data-skin="y2k"] .state--center h1 { font-weight: 800; letter-spacing: -0.01em; }
 [data-skin="y2k"] .entry__card-title, [data-skin="y2k"] .event__title, [data-skin="y2k"] .work-card__title, [data-skin="y2k"] .home-works__title, [data-skin="y2k"] .search-hit__title, [data-skin="y2k"] .course-card__title, [data-skin="y2k"] .reading__side-name, [data-skin="y2k"] .prose__h, [data-skin="y2k"] .pill-button, [data-skin="y2k"] .timeline__month, [data-skin="y2k"] .entry__more, [data-skin="y2k"] .timeline__head a, [data-skin="y2k"] .entry__latest, [data-skin="y2k"] .pager a > span:nth-child(2), [data-skin="y2k"] .post-card__title, [data-skin="y2k"] .project-card__title, [data-skin="y2k"] .palette__title, [data-skin="y2k"] .theme-menu__option, [data-skin="y2k"] .segmented :is(a, button) { font-weight: 700; }
 [data-skin="y2k"] .hero__stroke { display: none; }
 /* The name in the period's chrome (C-03, the owner's pick of 2026-10-20): a blue metal gradient with a hard highlight and a fine edge. */
@@ -380,7 +380,7 @@
    Chinese of a heading falls on the system's semibold next to the rounded Latin instead of reading thin. */
 [data-skin="island"] :is(.timeline__month-name, .prose__h, .reading__toc-head, .tree__heading, .page-outline__head h2, .toc-drawer summary) { font-weight: 700; }
 /* The headings' Chinese is as round and thick as their Latin (design review 5, S-3): every heading that is set bold takes the rounded face. */
-[data-skin="island"] :is(.hero h1, .page-head h1, .reading__title, .course-head h1, .work__info h1, .album-head h1, .section-title, .timeline__head h2, .entry__card-title, .event__title, .work-line__title, .site-header__brand, .bili-card__title, .works-card__title, .library__title, .timeline__month-name, .prose__h, .reading__toc-head, .tree__heading, .page-outline__head h2, .toc-drawer summary, .state--center h1, .about-dialog__head h2) { font-family: var(--font-round); }
+[data-skin="island"] :is(.hero h1, .page-head h1, .reading__title, .course-head h1, .work-band__title, .work-book__title, .game-band__title, .album-head h1, .section-title, .timeline__head h2, .entry__card-title, .event__title, .work-line__title, .site-header__brand, .bili-card__title, .works-card__title, .library__title, .timeline__month-name, .prose__h, .reading__toc-head, .tree__heading, .page-outline__head h2, .toc-drawer summary, .state--center h1, .about-dialog__head h2) { font-family: var(--font-round); }
 
 /* Y2K bubbles keep to the page's margins (S-5): beside a note's outline or course directory the big right bubble moves up behind the header. */
 [data-skin="y2k"] body:has(.reading__toc, .reading__side) { --bubble-y: 26px; --bubble-r: 40px; --bubble-x: calc(100% - 40px); }

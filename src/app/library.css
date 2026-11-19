@@ -142,57 +142,25 @@
 }
 @keyframes cover-wait { from { opacity: 0; } }
 /* Landscape tiles (games, albums) keep the title horizontal, up to three lines. */
-.library__grid--game .cover--empty, .work--game .cover--empty, .album-card__cover.album-card__cover--empty { display: flex; align-items: center; padding: 6% 8% 6% 9%; }
-.library__grid--game .cover--empty span, .work--game .cover--empty span, .album-card__cover.album-card__cover--empty span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; height: auto; writing-mode: horizontal-tb; font-size: clamp(15px, 8.5cqw, 22px); letter-spacing: 0.04em; }
+.library__grid--game .cover--empty, .album-card__cover.album-card__cover--empty { display: flex; align-items: center; padding: 6% 8% 6% 9%; }
+.library__grid--game .cover--empty span, .album-card__cover.album-card__cover--empty span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; height: auto; writing-mode: horizontal-tb; font-size: clamp(15px, 8.5cqw, 22px); letter-spacing: 0.04em; }
 /* Game art is drawn wide; films and books are posters. Each keeps its own shape instead of a shared crop. */
 .library__grid--game { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.library__grid--game .cover, .work--game .cover { aspect-ratio: 16 / 9; }
-.work--game .work__cover { flex-basis: 380px; }
+.library__grid--game .cover { aspect-ratio: 16 / 9; }
 @media (max-width: 520px) {
   .library__grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 20px 12px; }
   .library__grid--game { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
 }
 
-/* A detail page sits in one centred column: a large cover beside what is known, the record below at the same width. */
-.work { display: flex; flex-wrap: wrap; gap: 28px 48px; max-width: 980px; margin-inline: auto; padding-block: 12px 36px; }
-.work ~ .reading__article { max-width: 980px; margin-inline: auto; }
 /*
- * Ink and Apple write a work's record straight on the page, as the notes are (round four, H-09): no sheet, and
- * the outline from Notion is one line of small links between two hairlines instead of a grey block. The island
+ * Ink and Apple write a work's record straight on the page, as the notes are (round four, H-09): no sheet. The island
  * and Y2K keep their sheet, which is what they are.
  */
-:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
-:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc { margin: 0 0 28px; padding: 10px 0; border-block: 1px solid var(--rule); border-radius: 0; background: none; }
-:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 20px; }
-:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc::before { content: "本文"; margin-right: 4px; font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--muted); }
-:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc a { padding: 6px 0; }
-.work__cover { flex: 0 0 300px; max-width: 100%; }
-.work--book .work__cover { flex-basis: 260px; }
-.work__info { flex: 1 1 320px; min-width: 0; }
-.work__info h1 { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 42px); font-weight: 400; line-height: 1.2; }
-.work__original { margin: 6px 0 0; font-size: var(--text-body); color: var(--muted); }
-.work__info .reading__tags { margin: 16px 0 0; }
-/* What stands out first: one sentence of when and what in the hand font, then the rating as ink dots and progress as a line of ink. */
-.work__said { margin: 22px 0 0; font-family: var(--font-hand); font-size: var(--text-lg); line-height: 1.5; color: var(--ink); }
-.work__lead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin: 10px 0 0; }
-.work__lead dd { margin: 0; }
-/* A game's platforms between its status and rating (platform-chip below). */
-.work__platforms { display: flex; flex-wrap: wrap; gap: 6px; }
-.work__platforms .platform-chip { padding: 2px 9px; font-size: var(--text-sm); }
-.work__rating, .work__progress { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) :is(.work-film__main > .reading__article, .work-book__main > .reading__article, .work-game__main > .reading__article) { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.work__rating { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
 .work__dots { display: inline-flex; gap: 5px; }
 .work__dots i { width: 11px; height: 11px; border: 1.5px solid var(--accent); border-radius: 50%; }
 .work__dots i.is-on { background: var(--accent); }
-.work__progress { flex: 1 1 200px; }
-.work__progress dd { flex: 1; display: flex; align-items: center; gap: 10px; }
-.work__bar { flex: 1; height: 5px; border-radius: 999px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--progress) 100% no-repeat, var(--soft); }
-/*
- * Everything else, as one quiet line under a hairline. A fact keeps together; the dots sit in the gaps between
- * facts, so one that would start a wrapped line falls outside it and is clipped (as .library__meta does).
- */
-.work__line { display: flex; flex-wrap: wrap; gap: 0 18px; overflow-x: clip; font-variant-numeric: tabular-nums; margin: 18px 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: var(--text-sm); line-height: 1.8; color: var(--muted); }
-.work__line span { position: relative; }
-.work__line span + span::before { content: "·"; position: absolute; left: -12px; }
 /* The floor of the page: the works on either side, as the note pages' previous and next cards (study.css .pager). */
 .work__neighbours, .work__neighbours-pending, .work__neighbours-failed { max-width: 980px; margin: 28px auto 0; }
 .work__neighbours a { flex-basis: 260px; }
@@ -206,26 +174,181 @@
 :root:not([data-skin]) .work__record-empty { padding-bottom: 10px; }
 :root:not([data-skin]) .work__record-empty::after { content: ""; position: absolute; left: 0; bottom: 0; width: 46px; height: 6px; background: color-mix(in srgb, var(--accent) 55%, transparent); -webkit-mask: var(--pen-stroke) center / 100% 100% no-repeat; mask: var(--pen-stroke) center / 100% 100% no-repeat; }
 [data-skin="island"] .work__record-empty { background: linear-gradient(transparent 56%, var(--marker) 56% 88%, transparent 88%); }
-@media (max-width: 640px) {
-  .work__cover, .work--book .work__cover { flex-basis: 220px; }
-}
+
 /*
- * Phones: a poster or book cover takes two fifths of the row with the title, tags, sentence and rating beside it,
- * like the desktop page made small, so the first screen holds the whole record instead of the cover alone.
- * The line of facts and the outside link run under both. Game art is wide and stays above the title.
+ * Films (the owner's pick 甲 of 2026-11-19, "海报幕布", after Letterboxd and TMDB). The poster, blurred, is a dark
+ * band across the page carrying the breadcrumb, the title and one line of facts; the poster itself stands over the
+ * band's lower edge at the head of a side column (the owner's rating, when they saw it, the public score), and the
+ * write-up runs beside it. The band is the same dark glass in every skin and scheme, so its words are always light.
+ * Without a poster the band is the page's own soft ground and the poster's place shows the spine tile.
  */
-@media (max-width: 540px) {
-  .work:not(.work--game) { display: grid; grid-template-columns: 40% minmax(0, 1fr); grid-template-rows: repeat(5, auto) 1fr; gap: 0 16px; align-items: start; padding-top: 0; }
-  .work:not(.work--game) .work__info { display: contents; }
-  .work:not(.work--game) .work__cover { grid-column: 1; grid-row: 1 / span 6; }
-  .work:not(.work--game) .work__info > * { grid-column: 2; }
-  .work:not(.work--game) .work__info > :is(.work__line, .work__line ~ *) { grid-column: 1 / -1; }
-  .work:not(.work--game) .work__info h1 { font-size: var(--text-2xl); }
-  .work:not(.work--game) .work__original { font-size: var(--text-sm); }
-  .work:not(.work--game) .work__info .reading__tags { margin-top: 10px; }
-  .work:not(.work--game) .work__said { margin-top: 12px; font-size: var(--text-md); }
-  .work:not(.work--game) .work__lead { margin-top: 8px; gap: 8px 12px; }
-  .work:not(.work--game) .work__line { margin-top: 18px; }
+.work-band { position: relative; overflow: hidden; background: #15171c; color: #f4f1ea; }
+.work-band::before { content: ""; position: absolute; inset: -48px; background: var(--band) center 30% / cover; filter: blur(30px) saturate(1.1); opacity: 0.75; }
+.work-band::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 12, 16, 0.2), rgba(10, 12, 16, 0.74)); }
+.work-band--plain { background: var(--soft); color: var(--ink); }
+.work-band--plain::before, .work-band--plain::after { content: none; }
+.work-band__in { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 300px; padding-bottom: 26px; }
+.work-band .crumbs, .work-band .crumbs [aria-current] { color: inherit; }
+.work-band .crumbs { opacity: 0.78; }
+.work-band__text { max-width: 980px; width: 100%; margin: auto auto 0; padding-left: 260px; }
+.work-band__title { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 42px); font-weight: 400; line-height: 1.2; color: inherit; overflow-wrap: anywhere; }
+.work-band__original { margin: 6px 0 0; font-size: var(--text-body); opacity: 0.8; }
+.work-band__meta { margin: 10px 0 0; font-size: var(--text-sm); line-height: 1.6; opacity: 0.9; }
+.work-film { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 40px; max-width: 980px; margin-inline: auto; }
+.work-film__poster { position: relative; z-index: 1; margin-top: -190px; }
+.work-film__meta { display: none; }
+.work-film__mine { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: var(--text-sm); }
+.work-film__mine dd { margin: 0; }
+.work-film__mine .work__rating { font-size: var(--text-lg); color: var(--ink); }
+.work-film__seen { margin: 8px 0 0; line-height: 1.7; color: var(--ink); }
+.work-film__seen p { margin: 0; }
+.work-film__seen ul { margin: 2px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+.work-film__seen li::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 8px 2px 0; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.work-film__fact { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.work-film__main { min-width: 0; padding-top: 22px; }
+.work-film__main > .reading__tags { margin: 0 0 6px; }
+.work-film__main > .reading__article { margin-top: 18px; }
+.work-film__main > .work__record-empty { margin: 28px 0 0; }
+.work-film__main .work__neighbours, .work-film__main .work__neighbours-pending { margin-top: 40px; }
+/* The cards on either side carry a small poster at their outer edge (2026-11-19). */
+.work__neighbours--posters a { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-content: center; column-gap: 12px; }
+.work__neighbours--posters a > * { grid-column: 2; }
+.work__neighbours--posters a > .work__neighbour-poster { grid-column: 1; grid-row: 1 / span 3; align-self: center; }
+.work__neighbours--posters .pager__next { grid-template-columns: minmax(0, 1fr) 44px; }
+.work__neighbours--posters .pager__next > * { grid-column: 1; }
+.work__neighbours--posters .pager__next > .work__neighbour-poster { grid-column: 2; }
+.work__neighbour-poster .cover { width: 44px; border-radius: var(--radius-xs); box-shadow: none; }
+.work__neighbour-poster .cover--empty span { display: none; }
+.work__neighbours--posters a:not(.pager__next) > span:first-child::before { content: "← "; }
+.work__neighbours--posters .pager__next > span:first-child::after { content: " →"; }
+@media (max-width: 640px) {
+  .work-band__in { min-height: 230px; padding-bottom: 18px; }
+  .work-band__text { padding-left: 124px; }
+  .work-band__title { font-size: var(--text-2xl); }
+  .work-band__meta { display: none; }
+  .work-film { grid-template-columns: minmax(0, 1fr); }
+  .work-film__poster { width: 108px; margin-top: -116px; }
+  .work-film__meta { display: block; margin: 12px 0 0; font-size: var(--text-sm); line-height: 1.6; color: var(--muted); }
+  .work-film__main { padding-top: 20px; }
+}
+
+/*
+ * Books (the owner's pick 乙 of 2026-11-19, "书架与阅读历程", after Goodreads and StoryGraph). No band: the book
+ * stands in a left column (the cover with a spine's shade on its left edge, then status and a few quiet rows), and
+ * beside it the title, the author, the reading as one line from start to end, the excerpts as slips and anything
+ * else the owner wrote. The column stays in view while the excerpts scroll by.
+ */
+.work-book { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 44px; align-items: start; max-width: 980px; margin-inline: auto; padding-top: 4px; }
+.work-book__side { position: sticky; top: 88px; }
+.work-book__cover .cover { border-radius: 3px var(--radius-xs) var(--radius-xs) 3px; box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.08), var(--shadow-lift); }
+.work-book__facts { margin: 18px 0 0; font-size: var(--text-sm); }
+.work-book__facts dd { margin: 0; }
+.work-book__state { display: inline-block; padding: 1px 12px; border-radius: 999px; background: var(--ink); font-size: var(--text-xs); color: var(--bg); }
+.work-book__state--reading { background: var(--accent); color: var(--card); }
+.work-book__state--wishlist { background: var(--soft); color: var(--ink); }
+.work-book__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.work-book__row .work__rating { color: inherit; }
+.work-book__facts > div:first-child { margin-bottom: 12px; }
+.work-book__title { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 40px); font-weight: 400; line-height: 1.2; overflow-wrap: anywhere; }
+.work-book__by { margin: 6px 0 0; font-size: var(--text-body); }
+.work-book__main { min-width: 0; }
+.work-book__main > .reading__tags { margin: 12px 0 0; }
+.work-book__main > .reading__article { margin-top: 34px; }
+.work-book__main > .work__record-empty { margin: 30px 0 0; }
+.work-book__main .work__neighbours, .work-book__main .work__neighbours-pending { margin-top: 40px; }
+/* The reading, from where it began to where it ended; an open end is a book still being read, filled as far as it got. */
+.journey { display: grid; grid-template-columns: auto minmax(60px, 1fr) auto; align-items: center; gap: 18px; margin-top: 22px; padding: 16px 20px; border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); font-size: var(--text-sm); }
+.journey small { display: block; font-size: var(--text-xs); color: var(--muted); }
+.journey b { display: block; font-family: var(--font-hand); font-size: var(--text-md); font-weight: 400; white-space: nowrap; }
+.journey__end { text-align: right; }
+.journey--one { display: block; }
+.journey__track { position: relative; height: 2px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--progress, 100%) 100% no-repeat, var(--rule); }
+.journey__track::before, .journey__track::after { content: ""; position: absolute; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.journey__track::before { left: 0; }
+.journey__track::after { right: 0; }
+.journey--open .journey__track::after { top: -4px; box-sizing: border-box; width: 10px; height: 10px; border: 2px solid var(--ink); background: var(--card); }
+.journey__track em { position: absolute; left: 50%; top: -11px; transform: translateX(-50%); padding: 0 10px; background: var(--card); font-style: normal; font-size: var(--text-xs); line-height: 22px; color: var(--muted); white-space: nowrap; }
+/* Excerpts, one slip each; a part's name heads its slips with how many there are. */
+.work-excerpts { margin-top: 34px; }
+.work-excerpts__title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font-family: var(--font-hand); font-size: var(--text-xl); font-weight: 400; }
+.work-excerpts__title small { font-family: var(--font-sans); font-size: var(--text-sm); color: var(--muted); }
+.work-excerpts .prose > .list { margin: 0; padding: 0; list-style: none; }
+.work-excerpts .prose > .list > li, .work-excerpts .prose > :is(p, blockquote) { margin: 0 0 12px; padding: 14px 18px; border: 0; border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); font-style: normal; }
+.work-excerpts .prose > :is(h3, h4) { margin: 26px 0 12px; font-size: var(--text-md); color: var(--muted); }
+.work-excerpts .prose > :is(h3, h4):first-child { margin-top: 0; }
+@media (max-width: 640px) {
+  .work-book { grid-template-columns: minmax(0, 1fr); }
+  .work-book__side { position: static; display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 20px; }
+  .work-book__facts { margin: 0; }
+  .work-book__title { font-size: var(--text-2xl); }
+  .journey { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; }
+  .journey__track { grid-column: 1 / -1; grid-row: 2; margin: 10px 4px 4px; }
+}
+
+/*
+ * Games (the owner's pick 乙 of 2026-11-19, "全幅主视觉", after the PlayStation Store and Apple TV). Every game's cover
+ * is wide key art, so it runs the width of the page unblurred, darkened behind the words, and fades into the page
+ * through a mask, so the skin's own ground (paper, stripes, grid) shows below it. The title and platforms stand on
+ * the art above the fade. A dark ground sits under the art, so the words stay readable if the art does not arrive.
+ * Below, the side column and the write-up, as on a film's page.
+ */
+.game-band { position: relative; color: #f4f1ea; }
+.game-band::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 14, 0.45), rgba(8, 10, 14, 0) 28%, rgba(8, 10, 14, 0.5) 72%), var(--art) center 20% / cover, #15171c; -webkit-mask: linear-gradient(#000 70%, transparent); mask: linear-gradient(#000 70%, transparent); }
+.game-band--plain { color: var(--ink); }
+.game-band--plain::before { content: none; }
+.game-band--plain .game-band__in { min-height: 0; padding-bottom: 36px; }
+.game-band__in { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: clamp(300px, 36vw, 460px); padding-bottom: clamp(64px, 9vw, 120px); }
+.game-band .crumbs, .game-band .crumbs [aria-current] { color: inherit; }
+.game-band .crumbs { opacity: 0.85; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+.game-band--plain .crumbs { text-shadow: none; }
+.game-band__text { max-width: 980px; width: 100%; margin: auto auto 0; }
+.game-band__title { margin: 0; font-family: var(--font-hand); font-size: clamp(30px, 4vw, 46px); font-weight: 400; line-height: 1.15; color: inherit; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45); overflow-wrap: anywhere; }
+.game-band--plain .game-band__title { text-shadow: none; }
+.game-band__platforms { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
+.game-band__platforms .platform-chip { padding: 2px 9px; font-size: var(--text-sm); }
+.work-game { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 0 40px; max-width: 980px; margin: -16px auto 0; position: relative; z-index: 1; }
+.work-game__facts { margin: 0; font-size: var(--text-sm); }
+.work-game__facts dd { margin: 0; }
+.work-game__group { padding: 14px 0; border-top: 1px solid var(--rule); }
+.work-game__group:first-child { padding-top: 0; border-top: 0; }
+.work-game__group .work__rating { margin-top: 10px; font-size: var(--text-lg); color: var(--ink); }
+.work-game__unrated { margin-top: 8px; color: var(--muted); }
+.work-game__state { display: inline-block; padding: 1px 12px; border-radius: 999px; background: var(--ink); font-size: var(--text-xs); color: var(--bg); }
+.work-game__state--playing { background: var(--accent); color: var(--card); }
+.work-game__state--platinumed { background: linear-gradient(135deg, #d6dae2, #8a92a4); color: #1a1d24; }
+.work-game__state--wishlist { background: var(--soft); color: var(--ink); }
+.game-time__played { font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.game-time__note { color: var(--muted); }
+.game-time__note:empty { display: none; }
+.game-time__bars { margin-top: 8px; }
+.game-time__bar { display: grid; grid-template-columns: 2.5em minmax(40px, 1fr) auto; align-items: center; gap: 10px; margin-top: 6px; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-time__bar i { height: 8px; border-radius: 999px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--share) 100% no-repeat, var(--soft); }
+.game-time__bar--expected i { background: linear-gradient(var(--muted), var(--muted)) 0 / var(--share) 100% no-repeat, var(--soft); }
+.game-timeline { margin: 0; padding: 0 0 0 18px; border-left: 2px solid var(--rule); list-style: none; }
+.game-timeline li { position: relative; margin: 0 0 12px; line-height: 1.5; }
+.game-timeline li:last-child { margin-bottom: 0; }
+.game-timeline li::before { content: ""; position: absolute; left: -25px; top: 5px; box-sizing: border-box; width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
+.game-timeline li.game-timeline__own::before { background: var(--ink); }
+.game-timeline b { display: block; font-weight: 500; color: var(--ink); }
+.game-timeline span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.work-game__main { min-width: 0; padding-top: 2px; }
+.work-game__main > .reading__tags { margin: 0 0 6px; }
+.work-game__main > .reading__article { margin-top: 18px; }
+.work-game__main > .work__record-empty { margin: 24px 0 0; }
+.work-game__main .work__neighbours, .work-game__main .work__neighbours-pending { margin-top: 40px; }
+/* A game's neighbours carry its wide art. */
+.work__neighbours--wide a { grid-template-columns: 72px minmax(0, 1fr); }
+.work__neighbours--wide .pager__next { grid-template-columns: minmax(0, 1fr) 72px; }
+.work__neighbours--wide .work__neighbour-poster .cover { width: 72px; aspect-ratio: 16 / 9; object-fit: cover; }
+@media (max-width: 640px) {
+  .game-band__in { min-height: 280px; padding-bottom: 56px; }
+  .game-band--plain .game-band__in { min-height: 0; padding-bottom: 28px; }
+  .game-band__title { font-size: var(--text-2xl); }
+  .work-game { grid-template-columns: minmax(0, 1fr); margin-top: -12px; }
+  .work-game__facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
+  .work-game__group { padding: 0 0 14px; border-top: 0; }
+  .work-game__dates { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--rule); }
+  .work-game__main { padding-top: 6px; }
 }
 
 /* Albums */
@@ -407,6 +530,8 @@
 /* A work's page on its way: the same layout, quiet bars in place of the words. */
 .work-loading__crumb { width: 72px; height: 14px; }
 .work-loading .work__cover .cover { box-shadow: none; background: var(--soft); }
+.work-band.work-loading .skeleton { display: block; background: rgba(255, 255, 255, 0.14); }
+.work-band.work-loading .work-loading__title { width: min(420px, 70%); margin: 0; }
 .work-loading__title { width: 70%; height: 40px; margin-bottom: 26px; }
 .work-loading__line { height: 16px; margin-bottom: 14px; }
 
@@ -421,5 +546,5 @@
  * is 28 (games, albums, courses, notes), one beside a poster 24 (films and books, above).
  */
 @media (max-width: 640px) {
-  .work--game .work__info h1, .album-head h1, .course-head h1, .reading__title { font-size: var(--text-3xl); }
+  .album-head h1, .course-head h1, .reading__title { font-size: var(--text-3xl); }
 }
