@@ -1,5 +1,8 @@
 import "server-only";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
+import { DEFAULT_SKIN, schemeFor, type SkinId } from "../skins.ts";
 import { getSiteConfig } from "./index.ts";
 import { ICON_BOX, ICON_COLORS, ICON_STROKE, monogram, sealGlyphs, type IconTheme } from "./monogram.ts";
 
@@ -16,11 +19,14 @@ export function isIconVariant(value: string): value is IconVariant {
   return Object.hasOwn(variants, value);
 }
 
-/**
- * The site icon: the owner's initials as a seal. The name comes from the private site configuration
- * on every request, so no initials live in the repository; without a usable name it shows a pen stroke.
- */
-export function siteIcon(variant: IconVariant): ImageResponse {
+/** Locally supplied artwork takes precedence over the seal drawn from the site's configured name. */
+export async function siteIcon(requested: IconVariant, skin: SkinId = DEFAULT_SKIN): Promise<Response> {
+  const variant = requested === "apple" ? "apple" : schemeFor(skin, requested, requested);
+  const filename = variant === "apple" ? "apple-touch-icon.png" : `favicon-${variant}-96.png`;
+  const headers = { "Cache-Control": "public, max-age=3600" };
+  const png = await readFile(/* turbopackIgnore: true */ join(process.cwd(), "public/local/site-icons", skin, filename)).catch(() => null);
+  if (png) return new Response(png, { headers: { ...headers, "Content-Type": "image/png" } });
+
   const { theme, size, radius } = variants[variant];
   const { seal, mark } = ICON_COLORS[theme];
   const name = getSiteConfig().profile.name;
@@ -36,7 +42,6 @@ export function siteIcon(variant: IconVariant): ImageResponse {
         </svg>
       </div>
     ),
-    // The initials can change with the private configuration, so browsers keep the image for an hour only.
-    { width: size, height: size, headers: { "Cache-Control": "public, max-age=3600" } },
+    { width: size, height: size, headers },
   );
 }

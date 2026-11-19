@@ -223,7 +223,7 @@ interface Project extends ContentBase {
 - **状态码**。带加载占位的动态页面（未知课程、未知笔记、未启用栏目）内容是“找不到”，但 HTTP 状态是 200 并带禁止收录标记。做站点地图、收录与监控时请按此处理，或约定一个能返回 404 的做法。
 - **收录与订阅**。站点地图、订阅源与文章级的搜索元数据都没有做，全站目前禁止收录。正式发布前请确定范围；需要页面里输出什么元数据，前端配合。
 - **个人信息**。来自 `SITE_CONFIG_JSON`（托管环境）或忽略的 `config/site.json`（本地），云端已配置。头像目前为空，上线时需要一个可公开访问的头像地址，建议放进同一套媒体存储。
-- **站点图标**。已由前端实现：按站点配置里的姓名生成，地址是 `/site-icon/…` 与 `/favicon.ico`，不需要后端配合。
+- **站点图标**。`/site-icon/…` 与 `/favicon.ico` 优先使用运行目录 `public/local/site-icons/` 的主题素材，缺失时按站点配置生成。素材通过私有发布流程交付，文件约定见[前端说明](FRONTEND_GUIDE.md)。
 - **自动检查**。`.github/workflows/check.yml` 已为指向 develop 和 main 的合并请求及两条分支推送运行 `npm run check` 和 `npm run build`，安装两份锁文件并使用 Node 24。合并到 develop 仍需本机和 GitHub 自动检查通过，不要求 Vercel Preview。
 - **部署次数**。最新要求（2026-10-12）收紧为只有 main 自动 Git 部署，develop 和工作分支不自动部署预览；取代之前 main／develop 都部署的安排。`vercel.json` 用 `**: false`、`main: true` 实现，旧分支须先整合最新 develop。集中积累改动后由用户合并发布请求；手动 deploy／redeploy 或部署钩子仅在用户明确要求时执行。已有 Preview 保持旧代码，日常验证和内容同步不重复部署。共同规则见 AGENTS.md。
 - **真实数据预览的重载循环（已解决）**。`next dev` 在保留的 `.next/dev` 缓存上重启后可能让页面无限整页重载，`npm run dev:real` 同样如此。经用户同意，已在 `next.config.ts` 里设 `experimental.turbopackFileSystemCacheForDev: false` 关掉开发缓存，`scripts/dev-real.mjs` 不需要改；代价是每次启动后首次打开页面要重新编译。旧分支要先整合最新 develop 才有这项设置。
