@@ -1,12 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { Book, ContentDocument, DateRange, Movie, Rating } from "../../contracts/content.ts";
+import type { Book, ContentDocument, DateRange, Game, Movie, Rating, TimeAmount } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
-import { knownStatusLabel, libraryHref, movieRatingFact, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
-import { bookRecord, movieRecord } from "../lib/work-record.ts";
+import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
+import { gameDateRows } from "../lib/game-dates.ts";
+import { bookRecord, gameRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
+import { PlatformChips } from "./platform-chips";
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -179,5 +181,96 @@ export function BookPage({ type, label, item, document, timeZone, neighbours }: 
         </div>
       </div>
     </div>
+  );
+}
+
+const hours = (amount: TimeAmount | null) => amount && amount.value > 0 ? (amount.unit === "hour" ? amount.value : amount.value / 60) : null;
+
+/**
+ * Played against expected, as two bars on one scale, only when both are known (23 of the first 50 games have an
+ * estimate). The longer of the two fills its bar; a game played past its estimate shows it at a glance.
+ */
+function TimeBars({ item }: { item: Game }) {
+  const played = hours(item.playedTime), expected = hours(item.estimatedTime);
+  const playedLabel = cardTimeLabel(item.playedTime), expectedLabel = cardTimeLabel(item.estimatedTime);
+  if (!played || !expected || !playedLabel || !expectedLabel) return null;
+  const scale = Math.max(played, expected);
+  const bar = (label: string, value: number, text: string, className: string) => (
+    <div className={`game-time__bar ${className}`}><span>{label}</span><i style={{ "--share": `${Math.round((value / scale) * 1000) / 10}%` } as React.CSSProperties} aria-hidden="true" /><span>{text}</span></div>
+  );
+  return <div className="game-time__bars">{bar("已玩", played, playedLabel, "game-time__bar--played")}{bar("预计", expected, expectedLabel, "game-time__bar--expected")}</div>;
+}
+
+/**
+ * The game's days in the order they happened: its release, then what the platforms report and the date the owner
+ * wrote (the rows and their rules are gameDateRows', the owner's of 2026-10-16). The owner's own date has a filled
+ * dot. A row without a date keeps its place at the end and says so.
+ */
+function GameTimeline({ item, timeZone }: { item: Game; timeZone: string }) {
+  const rows: { label: string; range: DateRange | null; own: boolean }[] = gameDateRows(item, timeZone).map(([label, range]) => ({ label, range, own: label === "体验日期" || label === "游玩日期" }));
+  if (item.releaseDate) rows.push({ label: "发售", range: item.releaseDate, own: false });
+  const known = rows.filter(row => row.range && rangeLabel(row.range, timeZone)).sort((a, b) => a.range!.start.slice(0, 10).localeCompare(b.range!.start.slice(0, 10)));
+  const unknown = rows.filter(row => !row.range || !rangeLabel(row.range, timeZone));
+  return (
+    <ol className="game-timeline">
+      {[...known, ...unknown].map(row => (
+        <li key={row.label} className={row.own ? "game-timeline__own" : undefined}><b>{row.label}</b><span>{(row.range && rangeLabel(row.range, timeZone)) ?? "日期未记录"}</span></li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * A game (the owner's pick 乙 of 2026-11-19, "全幅主视觉", after the PlayStation Store and Apple TV): every game's
+ * cover is wide key art, so it runs the width of the page unblurred and fades into the paper; the title and the
+ * platforms stand on it. Below, as on a film's page, a side column holds the status, the owner's rating, the time
+ * played (against the estimate when there is one) and the days in order, and the write-up runs beside it. Most
+ * recent games have no write-up, so the column alone carries the page.
+ */
+export function GamePage({ type, label, item, document, timeZone, neighbours }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode }) {
+  const record = gameRecord(document);
+  const played = cardTimeLabel(item.playedTime);
+  const expected = cardTimeLabel(item.estimatedTime);
+  const art = item.cover ? { "--art": `url("${imagePreviewSrc(item.cover, 1600)}")` } as React.CSSProperties : undefined;
+  const chips = platformChips(item.platforms);
+  return (
+    <>
+      <div className={`game-band${item.cover ? "" : " game-band--plain"}`} style={art}>
+        <div className="wrap game-band__in">
+          <nav className="crumbs" aria-label="面包屑">
+            <Link href={libraryHref(type, null, null)}>{label}</Link><span aria-hidden="true">›</span><span aria-current="page">{item.title}</span>
+          </nav>
+          <div className="game-band__text">
+            <h1 className="game-band__title">{item.title}</h1>
+            {chips.length ? <p className="game-band__platforms"><span className="visually-hidden">平台：</span><PlatformChips chips={chips} /></p> : null}
+          </div>
+        </div>
+      </div>
+      <div className="wrap">
+        <div className="work-game">
+          <aside className="work-game__side">
+            <dl className="work-game__facts">
+              <div className="work-game__group">
+                <dt className="visually-hidden">状态</dt><dd><span className={`work-game__state work-game__state--${item.status}`}>{statusLabel(item)}</span></dd>
+                {/* Fewer than half the games carry the owner's rating; without one it is a quiet line, not a large empty score. */}
+                <dt className="visually-hidden">我的评分</dt>{item.rating ? <RatingValue rating={item.rating} /> : <dd className="work-game__unrated">未评分</dd>}
+              </div>
+              <div className="work-game__group game-time">
+                <dt className="visually-hidden">已玩时长</dt>
+                <dd className="game-time__played">{played ?? "时长未记录"}</dd>
+                <dd className="game-time__note">{played ? "已玩" : ""}{expected ? `${played ? "，" : ""}预计 ${expected}` : ""}</dd>
+                <dd><TimeBars item={item} /></dd>
+              </div>
+              <div className="work-game__group work-game__dates"><dt className="visually-hidden">日期</dt><dd><GameTimeline item={item} timeZone={timeZone} /></dd></div>
+            </dl>
+          </aside>
+          <div className="work-game__main">
+            {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
+            <WorkRecord item={item} document={record} />
+            {neighbours}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

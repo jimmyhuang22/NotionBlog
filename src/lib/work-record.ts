@@ -173,3 +173,8 @@ export function bookRecord(document: ContentDocument | null): BookRecord {
     rest: assemble(document, kept.filter((_, index) => index !== at)),
   };
 }
+
+/** A game (the key art across the page, 2026-11-19): the outline and empty headings go; every heading keeps the owner's words. */
+export function gameRecord(document: ContentDocument | null): ContentDocument | null {
+  return document ? assemble(document, tidy(document, {})) : null;
+}

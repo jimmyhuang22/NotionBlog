@@ -40,14 +40,19 @@ export function LibraryDetailLoading() {
       </div>
     </div>
   );
+  // A game's page opens on its wide art with the side column under it (2026-11-19); the wait keeps that shape.
   return (
-    <div className="wrap page-loading" role="status" aria-label="正在加载">
-      <nav className="crumbs" aria-hidden="true"><span className="skeleton work-loading__crumb" /></nav>
-      <div className={`work work--${kind} work-loading`}>
-        <div className="work__cover"><span className="skeleton cover work-loading__cover" /></div>
-        <div className="work__info">
-          <span className="skeleton work-loading__title" />
-          {lines}
+    <div className="page-loading" role="status" aria-label="正在加载">
+      <div className="game-band game-band--plain work-loading">
+        <div className="wrap game-band__in">
+          <nav className="crumbs" aria-hidden="true"><span className="skeleton work-loading__crumb" /></nav>
+          <div className="game-band__text"><span className="skeleton work-loading__title" /></div>
+        </div>
+      </div>
+      <div className="wrap">
+        <div className="work-game work-loading">
+          <aside className="work-game__side">{lines}</aside>
+          <div className="work-game__main">{lines}</div>
         </div>
       </div>
     </div>
