@@ -17,7 +17,6 @@ import { getSiteConfig } from "@/lib/site";
 import { contactCode } from "@/lib/contact";
 import { inputModeScript } from "@/lib/input-mode";
 import { themeScript } from "@/lib/skins";
-import { discoveryOptions } from "@/lib/seo/discovery";
 import { siteMetadata } from "@/lib/seo/metadata";
 import { publicCacheEnabled } from "@/server/public-cache/policy";
 import { visitorAnalyticsConfig } from "@/server/analytics/config";
@@ -44,11 +43,6 @@ export function generateMetadata(): Metadata {
       apple: "/site-icon/apple",
     },
   };
-}
-
-/** The feed only carries entries once the site is open to discovery; until then there is nothing to subscribe to. */
-function hasFeed(): boolean {
-  try { return discoveryOptions(process.env).enabled; } catch { return false; }
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -79,7 +73,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <nav className="site-footer__links" aria-label="页脚">
               {/* The same card as the profile's envelope, opened upwards; only when an email is configured. */}
               {contact ? <ContactCard code={contact} place="above" label="联系我" className="site-footer__contact">联系我</ContactCard> : null}
-              {hasFeed() ? <a href="/feed.xml">订阅</a> : null}
               {site.notionSiteUrl ? <a className="site-footer__notion" href={site.notionSiteUrl} target="_blank" rel="noopener noreferrer" aria-label="Notion 源站（新标签页打开）">
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d={notionIconPath} /></svg>
                 <span>Notion 源站</span>

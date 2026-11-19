@@ -104,7 +104,7 @@
   <circle class="dot" cx="999" cy="176" r="3"/><text x="1012" y="181">四套主题</text>
   <circle class="dot" cx="999" cy="206" r="3"/><text x="1012" y="211">首页时间线</text>
   <circle class="dot" cx="999" cy="236" r="3"/><text x="1012" y="241">课程目录与笔记</text>
-  <circle class="dot" cx="999" cy="266" r="3"/><text x="1012" y="271">站内搜索与 RSS</text>
+  <circle class="dot" cx="999" cy="266" r="3"/><text x="1012" y="271">站内搜索</text>
 
   <path class="arrow" d="M910 190 H966" marker-end="url(#a)"/>
 
