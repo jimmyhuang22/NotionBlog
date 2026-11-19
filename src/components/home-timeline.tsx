@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import type { HomeFeedV2Item, HomeFeedV2Page } from "../../contracts/social-timeline.ts";
+import type { HomeFeedV2Item, HomeFeedV2Page, SocialTimelineWork } from "../../contracts/social-timeline.ts";
 import { isNoticedActivity } from "../lib/home-feed.ts";
 import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
@@ -10,7 +10,8 @@ import { PlatformChips } from "./platform-chips";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
 import { EntryMoment } from "./entry-moment";
 import { MonthLabel } from "./month-label";
-import { HomeWorkLine, HomeWorks } from "./home-works";
+import { HomeWorkLine, HomeWorks, workPlatforms } from "./home-works";
+import { PlatformMark } from "./platform-signs";
 import { StatusBody } from "./status-body";
 import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
@@ -88,6 +89,14 @@ const DRAWN_ROWS = 8;
 /** Whether this visit has drawn the home timeline already: coming back to the home page shows it at once. */
 let drawnThisVisit = false;
 
+/**
+ * The "作品" tag of a row of works, led by the platforms' signs (2026-11-19, the owner's pick: the sign moved here
+ * from under each title, where it stood alone). The works page exists whenever these entries do.
+ */
+function WorksTag({ works }: { works: SocialTimelineWork[] }) {
+  return <Link className="tag tag--social" href="/works" prefetch={false} title="全部作品">{workPlatforms(works).map(platform => <PlatformMark key={platform} platform={platform} size={12} />)}作品</Link>;
+}
+
 export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFeedV2Page; pageSize: number; timeZone: string }) {
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<HomeFeedV2Item>("/api/home/feed-v2", { limit: String(pageSize) }, initial, true);
   const today = useToday(timeZone);
@@ -124,7 +133,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                 <p className="entry__meta">
                   {/* The days the run covers; a time of day would belong to one work only. */}
                   {span ? <span className="entry__time"><EntryMoment moment={span} /></span> : null}
-                  <Link className="tag tag--social" href="/works" prefetch={false} title="全部作品">作品</Link>
+                  <WorksTag works={run.flatMap(entry => entry.source === "social" ? [entry.work] : [])} />
                   <span className="entry__count">{run.length} 件</span>
                 </p>
                 <HomeWorks works={run.flatMap(entry => entry.source === "social" ? [entry.work] : [])} timeZone={timeZone} today={today} priorityCover={priorityCover} />
@@ -134,7 +143,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
                 <p className="entry__meta">
                   {moment ? <time className="entry__time" dateTime={item.occurredAt?.start}><EntryMoment moment={moment} /></time> : null}
                   {/* The works page exists whenever these entries do: both follow the social source. */}
-                  <Link className="tag tag--social" href="/works" prefetch={false} title="全部作品">作品</Link>
+                  <WorksTag works={[item.work]} />
                   {/* Placed at the moment a change was noticed: said here, so the time is not read as a publication date. */}
                   {item.work.collection && isNoticedActivity(item.work.collection) ? <span className="tag">发现更新</span> : null}
                 </p>
