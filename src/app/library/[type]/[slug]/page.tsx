@@ -5,15 +5,13 @@ import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import { contentMetadata } from "@/lib/seo/metadata";
 import { notFound } from "next/navigation";
-import type { Game, LibraryKind, Page, Rating } from "../../../../../contracts/content.ts";
+import type { LibraryKind, Page } from "../../../../../contracts/content.ts";
 import { Cover } from "@/components/library-grid";
-import { PlatformChips } from "@/components/platform-chips";
 import { contentRepository } from "@/lib/content";
 import { dateParts, rangeLabel } from "@/lib/format";
-import { libraryHref, librarySections, progressWidth, workSentence, workFactText, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
-import { BookPage, FilmPage, RatingValue, WorkRecord } from "@/components/work-detail";
+import { librarySections, itemDate, type LibraryItem } from "@/lib/library";
+import { BookPage, FilmPage, GamePage } from "@/components/work-detail";
 import { getSiteConfig } from "@/lib/site";
-import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
 
@@ -41,53 +39,6 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   }
 }
 
-interface Facts {
-  /** The one sentence under the title: when, and what the owner did ("2024 年 7 月 13 日看过"). */
-  said: string;
-  rating: Rating | null;
-  /** Percentage read or played, when the source records one. */
-  progress: number | null;
-  rest: [string, string][];
-  /** A game's platforms, shown as boxes beside its status rather than as a row of the table. */
-  platforms: PlatformChip[];
-}
-
-/**
- * The sentence and the owner's rating lead; a missing rating says so instead of showing zero. Everything
- * else follows as one quiet line of label and value pairs (H-04, the owner's pick of 2026-10-20).
- */
-function facts(item: Game, timeZone: string): Facts {
-  const date = (label: string, value: Parameters<typeof rangeLabel>[0]): [string, string] => [label, rangeLabel(value, timeZone) ?? "日期未记录"];
-  const optional = (label: string, value: string | null | undefined): [string, string][] => (value ? [[label, value]] : []);
-  // Platforms as boxes in the leading line, the same as on the card; times written as the card writes them, none at all left out (the owner's choice, 2026-10-17).
-  return { said: workSentence(item, undefined), rating: item.rating, progress: item.progressPercent, platforms: platformChips(item.platforms), rest: [
-    ...gameDateRows(item, timeZone).map(([label, value]) => date(label, value)),
-    ...optional("已玩时长", cardTimeLabel(item.playedTime)), ...optional("预计时长", cardTimeLabel(item.estimatedTime)),
-    ...optional("发售", rangeLabel(item.releaseDate, timeZone)),
-  ] };
-}
-
-/** What stands out about a work after the sentence: platforms, the rating as ink dots, and progress as a line of ink. */
-function Lead({ rating, progress, platforms }: Facts) {
-  const width = progressWidth(progress);
-  return (
-    <dl className="work__lead">
-      {platforms.length ? <div><dt className="visually-hidden">平台</dt><dd className="work__platforms"><PlatformChips chips={platforms} /></dd></div> : null}
-      <div>
-        <dt className="visually-hidden">我的评分</dt>
-        <RatingValue rating={rating} />
-      </div>
-      {progress !== null ? (
-        <div className="work__progress">
-          <dt>进度</dt>
-          <dd>{width ? <span className="work__bar" aria-hidden="true" style={{ "--progress": width } as React.CSSProperties} /> : null}{progress}%</dd>
-        </div>
-      ) : null}
-    </dl>
-  );
-}
-
-const neighbourWords: Record<LibraryItem["kind"], string> = { movie: "看过", book: "读过", game: "玩过" };
 
 /**
  * The page's floor (W-02): the works on either side of this one in the list's own order, newest first.
@@ -128,21 +79,19 @@ async function Neighbours({ item, timeZone }: { item: LibraryItem; timeZone: str
       if (here >= 0) [newer, older] = await Promise.all([newer ?? nearest(-1), older ?? nearest(1)]);
     }
     if (!newer && !older) return null;
-    const word = neighbourWords[item.kind];
-    // Films and books read "上一部 / 下一部", "上一本 / 下一本" in the list's order, newest first, with a small cover
-    // (2026-11-19); the date under the title says which way each goes. Games keep their words until their page is redone.
-    const measure = item.kind === "movie" ? "部" : item.kind === "book" ? "本" : null;
-    const film = measure !== null;
+    // "上一部 / 下一部", "上一本 / 下一本", "上一款 / 下一款" in the list's order, newest first, with a small cover
+    // (2026-11-19); the date under the title says which way each goes.
+    const measure = item.kind === "movie" ? "部" : item.kind === "book" ? "本" : "款";
     const card = (entry: LibraryItem, label: string, className: string) => (
       <Link prefetch={false} className={className} href={entry.href}>
         <span>{label}</span><span>{entry.title}</span><small className="study-link-context">{rangeLabel(itemDate(entry), timeZone) ?? "日期未记录"}</small>
-        {film ? <span className="work__neighbour-poster" aria-hidden="true"><Cover image={entry.cover} title={entry.title} previewWidth={400} /></span> : null}
+        <span className="work__neighbour-poster" aria-hidden="true"><Cover image={entry.cover} title={entry.title} previewWidth={400} /></span>
       </Link>
     );
     return (
-      <nav className={`pager work__neighbours${film ? " work__neighbours--posters" : ""}`} aria-label={measure ? `上一${measure}和下一${measure}` : `前后${word}的`}>
-        {newer ? card(newer, measure ? `上一${measure}` : `较新${word}`, "pager__prev") : null}
-        {older ? card(older, measure ? `下一${measure}` : `较早${word}`, "pager__next") : null}
+      <nav className={`pager work__neighbours work__neighbours--posters${item.kind === "game" ? " work__neighbours--wide" : ""}`} aria-label={`上一${measure}和下一${measure}`}>
+        {newer ? card(newer, `上一${measure}`, "pager__prev") : null}
+        {older ? card(older, `下一${measure}`, "pager__next") : null}
       </nav>
     );
   } catch {
@@ -158,8 +107,8 @@ export default async function LibraryDetailPage(props: Props) {
   if (!loaded) notFound();
   const { type, section, item, document } = loaded;
   const timeZone = getSiteConfig().timeZone;
-  // The large cover's address is known here: ask for it with the page, not after it.
-  if (item.cover) preload(imagePreviewSrc(item.cover, 800), { as: "image" });
+  // The large cover's address is known here: ask for it with the page, not after it. A game's art runs the width of the page.
+  if (item.cover) preload(imagePreviewSrc(item.cover, item.kind === "game" ? 1600 : 800), { as: "image" });
   const neighbours = (
     <Suspense fallback={<div className="work__neighbours-pending" aria-hidden="true" />}>
       <Neighbours item={item} timeZone={timeZone} />
@@ -167,24 +116,5 @@ export default async function LibraryDetailPage(props: Props) {
   );
   if (item.kind === "movie") return <FilmPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
   if (item.kind === "book") return <BookPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
-  const summary = facts(item, timeZone);
-  return (
-    <div className="wrap">
-      <nav className="crumbs" aria-label="面包屑">
-        <Link href={libraryHref(type, null, null)}>{section.label}</Link><span aria-hidden="true">›</span><span aria-current="page">{item.title}</span>
-      </nav>
-      <div className={`work work--${item.kind}`}>
-        <div className="work__cover"><Cover image={item.cover} title={item.title} previewWidth={800} /></div>
-        <div className="work__info">
-          <h1>{item.title}</h1>
-          {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
-          <p className="work__said">{summary.said}</p>
-          <Lead {...summary} />
-          {summary.rest.length ? <p className="work__line">{summary.rest.map(([label, value]) => <span key={label}>{workFactText(label, value, item.kind)}</span>)}</p> : null}
-        </div>
-      </div>
-      <WorkRecord item={item} document={document} />
-      {neighbours}
-    </div>
-  );
+  return <GamePage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
 }

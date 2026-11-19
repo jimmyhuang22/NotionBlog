@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ContentBlock, ContentDocument, DateRange } from "../contracts/content.ts";
-import { bookRecord, movieRecord } from "../src/lib/work-record.ts";
+import { bookRecord, gameRecord, movieRecord } from "../src/lib/work-record.ts";
 
 const runs = (text: string) => (text ? [{ text }] : []);
 const h = (id: string, text: string, level: 1 | 2 | 3 = 1): ContentBlock => ({ id, type: "heading", level, text: runs(text) });
@@ -112,4 +112,11 @@ test("an empty bullet among the excerpts is neither a slip nor counted", () => {
   assert.equal(record.excerptCount, 2);
   assert.deepEqual(ids(record.excerpts), ["l"]);
   assert.equal((record.excerpts!.blocks[0] as Extract<ContentBlock, { type: "list" }>).items.length, 2);
+});
+
+test("a game's record keeps its own headings and drops the outline and the empty ones", () => {
+  const record = gameRecord(doc([{ id: "toc", type: "table-of-contents" }, h("g", "游玩内容目标"), p("g1", "主线剩盖侬没打"), h("f", "游玩感受"), p("f1")]));
+  assert.deepEqual(ids(record), ["g", "g1"]);
+  assert.equal(heading(record, "g"), "游玩内容目标");
+  assert.equal(gameRecord(null), null);
 });
