@@ -426,6 +426,24 @@
 /* While a shelf loads, its years wait as a row of short word-sized bars, not one grey pill (2026-11-18). */
 :root:not([data-skin]) .library__filters:not(.status-filters) .waiting__years { height: 14px; margin-block: 17px; border-radius: 0; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 7%, var(--bg)) 0 36px, transparent 36px 62px) 14px 0 / calc(100% - 14px) 100% no-repeat; }
 /*
+ * Island and Y2K take the same order on the shelves (the owner's pick 甲, 2026-11-19): the status keeps the skin's
+ * pill, the years under it are plain words over a short round bar in the skin's own colour, the island's yellow of
+ * the header and Y2K's glossy blue. The bar rides on the sliding block, so it still moves at the press. The sort keeps
+ * its ground in both, and the feed (status-filters) keeps its pill.
+ */
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .segmented--scroll { gap: 0; padding: 4px 0; background: none; box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .segmented--scroll > a { padding: 0 14px; }
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .segmented--scroll > a[aria-current] { background: none; box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .segmented--scroll > a[aria-current]:active { transform: none; background-color: var(--bloom); box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .segmented--scroll .segmented__pill { background: none; box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .segmented--scroll .segmented__pill::after { content: ""; position: absolute; right: 14px; bottom: 5px; left: 14px; height: 4px; border-radius: 999px; }
+[data-skin="island"] .library__filters:not(.status-filters) .segmented--scroll .segmented__pill::after { background: var(--island-pick); box-shadow: 0 1px 0 var(--island-pick-edge); }
+[data-skin="y2k"] .library__filters:not(.status-filters) .segmented--scroll .segmented__pill::after { background: var(--y2k-button) #1a6ace; box-shadow: 0 2px 5px -2px rgba(22, 103, 199, 0.7); }
+/* Y2K's chosen word is white on its blue button elsewhere; over the bar it is the blue itself. */
+[data-skin="y2k"] .library__filters:not(.status-filters) .segmented--scroll > :is(a[aria-current], a[data-picked]) { color: var(--accent); }
+[data-skin="y2k"] .library__filters:not(.status-filters) .segmented--slide[data-moving] > a[aria-current]:not([data-picked]) { color: var(--muted); }
+:is([data-skin="island"], [data-skin="y2k"]) .library__filters:not(.status-filters) .waiting__years { height: 14px; margin-block: 17px; border-radius: 0; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 7%, var(--bg)) 0 36px, transparent 36px 62px) 14px 0 / calc(100% - 14px) 100% no-repeat; }
+/*
  * Names in lists (shelves, works, the home timeline, a status card's title) in the body face, a little heavier;
  * the hand stays for page and section titles, months, the header and the owner's name (the owner, 2026-11-18,
  * from the side-by-side of 2026-11-16).
