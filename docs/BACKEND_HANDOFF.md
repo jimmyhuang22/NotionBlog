@@ -343,6 +343,17 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 **后端接续（2026-11-19，Codex）**：`SearchHit.cover?` 与 `details?` 已补齐，`SearchPage.kindCounts?` 提供第一页的分类总数。用未加 `kinds` 的第一页取所有开启栏目计数；加 `kinds` 时计数与该筛选的 `total` 同范围。旧回应没有新字段时仍可显示类型名、来源行和原摘要。接入方式见[搜索接口](WEBSITE_CAPABILITIES.md#给前端的接口)和[进度](progress/2026-11-19-search-result-data.md)。搜索界面的图文排版与正式验收接续由前端处理。
 
+### 十五、作品页的年份筛选（2026-11-20，Claude）
+
+**用户要做作品页的年份筛选**，样子和影视、书籍、游戏的年份一样：平台切换下面一排年份（全部、2026、2025……、无日期），选中的下面一道短线，排序挪到同一行右边。原型在前端忽略目录 `.local/design-review-kit/prototype-26/`。现在 `/api/social/works/v2` 只接受 `platform` 和 `order`，带别的参数是 400，所以要后端加两样东西。契约属于共享范围，用户已同意提出；字段名和结构由后端定。
+
+- **按年份取列表**：`/api/social/works/v2` 和服务端 `socialTimelineRepository.listWorks` 接受一个年份参数（建议和作品库列表一样叫 `year`，取数字年份或 `undated`），与 `platform`、`order` 可以同时用。年份按现在分组用的同一条日期规则：`socialWorkPublishedAt(work)`（合集取最近一集发布时间，单件取首要平台最新发布时间），按站点时区换算；没有日期的归 `undated`，不拿采样或编辑时间补。`total` 和游标跟着筛选；换年份时旧游标作废，和换平台一样。
+- **各年条数**：给出某个平台下每年各有多少件、无日期多少件，结构可以照作品库的 `LibraryYears`（`{ years: [{ year, count }], undatedCount, timeZone }`），按 `platform` 区分。前端用它画年份那一排，条数为 0 的年份不出现；只有一个年份时不显示年份筛选（作品库同样的规则）。
+- **排序叠加**：选了年份时，“按播放”“按点赞”在那一年里排序（作品库的年份和排序也是叠加的）。
+- 线上现在的分布（我 2026-11-20 读接口数的，按墨尔本时区近似）：B 站 109 件，2026 9、2025 9、2024 8、2023 54、2022 27、2019 2；小红书 135 件，2026 8、2025 120、2024 7。
+
+不要的：首页时间线不受影响；作品 DTO 本身不用加字段。接口好了告诉用户，前端再接上年份那一排，在正式站点核对两个平台的年份和条数。
+
 ## 可直接给 Codex 的启动指令
 
 ```text
