@@ -125,7 +125,13 @@
       linear-gradient(var(--bar), var(--bar)) 0 var(--bar-long) / var(--bar-long-width) var(--bar-height) no-repeat,
       linear-gradient(var(--bar), var(--bar)) 0 var(--bar-short) / var(--bar-short-width) var(--bar-height) no-repeat;
     background-origin: content-box;
-    animation: bars-out 1ms step-end forwards; animation-delay: calc(var(--i) * 150ms + 90ms);
+    /*
+     * step-start, not step-end (F58, 2026-11-19): the delay is worked out in floating seconds, and for the eighth row
+     * 7 × 0.15 + 0.09 came to 1.1400000000000001 s, so the browser ended the 1ms run a hair short of its last
+     * step and step-end left the bars standing. step-start takes the end value from the first moment of the run,
+     * and the delay still shows the bars because nothing fills backwards.
+     */
+    animation: bars-out 1ms step-start forwards; animation-delay: calc(var(--i) * 150ms + 90ms);
   }
   /* Specificity 0,3,0: it overrides any CSS animation on an entry's direct children (cards, covers) in the first screen; add theirs in script or above this weight. */
   .timeline--home [style*="--i"] .entry > * { animation: arrive 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i) * 150ms + 90ms); }
