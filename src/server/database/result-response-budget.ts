@@ -1,4 +1,5 @@
 import { ContentServiceError } from "../../../contracts/repository.ts";
+import { WEBSITE_SEARCH_DETAILS_SQL } from "./website-projection.ts";
 
 export const SEARCH_RESULT_TEXT_BYTES = 13 * 1024 * 1024;
 export const SEARCH_RESULT_STATEMENTS = 4;
@@ -8,6 +9,7 @@ const allowed = new Set([
   `${check} AS result`, `${check} AND nb_read_api.check_search_filtered_scope($4) AS result`,
   "SELECT nb_read_api.read_search_parts('qualified',$1::text[]) AS result",
   "SELECT nb_read_api.read_search_filtered_scope('qualified',$1::text[],$2::text[]) AS result",
+  WEBSITE_SEARCH_DETAILS_SQL.replace("nb_v2_api.read_content(", "nb_read_api.read_content('qualified',"),
   "SELECT nb_read_api.read_version('qualified') AS result",
 ]);
 const unavailable = () => new ContentServiceError("CONTENT_UNAVAILABLE", "The search result exceeded its read budget.");

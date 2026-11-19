@@ -11,18 +11,18 @@ import { compareContent, matchesContent, pageOf, documentPlainText, searchConten
 import { CONTENT_KINDS } from "../../../config/features.ts";
 import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../../lib/content/status.ts";
-import { WEBSITE_CONTENT_SQL, WEBSITE_SNAPSHOT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "./website-projection.ts";
+import { WEBSITE_CONTENT_SQL, WEBSITE_SEARCH_DETAILS_SQL, WEBSITE_SNAPSHOT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "./website-projection.ts";
 import { measureContentRead, measureContentReadAsync } from "../content-read-timing.ts";
 import { SCOPED_INDEX_SQL, SCOPED_SEARCH_SQL, SCOPED_FILTERED_SEARCH_SQL, SCOPED_FILTERED_SCOPE_SEARCH_SQL, SCOPED_SELECTED_SQL, SCOPED_VERSION_SQL, SCOPED_STATUS_INDEX_SQL } from "./scoped-reads.ts";
 import { contentReadBudgetIdentity } from "../content-read-budget.ts";
 import { STUDY_DIRECTORY_SQL, STUDY_NOTE_ELIGIBILITY_SQL, STUDY_NOTE_DETAIL_SQL } from "./study-reads.ts";
 import { readSearchContexts } from "./search-context.ts";
 import { SEARCH_CONTEXT_VERSION } from "../../lib/content/search-context.ts";
-import type { SearchHit } from "../../../contracts/website.ts";
-import type { Page } from "../../../contracts/content.ts";
+import { SEARCH_DETAIL_KINDS, searchHitDetails } from "../../lib/content/search-result.ts";
+import type { SearchHit, SearchPage } from "../../../contracts/website.ts";
 export interface Projection { runId: string; revision: string; schemaDigest: string; records: ContentDetail<AnyContent>[]; links: string[]; mediaIds: string[]; hasMore?: boolean }
 /** Scrub references against CURRENT eligibility even when stored AST predates a withdrawal. */
-function project<T>(value: T, snapshot: Projection, timeZone: string): T {
+function project<T>(value: T, snapshot: Pick<Projection, "links" | "mediaIds">, timeZone: string): T {
   const links=new Set(snapshot.links), images=new Set(snapshot.mediaIds);
   function visit(x: unknown): unknown {
     if (typeof x==="string") return sanitizePublicText(x);
@@ -74,10 +74,41 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
   };
   const version = (p: Projection) => `${p.runId}:${p.revision}`;
   const searchVersion = (p: Projection) => `${version(p)}${options.searchContext ? `:${SEARCH_CONTEXT_VERSION}` : ""}`;
-  const contextPage = async (page: Page<SearchHit>, pin: Projection): Promise<Page<SearchHit>> => {
+  const contextPage = async (page: SearchPage, pin: Projection): Promise<SearchPage> => {
     if (!options.searchContext) return page;
     const contexts = await readSearchContexts(db, page.items.filter(hit => hit.kind === "study-note").map(hit => hit.id), pin);
     return { ...page, items: page.items.map(hit => hit.kind === "study-note" ? { ...hit, context: contexts.get(hit.id) ?? null } : hit) };
+  };
+  const finishScopedSearch = async (page: SearchPage, pin: Projection, records: ContentDetail<AnyContent>[]): Promise<SearchPage> => {
+    const selected = page.items.filter(hit => SEARCH_DETAIL_KINDS.has(hit.kind));
+    if (!selected.length) {
+      if (version(await measureContentReadAsync("search-version", readVersion)) !== version(pin))
+        throw new ContentServiceError("INVALID_QUERY", "Content changed during search.");
+      return page;
+    }
+    const slugs = new Map(records.map(({ item }) => [item.id, item.slug]));
+    const requested = selected.map(hit => slugs.get(hit.id));
+    if (requested.some(slug => typeof slug !== "string" || !slug))
+      throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid search details selection.");
+    type Result = Pick<Projection, "runId" | "revision" | "schemaDigest" | "mediaIds"> & { item: AnyContent | null };
+    // This is the final read. Each lookup verifies the current pin, so a page
+    // with display details uses the same number of SQL round trips as before.
+    const display = await measureContentReadAsync("search-details", () => callSql<Result[]>(db, WEBSITE_SEARCH_DETAILS_SQL,
+      [selected.map(hit => hit.kind), requested, pin.runId, pin.revision]));
+    if (!Array.isArray(display) || display.length !== selected.length)
+      throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid search details projection.");
+    const byId = new Map<string, Pick<SearchHit, "cover" | "details">>();
+    for (const [index, result] of display.entries()) {
+      if (!result || result.schemaDigest !== WEBSITE_SCHEMA_DIGEST || !Array.isArray(result.mediaIds))
+        throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid search details projection.");
+      if (result.runId !== pin.runId || result.revision !== pin.revision || !result.item)
+        throw new ContentServiceError("INVALID_QUERY", "Content changed during search.");
+      const hit = selected[index];
+      if (result.item.id !== hit.id || result.item.kind !== hit.kind || result.item.slug !== requested[index])
+        throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid search details projection.");
+      byId.set(hit.id, searchHitDetails(project(result.item, { links: [], mediaIds: result.mediaIds }, zone())));
+    }
+    return { ...page, items: page.items.map(hit => ({ ...hit, ...byId.get(hit.id) })) };
   };
   const readContent = async (kind: ContentKind, slug: string | null, documents: boolean,
     pin?: Projection, offset = 0, limit = 1, index = false) => validate(await callSql<Projection>(db,index ? options.scoped ? SCOPED_STATUS_INDEX_SQL : WEBSITE_STATUS_INDEX_SQL : WEBSITE_CONTENT_SQL,
@@ -212,10 +243,8 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
             throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid search projection.");
           return records;
         });
-        const result = await contextPage(measureContentRead("search-match", () => searchContentSnapshot({ version: searchVersion(p), records }, query, selected)), p);
-        if (version(await measureContentReadAsync("search-version", readVersion)) !== version(p))
-          throw new ContentServiceError("INVALID_QUERY", "Content changed during search.");
-        return result;
+        const matches = measureContentRead("search-match", () => searchContentSnapshot({ version: searchVersion(p), records }, query, selected, { includeDetails: false }));
+        return finishScopedSearch(await contextPage(matches, p), p, records);
       }
       let pin: Projection | undefined, bytes = 2;
       const records: ContentDetail<AnyContent>[] = [], seen = new Set<string>();

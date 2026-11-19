@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import type { AnyContent, ContentDetail, ContentDocument, ContentKind, ContentLink, DateRange, ListQuery, Page } from "../../../contracts/content.ts";
 import type { ContentRepository } from "../../../contracts/repository.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
-import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, SearchSnapshot, TimelineEvent } from "../../../contracts/website.ts";
+import type { CursorQuery, PublicContentSnapshot, SearchPage, SearchQuery, SearchSnapshot, TimelineEvent } from "../../../contracts/website.ts";
 import { CONTENT_KINDS, type ContentFeatures } from "../../../config/features.ts";
 import { statusTimeZone, statusPreview } from "./status.ts";
 import { contentYear, supportsYear } from "./years.ts";
 import { gameActivityDate, gameBrowsingDate, platformPlayDay } from "./game-date.ts";
 import { validateLibraryYearsQuery } from "./query.ts";
 import type { FeedSnapshot } from "../../../contracts/home-feed.ts";
+import { searchExcerpt, searchHitDetails, searchKey } from "./search-result.ts";
 
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("base64url");
 // A projection change must invalidate cursors even when the stored snapshot is unchanged.
@@ -119,27 +120,39 @@ export function validateSearchQuery(query: SearchQuery): void {
 }
 
 /** Shared matching/ranking/cursors for full snapshots and compact SQL text. */
-export function searchContentSnapshot(all: SearchSnapshot, query: SearchQuery, selected: ContentKind[]): Page<SearchHit> {
-  const needle = query.q.normalize("NFKC").toLocaleLowerCase();
-  const hits: (SearchHit & { score: number })[] = [];
+export function searchContentSnapshot(all: SearchSnapshot, query: SearchQuery, selected: ContentKind[],
+  { includeDetails = true }: { includeDetails?: boolean } = {}): SearchPage {
+  const needle = searchKey(query.q), scope = new Set(selected);
+  const hits: { item: AnyContent; text: string; titleMatch: boolean }[] = [];
+  const kindCounts: NonNullable<SearchPage["kindCounts"]> = {};
   for (const { item, document } of all.records) {
-    const title = item.title.normalize("NFKC").toLocaleLowerCase();
+    if (!scope.has(item.kind)) continue;
+    const titleMatch = searchKey(item.title).includes(needle);
     const text = `${item.summary ?? ""} ${documentPlainText(document)}`.replace(/\s+/g, " ").trim();
-    const normalized = text.normalize("NFKC").toLocaleLowerCase(), offset = normalized.indexOf(needle);
-    if (!title.includes(needle) && offset < 0) continue;
-    const start = Math.max(0, offset - 45);
-    hits.push({ id: item.id, kind: item.kind, title: item.title, href: item.href, updatedAt: item.updatedAt, excerpt: text.slice(start, start + 180), score: title.includes(needle) ? 2 : 1,
-      ...(item.kind === "study-note" && all.searchContexts ? { context: all.searchContexts[item.id] ?? null } : {}) });
+    if (!titleMatch && !searchKey(text).includes(needle)) continue;
+    hits.push({ item, text, titleMatch });
+    if (!query.cursor) kindCounts[item.kind] = (kindCounts[item.kind] ?? 0) + 1;
   }
-  hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, "en") || a.id.localeCompare(b.id));
+  hits.sort((a, b) => Number(b.titleMatch) - Number(a.titleMatch) ||
+    a.item.title.localeCompare(b.item.title, "en") || a.item.id.localeCompare(b.item.id));
+  const fingerprint = createHash("sha256");
+  for (const { item, text } of hits) {
+    const context = item.kind === "study-note" ? all.searchContexts?.[item.id] : undefined;
+    fingerprint.update(JSON.stringify([item.id, item.kind, item.title, item.href, item.updatedAt, text, context]));
+  }
   const { cursor, limit } = query;
-  // Live media/link scrubbing can change hits without changing the stored version.
-  // Bind the cursor to the ordered visible result, including changed excerpts.
-  const page = pageOf(hits, { cursor, limit }, ["search", all.version, selected, needle, limit ?? 12, hash(hits)]);
-  return { ...page, items: page.items.map(({ score: _score, ...hit }) => hit) };
+  // Bind to the same qualified text across pages, even if a live withdrawal
+  // changes an excerpt without changing the snapshot revision.
+  const page = pageOf(hits, { cursor, limit }, ["search-display-v1", all.version, selected, needle, limit ?? 12, fingerprint.digest("base64url")]);
+  return { ...page, ...(!cursor ? { kindCounts } : {}), items: page.items.map(({ item, text, titleMatch }) => ({
+    id: item.id, kind: item.kind, title: item.title, href: item.href, updatedAt: item.updatedAt,
+    excerpt: searchExcerpt(text, needle, titleMatch),
+    ...(includeDetails ? searchHitDetails(item) : {}),
+    ...(item.kind === "study-note" && all.searchContexts ? { context: all.searchContexts[item.id] ?? null } : {}),
+  })) };
 }
 
-export async function searchRepository(repository: ContentRepository, features: ContentFeatures, query: SearchQuery): Promise<Page<SearchHit>> {
+export async function searchRepository(repository: ContentRepository, features: ContentFeatures, query: SearchQuery): Promise<SearchPage> {
   validateSearchQuery(query);
   const selected = [...new Set(query.kinds ?? CONTENT_KINDS)].filter(kind => features[kind]).sort();
   const page = repository.search && selected.length ? await repository.search({ ...query, kinds: selected })

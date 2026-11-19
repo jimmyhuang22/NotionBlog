@@ -2,7 +2,7 @@ import type {
   ContentKind, ContentByKind, ContentDetail, ListQuery,
   Page, HomeSummary, CourseTree, Course, StatusYears, SitePage, LibraryKind, LibraryYears, LibraryYearsQuery,
 } from "./content.ts";
-import type { CursorQuery, PublicContentSnapshot, SearchHit, SearchQuery, SearchSnapshot, TimelinePage } from "./website.ts";
+import type { CursorQuery, PublicContentSnapshot, SearchPage, SearchQuery, SearchSnapshot, TimelinePage } from "./website.ts";
 
 export interface LibraryPageResult<K extends LibraryKind = LibraryKind> {
   page: Page<ContentByKind[K]>;
@@ -17,7 +17,7 @@ export interface ContentRepository {
   getContentMetadata?<K extends ContentKind>(kind: K, slug: string): Promise<ContentByKind[K] | null>;
   getPage?(key: "about"): Promise<SitePage | null>;
   getTimeline?(query?: CursorQuery): Promise<TimelinePage>;
-  search?(query: SearchQuery): Promise<Page<SearchHit>>;
+  search?(query: SearchQuery): Promise<SearchPage>;
   /** Search bodies and optional context from one qualification scope; never a browser endpoint. */
   readSearchSnapshot?(kinds: ContentKind[]): Promise<SearchSnapshot>;
   /** One bounded, internally consistent read; never exposed as an HTTP endpoint. */
