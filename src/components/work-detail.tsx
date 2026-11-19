@@ -9,6 +9,10 @@ import { bookRecord, gameRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
 import { PlatformChips } from "./platform-chips";
+import { ExcerptFold } from "./excerpt-fold";
+
+/** Up to this many excerpts show in full; more are held to about a screen (ExcerptFold). */
+const EXCERPTS_SHOWN = 12;
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -88,6 +92,16 @@ export function FilmPage({ type, label, item, document, timeZone, neighbours }: 
           </aside>
           <div className="work-film__main">
             {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
+            {record.episodes.length ? (
+              <section className="work-episodes" aria-label="分集摘录">
+                <h2 className="work-episodes__title">分集摘录<small>{record.episodes.length} 集</small></h2>
+                <ol className="work-episodes__list">
+                  {record.episodes.map(episode => (
+                    <li key={episode.number}><b>第 {episode.number} 集{episode.name ? <small>{episode.name}</small> : null}</b><span>{episode.text}</span></li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
             <WorkRecord item={item} document={record.document} />
             {neighbours}
           </div>
@@ -173,7 +187,7 @@ export function BookPage({ type, label, item, document, timeZone, neighbours }: 
           {record.excerpts ? (
             <section className="work-excerpts" aria-label="摘录">
               <h2 className="work-excerpts__title">摘录{record.excerptCount ? <small>{record.excerptCount} 条</small> : null}</h2>
-              <RichDocumentBody document={record.excerpts} imagePreviewWidth={800} topHeading={3} />
+              <ExcerptFold count={record.excerptCount} held={record.excerptCount > EXCERPTS_SHOWN}><RichDocumentBody document={record.excerpts} imagePreviewWidth={800} topHeading={3} /></ExcerptFold>
             </section>
           ) : null}
           <WorkRecord item={item} document={record.rest} />
@@ -206,15 +220,21 @@ function TimeBars({ item }: { item: Game }) {
  * wrote (the rows and their rules are gameDateRows', the owner's of 2026-10-16). The owner's own date has a filled
  * dot. A row without a date keeps its place at the end and says so.
  */
-function GameTimeline({ item, timeZone }: { item: Game; timeZone: string }) {
+function timelineRows(item: Game, timeZone: string) {
   const rows: { label: string; range: DateRange | null; own: boolean }[] = gameDateRows(item, timeZone).map(([label, range]) => ({ label, range, own: label === "体验日期" || label === "游玩日期" }));
   if (item.releaseDate) rows.push({ label: "发售", range: item.releaseDate, own: false });
   // On the same day the release comes first: a game is played on its release day, not before it.
   const known = rows.filter(row => row.range && rangeLabel(row.range, timeZone)).sort((a, b) => a.range!.start.slice(0, 10).localeCompare(b.range!.start.slice(0, 10)) || Number(b.label === "发售") - Number(a.label === "发售"));
-  const unknown = rows.filter(row => !row.range || !rangeLabel(row.range, timeZone));
+  // A game only wished for has not been played: no "日期未记录" row for its play (2026-11-19, narrowing 10-16's rule).
+  const unknown = item.status === "wishlist" ? [] : rows.filter(row => !row.range || !rangeLabel(row.range, timeZone));
+  return [...known, ...unknown];
+}
+
+function GameTimeline({ item, timeZone }: { item: Game; timeZone: string }) {
+  const rows = timelineRows(item, timeZone);
   return (
     <ol className="game-timeline">
-      {[...known, ...unknown].map(row => (
+      {rows.map(row => (
         <li key={row.label} className={row.own ? "game-timeline__own" : undefined}><b>{row.label}</b><span>{(row.range && rangeLabel(row.range, timeZone)) ?? "日期未记录"}</span></li>
       ))}
     </ol>
@@ -263,7 +283,7 @@ export function GamePage({ type, label, item, document, timeZone, neighbours }: 
                 <dd className="game-time__note">{played ? "已玩" : ""}{expected ? `${played ? "，" : ""}预计 ${expected}` : ""}</dd>
                 <dd><TimeBars item={item} /></dd>
               </div>}
-              <div className="work-game__group work-game__dates"><dt className="visually-hidden">日期</dt><dd><GameTimeline item={item} timeZone={timeZone} /></dd></div>
+              {timelineRows(item, timeZone).length ? <div className="work-game__group work-game__dates"><dt className="visually-hidden">日期</dt><dd><GameTimeline item={item} timeZone={timeZone} /></dd></div> : null}
             </dl>
           </aside>
           <div className="work-game__main">

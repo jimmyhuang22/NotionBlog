@@ -110,17 +110,50 @@ function assemble(document: ContentDocument, kept: Section[]): ContentDocument {
   return { ...document, blocks, toc: document.toc.filter(entry => headings.has(entry.id)).map(entry => ({ ...entry, title: headings.get(entry.id)! })) };
 }
 
+/** One episode's note from a series' excerpts: its number, its name, and what was written about it. */
+export interface EpisodeNote { number: number; name: string | null; text: string }
+
+/** An episode heading as the template writes it: "Episode 1 - “Seven Thirty-Seven”" or "第 1 集 名字". */
+const EPISODE = /^(?:Episode\s*(\d+)|第\s*(\d+)\s*集)\s*(?:[-–—:：·]\s*)?(.*)$/iu;
+
+/**
+ * A series' excerpts read as a list of episodes (2026-11-19, the owner's pick 甲): only when everything under
+ * "摘录" is pairs of an episode heading and one quote or paragraph; anything else leaves the section as written.
+ */
+function readEpisodes(section: Section): EpisodeNote[] | null {
+  const blocks = section.blocks.filter(block => !blank(block));
+  if (!blocks.length || blocks.length % 2) return null;
+  const notes: EpisodeNote[] = [];
+  for (let index = 0; index < blocks.length; index += 2) {
+    const heading = blocks[index]!, body = blocks[index + 1]!;
+    if (heading.type !== "heading" || (body.type !== "quote" && body.type !== "paragraph")) return null;
+    const match = EPISODE.exec(plain(heading.text));
+    if (!match) return null;
+    const name = match[3]!.replace(/^[“"「『]|[”"」』]$/gu, "").trim();
+    notes.push({ number: Number(match[1] ?? match[2]), name: name || null, text: plain(body.text) });
+  }
+  return notes;
+}
+
 /** A film (the poster backdrop, 2026-11-19): the viewings table becomes the dates in the side column; "总结" reads "观后感". */
 export interface MovieRecord {
   /** Each viewing, oldest first. Every date is one the source records; none is made up. */
   viewings: DateRange[];
+  /** A series' excerpts, when they are all episode notes; they then leave the body. Empty otherwise. */
+  episodes: EpisodeNote[];
   /** The body without what moved to the side; null when the body did not load, as the source said. */
   document: ContentDocument | null;
 }
 
 export function movieRecord(document: ContentDocument | null, watched: DateRange | null): MovieRecord {
   let table: DateRange[] = [];
+  let episodes: EpisodeNote[] = [];
   const result = document ? assemble(document, tidy(document, { 总结: "观后感" }, (title, section) => {
+    if (title === "摘录") {
+      const read = readEpisodes(section);
+      if (read) episodes = read;
+      return !!read;
+    }
     if (title !== VIEWINGS) return false;
     const read = readViewings(section);
     if (read) table = read;
@@ -129,7 +162,7 @@ export function movieRecord(document: ContentDocument | null, watched: DateRange
   // The record's own date counts as a viewing when the table does not name that day, so the page never hides a
   // date the list files the work under (confirmed by the owner, 2026-11-19).
   const viewings = watched && !table.some(range => covers(range, watched.start)) ? [...table, watched] : table;
-  return { viewings: viewings.sort((a, b) => day(a.start).localeCompare(day(b.start))), document: result };
+  return { viewings: viewings.sort((a, b) => day(a.start).localeCompare(day(b.start))), episodes, document: result };
 }
 
 /**
