@@ -2,10 +2,12 @@ import type { SocialTimelineWork } from "../../contracts/social-timeline.ts";
 import type { ReactNode } from "react";
 import { collectionBadge, platformNames } from "../lib/home-feed.ts";
 import { calendarDay, type CalendarDay, type MomentLabel } from "../lib/format.ts";
-import { coverShapes, workDayMoment, workLines, workMoment, type WorkLine } from "../lib/works.ts";
+import { workDayMoment, workLines, workMoment, type WorkLine } from "../lib/works.ts";
+import type { Figure } from "../lib/home-feed.ts";
+import type { SocialPlatform } from "../../contracts/social.ts";
 import { CoverImage } from "./cover-image";
 import { EntryMoment } from "./entry-moment";
-import { PlatformExitNote, PlatformMark } from "./platform-signs";
+import { figureSignPath, LikeSign, PlatformExitNote, PlatformMark, PlaySign, StackSign } from "./platform-signs";
 import { BiliCard, isBiliCard } from "./bili-card";
 import { SocialWorkCard } from "./social-work-card";
 import { WorkStrip } from "./work-strip";
@@ -68,7 +70,7 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
             </span>
             <span className="home-works__figures">
               {line.figures.length
-                ? line.figures.map(figure => <span key={figure.metric}><span className="home-works__label">{figure.label}</span> {figure.value}</span>)
+                ? line.figures.map(figure => <span key={figure.metric}><FigureMark figure={figure} platform={line.platform} /></span>)
                 : <span className="home-works__label">数据未记录</span>}
             </span>
             {line.url ? <PlatformExitNote name={name} /> : null}
@@ -85,6 +87,20 @@ export function HomeWorks({ works, timeZone, today = null, priorityCover = false
 }
 
 /**
+ * A figure as its sign and number (2026-11-19, the owner's pick: words such as 播放 read as forced); the name is
+ * still read out. A figure without a sign of its own keeps its word.
+ */
+export function FigureMark({ figure, platform }: { figure: Figure; platform: SocialPlatform }) {
+  if (!figureSignPath(figure.metric, platform)) return <>{figure.label} {figure.value}</>;
+  return <>{figure.metric === "views" ? <PlaySign size={11} /> : <LikeSign platform={platform} size={11} stroke={1.5} />}<span className="visually-hidden">{figure.label}</span>{figure.value}</>;
+}
+
+/** The platforms of some works, each once, in their order: the signs in the row's "作品" tag (2026-11-19). */
+export function workPlatforms(works: SocialTimelineWork[]): SocialPlatform[] {
+  return [...new Set(works.flatMap(work => workLines(work).slice(0, 1).map(line => line.platform)))];
+}
+
+/**
  * What a light line's quiet line says after the platform's sign (2026-11-18, the owner's pick): the sign stands
  * for the platform, whose name is only read out; a single post's kind (视频, 图文) is left out; a collection's
  * kind and size are one phrase ("合集 179 个视频") followed by what was added as "+N" ("新" when the count is
@@ -98,43 +114,48 @@ function quietParts(line: WorkLine, day: MomentLabel | null, badge: { count: num
   if (collection) {
     parts.push({ key: "size", node: <>{[line.kind, line.size].filter(Boolean).join(" ")}{badge ? <><span className="work-line__added" aria-hidden="true">{badge.count ? `+${badge.count}` : "新"}</span><span className="visually-hidden">，{badge.words}</span></> : null}</> });
   }
-  for (const figure of line.figures) parts.push({ key: figure.metric, node: `${figure.label} ${figure.value}`, figure: true });
+  for (const figure of line.figures) parts.push({ key: figure.metric, node: <FigureMark figure={figure} platform={line.platform} />, figure: true });
   if (!parts.length) parts.push({ key: "kind", node: line.kind });
   return parts.map((part, index) => <span key={part.key} className={`work-line__part${part.figure ? " work-line__figure" : ""}${index === 0 ? " work-line__part--first" : ""}`}>{part.node}</span>);
 }
 
 /**
- * A work standing alone on the home timeline, as one light line (the owner's choice, 2026-11-11): a small
- * square picture, as a game's (2026-11-18), then the title over one quiet line: the platform's sign, then what
- * it is and its figures (`quietParts`). The status entries stay the timeline's main reading; this only says what
- * was published. A further platform of the same work gets its own short line under it with that platform's
- * figures and address. The picture comes after the words in the source, so the link reads its title first. The
- * figures keep to the platform's own and an unknown one is left out; only a checked address is a link. Among two
- * or three works of different days (`showDay`) the quiet line also names the work's own day, as a card in a strip does.
+ * A work standing alone on the home timeline, as one light line (the owner's choice, 2026-11-11). Since
+ * 2026-11-19 (the owner's pick 乙, after the works page) its picture is a small wide frame, 144 by 81, the same for
+ * every platform (an upright note cropped from its top), carrying the figures at its foot as the works page does:
+ * views and the collection's size, or likes; a collection's addition as "+N" at its top right. The title stands
+ * beside it alone; the platform's sign sits in the row's "作品" tag (home-timeline.tsx). The day is written under
+ * the title only among works of different days (`showDay`). Everything on the picture is also read out. A further
+ * platform of the same work keeps its own short line under it with that platform's figures and address. The
+ * picture comes after the words in the source, so the link reads its title first; only a checked address is a link.
  */
 export function HomeWorkLine({ work, timeZone, today = null, showDay = false, priorityCover = false }: { work: SocialTimelineWork; timeZone: string; today?: CalendarDay | null; showDay?: boolean; priorityCover?: boolean }) {
   const [lead, ...more] = workLines(work);
-  const shape = lead ? coverShapes[lead.platform] : "wide";
   const badge = work.collection ? collectionBadge(work.collection, timeZone) : null;
   const name = lead ? platformNames[lead.platform] : null;
   const day = showDay ? workDayMoment(work, timeZone, today) : null;
-  const blank = <span className="work-line__blank">{lead ? <PlatformMark platform={lead.platform} size={16} /> : null}<span className="visually-hidden">封面未记录</span></span>;
+  const blank = <span className="work-line__blank">{lead ? <PlatformMark platform={lead.platform} size={18} /> : null}<span className="visually-hidden">封面未记录</span></span>;
+  const views = lead?.figures.find(figure => figure.metric === "views") ?? null;
+  const likes = lead && !views ? lead.figures.find(figure => figure.metric === "likes") ?? null : null;
+  const shown = views ?? likes;
+  const count = lead?.count ?? null;
   const main = (
     <>
       <span className="work-line__text">
-        <span className="work-line__head">
-          <span className="work-line__title">{work.title}</span>
-        </span>
-        {lead ? (
-          <span className="work-line__meta">
-            <PlatformMark platform={lead.platform} />
-            <span className="visually-hidden">，{name}，</span>
-            {quietParts(lead, day, badge)}
+        <span className="work-line__title">{work.title}</span>
+        {/* What the picture shows, for those who do not see it. */}
+        {lead ? <span className="visually-hidden">，{[name, lead.kind, lead.size, badge?.words, ...lead.figures.map(figure => `${figure.label} ${figure.value}`)].filter(Boolean).join("，")}</span> : null}
+        {day ? <span className="work-line__meta"><EntryMoment moment={day} /></span> : null}
+      </span>
+      <span className={`work-line__thumb${lead && lead.platform === "xiaohongshu" ? " work-line__thumb--tall" : ""}`} aria-hidden="true">
+        {work.cover ? <CoverImage className="work-line__cover" image={work.cover} previewWidth={400} label="作品封面" lazy priority={priorityCover} sized={false} fallback={blank} /> : blank}
+        {badge ? <span className="work-line__new">{badge.count ? `+${badge.count}` : "新"}</span> : null}
+        {lead && (shown || count !== null) ? (
+          <span className="work-line__stats">
+            {shown ? <span>{shown.metric === "views" ? <PlaySign size={11} /> : <LikeSign platform={lead.platform} size={11} stroke={1.5} />}{shown.value}</span> : <span />}
+            {count !== null ? <span><StackSign />{count}</span> : null}
           </span>
         ) : null}
-      </span>
-      <span className={`work-line__thumb work-line__thumb--${shape}`}>
-        {work.cover ? <CoverImage className="work-line__cover" image={work.cover} previewWidth={400} label="作品封面" lazy priority={priorityCover} sized={false} fallback={blank} /> : blank}
       </span>
       {lead?.url && name ? <PlatformExitNote name={name} /> : null}
     </>

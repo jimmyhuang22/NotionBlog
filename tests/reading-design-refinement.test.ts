@@ -71,7 +71,7 @@ function workLine() {
     "../lib/home-feed.ts": homeFeed, "../lib/format.ts": format, "../lib/works.ts": works,
     "./cover-image": { CoverImage: ({ className }: { className: string }) => React.createElement("img", { className }) },
     "./entry-moment": { EntryMoment: () => null },
-    "./platform-signs": { PlatformMark: () => React.createElement("svg"), PlatformExitNote: ({ name }: { name: string }) => React.createElement("span", null, `，在${name}打开`) },
+    "./platform-signs": { PlatformMark: () => React.createElement("svg"), PlatformExitNote: ({ name }: { name: string }) => React.createElement("span", null, `，在${name}打开`), PlaySign: () => React.createElement("svg", { className: "play" }), LikeSign: () => React.createElement("svg", { className: "like" }), StackSign: () => React.createElement("svg", { className: "stack" }), figureSignPath: (metric: string) => (metric === "views" || metric === "likes" ? "M0" : null) },
     "./bili-card": { BiliCard: () => null, isBiliCard: () => false },
     "./social-work-card": { SocialWorkCard: () => null },
     "./work-strip": { WorkStrip: () => null },
@@ -80,33 +80,36 @@ function workLine() {
 const render = (work: (typeof demoSocialWorks)[number]) => renderToStaticMarkup(React.createElement(workLine(), { work, timeZone: "UTC" }));
 const byId = (id: string) => demoSocialWorks.find(work => work.id === id)!;
 
-test("a single work on the home timeline is one light line that keeps its platform, kind and own figures", () => {
+test("a single work on the home timeline is one light line: a small frame carrying its figures, the title beside it", () => {
   const html = render(byId("demo-bilibili-1"));
   // Title first in the source, the picture after it (drawn first by the style sheet).
   assert.ok(html.indexOf("work-line__title") < html.indexOf("work-line__thumb"));
-  assert.ok(html.includes("work-line__thumb--wide"));
-  assert.ok(html.includes("B 站") && html.includes("播放 0"));
-  // The platform's sign stands for it: its name is only read out, and a single post's kind is left out (2026-11-18).
-  assert.match(html, /<span class="visually-hidden">，B 站，<\/span>/);
-  assert.ok(!html.includes(">视频<"));
-  assert.match(html, /<span class="work-line__part work-line__figure work-line__part--first">播放 0<\/span>/);
+  // On the picture since 2026-11-19: views as a play sign and the number, no word; the picture is hidden from
+  // screen readers, which hear the platform, the kind and the figure after the title instead.
+  assert.match(html, /<span class="work-line__stats"><span><svg class="play"><\/svg>0<\/span>/);
+  assert.match(html, /<span class="work-line__thumb" aria-hidden="true">/);
+  assert.match(html, /<span class="visually-hidden">，B 站，视频，播放 0<\/span>/);
+  // No quiet line under the title any more: the platform's sign is in the row's tag (home-timeline.tsx).
+  assert.ok(!html.includes("work-line__part"));
   // Bilibili shows no likes; an address that was never checked is no link.
-  assert.ok(!html.includes("点赞"));
+  assert.ok(!html.includes("点赞") && !html.includes('class="like"'));
   assert.ok(!html.includes("<a "));
 });
 
-test("a Xiaohongshu work keeps its upright picture and its likes", () => {
+test("a Xiaohongshu work takes the same wide frame, cropped from its top, with its likes on it", () => {
   const html = render(byId("demo-xiaohongshu-1"));
-  assert.ok(html.includes("work-line__thumb--tall"));
-  assert.ok(html.includes("点赞"));
+  assert.ok(html.includes("work-line__thumb work-line__thumb--tall"));
+  assert.ok(html.includes('class="like"') && html.includes("点赞"));
   assert.ok(!html.includes("播放"));
 });
 
-test("a collection links to its newest episode and says what was added; a second platform gets its own line", () => {
+test("a collection links to its newest episode, shows its size and addition on the picture; a second platform gets its own line", () => {
   const collection = render(byId("demo-bilibili-2"));
   assert.match(collection, /<a class="work-line__main" href="https:\/\/www\.bilibili\.com\/video\/BV0000000002\/"[^>]*title="打开最新一集"/);
-  // Kind and size are one phrase, and what was added is "+N" right after it, the words read out.
-  assert.match(collection, /work-line__part--first">合集 \d+ 个视频<span class="work-line__added" aria-hidden="true">\+1<\/span><span class="visually-hidden">，[^<]*新增 1 个视频/);
+  // The size as stacked sheets and a number at the foot; what was added as "+N" at the top right; both read out after the title.
+  assert.match(collection, /<span class="work-line__new">\+1<\/span>/);
+  assert.match(collection, /<svg class="stack"><\/svg>\d+<\/span>/);
+  assert.match(collection, /visually-hidden">，B 站，合集，\d+ 个视频，[^<]*新增 1 个视频/);
   const both = render(byId("demo-bilibili-3"));
   assert.equal(both.match(/work-line__more/g)?.length, 1);
   assert.ok(both.includes("小红书"));
@@ -117,7 +120,7 @@ function homeWorks() {
     "../lib/home-feed.ts": homeFeed, "../lib/format.ts": format, "../lib/works.ts": works,
     "./cover-image": { CoverImage: ({ className }: { className: string }) => React.createElement("img", { className }) },
     "./entry-moment": { EntryMoment: ({ moment }: { moment: { label?: string } }) => React.createElement("time", null, "DAY") },
-    "./platform-signs": { PlatformMark: () => React.createElement("svg"), PlatformExitNote: () => null },
+    "./platform-signs": { PlatformMark: () => React.createElement("svg"), PlatformExitNote: () => null, PlaySign: () => null, LikeSign: () => null, StackSign: () => null, figureSignPath: () => "M0" },
     "./bili-card": { BiliCard: ({ showDay }: { showDay: boolean }) => React.createElement("i", { className: "bili", "data-day": String(showDay) }), isBiliCard: (work: { id: string }) => work.id.startsWith("demo-bilibili") },
     "./social-work-card": { SocialWorkCard: ({ showDay }: { showDay: boolean }) => React.createElement("i", { className: "social", "data-day": String(showDay) }) },
     "./work-strip": { WorkStrip: ({ children }: { children: React.ReactNode }) => React.createElement("ol", { className: "strip" }, children) },
