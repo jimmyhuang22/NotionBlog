@@ -6,12 +6,12 @@ import type { Metadata } from "next";
 import { contentMetadata } from "@/lib/seo/metadata";
 import { notFound } from "next/navigation";
 import type { LibraryKind, Page, Rating } from "../../../../../contracts/content.ts";
-import { RichDocumentBody } from "@/components/rich-document";
 import { Cover } from "@/components/library-grid";
 import { PlatformChips } from "@/components/platform-chips";
 import { contentRepository } from "@/lib/content";
-import { dateParts, rangeLabel, ratingLabel } from "@/lib/format";
-import { libraryHref, librarySections, progressWidth, ratingDots, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
+import { dateParts, rangeLabel } from "@/lib/format";
+import { libraryHref, librarySections, progressWidth, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
+import { FilmPage, RatingValue, WorkRecord } from "@/components/work-detail";
 import { getSiteConfig } from "@/lib/site";
 import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
@@ -82,17 +82,13 @@ function facts(item: LibraryItem, timeZone: string): Facts {
 
 /** What stands out about a work after the sentence: platforms, the rating as ink dots, and progress as a line of ink. */
 function Lead({ rating, progress, platforms }: Facts) {
-  const dots = ratingDots(rating);
   const width = progressWidth(progress);
   return (
     <dl className="work__lead">
       {platforms.length ? <div><dt className="visually-hidden">平台</dt><dd className="work__platforms"><PlatformChips chips={platforms} /></dd></div> : null}
       <div>
         <dt className="visually-hidden">我的评分</dt>
-        <dd className="work__rating">
-          {dots ? <span className="work__dots" aria-hidden="true">{Array.from({ length: dots.total }, (_, index) => <i key={index} className={index < dots.filled ? "is-on" : undefined} />)}</span> : null}
-          {ratingLabel(rating, "未评分")}
-        </dd>
+        <RatingValue rating={rating} />
       </div>
       {progress !== null ? (
         <div className="work__progress">
@@ -105,7 +101,6 @@ function Lead({ rating, progress, platforms }: Facts) {
 }
 
 const neighbourWords: Record<LibraryItem["kind"], string> = { movie: "看过", book: "读过", game: "玩过" };
-const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
 
 /**
  * The page's floor (W-02): the works on either side of this one in the list's own order, newest first.
@@ -147,13 +142,19 @@ async function Neighbours({ item, timeZone }: { item: LibraryItem; timeZone: str
     }
     if (!newer && !older) return null;
     const word = neighbourWords[item.kind];
+    // Films read "上一部 / 下一部" in the list's order, newest first, with a small poster (2026-11-19); the date
+    // under the title says which way each goes. Books and games keep their words until their pages are redone.
+    const film = item.kind === "movie";
     const card = (entry: LibraryItem, label: string, className: string) => (
-      <Link prefetch={false} className={className} href={entry.href}><span>{label}</span><span>{entry.title}</span><small className="study-link-context">{rangeLabel(itemDate(entry), timeZone) ?? "日期未记录"}</small></Link>
+      <Link prefetch={false} className={className} href={entry.href}>
+        <span>{label}</span><span>{entry.title}</span><small className="study-link-context">{rangeLabel(itemDate(entry), timeZone) ?? "日期未记录"}</small>
+        {film ? <span className="work__neighbour-poster" aria-hidden="true"><Cover image={entry.cover} title={entry.title} previewWidth={400} /></span> : null}
+      </Link>
     );
     return (
-      <nav className="pager work__neighbours" aria-label={`前后${word}的`}>
-        {newer ? card(newer, `较新${word}`, "pager__prev") : null}
-        {older ? card(older, `较早${word}`, "pager__next") : null}
+      <nav className={`pager work__neighbours${film ? " work__neighbours--posters" : ""}`} aria-label={film ? "上一部和下一部" : `前后${word}的`}>
+        {newer ? card(newer, film ? "上一部" : `较新${word}`, "pager__prev") : null}
+        {older ? card(older, film ? "下一部" : `较早${word}`, "pager__next") : null}
       </nav>
     );
   } catch {
@@ -168,11 +169,17 @@ export default async function LibraryDetailPage(props: Props) {
   const loaded = await load(props);
   if (!loaded) notFound();
   const { type, section, item, document } = loaded;
-  const original = item.kind === "movie" ? item.originalTitle : null;
-  const external = item.kind === "book" ? item.externalUrl : null;
-  const summary = facts(item, getSiteConfig().timeZone);
+  const timeZone = getSiteConfig().timeZone;
   // The large cover's address is known here: ask for it with the page, not after it.
   if (item.cover) preload(imagePreviewSrc(item.cover, 800), { as: "image" });
+  const neighbours = (
+    <Suspense fallback={<div className="work__neighbours-pending" aria-hidden="true" />}>
+      <Neighbours item={item} timeZone={timeZone} />
+    </Suspense>
+  );
+  if (item.kind === "movie") return <FilmPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
+  const external = item.kind === "book" ? item.externalUrl : null;
+  const summary = facts(item, timeZone);
   return (
     <div className="wrap">
       <nav className="crumbs" aria-label="面包屑">
@@ -182,7 +189,6 @@ export default async function LibraryDetailPage(props: Props) {
         <div className="work__cover"><Cover image={item.cover} title={item.title} previewWidth={800} /></div>
         <div className="work__info">
           <h1>{item.title}</h1>
-          {original && original !== item.title ? <p className="work__original">{original}</p> : null}
           {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
           <p className="work__said">{summary.said}</p>
           <Lead {...summary} />
@@ -190,17 +196,8 @@ export default async function LibraryDetailPage(props: Props) {
           {external ? <p><a className="rt-link" href={external} target="_blank" rel="noopener noreferrer">查看外部条目</a></p> : null}
         </div>
       </div>
-      {/* Many works are a record without a write-up: no body means no empty reading card. */}
-      {document && (document.blocks.length > 0 || document.completeness === "partial")
-        ? <article className="reading__article card" aria-label="我的记录"><RichDocumentBody document={document} imagePreviewWidth={800} /></article>
-        // Where a write-up would be, a quiet slip says there is none yet (W-05, 2026-10-20); a wish has nothing to write.
-        // A body that was not loaded (null, unlike an empty one) is not "none yet": the slip says it did not load.
-        : item.status === "wishlist" ? null
-        : document === null ? <p className="work__record-empty">{recordWords[item.kind]}暂时没有加载，稍后刷新再试。</p>
-        : <p className="work__record-empty">还没有写下{recordWords[item.kind]}。</p>}
-      <Suspense fallback={<div className="work__neighbours-pending" aria-hidden="true" />}>
-        <Neighbours item={item} timeZone={getSiteConfig().timeZone} />
-      </Suspense>
+      <WorkRecord item={item} document={document} />
+      {neighbours}
     </div>
   );
 }
