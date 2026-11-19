@@ -161,7 +161,7 @@
  * the outline from Notion is one line of small links between two hairlines instead of a grey block. The island
  * and Y2K keep their sheet, which is what they are.
  */
-:is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) :is(.work ~ .reading__article, .work-film__main > .reading__article) { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc { margin: 0 0 28px; padding: 10px 0; border-block: 1px solid var(--rule); border-radius: 0; background: none; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 20px; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc::before { content: "本文"; margin-right: 4px; font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--muted); }
@@ -226,6 +226,63 @@
   .work:not(.work--game) .work__said { margin-top: 12px; font-size: var(--text-md); }
   .work:not(.work--game) .work__lead { margin-top: 8px; gap: 8px 12px; }
   .work:not(.work--game) .work__line { margin-top: 18px; }
+}
+
+/*
+ * Films (the owner's pick 甲 of 2026-11-19, "海报幕布", after Letterboxd and TMDB). The poster, blurred, is a dark
+ * band across the page carrying the breadcrumb, the title and one line of facts; the poster itself stands over the
+ * band's lower edge at the head of a side column (the owner's rating, when they saw it, the public score), and the
+ * write-up runs beside it. The band is the same dark glass in every skin and scheme, so its words are always light.
+ * Without a poster the band is the page's own soft ground and the poster's place shows the spine tile.
+ */
+.work-band { position: relative; overflow: hidden; background: #15171c; color: #f4f1ea; }
+.work-band::before { content: ""; position: absolute; inset: -48px; background: var(--band) center 30% / cover; filter: blur(30px) saturate(1.1); opacity: 0.75; }
+.work-band::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 12, 16, 0.2), rgba(10, 12, 16, 0.74)); }
+.work-band--plain { background: var(--soft); color: var(--ink); }
+.work-band--plain::before, .work-band--plain::after { content: none; }
+.work-band__in { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 300px; padding-bottom: 26px; }
+.work-band .crumbs, .work-band .crumbs [aria-current] { color: inherit; }
+.work-band .crumbs { opacity: 0.78; }
+.work-band__text { max-width: 980px; width: 100%; margin: auto auto 0; padding-left: 260px; }
+.work-band__title { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 42px); font-weight: 400; line-height: 1.2; color: inherit; overflow-wrap: anywhere; }
+.work-band__original { margin: 6px 0 0; font-size: var(--text-body); opacity: 0.8; }
+.work-band__meta { margin: 10px 0 0; font-size: var(--text-sm); line-height: 1.6; opacity: 0.9; }
+.work-film { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 40px; max-width: 980px; margin-inline: auto; }
+.work-film__poster { position: relative; z-index: 1; margin-top: -190px; }
+.work-film__meta { display: none; }
+.work-film__mine { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: var(--text-sm); }
+.work-film__mine dd { margin: 0; }
+.work-film__mine .work__rating { font-size: var(--text-lg); color: var(--ink); }
+.work-film__seen { margin: 8px 0 0; line-height: 1.7; color: var(--ink); }
+.work-film__seen p { margin: 0; }
+.work-film__seen ul { margin: 2px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+.work-film__seen li::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 8px 2px 0; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.work-film__fact { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.work-film__main { min-width: 0; padding-top: 22px; }
+.work-film__main > .reading__tags { margin: 0 0 6px; }
+.work-film__main > .reading__article { margin-top: 18px; }
+.work-film__main > .work__record-empty { margin: 28px 0 0; }
+.work-film__main .work__neighbours, .work-film__main .work__neighbours-pending { margin-top: 40px; }
+/* The cards on either side carry a small poster at their outer edge (2026-11-19). */
+.work__neighbours--posters a { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-content: center; column-gap: 12px; }
+.work__neighbours--posters a > * { grid-column: 2; }
+.work__neighbours--posters a > .work__neighbour-poster { grid-column: 1; grid-row: 1 / span 3; align-self: center; }
+.work__neighbours--posters .pager__next { grid-template-columns: minmax(0, 1fr) 44px; }
+.work__neighbours--posters .pager__next > * { grid-column: 1; }
+.work__neighbours--posters .pager__next > .work__neighbour-poster { grid-column: 2; }
+.work__neighbour-poster .cover { width: 44px; border-radius: var(--radius-xs); box-shadow: none; }
+.work__neighbour-poster .cover--empty span { display: none; }
+.work__neighbours--posters a:not(.pager__next) > span:first-child::before { content: "← "; }
+.work__neighbours--posters .pager__next > span:first-child::after { content: " →"; }
+@media (max-width: 640px) {
+  .work-band__in { min-height: 230px; padding-bottom: 18px; }
+  .work-band__text { padding-left: 124px; }
+  .work-band__title { font-size: var(--text-2xl); }
+  .work-band__meta { display: none; }
+  .work-film { grid-template-columns: minmax(0, 1fr); }
+  .work-film__poster { width: 108px; margin-top: -116px; }
+  .work-film__meta { display: block; margin: 12px 0 0; font-size: var(--text-sm); line-height: 1.6; color: var(--muted); }
+  .work-film__main { padding-top: 20px; }
 }
 
 /* Albums */
@@ -407,6 +464,8 @@
 /* A work's page on its way: the same layout, quiet bars in place of the words. */
 .work-loading__crumb { width: 72px; height: 14px; }
 .work-loading .work__cover .cover { box-shadow: none; background: var(--soft); }
+.work-band.work-loading .skeleton { display: block; background: rgba(255, 255, 255, 0.14); }
+.work-band.work-loading .work-loading__title { width: min(420px, 70%); margin: 0; }
 .work-loading__title { width: 70%; height: 40px; margin-bottom: 26px; }
 .work-loading__line { height: 16px; margin-bottom: 14px; }
 
