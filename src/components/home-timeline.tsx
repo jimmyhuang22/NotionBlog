@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HomeFeedV2Item, HomeFeedV2Page, SocialTimelineWork } from "../../contracts/social-timeline.ts";
-import { isNoticedActivity } from "../lib/home-feed.ts";
+import { isNoticedActivity, platformNames } from "../lib/home-feed.ts";
 import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
@@ -101,11 +101,18 @@ const DRAWN_ROWS = 8;
 let drawnThisVisit = false;
 
 /**
- * The "作品" tag of a row of works, led by the platforms' signs (2026-11-19, the owner's pick: the sign moved here
- * from under each title, where it stood alone). The works page exists whenever these entries do.
+ * The mark of a row of works: the platforms' own signs in their own colours, nothing else (2026-11-19, the owner's
+ * pick 乙: "作品" beside the sign said the same thing twice). It still leads to the works page, which exists whenever
+ * these entries do; the words are read out.
  */
 function WorksTag({ works }: { works: SocialTimelineWork[] }) {
-  return <Link className="tag tag--social" href="/works" prefetch={false} title="全部作品">{workPlatforms(works).map(platform => <PlatformMark key={platform} platform={platform} size={12} />)}作品</Link>;
+  const platforms = workPlatforms(works);
+  return (
+    <Link className="work-marks" href="/works" prefetch={false} title="全部作品">
+      {platforms.map(platform => <span key={platform} className={`work-marks__sign work-marks__sign--${platform}`}><PlatformMark platform={platform} size={16} /></span>)}
+      <span className="visually-hidden">{platforms.map(platform => platformNames[platform]).join("、")}作品</span>
+    </Link>
+  );
 }
 
 export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFeedV2Page; pageSize: number; timeZone: string }) {

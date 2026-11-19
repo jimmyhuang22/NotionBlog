@@ -111,14 +111,14 @@
 /* Updates from other sections: a hollow dot, a plain label and a compact linked card. */
 .entry--event::before { border-color: var(--muted); }
 .entry__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
-/* The label on a work published elsewhere leads to the page that lists them all. */
-a.tag--social { position: relative; }
-/* The platforms' signs lead the tag (2026-11-19). */
-.tag--social { gap: 4px; }
-.tag--social > svg { flex: none; }
-a.tag--social:hover { color: var(--accent); }
-/* A label is small; the area that takes a press reaches a little past it. */
-a.tag--social::after { content: ""; position: absolute; inset: -11px -8px; }
+/* A work's row is marked by its platforms' own signs in their colours (2026-11-19), leading to the works page. */
+.work-marks { position: relative; display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
+.work-marks svg { display: block; }
+.work-marks__sign--bilibili { color: var(--brand-bilibili); }
+.work-marks__sign--xiaohongshu { color: var(--brand-xiaohongshu); }
+a.work-marks:hover { opacity: 0.75; }
+/* A sign is small; the area that takes a press reaches a little past it. */
+a.work-marks::after { content: ""; position: absolute; inset: -12px -8px; }
 .event { display: flex; align-items: center; gap: 16px; max-width: 460px; margin-top: 10px; padding: 14px 18px 14px 14px; border-radius: var(--radius-lg); line-height: 1.45; }
 .event__cover { flex: 0 0 46px; width: 46px; height: 64px; border-radius: var(--radius-sm); background: var(--soft); object-fit: cover; }
 .event--album .event__cover { flex-basis: 76px; width: 76px; height: 57px; }
