@@ -125,3 +125,14 @@ test("a sub-heading with nothing under it before the next heading goes", () => {
   const record = gameRecord(doc([h("a", "游戏相关"), p("a1", "官网"), h("g", "图片收集", 2), h("b", "游玩历程"), h("w", "等待快递中", 2), p("w1", "快到了"), h("e", "收尾", 2)]));
   assert.deepEqual(ids(record), ["a", "a1", "b", "w", "w1"]);
 });
+
+test("a series' excerpts that are all episode notes become a list and leave the body; anything else stays", () => {
+  const quote = (id: string, text: string): ContentBlock => ({ id, type: "quote", text: runs(text) });
+  const record = movieRecord(doc([h("x", "摘录"), h("e1", "Episode 1 - “Seven Thirty-Seven”", 2), quote("q1", "Walt and Jesse…"), h("e2", "第 2 集 Grilled", 2), p("q2", "Hank…"), p("b"), h("s", "总结"), p("s1", "好看")]), null);
+  assert.deepEqual(record.episodes, [{ number: 1, name: "Seven Thirty-Seven", text: "Walt and Jesse…" }, { number: 2, name: "Grilled", text: "Hank…" }]);
+  assert.deepEqual(ids(record.document), ["s", "s1"]);
+  const mixed = movieRecord(doc([h("x", "摘录"), h("e1", "Episode 1", 2), quote("q1", "a"), p("n", "我的想法")]), null);
+  assert.deepEqual(mixed.episodes, []);
+  assert.deepEqual(ids(mixed.document), ["x", "e1", "q1", "n"]);
+  assert.deepEqual(movieRecord(doc([h("x", "摘录"), h("a", "一句台词", 2), quote("q", "…")]), null).episodes, []);
+});
