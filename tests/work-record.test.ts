@@ -120,3 +120,8 @@ test("a game's record keeps its own headings and drops the outline and the empty
   assert.equal(heading(record, "g"), "游玩内容目标");
   assert.equal(gameRecord(null), null);
 });
+
+test("a sub-heading with nothing under it before the next heading goes", () => {
+  const record = gameRecord(doc([h("a", "游戏相关"), p("a1", "官网"), h("g", "图片收集", 2), h("b", "游玩历程"), h("w", "等待快递中", 2), p("w1", "快到了"), h("e", "收尾", 2)]));
+  assert.deepEqual(ids(record), ["a", "a1", "b", "w", "w1"]);
+});

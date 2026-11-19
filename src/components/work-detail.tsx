@@ -209,7 +209,8 @@ function TimeBars({ item }: { item: Game }) {
 function GameTimeline({ item, timeZone }: { item: Game; timeZone: string }) {
   const rows: { label: string; range: DateRange | null; own: boolean }[] = gameDateRows(item, timeZone).map(([label, range]) => ({ label, range, own: label === "体验日期" || label === "游玩日期" }));
   if (item.releaseDate) rows.push({ label: "发售", range: item.releaseDate, own: false });
-  const known = rows.filter(row => row.range && rangeLabel(row.range, timeZone)).sort((a, b) => a.range!.start.slice(0, 10).localeCompare(b.range!.start.slice(0, 10)));
+  // On the same day the release comes first: a game is played on its release day, not before it.
+  const known = rows.filter(row => row.range && rangeLabel(row.range, timeZone)).sort((a, b) => a.range!.start.slice(0, 10).localeCompare(b.range!.start.slice(0, 10)) || Number(b.label === "发售") - Number(a.label === "发售"));
   const unknown = rows.filter(row => !row.range || !rangeLabel(row.range, timeZone));
   return (
     <ol className="game-timeline">
@@ -255,12 +256,13 @@ export function GamePage({ type, label, item, document, timeZone, neighbours }: 
                 {/* Fewer than half the games carry the owner's rating; without one it is a quiet line, not a large empty score. */}
                 <dt className="visually-hidden">我的评分</dt>{item.rating ? <RatingValue rating={item.rating} /> : <dd className="work-game__unrated">未评分</dd>}
               </div>
-              <div className="work-game__group game-time">
+              {/* A game not yet played has no time to tell. */}
+              {item.status === "wishlist" && !played ? null : <div className="work-game__group game-time">
                 <dt className="visually-hidden">已玩时长</dt>
                 <dd className="game-time__played">{played ?? "时长未记录"}</dd>
                 <dd className="game-time__note">{played ? "已玩" : ""}{expected ? `${played ? "，" : ""}预计 ${expected}` : ""}</dd>
                 <dd><TimeBars item={item} /></dd>
-              </div>
+              </div>}
               <div className="work-game__group work-game__dates"><dt className="visually-hidden">日期</dt><dd><GameTimeline item={item} timeZone={timeZone} /></dd></div>
             </dl>
           </aside>
