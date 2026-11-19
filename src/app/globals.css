@@ -479,6 +479,10 @@ a.card:hover { box-shadow: var(--shadow-lift); }
 .state--center h1 { margin: 0; font-family: var(--font-hand); font-size: var(--text-3xl); font-weight: 400; color: var(--ink); }
 /* Not found: a blank sheet, slightly askew, with one drop of ink. */
 .not-found { gap: 14px; padding-block: 96px 80px; }
+.not-found__ways { width: min(440px, 100%); margin-top: 6px; }
+.section-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 18px; }
+.section-links__item { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); font-size: var(--text-sm); color: var(--ink); }
+.section-links__item:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
 .not-found__sheet { position: relative; width: 132px; aspect-ratio: 3 / 4; margin-bottom: 18px; border-radius: var(--radius-sm); background: var(--card); box-shadow: var(--shadow), inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent); transform: rotate(-3deg); }
 .not-found__sheet::before { content: ""; position: absolute; left: 22px; right: 20px; top: 30px; height: 62px; background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--rule) 80%, transparent) 0 1px, transparent 1px 20px); }
 .not-found__sheet::after { content: ""; position: absolute; right: 22px; bottom: 26px; width: 15px; height: 15px; border-radius: 50%; background: var(--accent); box-shadow: 13px -9px 0 -5px var(--accent), -9px 6px 0 -6px var(--accent); }

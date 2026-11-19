@@ -73,6 +73,15 @@ function dated(block: ContentBlock): ContentBlock {
 /** A heading with only other headings and empty lines under it says nothing yet. */
 const says = (blocks: ContentBlock[]) => blocks.some(block => block.type !== "heading" && !blank(block));
 
+/** A sub-heading with nothing under it before the next heading of its rank or above (an empty "图片收集") says nothing. */
+function unheaded(blocks: ContentBlock[]): ContentBlock[] {
+  return blocks.filter((block, index) => {
+    if (block.type !== "heading") return true;
+    const next = blocks.slice(index + 1).find(other => !blank(other));
+    return !!next && !(next.type === "heading" && next.level <= block.level);
+  });
+}
+
 function trim(blocks: ContentBlock[]): ContentBlock[] {
   let start = 0, end = blocks.length;
   while (start < end && blank(blocks[start]!)) start++;
@@ -89,7 +98,7 @@ function tidy(document: ContentDocument, renamed: Record<string, string>, take?:
     const blocks = section.blocks.filter(block => !untouched(block));
     if (section.heading && !says(blocks)) continue;
     const name = title !== null ? renamed[title] : undefined;
-    kept.push({ heading: section.heading && name ? { ...section.heading, text: [{ text: name }] } : section.heading, blocks: trim(blocks).map(dated) });
+    kept.push({ heading: section.heading && name ? { ...section.heading, text: [{ text: name }] } : section.heading, blocks: unheaded(trim(blocks)).map(dated) });
   }
   return kept.filter(section => section.heading || section.blocks.length);
 }

@@ -68,6 +68,10 @@ export function stepOption(current: number, count: number, delta: 1 | -1): numbe
 /** Headings of the owner's Notion templates; in an excerpt they are words of the form, not of the record. */
 const TEMPLATE_HEADINGS = new Set(["游玩内容目标", "游玩内容", "游玩目标", "游玩感受", "游玩录像", "截图", "感受", "感想", "书评", "摘录", "总结", "其他", "多刷记录"]);
 
+export function withoutSearchTemplateHeadings(text: string): string {
+  return text.split(/\s+/u).filter(word => word && !TEMPLATE_HEADINGS.has(word.replace(/[：:]$/u, ""))).join(" ");
+}
+
 /**
  * What a result shows under its title (the owner's pick 甲 of 2026-11-19): nothing when the title already holds
  * the words searched for, since the title then says why it was found; otherwise the excerpt without the template's
@@ -75,7 +79,7 @@ const TEMPLATE_HEADINGS = new Set(["游玩内容目标", "游玩内容", "游玩
  */
 export function hitExcerpt(hit: { title: string; excerpt: string }, query: string): string {
   if (!hit.excerpt || splitMatch(hit.title, query)) return "";
-  return readableExcerpt(hit.excerpt.split(/\s+/u).filter(word => word && !TEMPLATE_HEADINGS.has(word)).join(" "));
+  return readableExcerpt(withoutSearchTemplateHeadings(hit.excerpt));
 }
 
 export function readableExcerpt(text: string): string {

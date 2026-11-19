@@ -35,7 +35,8 @@
     animation: segmented-edges linear both; animation-timeline: scroll(self inline);
   }
 }
-@keyframes segmented-edges { 0% { --edge-start: 0px; --edge-end: 36px; } 10% { --edge-start: 36px; } 90% { --edge-end: 36px; } 100% { --edge-start: 36px; --edge-end: 0px; } }
+/* 48px (2026-11-19, was 36): wide enough that a year cut at the edge reads as fading out, not as half a figure. */
+@keyframes segmented-edges { 0% { --edge-start: 0px; --edge-end: 48px; } 10% { --edge-start: 48px; } 90% { --edge-end: 48px; } 100% { --edge-start: 48px; --edge-end: 0px; } }
 /*
  * Under the heading: the years on the left, scrolling sideways when there are many, and the order as one
  * button at the end of the same row (F34). Without a year row the button keeps that place on its own.
@@ -293,13 +294,13 @@
  * Below, the side column and the write-up, as on a film's page.
  */
 .game-band { position: relative; color: #f4f1ea; }
-.game-band::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 14, 0.45), rgba(8, 10, 14, 0) 28%, rgba(8, 10, 14, 0.5) 72%), var(--art) center 20% / cover, #15171c; -webkit-mask: linear-gradient(#000 70%, transparent); mask: linear-gradient(#000 70%, transparent); }
+.game-band::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 14, 0.72), rgba(8, 10, 14, 0.38) 16%, rgba(8, 10, 14, 0) 34%, rgba(8, 10, 14, 0.5) 72%), var(--art) center 20% / cover, #15171c; -webkit-mask: linear-gradient(#000 70%, transparent); mask: linear-gradient(#000 70%, transparent); }
 .game-band--plain { color: var(--ink); }
 .game-band--plain::before { content: none; }
 .game-band--plain .game-band__in { min-height: 0; padding-bottom: 36px; }
 .game-band__in { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: clamp(300px, 36vw, 460px); padding-bottom: clamp(64px, 9vw, 120px); }
 .game-band .crumbs, .game-band .crumbs [aria-current] { color: inherit; }
-.game-band .crumbs { opacity: 0.85; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+.game-band .crumbs { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 14px rgba(0, 0, 0, 0.5); }
 .game-band--plain .crumbs { text-shadow: none; }
 .game-band__text { max-width: 980px; width: 100%; margin: auto auto 0; }
 .game-band__title { margin: 0; font-family: var(--font-hand); font-size: clamp(30px, 4vw, 46px); font-weight: 400; line-height: 1.15; color: inherit; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45); overflow-wrap: anywhere; }
@@ -435,6 +436,20 @@
  * underlines in a row of "塞尔达传说" were loud); under it the kind written out and where it sits; an excerpt only
  * when the title does not hold the words (hitExcerpt). A count above the list.
  */
+.search-start { display: grid; gap: 28px; }
+.search-start__title { margin: 0 0 10px; font-size: var(--text-sm); font-weight: 500; letter-spacing: 0.04em; color: var(--muted); }
+.search-start__works { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.search-start__work { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; height: 100%; padding: 10px 12px; border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); color: var(--ink); }
+.search-start__work:hover .search-start__name { color: var(--accent); }
+.search-start__thumb { display: block; overflow: hidden; border-radius: var(--radius-xs); background: var(--soft); }
+.search-start__thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.search-start__thumb--movie, .search-start__thumb--book { width: 40px; height: 58px; }
+.search-start__thumb--game { width: 72px; height: 41px; }
+.search-start__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.search-start__name { overflow: hidden; font-family: var(--font-hand); font-size: var(--text-md); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.search-start__kind { font-size: var(--text-xs); color: var(--muted); }
+.search-start .section-links { justify-content: flex-start; margin-top: 0; }
+@media (max-width: 640px) { .search-start__works { grid-template-columns: minmax(0, 1fr); } }
 .search__count { margin: 0 0 10px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
 .search__hits { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
 .search__hits > li { border-bottom: 1px solid var(--rule); }
