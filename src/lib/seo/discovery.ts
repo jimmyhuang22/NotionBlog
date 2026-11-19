@@ -1,8 +1,8 @@
-import type { ContentKind,AnyContent } from "../../../contracts/content.ts";
+import type { ContentKind } from "../../../contracts/content.ts";
 import type { ContentRepository } from "../../../contracts/repository.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { isContentKind,type ContentFeatures } from "../../../config/features.ts";
-import { publicSnapshot,documentPlainText,contentDate,compareContent } from "../content/website.ts";
+import { publicSnapshot } from "../content/website.ts";
 export interface DiscoveryOptions { enabled: boolean; origin: string|null; kinds: ContentKind[] }
 const defaults:ContentKind[]=["status","course","study-note","post","album","book","movie","game"];
 export function discoveryOptions(env:Record<string,string|undefined>):DiscoveryOptions {
@@ -25,8 +25,3 @@ export async function sitemapXml(repository:ContentRepository,features:ContentFe
   return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+[...urls].sort(([a],[b])=>a.localeCompare(b)).map(([path,date])=>`<url><loc>${xmlEscape(new URL(path,options.origin!).toString())}</loc>${date?`<lastmod>${xmlEscape(date)}</lastmod>`:""}</url>`).join("")+"</urlset>";
 }
 export function robotsText(options:DiscoveryOptions) {return options.enabled?`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /preview/\nSitemap: ${options.origin}/sitemap.xml\n`:"User-agent: *\nDisallow: /\n";}
-export async function feedXml(repository:ContentRepository,features:ContentFeatures,options:DiscoveryOptions,siteName:string) {
-  const kinds=options.kinds.filter(k=>features[k]&&(k==="status"||k==="post"));
-  const records=options.enabled?(await publicSnapshot(repository,kinds,true)).records.sort((a,b)=>compareContent(a.item,b.item)).filter(d=>contentDate(d.item)!==null).slice(0,20):[];
-  return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>'+`<title>${xmlEscape(siteName)}</title><link>${xmlEscape(options.enabled?options.origin!:"https://example.invalid")}</link><description>${xmlEscape(siteName)}</description>`+records.map(d=>`<item><title>${xmlEscape(d.item.title)}</title><link>${xmlEscape(new URL(d.item.href,options.origin!).toString())}</link><guid>${xmlEscape(new URL(d.item.href,options.origin!).toString())}</guid><description>${xmlEscape(documentPlainText(d.document).slice(0,2000))}</description>${contentDate(d.item)?.precision==="datetime"?`<pubDate>${new Date(contentDate(d.item)!.start).toUTCString()}</pubDate>`:""}</item>`).join("")+"</channel></rss>";
-}

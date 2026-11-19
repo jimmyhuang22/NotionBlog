@@ -6,7 +6,7 @@ import { createMockRepository } from "../adapters/mock-repository.ts";
 import type { Game, TimeAmount } from "../contracts/content.ts";
 import { timelineEvents,documentPlainText,createWebsiteQueries } from "../src/lib/content/website.ts";
 import { websiteQueryResponse,sitePageResponse } from "../src/lib/content/website-http.ts";
-import { discoveryOptions,sitemapXml,robotsText,feedXml } from "../src/lib/seo/discovery.ts";
+import { discoveryOptions,sitemapXml,robotsText } from "../src/lib/seo/discovery.ts";
 const all=Object.fromEntries(CONTENT_KINDS.map(k=>[k,true])) as typeof contentFeatures;
 const invalid=(e:unknown)=>!!e&&typeof e==="object"&&"code" in e&&e.code==="INVALID_QUERY";
 test("multi-page fixtures expose totals, adjacent articles and only the fixed About key",async()=>{
@@ -76,6 +76,5 @@ test("discovery is off in demo and platform previews; explicit public discovery 
   const options=discoveryOptions({SITE_INDEXING_ENABLED:"true",CONTENT_PROVIDER:"database",SITE_URL:"https://example.test",SITE_DISCOVERY_KINDS_JSON:'["status","post","game"]'});
   const repo=createContentService().repository,xml=await sitemapXml(repo,contentFeatures,options);assert.ok(xml.includes("/status"));assert.ok(!xml.includes("/blog"));assert.ok(!xml.includes("library/games"));assert.ok(!xml.includes("#mock"));
   const off=await sitemapXml({...repo,readSnapshot:async()=>{throw Error("should not read");}},all,{...options,enabled:false});assert.ok(!off.includes("<loc>"));
-  const feed=await feedXml(createContentService({features:all}).repository,all,options,"A & B");assert.ok(feed.includes("A &amp; B"));assert.ok(!feed.includes("<script>"));
   assert.equal(parseContentFeatures('{"game":true}').game,true);assert.throws(()=>parseContentFeatures('{"unknown":true}'));assert.throws(()=>parseContentFeatures('{"page":"true"}'));
 });
