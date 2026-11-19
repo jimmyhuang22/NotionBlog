@@ -340,7 +340,6 @@
 [data-skin="y2k"] .callout, [data-skin="y2k"] .child-page, [data-skin="y2k"] .prose__toc, [data-skin="y2k"] .bookmark, [data-skin="y2k"] .code { background: color-mix(in srgb, var(--accent) 6%, #fff); border: 1px solid color-mix(in srgb, var(--accent) 18%, #fff); box-shadow: inset 0 1px 0 #fff; }
 [data-skin="y2k"] .tree__link[aria-current="page"] { background: var(--y2k-gloss); color: #17549f; box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #c6dcf2; }
 [data-skin="y2k"] .palette mark { background: #cfe6ff; }
-[data-skin="y2k"] .search-hit__kind { border-color: transparent; background: var(--y2k-button) #1a6ace; color: #fff; }
 
 /*
  * Pressing in each skin (2026-11-12, design review 5 and its skins addendum). Every skin presses the same

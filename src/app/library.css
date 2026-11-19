@@ -414,6 +414,8 @@
 .search__input { flex: 1 1 auto; min-width: 0; height: 44px; border: 0; background: none; font: inherit; font-size: var(--text-body); color: var(--ink); outline: none; }
 .search__input::placeholder { color: var(--muted); opacity: 1; }
 .search__kinds { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 4px 0; }
+/* Phones: one row that slides, its right edge fading so the rest is seen to be there (2026-11-19). */
+@media (max-width: 640px) { .search__kinds { flex-wrap: nowrap; overflow-x: auto; padding-right: 32px; scrollbar-width: none; -webkit-mask: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 40px), transparent); } .search__kinds::-webkit-scrollbar { display: none; } .search__kinds .tag { flex: none; } }
 .search__kinds .tag { min-height: 34px; padding: 4px 14px; }
 .search__kinds .tag:hover { color: var(--accent); }
 /* At least as tall as the loading state that stands in for it (page-loading, 100vh): the footer, below the first screen while the results are read, then stays put when they arrive instead of rising into view (S13-5). */
@@ -428,27 +430,26 @@
 .search-recovery__action:hover { text-decoration: underline; text-underline-offset: 4px; }
 .search-recovery__action:disabled { color: var(--muted); cursor: progress; text-decoration: none; }
 /*
- * Results read as a column of entries in a notebook (2026-10-20): no cards, hairlines between them, the kind as one
- * character in a ring like the course overview's marks, and a match underlined in ink (O-04: no fill, which the island's yellow highlight already uses).
+ * Results read as a column of entries in a notebook (2026-10-20): no cards, hairlines between them. Since 2026-11-19
+ * (the owner's pick 甲) the title stands alone on the left edge, a match in it inked rather than underlined (seven
+ * underlines in a row of "塞尔达传说" were loud); under it the kind written out and where it sits; an excerpt only
+ * when the title does not hold the words (hitExcerpt). A count above the list.
  */
+.search__count { margin: 0 0 10px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
 .search__hits { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
 .search__hits > li { border-bottom: 1px solid var(--rule); }
-.search-hit { display: block; padding: 16px 6px 18px; color: var(--ink); }
+.search-hit { display: block; padding: 14px 6px 16px; color: var(--ink); }
 .search-hit:hover { background: color-mix(in srgb, var(--soft) 55%, transparent); }
 .search-hit:hover .search-hit__title { color: var(--accent); }
-.search-hit__top { display: flex; align-items: baseline; gap: 12px; }
-.search-hit__kind { flex: 0 0 auto; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 50%; color: var(--muted); font-family: var(--font-hand); font-size: var(--text-xs); line-height: 1; transform: translateY(-2px); }
-.search-hit__kind > i { font-style: normal; }
-.search-hit__title { min-width: 0; font-family: var(--font-hand); font-size: var(--text-lg); line-height: 1.45; }
-.search-hit__excerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 6px; padding-left: 34px; font-size: var(--text-base); line-height: 1.7; color: var(--muted); }
+.search-hit__title { display: block; min-width: 0; font-family: var(--font-hand); font-size: var(--text-lg); line-height: 1.45; }
+.search-hit__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; margin-top: 3px; font-size: var(--text-sm); line-height: 1.65; color: var(--muted); }
+.search-hit__kind { color: var(--ink); font-weight: 500; }
+.search-hit__meta .search-context { display: inline; margin: 0; }
+.search-hit__excerpt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; font-size: var(--text-sm); line-height: 1.7; color: var(--muted); }
 .search-context { display: block; margin-top: 5px; font-size: var(--text-sm); line-height: 1.65; color: var(--muted); overflow-wrap: anywhere; white-space: normal; }
 .search-context__course { color: var(--accent); font-weight: 500; }
-.search-hit > .search-context { padding-left: 34px; }
-.search-hit mark { padding: 0; border-radius: 0; background: none; color: inherit; text-decoration: underline 1.5px var(--accent); text-underline-offset: 4px; text-decoration-skip-ink: none; }
-/* In the excerpt a found word is only inked: underlines there read as links of their own inside the one link (X-10). */
-.search-hit__excerpt mark { text-decoration: none; color: var(--accent); }
+.search-hit mark { padding: 0; border-radius: 0; background: none; color: var(--accent); }
 .palette mark { padding: 0 2px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink); }
-@media (max-width: 520px) { .search-hit__excerpt, .search-hit > .search-context { padding-left: 0; } }
 
 /* Projects: one card per project, what it is on the left, stack and links on the right. */
 .project-card { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-bottom: 14px; padding: 26px 28px; border-radius: var(--radius-lg); }
