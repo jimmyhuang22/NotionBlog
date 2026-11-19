@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HomeFeedV2Item, HomeFeedV2Page, SocialTimelineWork } from "../../contracts/social-timeline.ts";
-import { isNoticedActivity } from "../lib/home-feed.ts";
+import { isNoticedActivity, platformNames } from "../lib/home-feed.ts";
 import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
-import { PlatformChips } from "./platform-chips";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
 import { EntryMoment } from "./entry-moment";
 import { MonthLabel } from "./month-label";
@@ -17,38 +16,50 @@ import { ListTail } from "./list-tail";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { useToday } from "./use-today";
 
+/** The platforms a game event names, as their chips label them (Switch, PC, PlayStation). */
+function gamePlatforms(event: WorkEvent): string[] {
+  return platformChips((event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean)).map(chip => chip.label);
+}
+
+/** The date row's tag for a game (2026-11-19, the owner's pick 丙一): "在 Switch 上玩", or "在玩" when no platform is recorded. */
+function gameTag(event: WorkEvent): string {
+  const platforms = gamePlatforms(event);
+  return platforms.length ? `在 ${platforms.join("、")} 上玩` : "在玩";
+}
+
 /**
- * A game on the home timeline, as one line (the owner's choice, 2026-10-18): a small square of its
- * cover, then "在玩 {title}" whatever its status (a playing entry stands on the day it was last played;
- * a platinum or cleared one stands on its hand-written completion day and reads the same, no mark — and
- * if it was played again later, a separate playing entry stands on that day, F47), then its platforms in
- * their makers' colours. The
- * line wraps as a whole, chips and all, never through a word. Each game keeps its own line and day: neighbouring
- * games were joined into one sentence for a day (design review 5, H-11) and the owner preferred them apart, with
- * their platform and hours (2026-11-13).
+ * A game on the home timeline, drawn as a work published elsewhere is (2026-11-19, the owner's pick 丙): its wide
+ * cover in the same 144 by 81 frame with the hours played at its foot, and the title alone beside it. What it is
+ * and where it was played are said by the date row's tag ("在 Switch 上玩", gameTag), so nothing is said twice. Every
+ * game reads "playing" whatever its status: a playing entry stands on the day it was last played; a platinum or
+ * cleared one on its completion day (F47). Each game keeps its own row and day (2026-11-13).
  */
 function GameLine({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
-  const platforms = platformChips((event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean));
   // The game's current total, written as on its card: none at all and unknown are left out.
   const time = cardTimeLabel(event.playedTime ?? null);
+  const blank = <span className="work-line__blank" aria-hidden="true" />;
   const body: ReactNode = (
     <>
-      {event.cover ? <CoverImage className="event__square" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy priority={priorityCover} sized={false} fallback={<span className="event__square" aria-hidden="true" />} /> : <span className="event__square" aria-hidden="true" />}
-      <span className="event__line">
-        <span className="event__sentence"><span className="event__lead">在玩</span> <span className="event__title">{event.title}</span></span>
-        {platforms.length || time ? (
-          <span className="event__chips">
-            {platforms.length ? <><span className="visually-hidden">，</span><PlatformChips chips={platforms} /></> : null}
-            {time ? <span className="event__time"><span className="visually-hidden">，</span>{time}</span> : null}
-          </span>
-        ) : null}
+      <span className="work-line__text">
+        <span className="work-line__title">{event.title}</span>
+        {time ? <span className="visually-hidden">，已玩 {time}</span> : null}
+      </span>
+      <span className="work-line__thumb" aria-hidden="true">
+        {event.cover ? <CoverImage className="work-line__cover" image={{ ...event.cover, alt: "" }} previewWidth={400} label="封面" lazy priority={priorityCover} sized={false} fallback={blank} /> : blank}
+        {time ? <span className="work-line__stats"><span><ClockSign />{time}</span></span> : null}
       </span>
     </>
   );
-  // No card behind it (2026-11-11): a game is a quiet line beside the status entries.
-  const className = "event event--game event--line";
-  if (event.href) return <Link className={className} href={event.href} prefetch={false}>{body}</Link>;
-  return <div className={className}>{body}</div>;
+  return (
+    <div className="work-line work-line--game">
+      {event.href ? <Link className="work-line__main" href={event.href} prefetch={false}>{body}</Link> : <div className="work-line__main">{body}</div>}
+    </div>
+  );
+}
+
+/** A clock, for the hours a game was played. */
+function ClockSign() {
+  return <svg aria-hidden="true" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="5.8" /><path d="M8 5v3.2l2.2 1.3" /></svg>;
 }
 
 function WorkCard({ event, priorityCover }: { event: WorkEvent; priorityCover: boolean }) {
@@ -90,11 +101,18 @@ const DRAWN_ROWS = 8;
 let drawnThisVisit = false;
 
 /**
- * The "作品" tag of a row of works, led by the platforms' signs (2026-11-19, the owner's pick: the sign moved here
- * from under each title, where it stood alone). The works page exists whenever these entries do.
+ * The mark of a row of works: the platforms' own signs in their own colours, nothing else (2026-11-19, the owner's
+ * pick 乙: "作品" beside the sign said the same thing twice). It still leads to the works page, which exists whenever
+ * these entries do; the words are read out.
  */
 function WorksTag({ works }: { works: SocialTimelineWork[] }) {
-  return <Link className="tag tag--social" href="/works" prefetch={false} title="全部作品">{workPlatforms(works).map(platform => <PlatformMark key={platform} platform={platform} size={12} />)}作品</Link>;
+  const platforms = workPlatforms(works);
+  return (
+    <Link className="work-marks" href="/works" prefetch={false} title="全部作品">
+      {platforms.map(platform => <span key={platform} className={`work-marks__sign work-marks__sign--${platform}`}><PlatformMark platform={platform} size={16} /></span>)}
+      <span className="visually-hidden">{platforms.map(platform => platformNames[platform]).join("、")}作品</span>
+    </Link>
+  );
 }
 
 export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFeedV2Page; pageSize: number; timeZone: string }) {
@@ -163,7 +181,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
               <article className="entry entry--event">
                 <p className="entry__meta">
                   {moment ? <span className="entry__time"><EntryMoment moment={moment} /></span> : null}
-                  <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{eventKinds[item.event.type].section}</span>
+                  <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{item.event.type.startsWith("game-") ? gameTag(item.event) : eventKinds[item.event.type].section}</span>
                   {demo}
                 </p>
                 <WorkCard event={item.event} priorityCover={priorityCover} />

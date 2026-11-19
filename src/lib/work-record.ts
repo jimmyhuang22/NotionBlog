@@ -220,3 +220,13 @@ export function bookRecord(document: ContentDocument | null): BookRecord {
 export function gameRecord(document: ContentDocument | null): ContentDocument | null {
   return document ? assemble(document, tidy(document, {})) : null;
 }
+
+/**
+ * Whether a book's excerpts open held to about a screen (ExcerptFold). One rule by count, the same on every width:
+ * up to 30 are shown in full, more are held (2026-11-19, after the release check found 12 holding back a book of
+ * 16 that the owner expects open; of the first 30 books, those over 30 run from 31 to 80 excerpts).
+ */
+export const EXCERPTS_SHOWN = 30;
+export function excerptsHeld(count: number): boolean {
+  return count > EXCERPTS_SHOWN;
+}

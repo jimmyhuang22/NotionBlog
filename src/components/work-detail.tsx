@@ -5,14 +5,11 @@ import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
 import { gameDateRows } from "../lib/game-dates.ts";
-import { bookRecord, gameRecord, movieRecord } from "../lib/work-record.ts";
+import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
 import { PlatformChips } from "./platform-chips";
 import { ExcerptFold } from "./excerpt-fold";
-
-/** Up to this many excerpts show in full; more are held to about a screen (ExcerptFold). */
-const EXCERPTS_SHOWN = 12;
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -187,7 +184,7 @@ export function BookPage({ type, label, item, document, timeZone, neighbours }: 
           {record.excerpts ? (
             <section className="work-excerpts" aria-label="摘录">
               <h2 className="work-excerpts__title">摘录{record.excerptCount ? <small>{record.excerptCount} 条</small> : null}</h2>
-              <ExcerptFold count={record.excerptCount} held={record.excerptCount > EXCERPTS_SHOWN}><RichDocumentBody document={record.excerpts} imagePreviewWidth={800} topHeading={3} /></ExcerptFold>
+              <ExcerptFold count={record.excerptCount} held={excerptsHeld(record.excerptCount)}><RichDocumentBody document={record.excerpts} imagePreviewWidth={800} topHeading={3} /></ExcerptFold>
             </section>
           ) : null}
           <WorkRecord item={item} document={record.rest} />
