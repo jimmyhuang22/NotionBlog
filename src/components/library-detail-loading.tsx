@@ -30,6 +30,16 @@ export function LibraryDetailLoading() {
       </div>
     </div>
   );
+  // A book's page is the shelf: the cover in a left column, the title and the reading beside it (2026-11-19).
+  if (kind === "book") return (
+    <div className="wrap page-loading" role="status" aria-label="正在加载">
+      <nav className="crumbs" aria-hidden="true"><span className="skeleton work-loading__crumb" /></nav>
+      <div className="work-book work-loading">
+        <aside className="work-book__side"><div className="work-book__cover work__cover"><span className="skeleton cover work-loading__cover" /></div></aside>
+        <div className="work-book__main"><span className="skeleton work-loading__title" />{lines}</div>
+      </div>
+    </div>
+  );
   return (
     <div className="wrap page-loading" role="status" aria-label="正在加载">
       <nav className="crumbs" aria-hidden="true"><span className="skeleton work-loading__crumb" /></nav>

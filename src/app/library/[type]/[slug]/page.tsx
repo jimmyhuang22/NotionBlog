@@ -5,13 +5,13 @@ import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import { contentMetadata } from "@/lib/seo/metadata";
 import { notFound } from "next/navigation";
-import type { LibraryKind, Page, Rating } from "../../../../../contracts/content.ts";
+import type { Game, LibraryKind, Page, Rating } from "../../../../../contracts/content.ts";
 import { Cover } from "@/components/library-grid";
 import { PlatformChips } from "@/components/platform-chips";
 import { contentRepository } from "@/lib/content";
 import { dateParts, rangeLabel } from "@/lib/format";
-import { libraryHref, librarySections, progressWidth, workSentence, workFactText, movieRatingFact, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
-import { FilmPage, RatingValue, WorkRecord } from "@/components/work-detail";
+import { libraryHref, librarySections, progressWidth, workSentence, workFactText, itemDate, type LibraryItem, cardTimeLabel, platformChips, type PlatformChip } from "@/lib/library";
+import { BookPage, FilmPage, RatingValue, WorkRecord } from "@/components/work-detail";
 import { getSiteConfig } from "@/lib/site";
 import { gameDateRows } from "@/lib/game-dates";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
@@ -56,22 +56,9 @@ interface Facts {
  * The sentence and the owner's rating lead; a missing rating says so instead of showing zero. Everything
  * else follows as one quiet line of label and value pairs (H-04, the owner's pick of 2026-10-20).
  */
-function facts(item: LibraryItem, timeZone: string): Facts {
+function facts(item: Game, timeZone: string): Facts {
   const date = (label: string, value: Parameters<typeof rangeLabel>[0]): [string, string] => [label, rangeLabel(value, timeZone) ?? "日期未记录"];
   const optional = (label: string, value: string | null | undefined): [string, string][] => (value ? [[label, value]] : []);
-  if (item.kind === "movie") {
-    const publicRating = movieRatingFact(item);
-    return { said: workSentence(item, rangeLabel(item.watchedDate, timeZone)), rating: item.rating, progress: null, platforms: [], rest: [
-      ...optional("类型", item.mediaType), ...optional("导演", item.director), ...optional("主演", item.actors.join("、")),
-      ...optional("上映", rangeLabel(item.releaseDate, timeZone)), ...(publicRating ? [publicRating] : []),
-    ] };
-  }
-  if (item.kind === "book") {
-    const pages = item.pagesRead !== null && item.totalPages !== null ? `${item.pagesRead} / ${item.totalPages} 页` : item.totalPages !== null ? `${item.totalPages} 页` : null;
-    return { said: workSentence(item, rangeLabel(item.readingDate, timeZone)), rating: item.personalRating, progress: item.progressPercent, platforms: [], rest: [
-      ...optional("作者", item.authors.join("、")), ...optional("页数", pages), ...optional("豆瓣评分", item.doubanRating === null ? null : String(item.doubanRating)),
-    ] };
-  }
   // Platforms as boxes in the leading line, the same as on the card; times written as the card writes them, none at all left out (the owner's choice, 2026-10-17).
   return { said: workSentence(item, undefined), rating: item.rating, progress: item.progressPercent, platforms: platformChips(item.platforms), rest: [
     ...gameDateRows(item, timeZone).map(([label, value]) => date(label, value)),
@@ -142,9 +129,10 @@ async function Neighbours({ item, timeZone }: { item: LibraryItem; timeZone: str
     }
     if (!newer && !older) return null;
     const word = neighbourWords[item.kind];
-    // Films read "上一部 / 下一部" in the list's order, newest first, with a small poster (2026-11-19); the date
-    // under the title says which way each goes. Books and games keep their words until their pages are redone.
-    const film = item.kind === "movie";
+    // Films and books read "上一部 / 下一部", "上一本 / 下一本" in the list's order, newest first, with a small cover
+    // (2026-11-19); the date under the title says which way each goes. Games keep their words until their page is redone.
+    const measure = item.kind === "movie" ? "部" : item.kind === "book" ? "本" : null;
+    const film = measure !== null;
     const card = (entry: LibraryItem, label: string, className: string) => (
       <Link prefetch={false} className={className} href={entry.href}>
         <span>{label}</span><span>{entry.title}</span><small className="study-link-context">{rangeLabel(itemDate(entry), timeZone) ?? "日期未记录"}</small>
@@ -152,9 +140,9 @@ async function Neighbours({ item, timeZone }: { item: LibraryItem; timeZone: str
       </Link>
     );
     return (
-      <nav className={`pager work__neighbours${film ? " work__neighbours--posters" : ""}`} aria-label={film ? "上一部和下一部" : `前后${word}的`}>
-        {newer ? card(newer, film ? "上一部" : `较新${word}`, "pager__prev") : null}
-        {older ? card(older, film ? "下一部" : `较早${word}`, "pager__next") : null}
+      <nav className={`pager work__neighbours${film ? " work__neighbours--posters" : ""}`} aria-label={measure ? `上一${measure}和下一${measure}` : `前后${word}的`}>
+        {newer ? card(newer, measure ? `上一${measure}` : `较新${word}`, "pager__prev") : null}
+        {older ? card(older, measure ? `下一${measure}` : `较早${word}`, "pager__next") : null}
       </nav>
     );
   } catch {
@@ -178,7 +166,7 @@ export default async function LibraryDetailPage(props: Props) {
     </Suspense>
   );
   if (item.kind === "movie") return <FilmPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
-  const external = item.kind === "book" ? item.externalUrl : null;
+  if (item.kind === "book") return <BookPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
   const summary = facts(item, timeZone);
   return (
     <div className="wrap">
@@ -193,7 +181,6 @@ export default async function LibraryDetailPage(props: Props) {
           <p className="work__said">{summary.said}</p>
           <Lead {...summary} />
           {summary.rest.length ? <p className="work__line">{summary.rest.map(([label, value]) => <span key={label}>{workFactText(label, value, item.kind)}</span>)}</p> : null}
-          {external ? <p><a className="rt-link" href={external} target="_blank" rel="noopener noreferrer">查看外部条目</a></p> : null}
         </div>
       </div>
       <WorkRecord item={item} document={document} />
