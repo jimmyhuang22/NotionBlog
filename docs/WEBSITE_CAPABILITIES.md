@@ -55,7 +55,7 @@
 
 JSON、XML发现入口与错误继续no-store。用户2026-10-17同意[浏览器图片缓存一天](decisions/2026-10-17-private-media-cache-day.md)：成功的v2／社交站内图片字节响应使用private,max-age=86400,must-revalidate，CDN专用头明确no-store；不使用immutable。新服务器请求仍检查所有者资格、格式、大小、SHA和下载后撤回，访客已缓存的副本可在一天内复用，过期须重新验证。签名原图302跳转、404／权限／不可用继续no-store，冻结v1保持旧策略。页面五分钟缓存属于前端独立范围，本项不改变JSON／HTML缓存。
 
-默认 `SITE_INDEXING_ENABLED=false`，演示和 Vercel Preview 始终不收录。站点地图、RSS 与根／详情元数据只有在真实 provider、明确开启收录并提供有效 HTTPS `SITE_URL` 时公开；`SITE_DISCOVERY_KINDS_JSON` 只列已实现路由的栏目，默认不列关于和项目。地图不包含动态片段、查询、媒体地址或关闭的栏目；RSS 只取已公开、已知日期的动态与文章。资格或 provider 失败时返回 503，不能生成看似成功的空地图。
+默认 `SITE_INDEXING_ENABLED=false`，演示和 Vercel Preview 始终不收录。站点地图与根／详情元数据只有在真实 provider、明确开启收录并提供有效 HTTPS `SITE_URL` 时公开；`SITE_DISCOVERY_KINDS_JSON` 只列已实现路由的栏目，默认不列关于和项目。地图不包含动态片段、查询、媒体地址或关闭的栏目。网站不提供 RSS（2026-11-19 移除，`/feed.xml` 返回 404，页面也不声明订阅源）。资格或 provider 失败时返回 503，不能生成看似成功的空地图。
 
 内容详情在 Next.js Proxy 中先检查当前元数据，未知、关闭和无公开资格的详情在流式输出开始前改写到沿用现有界面的 404 入口。笔记也检查课程归属；原页面和 API 的资格检查保留。元数据失败保持服务器错误，不改成 404。验收分别检查实际页面状态码、noindex 和 API 状态，不将流式正文中的找不到提示当成状态码证明。
 
