@@ -1,8 +1,6 @@
 import "./fonts/nunito.css";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { contentFeatures } from "../../config/features.ts";
-import type { ContentKind } from "../../contracts/content.ts";
 import { BackToTop } from "@/components/back-to-top";
 import { ContactCard } from "@/components/contact-card";
 import { NavLinks, type NavItem } from "@/components/nav-links";
@@ -14,6 +12,7 @@ import { ThemeControls } from "@/components/theme-toggle";
 import { notionIconPath } from "@/components/social-icon-paths";
 import { getContentProvider } from "@/lib/content";
 import { isSocialEnabled } from "@/lib/content/social";
+import { siteNav } from "@/lib/site-nav";
 import { getSiteConfig } from "@/lib/site";
 import { contactCode } from "@/lib/contact";
 import { inputModeScript } from "@/lib/input-mode";
@@ -47,22 +46,6 @@ export function generateMetadata(): Metadata {
   };
 }
 
-/**
- * A section appears in the navigation only once its content kind is enabled; `more` ones fold under
- * "更多" when the row would hold more than fits a phone. The about page is reached from the home
- * page's picture, not from here.
- */
-const sections: { kind: ContentKind; href: string; label: string; more?: boolean }[] = [
-  { kind: "status", href: "/status", label: "动态" },
-  { kind: "course", href: "/study", label: "学习" },
-  { kind: "post", href: "/blog", label: "博客" },
-  { kind: "movie", href: "/library/movies", label: "影视", more: true },
-  { kind: "book", href: "/library/books", label: "书籍", more: true },
-  { kind: "game", href: "/library/games", label: "游戏", more: true },
-  { kind: "album", href: "/photos", label: "相册", more: true },
-  { kind: "project", href: "/projects", label: "项目" },
-];
-
 /** The feed only carries entries once the site is open to discovery; until then there is nothing to subscribe to. */
 function hasFeed(): boolean {
   try { return discoveryOptions(process.env).enabled; } catch { return false; }
@@ -71,13 +54,7 @@ function hasFeed(): boolean {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const site = getSiteConfig();
   const contact = contactCode(site.socials);
-  const nav: NavItem[] = sections.filter(section => contentFeatures[section.kind]).map(({ href, label, more }) => ({ href, label, more }));
-  // Works published elsewhere are a section of their own while the social source is on. It sits before the
-  // library sections, which fold under "更多" once the row holds more than fits a phone.
-  if (isSocialEnabled()) {
-    const firstFoldable = nav.findIndex(item => item.more);
-    nav.splice(firstFoldable === -1 ? nav.length : firstFoldable, 0, { href: "/works", label: "作品" });
-  }
+  const nav: NavItem[] = siteNav();
   return (
     <html lang="zh-CN" className="font-nunito" data-scroll-behavior="smooth" data-public-cache={publicCacheEnabled() ? "tagged-v1" : undefined} suppressHydrationWarning>
       {/* The script's text must come from a plain module. Taken from a "use client" file it reaches the browser as a reference to that file's code, and the page then waits on it while becoming interactive; when that code arrived late, hydration failed now and then. */}
