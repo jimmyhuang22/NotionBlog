@@ -23,6 +23,19 @@ export const WEBSITE_SNAPSHOT_SQL = compactWebsiteProjection(
 export const WEBSITE_CONTENT_SQL = compactWebsiteProjection(
   "SELECT nb_v2_api.read_content($1,$3,NULL,'{}'::jsonb,$6,$7,$4::uuid,$5::bigint,$2) AS value");
 
+// The caller supplies at most the current result page. Each exact slug uses
+// the existing qualified, pinned metadata read and its current media scope.
+export const WEBSITE_SEARCH_DETAILS_SQL = `SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'runId', scoped.value->'runId', 'revision', scoped.value->'revision',
+    'schemaDigest', scoped.value->'schemaDigest', 'mediaIds', scoped.value->'mediaIds',
+    'item', (SELECT jsonb_object_agg(field.key, field.value)
+      FROM jsonb_each(scoped.value #> '{records,0,item}') AS field
+      WHERE field.key IN ('id', 'slug', 'kind', 'cover', 'images', 'status', 'platforms', 'playedTime',
+        'rating', 'authors', 'mediaType', 'date', 'photoCount', 'recordedAt'))
+  ) ORDER BY hit.ordinal), '[]'::jsonb) AS result
+  FROM unnest($1::text[], $2::text[]) WITH ORDINALITY AS hit(kind, slug, ordinal)
+  CROSS JOIN LATERAL nb_v2_api.read_content(hit.kind,hit.slug,NULL,'{}'::jsonb,0,1,$3::uuid,$4::bigint,false) AS scoped(value)`;
+
 // This private index is used only to sort/filter/count Status. The selected page
 // is replaced by complete, freshly qualified DTOs before anything is returned.
 export const WEBSITE_STATUS_INDEX_SQL = compactWebsiteProjection(`WITH content AS MATERIALIZED (

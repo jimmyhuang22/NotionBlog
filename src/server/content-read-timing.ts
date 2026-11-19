@@ -3,7 +3,7 @@ import { performance } from "node:perf_hooks";
 import type { ContentKind } from "../../contracts/content.ts";
 
 type Phase = "service" | "database-runtime" | "database-pool" | "database-acquire" | "database-roundtrip" | "dto-projection"
-  | "search-read" | "search-text" | "search-match" | "search-version"
+  | "search-read" | "search-text" | "search-match" | "search-details" | "search-version"
   | "home-content" | "home-social" | "home-compose" | "home-hydrate"
   | "social-reader-check" | "social-collection-check" | "social-snapshot" | "social-covers" | "social-pagination";
 export interface ContentReadTiming {

@@ -6,6 +6,7 @@ import { WEBSITE_SCHEMA_DIGEST } from "../contracts/website-sync.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 import { SCOPED_SEARCH_SQL, SCOPED_VERSION_SQL } from "../src/server/database/scoped-reads.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
+import { WEBSITE_SEARCH_DETAILS_SQL } from "../src/server/database/website-projection.ts";
 import { createHomeFeedV2Repository } from "../src/lib/content/home-feed-v2-core.ts";
 import { createSocialWorksRepository } from "../src/server/social/works-repository.ts";
 import { exampleSocialWork } from "./helpers/home-feed-samples.ts";
@@ -20,7 +21,7 @@ async function capture(work: (reports: ContentReadTiming[]) => Promise<void>) {
   finally { console.info = info; if (setting === undefined) delete process.env.CONTENT_READ_TIMING; else process.env.CONTENT_READ_TIMING = setting; }
 }
 
-test("scoped search timing keeps the same two SQL calls, results and final version check", async () => {
+test("scoped search timing keeps two SQL calls and uses the pinned details read for the final version check", async () => {
   const engine = await PGlite.create(), calls: string[] = [];
   const item = { ...structuredClone(fixtureItems.book[0]), title: "private-search-fixture", cover: null };
   const snapshot = { runId: "private-run", revision: "private-revision", schemaDigest: WEBSITE_SCHEMA_DIGEST,
@@ -28,7 +29,10 @@ test("scoped search timing keeps the same two SQL calls, results and final versi
   const sql: SqlExecutor = { query: async <T>(text: string) => {
     calls.push(text);
     // Actual isolated SQL execution; no hosted database or credentials.
-    return engine.query<T>("SELECT $1::jsonb AS result", [JSON.stringify(text === SCOPED_VERSION_SQL ? { ...snapshot, records: [] } : snapshot)]);
+    const result = text === WEBSITE_SEARCH_DETAILS_SQL
+      ? [{ runId: snapshot.runId, revision: snapshot.revision, schemaDigest: snapshot.schemaDigest, mediaIds: [], item }]
+      : snapshot;
+    return engine.query<T>("SELECT $1::jsonb AS result", [JSON.stringify(result)]);
   } };
   try {
     const repo = createWebsiteDatabaseRepository(sql, { scoped: true });
@@ -37,9 +41,9 @@ test("scoped search timing keeps the same two SQL calls, results and final versi
     const timed = await traceContentRead("search", "unknown", () => repo.search!({ q: "private-search-fixture", kinds: ["book"] }), t => reports.push(t));
     assert.deepEqual(timed, plain);
     assert.equal(timed.items.length, 1);
-    assert.deepEqual(calls, [SCOPED_SEARCH_SQL, SCOPED_VERSION_SQL, SCOPED_SEARCH_SQL, SCOPED_VERSION_SQL]);
+    assert.deepEqual(calls, [SCOPED_SEARCH_SQL, WEBSITE_SEARCH_DETAILS_SQL, SCOPED_SEARCH_SQL, WEBSITE_SEARCH_DETAILS_SQL]);
     const phases = Object.fromEntries(reports[0].phases.map(p => [p.phase, p.calls]));
-    assert.deepEqual(phases, { "search-read": 1, "dto-projection": 1, "search-text": 1, "search-match": 1, "search-version": 1 });
+    assert.deepEqual(phases, { "search-read": 1, "dto-projection": 2, "search-text": 1, "search-match": 1, "search-details": 1 });
     assert.ok(!JSON.stringify(reports).includes("private-"));
   } finally { await engine.close(); }
 });

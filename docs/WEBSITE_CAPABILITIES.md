@@ -19,7 +19,7 @@
 | 动态排版预览 | `StatusEntry.previewBody? / previewBodyTruncated?`，授权后的有界文字块 | 动态列表与首页时间线同 DTO |
 | 关于 | `contentRepository.getPage("about")` → `{slug,title,updatedAt,document}` 或 null | `GET /api/pages/about` |
 | 首页时间线 | `getTimeline({limit?,cursor?})` → `TimelinePage` | `GET /api/timeline` |
-| 搜索 | `search({q,kinds?,limit?,cursor?})` → `Page<SearchHit>` | `GET /api/search?q=…&kinds=post,game` |
+| 搜索 | `search({q,kinds?,limit?,cursor?})` → `SearchPage` | `GET /api/search?q=…&kinds=post,game` |
 | 列表与总数 | `list(kind, query)`；v2／Notion v2／mock 返回 `total` | 原有 `/api/content/[kind]` |
 | 文章相邻项 | `get("post", slug).adjacent` → `{newer,older}`，各为 `{title,href}` 或 null | 原有详情接口 |
 | 项目 | `Project`：`period,role,stack,links`；`list/get("project",…)` | 原有列表与详情接口 |
@@ -34,6 +34,10 @@
 游戏事件（`game-playing`、`game-cleared`、`game-platinumed`）携带可选字段 `playedTime: TimeAmount | null`，值取当前公开 `Game.playedTime`，例如 `{value:120.25,unit:"hour"}`；未知为 null，真实零仍是 `{value:0,unit:"hour"}`。它表示当前累计时长，不表示事件当天的游玩量；不换算单位、不取整、不使用 `estimatedTime`。其他事件不增加该字段。数据库及演示 provider 共用生成逻辑，原日期、去重和分页规则不变。现有游戏 DTO 已有此值，无需新增来源读取或数据库迁移。
 
 游标必须当成不透明字符串。时间线、搜索和 v2 列表绑定当前快照与查询；批次、公开资格、筛选、时区或页大小变化后返回 400，前端从第一页重新开始。搜索使用当前公开 DTO 和可读 AST 的文本，排除不可用内部链接的文字与 URL／图片地址；结果是纯文本摘要，无 HTML。v2 单次读取限制为 20,000 条／16 MiB，超限明确失败，不能截断后伪装成完整列表。
+
+搜索结果的 `cover?` 只提供已获准的站内 v2 展示图，缺图时为 null。前端可用现有 `imagePreviewSrc(cover, 400)` 请求小图。游戏、书籍、影视、相册取记录封面，动态使用 provider 已提供的合格首图。`details?` 按 `kind` 区分：游戏有 `status`、`platforms`、`playedTime`、`rating`，书籍有 `authors`、`status`，影视有 `mediaType`、`status`，相册有 `date`、`photoCount`，动态有 `recordedAt`。学习笔记继续读 `context.courseLabel`。字段为空时由界面省略。
+
+第一页的 `kindCounts?` 是分页前、当前查询范围内各类型的正数计数，零结果省略对应类型。无 `kinds` 的第一页可以用于完整的分类标签，筛选后的 `total` 和 `kindCounts` 只覆盖所选类型。续页兼容省略计数，浏览器可以沿用同一关键词的完整标签计数。摘要跳过独立模板标题，从第一个正文命中前最多 16 个码点开始截，正文最多 180 个码点，按实际截断添加省略号；标题已命中则为空。匹配、相关度排序和课程来源行继续沿用既有规则。
 
 关于页只绑定固定 `about` 与一个精确页面标识，父级和子页不会因此获得公开资格。学习按新授权采用全部课程及拥有的多层后代自动公开，逐祖先验证物理归属与中央撤回；链接、关系、外部数据库视图与引用同步块不纳入。旧配置与冻结 v1 仍兼容名单；自动模式须安装独立学习扩展，见 [说明](STUDY_PUBLICATION.md)。作品、相册和博客只对用户明确指定的 data source 使用整来源模式，现有及未来新增直接记录自动纳入；移出来源、归档、删除或中央撤回的页面不进入新读取。
 

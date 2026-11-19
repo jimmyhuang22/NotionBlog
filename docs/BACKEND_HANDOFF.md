@@ -341,6 +341,8 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 不要的：按类型分组的排序（用户没选分组的“乙”，仍按相关度排一列）。新字段请都可选，旧回应也能用。接口改好后前端接上小图和信息行，在正式站点核对“塞尔达”“王小波”“墨尔本”三个搜索。原型在前端忽略目录 `.local/design-review-kit/prototype-19/`。
 
+**后端接续（2026-11-19，Codex）**：`SearchHit.cover?` 与 `details?` 已补齐，`SearchPage.kindCounts?` 提供第一页的分类总数。用未加 `kinds` 的第一页取所有开启栏目计数；加 `kinds` 时计数与该筛选的 `total` 同范围。旧回应没有新字段时仍可显示类型名、来源行和原摘要。接入方式见[搜索接口](WEBSITE_CAPABILITIES.md#给前端的接口)和[进度](progress/2026-11-19-search-result-data.md)。搜索界面的图文排版与正式验收接续由前端处理。
+
 ## 可直接给 Codex 的启动指令
 
 ```text

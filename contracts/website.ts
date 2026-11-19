@@ -1,4 +1,4 @@
-import type { AnyContent, ContentDetail, ContentKind, DateRange, ImageAsset, Page, Rating, StatusEntry, TimeAmount } from "./content.ts";
+import type { AnyContent, BookStatus, ContentDetail, ContentKind, DateRange, GameStatus, ImageAsset, MovieStatus, Page, Rating, StatusEntry, TimeAmount } from "./content.ts";
 
 /** Server adapter capability. version changes whenever content or eligibility changes. */
 export interface PublicContentSnapshot { version: string; records: ContentDetail<AnyContent>[] }
@@ -14,7 +14,28 @@ export type TimelineEvent =
 export interface SearchQuery extends CursorQuery { q: string; kinds?: ContentKind[] }
 /** Current public display text only; no source identities or new navigation targets. */
 export interface SearchContext { courseLabel: string; parentLabels: string[] }
-export interface SearchHit { id: string; kind: ContentKind; title: string; href: string; excerpt: string; updatedAt: string | null; context?: SearchContext | null }
+export type SearchHitDetails =
+  | { kind: "game"; status: GameStatus; platforms: string[]; playedTime: TimeAmount | null; rating: Rating | null }
+  | { kind: "book"; authors: string[]; status: BookStatus }
+  | { kind: "movie"; mediaType: string | null; status: MovieStatus }
+  | { kind: "album"; date: DateRange | null; photoCount: number | null }
+  | { kind: "status"; recordedAt: DateRange | null };
+export interface SearchHit {
+  id: string;
+  kind: ContentKind;
+  title: string;
+  href: string;
+  excerpt: string;
+  updatedAt: string | null;
+  context?: SearchContext | null;
+  /** Current public display asset; null when no eligible cover exists. */
+  cover?: ImageAsset | null;
+  details?: SearchHitDetails;
+}
+export interface SearchPage extends Page<SearchHit> {
+  /** First page only. Positive counts in the same enabled-kind scope as total, before pagination. */
+  kindCounts?: Partial<Record<ContentKind, number>>;
+}
 /** Optional server-only search projection; older snapshot providers remain compatible. */
 export interface SearchSnapshot extends PublicContentSnapshot { searchContexts?: Record<string, SearchContext | null> }
 export type TimelinePage = Page<TimelineEvent>;
