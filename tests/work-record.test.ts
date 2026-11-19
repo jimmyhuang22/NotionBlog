@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ContentBlock, ContentDocument, DateRange } from "../contracts/content.ts";
-import { bookRecord, gameRecord, movieRecord } from "../src/lib/work-record.ts";
+import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../src/lib/work-record.ts";
 
 const runs = (text: string) => (text ? [{ text }] : []);
 const h = (id: string, text: string, level: 1 | 2 | 3 = 1): ContentBlock => ({ id, type: "heading", level, text: runs(text) });
@@ -135,4 +135,12 @@ test("a series' excerpts that are all episode notes become a list and leave the 
   assert.deepEqual(mixed.episodes, []);
   assert.deepEqual(ids(mixed.document), ["x", "e1", "q1", "n"]);
   assert.deepEqual(movieRecord(doc([h("x", "摘录"), h("a", "一句台词", 2), quote("q", "…")]), null).episodes, []);
+});
+
+test("a book's excerpts open in full up to 30 and held beyond, whatever the width", () => {
+  assert.equal(excerptsHeld(0), false);
+  assert.equal(excerptsHeld(16), false);
+  assert.equal(excerptsHeld(30), false);
+  assert.equal(excerptsHeld(31), true);
+  assert.equal(excerptsHeld(80), true);
 });
