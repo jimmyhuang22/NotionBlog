@@ -27,6 +27,6 @@ const extensions: BlockExtensions = { Code: HighlightedCode, Equation: TypesetEq
  * Server-rendered documents get syntax highlighting and typeset formulas. Bodies rendered in the
  * browser (an expanded status) use BrowserDocumentBody, which asks the server for the same markup.
  */
-export function RichDocumentBody(props: { document: ContentDocument | null; emptyText?: string; imagePreviewWidth?: 400 | 800 }) {
+export function RichDocumentBody(props: { document: ContentDocument | null; emptyText?: string; imagePreviewWidth?: 400 | 800; topHeading?: number }) {
   return <DocumentBody {...props} extensions={extensions} />;
 }

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { ContentDocument, Movie, Rating } from "../../contracts/content.ts";
+import type { Book, ContentDocument, DateRange, Movie, Rating } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
-import { rangeLabel, ratingLabel } from "../lib/format.ts";
-import { knownStatusLabel, libraryHref, movieRatingFact, ratingDots, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
-import { movieRecord } from "../lib/movie-record.ts";
+import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
+import { knownStatusLabel, libraryHref, movieRatingFact, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
+import { bookRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
 
@@ -49,7 +49,7 @@ function Seen({ item, viewings, timeZone }: { item: Movie; viewings: Movie["watc
 /**
  * A film (the owner's pick 甲 of 2026-11-19, "海报幕布", after Letterboxd and TMDB): the poster blurred into a dark
  * band across the page with the title on it, the poster itself standing over the band's edge, and beside the
- * write-up a column of what the owner made of it. The Notion template is read into its parts (movie-record.ts).
+ * write-up a column of what the owner made of it. The Notion template is read into its parts (work-record.ts).
  */
 export function FilmPage({ type, label, item, document, timeZone, neighbours }: { type: string; label: string; item: Movie; document: ContentDocument | null; timeZone: string; neighbours: ReactNode }) {
   const record = movieRecord(document, item.watchedDate);
@@ -95,3 +95,89 @@ export function FilmPage({ type, label, item, document, timeZone, neighbours }: 
   );
 }
 
+
+/** Days from the first to the last, both counted; null when either side cannot be read as a day. */
+function daysBetween(start: string, end: string, precision: DateRange["precision"], timeZone: string): number | null {
+  const a = dateParts(start, precision, timeZone), b = dateParts(end, precision, timeZone);
+  if (!a || !b) return null;
+  const days = Math.round((Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86400000) + 1;
+  return days > 0 ? days : null;
+}
+
+/**
+ * The reading as one line from where it began to where it ended (after StoryGraph): a finished book has both ends and
+ * the days between; a book being read has an open end at the pages reached, and the line is filled that far.
+ * Anything less is one plain sentence, written as the rest of the site writes it ("已读，日期未记录").
+ */
+function Journey({ item, timeZone }: { item: Book; timeZone: string }) {
+  const range = item.readingDate;
+  const start = range ? rangeLabel({ ...range, end: null }, timeZone) : null;
+  const end = range?.end ? rangeLabel({ start: range.end, end: null, precision: range.precision }, timeZone) : null;
+  if (item.status === "reading") {
+    const pages = item.pagesRead !== null && item.totalPages !== null ? `${item.pagesRead} / ${item.totalPages} 页` : null;
+    const width = progressWidth(item.progressPercent);
+    return (
+      <div className="journey journey--open">
+        <div><small>开始读</small><b>{start ?? "日期未记录"}</b></div>
+        <div className="journey__track" style={{ "--progress": width ?? "0%" } as React.CSSProperties}>{width ? <em>{item.progressPercent}%</em> : null}</div>
+        <div className="journey__end"><small>读到</small><b>{pages ?? (width ? `${item.progressPercent}%` : "进度未记录")}</b></div>
+      </div>
+    );
+  }
+  const days = range?.end && start && end && end !== start ? daysBetween(range.start, range.end, range.precision, timeZone) : null;
+  if (item.status === "read" && start && end && days) {
+    return (
+      <div className="journey">
+        <div><small>开始读</small><b>{start}</b></div>
+        <div className="journey__track"><em>{days} 天</em></div>
+        <div className="journey__end"><small>读完</small><b>{end}</b></div>
+      </div>
+    );
+  }
+  return <div className="journey journey--one"><b>{workSentence(item, rangeLabel(range, timeZone))}</b></div>;
+}
+
+const outside = (url: string) => { try { return new URL(url).hostname.endsWith("douban.com") ? "豆瓣条目" : "外部条目"; } catch { return "外部条目"; } };
+
+/**
+ * A book (the owner's pick 乙 of 2026-11-19, "书架与阅读历程", after Goodreads and StoryGraph): no band; the book
+ * stands in a left column with what is known about it, and beside it the title, the reading as one line, the
+ * excerpts as slips (they are most of a book's record) and whatever else the owner wrote. No book carries the owner's
+ * own rating yet, so it is one quiet row that says so rather than a headline.
+ */
+export function BookPage({ type, label, item, document, timeZone, neighbours }: { type: string; label: string; item: Book; document: ContentDocument | null; timeZone: string; neighbours: ReactNode }) {
+  const record = bookRecord(document);
+  return (
+    <div className="wrap">
+      <nav className="crumbs" aria-label="面包屑">
+        <Link href={libraryHref(type, null, null)}>{label}</Link><span aria-hidden="true">›</span><span aria-current="page">{item.title}</span>
+      </nav>
+      <div className="work-book">
+        <aside className="work-book__side">
+          <div className="work-book__cover work__cover"><Cover image={item.cover} title={item.title} previewWidth={800} /></div>
+          <dl className="work-book__facts">
+            <div><dt className="visually-hidden">状态</dt><dd><span className={`work-book__state work-book__state--${item.status}`}>{statusLabel(item)}</span></dd></div>
+            {item.totalPages !== null && item.status !== "reading" ? <div className="work-book__row"><dt>页数</dt><dd>{item.totalPages} 页</dd></div> : null}
+            {item.doubanRating !== null ? <div className="work-book__row"><dt>豆瓣评分</dt><dd>{item.doubanRating.toFixed(1)}</dd></div> : null}
+            <div className="work-book__row"><dt>我的评分</dt><RatingValue rating={item.personalRating} /></div>
+            {item.externalUrl ? <div className="work-book__row"><dt>{outside(item.externalUrl)}</dt><dd><a className="rt-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer">打开 ↗</a></dd></div> : null}
+          </dl>
+        </aside>
+        <div className="work-book__main">
+          <h1 className="work-book__title">{item.title}</h1>
+          {item.authors.length ? <p className="work-book__by">{item.authors.join("、")} 著</p> : null}
+          {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
+          <Journey item={item} timeZone={timeZone} />
+          {record.excerpts ? (
+            <section className="work-excerpts" aria-label="摘录">
+              <h2 className="work-excerpts__title">摘录{record.excerptCount ? <small>{record.excerptCount} 条</small> : null}</h2>
+              <RichDocumentBody document={record.excerpts} imagePreviewWidth={800} topHeading={3} />
+            </section>
+          ) : null}
+          <WorkRecord item={item} document={record.rest} />
+          {neighbours}
+        </div>
+      </div>
+    </div>
+  );
+}

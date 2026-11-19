@@ -161,7 +161,7 @@
  * the outline from Notion is one line of small links between two hairlines instead of a grey block. The island
  * and Y2K keep their sheet, which is what they are.
  */
-:is(:root:not([data-skin]), :root[data-skin="apple"]) :is(.work ~ .reading__article, .work-film__main > .reading__article) { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+:is(:root:not([data-skin]), :root[data-skin="apple"]) :is(.work ~ .reading__article, .work-film__main > .reading__article, .work-book__main > .reading__article) { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc { margin: 0 0 28px; padding: 10px 0; border-block: 1px solid var(--rule); border-radius: 0; background: none; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 20px; }
 :is(:root:not([data-skin]), :root[data-skin="apple"]) .work ~ .reading__article .prose__toc .toc::before { content: "本文"; margin-right: 4px; font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--muted); }
@@ -283,6 +283,59 @@
   .work-film__poster { width: 108px; margin-top: -116px; }
   .work-film__meta { display: block; margin: 12px 0 0; font-size: var(--text-sm); line-height: 1.6; color: var(--muted); }
   .work-film__main { padding-top: 20px; }
+}
+
+/*
+ * Books (the owner's pick 乙 of 2026-11-19, "书架与阅读历程", after Goodreads and StoryGraph). No band: the book
+ * stands in a left column (the cover with a spine's shade on its left edge, then status and a few quiet rows), and
+ * beside it the title, the author, the reading as one line from start to end, the excerpts as slips and anything
+ * else the owner wrote. The column stays in view while the excerpts scroll by.
+ */
+.work-book { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 44px; align-items: start; max-width: 980px; margin-inline: auto; padding-top: 4px; }
+.work-book__side { position: sticky; top: 88px; }
+.work-book__cover .cover { border-radius: 3px var(--radius-xs) var(--radius-xs) 3px; box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.08), var(--shadow-lift); }
+.work-book__facts { margin: 18px 0 0; font-size: var(--text-sm); }
+.work-book__facts dd { margin: 0; }
+.work-book__state { display: inline-block; padding: 1px 12px; border-radius: 999px; background: var(--ink); font-size: var(--text-xs); color: var(--bg); }
+.work-book__state--reading { background: var(--accent); color: var(--card); }
+.work-book__state--wishlist { background: var(--soft); color: var(--ink); }
+.work-book__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.work-book__row .work__rating { color: inherit; }
+.work-book__facts > div:first-child { margin-bottom: 12px; }
+.work-book__title { margin: 0; font-family: var(--font-hand); font-size: clamp(29px, 3.7vw, 40px); font-weight: 400; line-height: 1.2; overflow-wrap: anywhere; }
+.work-book__by { margin: 6px 0 0; font-size: var(--text-body); }
+.work-book__main { min-width: 0; }
+.work-book__main > .reading__tags { margin: 12px 0 0; }
+.work-book__main > .reading__article { margin-top: 34px; }
+.work-book__main > .work__record-empty { margin: 30px 0 0; }
+.work-book__main .work__neighbours, .work-book__main .work__neighbours-pending { margin-top: 40px; }
+/* The reading, from where it began to where it ended; an open end is a book still being read, filled as far as it got. */
+.journey { display: grid; grid-template-columns: auto minmax(60px, 1fr) auto; align-items: center; gap: 18px; margin-top: 22px; padding: 16px 20px; border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); font-size: var(--text-sm); }
+.journey small { display: block; font-size: var(--text-xs); color: var(--muted); }
+.journey b { display: block; font-family: var(--font-hand); font-size: var(--text-md); font-weight: 400; white-space: nowrap; }
+.journey__end { text-align: right; }
+.journey--one { display: block; }
+.journey__track { position: relative; height: 2px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--progress, 100%) 100% no-repeat, var(--rule); }
+.journey__track::before, .journey__track::after { content: ""; position: absolute; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.journey__track::before { left: 0; }
+.journey__track::after { right: 0; }
+.journey--open .journey__track::after { top: -4px; box-sizing: border-box; width: 10px; height: 10px; border: 2px solid var(--ink); background: var(--card); }
+.journey__track em { position: absolute; left: 50%; top: -11px; transform: translateX(-50%); padding: 0 10px; background: var(--card); font-style: normal; font-size: var(--text-xs); line-height: 22px; color: var(--muted); white-space: nowrap; }
+/* Excerpts, one slip each; a part's name heads its slips with how many there are. */
+.work-excerpts { margin-top: 34px; }
+.work-excerpts__title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font-family: var(--font-hand); font-size: var(--text-xl); font-weight: 400; }
+.work-excerpts__title small { font-family: var(--font-sans); font-size: var(--text-sm); color: var(--muted); }
+.work-excerpts .prose > .list { margin: 0; padding: 0; list-style: none; }
+.work-excerpts .prose > .list > li, .work-excerpts .prose > :is(p, blockquote) { margin: 0 0 12px; padding: 14px 18px; border: 0; border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); font-style: normal; }
+.work-excerpts .prose > :is(h3, h4) { margin: 26px 0 12px; font-size: var(--text-md); color: var(--muted); }
+.work-excerpts .prose > :is(h3, h4):first-child { margin-top: 0; }
+@media (max-width: 640px) {
+  .work-book { grid-template-columns: minmax(0, 1fr); }
+  .work-book__side { position: static; display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 20px; }
+  .work-book__facts { margin: 0; }
+  .work-book__title { font-size: var(--text-2xl); }
+  .journey { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; }
+  .journey__track { grid-column: 1 / -1; grid-row: 2; margin: 10px 4px 4px; }
 }
 
 /* Albums */

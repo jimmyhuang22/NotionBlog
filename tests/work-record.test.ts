@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ContentBlock, ContentDocument, DateRange } from "../contracts/content.ts";
-import { movieRecord } from "../src/lib/movie-record.ts";
+import { bookRecord, movieRecord } from "../src/lib/work-record.ts";
 
 const runs = (text: string) => (text ? [{ text }] : []);
 const h = (id: string, text: string, level: 1 | 2 | 3 = 1): ContentBlock => ({ id, type: "heading", level, text: runs(text) });
@@ -71,4 +71,45 @@ test("the episode tracker is left out while nothing in it is ticked, and kept on
   // A list of words with boxes is the owner's, ticked or not.
   const words: ContentBlock = { id: "w", type: "list", ordered: false, items: [{ id: "w0", text: runs("重看结尾"), checked: false, children: [] }] };
   assert.deepEqual(movieRecord(doc([words]), null).document!.blocks.map(block => block.id), ["w"]);
+});
+
+const list = (id: string, texts: string[]): ContentBlock => ({ id, type: "list", ordered: false, items: texts.map((text, index) => ({ id: `${id}${index}`, text: runs(text), checked: null, children: [] })) });
+const ids = (document: ContentDocument | null) => document?.blocks.map(block => block.id);
+const heading = (document: ContentDocument | null, id: string) => (document!.blocks.find(block => block.id === id) as Extract<ContentBlock, { type: "heading" }>).text[0]!.text;
+
+test("a book's excerpts come apart from the rest, each part headed with its count", () => {
+  const record = bookRecord(doc([
+    { id: "toc", type: "table-of-contents" }, p("p0"),
+    h("x", "摘录"), h("a", "第一部", 2), list("l1", ["一", "二"]), p("q", "三"), h("b", "第二部", 2), list("l2", ["四"]), { id: "d", type: "divider" },
+    h("r", "感想"), p("r1", "读完了。"),
+  ]));
+  assert.equal(record.excerptCount, 4);
+  assert.deepEqual(ids(record.excerpts), ["a", "l1", "q", "b", "l2", "d"]);
+  assert.equal(heading(record.excerpts, "a"), "第一部 · 3 条");
+  assert.equal(heading(record.excerpts, "b"), "第二部 · 1 条");
+  assert.deepEqual(record.excerpts!.toc.map(entry => entry.title), ["第一部 · 3 条", "第二部 · 1 条"]);
+  assert.deepEqual(ids(record.rest), ["r", "r1"]);
+  assert.equal(heading(record.rest, "r"), "读后感");
+});
+
+test("an empty review heading goes, other headings keep their names, and a book without excerpts has none", () => {
+  const record = bookRecord(doc([h("x", "摘录"), list("l", ["一"]), h("r", "书评"), p("e1"), p("e2"), h("g", "梗概"), p("g1", "讲的是……")]));
+  assert.deepEqual(ids(record.rest), ["g", "g1"]);
+  assert.equal(heading(record.rest, "g"), "梗概");
+  const none = bookRecord(doc([h("r", "感受"), p("r1", "好书")]));
+  assert.equal(none.excerpts, null);
+  assert.equal(none.excerptCount, 0);
+  assert.deepEqual(ids(none.rest), ["r", "r1"]);
+  assert.deepEqual(ids(bookRecord(doc([])).rest), []);
+});
+
+test("a book's body that did not load stays unloaded", () => {
+  assert.deepEqual(bookRecord(null), { excerpts: null, excerptCount: 0, rest: null });
+});
+
+test("an empty bullet among the excerpts is neither a slip nor counted", () => {
+  const record = bookRecord(doc([h("x", "摘录"), list("l", ["一", "", "二"]), list("e", [""])]));
+  assert.equal(record.excerptCount, 2);
+  assert.deepEqual(ids(record.excerpts), ["l"]);
+  assert.equal((record.excerpts!.blocks[0] as Extract<ContentBlock, { type: "list" }>).items.length, 2);
 });
