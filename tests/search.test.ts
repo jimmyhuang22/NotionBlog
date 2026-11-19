@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CONTENT_KINDS } from "../config/features.ts";
 import { fixtureItems } from "../fixtures/content.ts";
 import { projectLinks, projectMeta } from "../src/lib/project.ts";
-import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, searchHref, searchResultHref, searchKinds, splitMatch, stepOption, readableExcerpt } from "../src/lib/search.ts";
+import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, searchHref, searchResultHref, searchKinds, splitMatch, stepOption, readableExcerpt, hitExcerpt } from "../src/lib/search.ts";
 import { readStatusFocus, readStatusHash } from "../src/lib/status-focus.ts";
 
 test("a search query is trimmed and refused when empty, too long or unprintable", () => {
@@ -91,4 +91,13 @@ test("an excerpt folds a Markdown table into （表格） and leaves a stray bar
   assert.equal(readableExcerpt("直接粘贴到Notion Page | 水果 | 蔬菜 | | ---- | ---- | | 西瓜 | 香菜 | Sw"), "直接粘贴到Notion Page （表格） Sw");
   assert.equal(readableExcerpt("A | B 不是表格"), "A | B 不是表格");
   assert.equal(readableExcerpt("| :--- | --- |"), "（表格）");
+});
+
+test("a result shows an excerpt only when its title does not hold the words, without the template's headings", () => {
+  assert.equal(hitExcerpt({ title: "塞尔达传说 旷野之息", excerpt: "游玩内容目标 玩了3次" }, "塞尔达"), "");
+  assert.equal(hitExcerpt({ title: "Zelda", excerpt: "x" }, "zelda"), "");
+  assert.equal(hitExcerpt({ title: "我的精神家园", excerpt: "感受 王小波的杂文实在太有趣了。" }, "王小波"), "王小波的杂文实在太有趣了。");
+  assert.equal(hitExcerpt({ title: "王国之泪", excerpt: "游玩内容目标 游玩感受 截图 感受" }, "塞尔达"), "");
+  assert.equal(hitExcerpt({ title: "Assessment 2", excerpt: "" }, "墨尔本"), "");
+  assert.equal(hitExcerpt({ title: "Lab", excerpt: "看 | a | b | | --- | --- | 墨尔本" }, "墨尔本"), "看 （表格） 墨尔本");
 });

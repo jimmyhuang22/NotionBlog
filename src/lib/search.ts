@@ -65,6 +65,19 @@ export function stepOption(current: number, count: number, delta: 1 | -1): numbe
  * An excerpt is read, not parsed: a Markdown table that came through as text ("| 水果 | 蔬菜 |" and a
  * "| ---- |" rule) is folded into "（表格）" (T-06). Text with a stray "|" but no table rule is left alone.
  */
+/** Headings of the owner's Notion templates; in an excerpt they are words of the form, not of the record. */
+const TEMPLATE_HEADINGS = new Set(["游玩内容目标", "游玩内容", "游玩目标", "游玩感受", "游玩录像", "截图", "感受", "感想", "书评", "摘录", "总结", "其他", "多刷记录"]);
+
+/**
+ * What a result shows under its title (the owner's pick 甲 of 2026-11-19): nothing when the title already holds
+ * the words searched for, since the title then says why it was found; otherwise the excerpt without the template's
+ * headings, tables folded. Empty when nothing of the record is left.
+ */
+export function hitExcerpt(hit: { title: string; excerpt: string }, query: string): string {
+  if (!hit.excerpt || splitMatch(hit.title, query)) return "";
+  return readableExcerpt(hit.excerpt.split(/\s+/u).filter(word => word && !TEMPLATE_HEADINGS.has(word)).join(" "));
+}
+
 export function readableExcerpt(text: string): string {
   if (!/\|\s*:?-{3,}/u.test(text)) return text;
   const first = text.indexOf("|"), last = text.lastIndexOf("|");
