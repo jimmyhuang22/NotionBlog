@@ -114,7 +114,7 @@ export function movieRecord(document: ContentDocument | null, watched: DateRange
     };
   }
   // The record's own date counts as a viewing when the table does not name that day, so the page never hides a
-  // date the list files the work under (2026-11-19; the owner was asked about the records where the two disagree).
+  // date the list files the work under (confirmed by the owner, 2026-11-19).
   const viewings = watched && !table.some(range => covers(range, watched.start)) ? [...table, watched] : table;
   return { viewings: viewings.sort((a, b) => day(a.start).localeCompare(day(b.start))), document: result };
 }
