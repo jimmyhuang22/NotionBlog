@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Page } from "../../contracts/content.ts";
 import type { SearchHit } from "../../contracts/website.ts";
-import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, readableExcerpt, searchHref, searchResultHref, searchResultLabel, stepOption } from "../lib/search.ts";
+import { MAX_QUERY, isSearchShortcut, kindLabels, readQuery, hitExcerpt, searchHref, searchResultHref, searchResultLabel, stepOption } from "../lib/search.ts";
 import { announceMove } from "./page-switch";
 import { Marked } from "./search-results";
 import { SearchContextLine } from "./search-context-line";
@@ -30,7 +30,8 @@ const allLabel = (results: Results) => typeof results.total === "number" && resu
 
 function HitRow({ hit, query }: { hit: SearchHit; query: string }) {
   const title = <span className="palette__title"><Marked text={hit.title} query={query} /></span>;
-  const excerpt = hit.excerpt ? <span className="palette__excerpt"><Marked text={readableExcerpt(hit.excerpt)} query={query} /></span> : null;
+  const shown = hitExcerpt(hit, query);
+  const excerpt = shown ? <span className="palette__excerpt"><Marked text={shown} query={query} /></span> : null;
   return (
     <>
       <span className="tag">{kindLabels[hit.kind] ?? "内容"}</span>

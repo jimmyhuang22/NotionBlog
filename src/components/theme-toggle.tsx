@@ -13,18 +13,16 @@ let runs = 0;
 const markerOf = (transition: Transition) => `theme${transition[0]!.toUpperCase()}${transition.slice(1)}`;
 const markers = skins.map(skin => markerOf(skin.transition));
 
-/**
- * The tab icons follow the system theme through their media queries. Once the visitor has chosen
- * a scheme by hand, both point at that scheme's icon instead, whichever one the browser picks. Back
- * to following the system, each points at its own scheme's icon again, so the tab changes at once.
- */
+/** Use the scheme the page is showing for either favicon link, whichever one the browser picks. */
 function syncIcons() {
-  const chosen = document.documentElement.dataset.theme;
-  const fixed = chosen === "light" || chosen === "dark" ? chosen : null;
-  for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"][href^="/site-icon/"]')) {
-    const own = link.media.includes("dark") ? "dark" : link.media.includes("light") ? "light" : null;
-    const scheme = fixed ?? own;
-    if (scheme && link.getAttribute("href") !== `/site-icon/${scheme}`) link.href = `/site-icon/${scheme}`;
+  const { skin: current, theme } = document.documentElement.dataset;
+  const skin = isSkin(current) ? current : DEFAULT_SKIN;
+  const scheme = schemeFor(skin, isScheme(theme) ? theme : null, systemScheme());
+  const links = document.querySelectorAll<HTMLLinkElement>('link:is([rel="icon"], [rel="apple-touch-icon"])[href^="/site-icon/"]');
+  for (const link of links) {
+    const variant = link.rel === "apple-touch-icon" ? "apple" : scheme;
+    const href = `/site-icon/${variant}?skin=${skin}`;
+    if (link.getAttribute("href") !== href) link.href = href;
   }
 }
 
@@ -133,7 +131,10 @@ export function ThemeControls() {
     setSkin(choice.skin);
     setTheme(choice.theme);
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const follow = () => setSystem(media.matches ? "dark" : "light");
+    const follow = () => {
+      setSystem(media.matches ? "dark" : "light");
+      syncIcons();
+    };
     follow();
     media.addEventListener("change", follow);
     return () => media.removeEventListener("change", follow);
