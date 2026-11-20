@@ -109,7 +109,10 @@ test("every admitted page rechecks the current snapshot and cover eligibility; n
 test("invalid filters fail before waiting for a busy turn or reading the provider", async () => {
   const queue = createSocialReadQueue(1), held = deferred(), began = deferred(); let reads = 0;
   const first = budget(() => queue.run(async () => { began.resolve(); await held.promise; })); await began.promise;
-  const repo = queueSocialWorksRepository({ async listWorks() { reads++; return { items: [], total: 0, hasMore: false, nextCursor: null }; } }, queue);
+  const repo = queueSocialWorksRepository(createSocialWorksRepository(async () => {
+    reads++;
+    return { version: "fixture", items: [] };
+  }), queue);
   await assert.rejects(budget(() => repo.listWorks({ order: "views" })), { code: "INVALID_QUERY" });
   assert.equal(reads, 0); held.resolve(); await first;
 });

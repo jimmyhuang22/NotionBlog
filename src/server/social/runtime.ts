@@ -64,7 +64,8 @@ async function hydrateTimelineCovers(version:string,selected:SocialTimelineWork[
 export async function socialTimelineRuntime(rows?:()=>Promise<FeedSnapshot<SocialTimelineWork>>){
   const currentPool = readerPool();
   worksQueue ??= createSocialReadQueue(currentPool.options.max ?? 1);
-  return queueSocialWorksRepository(createSocialWorksRepository(rows?async()=>withLiveSocialCovers(await rows()):socialTimelineSnapshot), worksQueue);
+  return queueSocialWorksRepository(createSocialWorksRepository(
+    rows ? async () => withLiveSocialCovers(await rows()) : socialTimelineSnapshot, getSiteConfig().timeZone), worksQueue);
 }
 export function socialTimelineSnapshot():Promise<SocialCoverSnapshot<SocialTimelineWork>> {
   return traceContentRead("social-snapshot", "unknown", async () => {
