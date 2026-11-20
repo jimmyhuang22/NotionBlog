@@ -22,19 +22,23 @@ test("v2 rejects unsupported, repeated and malformed combinations before reading
   const repo = createSocialWorksRepository(async () => { reads++; return { version: "current", items: base() }; });
   for (const query of ["platform=other", "platform=", "order=views", "order=likes", "platform=xiaohongshu&order=views",
     "platform=bilibili&order=likes", "platform=bilibili&order=time", "platform=bilibili&order=", "platform=bilibili&platform=bilibili",
-    "platform=bilibili&order=views&order=views", "account=123", "limit=0", "limit=21", "limit=1.0", "limit=90071992547409999", "cursor="]) {
+    "platform=bilibili&order=views&order=views", "account=123", "limit=0", "limit=21", "limit=1.0", "limit=90071992547409999", "cursor=",
+    "year=", "year=0", "year=10000", "year=0202", "year=2026.0", "year=all", "year=2026&year=undated"]) {
     const response = await socialTimelineWorksResponse(new Request(`http://example.test/api/social/works/v2?${query}`), repo, () => true);
     assert.equal(response.status, 400, query);
     assert.equal((await response.json()).error.code, "INVALID_QUERY");
     assert.equal(response.headers.get("cache-control"), "private, no-store");
   }
-  for (const query of [{ platform: "other" }, { order: "views" }, { secret: true }]) {
+  for (const query of [{ platform: "other" }, { order: "views" }, { secret: true }, { year: "2026" }, { year: 0 }]) {
     await assert.rejects(repo.listWorks(query as SocialWorksQuery), invalid);
   }
   assert.equal(reads, 0);
   assert.equal((await socialWorksResponse(new Request("http://example.test/api/social/works?platform=bilibili"), repo, () => true)).status, 400);
+  assert.equal((await socialWorksResponse(new Request("http://example.test/api/social/works?year=2026"), repo, () => true)).status, 400);
   assert.equal(reads, 0);
   assert.deepEqual(parseSocialWorksQuery(new URLSearchParams("platform=bilibili&order=views&limit=20")), { platform: "bilibili", order: "views", limit: 20 });
+  assert.deepEqual(parseSocialWorksQuery(new URLSearchParams("year=2026")), { year: 2026 });
+  assert.deepEqual(parseSocialWorksQuery(new URLSearchParams("year=undated")), { year: "undated" });
 });
 
 test("mock and direct SSR repository queries filter the same total; cross-posts have one primary platform", async () => {
@@ -96,6 +100,56 @@ test("works date is latest member publication or primary-platform publication, n
   collection.collection!.latestMemberPublishedAt = null;
   assert.equal(socialWorkPublishedAt(collection), null);
   single.publications[0]!.publishedAt = null; assert.equal(socialWorkPublishedAt(single), null);
+});
+
+test("site-year filtering combines with both metric sorts and uses per-platform counts from the same snapshot", async () => {
+  const timeZone = "Australia/Melbourne";
+  const collection = base().find(item => item.collection)!;
+  collection.collection!.latestMemberPublishedAt = "2025-12-31T13:15:00Z";
+  collection.collection!.metrics.views = 20;
+  const cross = work("cross", 200, "2025-12-31T12:55:00Z");
+  const xhs = base().find(item => socialWorkPlatform(item) === "xiaohongshu")!;
+  cross.publications.push({ ...xhs.publications[0]!, publishedAt: "2026-02-01T00:00:00Z" });
+  function note(id: string, likes: number, publishedAt: string) {
+    const item = structuredClone(xhs);
+    item.id = id;
+    item.publications[0]!.publishedAt = publishedAt;
+    item.publications[0]!.metrics.likes = likes;
+    return item;
+  }
+  const items = [collection, cross, work("views-top", 30, "2026-01-01T00:00:00Z"),
+    work("views-zero", 0, "2026-02-01T00:00:00Z"), work("unknown-date", 100, null),
+    note("likes-top", 10, "2026-01-01T00:00:00Z"), note("likes-new", 0, "2026-02-01T00:00:00Z"),
+    note("likes-previous", 99, "2024-02-01T00:00:00Z")];
+  let reads = 0;
+  const repo = createSocialWorksRepository(async () => { reads++; return { version: "fixture", items }; }, timeZone);
+  const query = { platform: "bilibili", order: "views", year: 2026, limit: 2 } as const;
+  const response = await socialTimelineWorksResponse(new Request("http://example.test/api/social/works/v2?platform=bilibili&order=views&year=2026&limit=2"), repo, () => true);
+  assert.equal(response.status, 200);
+  const { data: page } = await response.json() as { data: Awaited<ReturnType<typeof repo.listWorks>> };
+  assert.equal(reads, 1);
+  assert.equal(page.total, 3);
+  assert.deepEqual(page.items.map(item => item.id), ["views-top", collection.id]);
+  assert.deepEqual(page.yearCounts, { years: [{ year: 2026, count: 3 }, { year: 2025, count: 1 }], undatedCount: 1, timeZone });
+  assert.ok(page.nextCursor);
+  const next = await repo.listWorks({ ...query, cursor: page.nextCursor });
+  assert.deepEqual(next.items.map(item => item.id), ["views-zero"]);
+  assert.equal(next.nextCursor, null);
+  assert.deepEqual(next.yearCounts, page.yearCounts);
+  await assert.rejects(repo.listWorks({ ...query, year: 2025, cursor: page.nextCursor }), invalid);
+  await assert.rejects(repo.listWorks({ ...query, year: undefined, cursor: page.nextCursor }), invalid);
+  const undated = await repo.listWorks({ ...query, year: "undated" });
+  assert.deepEqual(undated.items.map(item => item.id), ["unknown-date"]);
+  assert.equal(undated.total, 1);
+  const empty = await repo.listWorks({ ...query, year: 2019 });
+  assert.equal(empty.total, 0);
+  assert.deepEqual(empty.yearCounts, page.yearCounts);
+  const likes = await repo.listWorks({ platform: "xiaohongshu", order: "likes", year: 2026 });
+  assert.deepEqual(likes.items.map(item => item.id), ["likes-top", "likes-new"]);
+  assert.deepEqual(likes.yearCounts, { years: [{ year: 2026, count: 2 }, { year: 2024, count: 1 }], undatedCount: 0, timeZone });
+  const all = await repo.listWorks();
+  assert.equal(all.total, 8);
+  assert.deepEqual(all.yearCounts, { years: [{ year: 2026, count: 5 }, { year: 2025, count: 1 }, { year: 2024, count: 1 }], undatedCount: 1, timeZone });
 });
 
 test("every supported mode traverses the complete mock set without duplicates, omissions or mutating the snapshot", async () => {

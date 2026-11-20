@@ -1,6 +1,6 @@
 import type { SocialCollectionCard, SocialCollectionDayAddition } from "./social-collections.ts";
 import type { SocialPlatform, SocialWork } from "./social.ts";
-import type { Page } from "./content.ts";
+import type { LibraryYears, ListQuery, Page } from "./content.ts";
 import type { CursorQuery } from "./website.ts";
 import type { HomeFeedItem, HomeFeedPage, HomeFeedRepository } from "./home-feed.ts";
 
@@ -17,10 +17,15 @@ export interface PublishedSocialCollection extends Omit<SocialCollectionCard,"or
 export interface SocialTimelineWork extends SocialWork { collection:PublishedSocialCollection|null }
 export interface SocialWorksQuery extends CursorQuery {
   platform?: SocialPlatform;
+  year?: ListQuery["year"];
   /** Views requires Bilibili; likes requires Xiaohongshu. Omit for publication-date ordering. */
   order?: "views" | "likes";
 }
-export interface SocialTimelineRepository {listWorks(query?:SocialWorksQuery):Promise<Page<SocialTimelineWork>>}
+export interface SocialWorksPage extends Page<SocialTimelineWork> {
+  /** All years for the requested platform, including when the list is filtered to one year. */
+  yearCounts: LibraryYears;
+}
+export interface SocialTimelineRepository {listWorks(query?:SocialWorksQuery):Promise<SocialWorksPage>}
 export type HomeFeedV2Item = Extract<HomeFeedItem,{source:"content"}> |
   {id:string;source:"social";provider:"database";occurredAt:HomeFeedItem["occurredAt"];work:SocialTimelineWork};
 export interface HomeFeedV2Page extends Omit<HomeFeedPage,"items"> {items:HomeFeedV2Item[]}

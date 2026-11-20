@@ -3,13 +3,16 @@ import type { SocialTimelineWork, SocialWorksQuery } from "../../../contracts/so
 import { ContentServiceError } from "../../../contracts/repository.ts";
 
 const invalid = () => new ContentServiceError("INVALID_QUERY", "Restart social works from the first page.");
+const worksKeys = new Set(["limit", "cursor", "platform", "order", "year"]);
 /** Shared by the HTTP parser, server-rendered first page and all works adapters. */
 export function validateSocialWorksQuery(query: SocialWorksQuery): void {
   if (!query || typeof query !== "object" || Array.isArray(query) ||
-      Object.keys(query).some(key => !["limit", "cursor", "platform", "order"].includes(key)) ||
+      Object.keys(query).some(key => !worksKeys.has(key)) ||
       (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 20)) ||
       (query.cursor !== undefined && (typeof query.cursor !== "string" || !query.cursor || query.cursor.length > 512)) ||
       (query.platform !== undefined && !["bilibili", "xiaohongshu"].includes(query.platform)) ||
+      (query.year !== undefined && query.year !== "undated" &&
+        (!Number.isInteger(query.year) || query.year < 1 || query.year > 9999)) ||
       (query.order !== undefined && !((query.order === "views" && query.platform === "bilibili") ||
         (query.order === "likes" && query.platform === "xiaohongshu")))) throw invalid();
 }
@@ -17,10 +20,13 @@ export function validateSocialWorksQuery(query: SocialWorksQuery): void {
 export function parseSocialWorksQuery(params: URLSearchParams): SocialWorksQuery {
   const query: Record<string, string | number> = {};
   for (const [key, value] of params) {
-    if (!["limit", "cursor", "platform", "order"].includes(key) || Object.hasOwn(query, key)) throw invalid();
+    if (!worksKeys.has(key) || Object.hasOwn(query, key)) throw invalid();
     if (key === "limit") {
       if (!/^[1-9]\d*$/.test(value)) throw invalid();
       query.limit = Number(value);
+    } else if (key === "year" && value !== "undated") {
+      if (!/^[1-9][0-9]{0,3}$/.test(value)) throw invalid();
+      query.year = Number(value);
     } else query[key] = value;
   }
   validateSocialWorksQuery(query as SocialWorksQuery);
