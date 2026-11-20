@@ -213,14 +213,22 @@ export async function readTimelineSnapshot(repository: ContentRepository, featur
   const snapshot = await publicSnapshot(repository, selected, true), zone = statusTimeZone({ timeZone });
   return { version: timelineVersion(snapshot.version, selected, zone), items: timelineEvents(snapshot, zone) };
 }
+export interface TimelineIndexSnapshot extends FeedSnapshot<TimelineEvent> {
+  hydrateCovers?: (events: TimelineEvent[]) => Promise<TimelineEvent[]>;
+}
+
 /** Sort the full metadata index, then hydrate only the Status entries selected
  * for the outgoing page. Older adapters keep their existing snapshot path. */
-export async function readTimelineIndexSnapshot(repository: ContentRepository, features: ContentFeatures, timeZone?: string): Promise<FeedSnapshot<TimelineEvent>> {
+export async function readTimelineIndexSnapshot(repository: ContentRepository, features: ContentFeatures, timeZone?: string,
+  display?: { readIndex: NonNullable<ContentRepository["readIndex"]>; hydrateCovers: (events: TimelineEvent[], version: string) => Promise<TimelineEvent[]> },
+): Promise<TimelineIndexSnapshot> {
   if (!repository.readIndex) return readTimelineSnapshot(repository, features, timeZone);
   const selected = CONTENT_KINDS.filter(kind => features[kind] && !["course", "study-note", "page"].includes(kind));
-  const snapshot = await publicSnapshot({ ...repository, readSnapshot: repository.readIndex }, selected), zone = statusTimeZone({ timeZone });
+  const snapshot = await publicSnapshot({ ...repository, readSnapshot: display?.readIndex ?? repository.readIndex }, selected), zone = statusTimeZone({ timeZone });
   if (snapshot.records.some(record => record.document !== null)) unavailable();
-  return { version: timelineVersion(snapshot.version, selected, zone), items: timelineEvents(snapshot, zone) };
+  const version = snapshot.version;
+  return { version: timelineVersion(version, selected, zone), items: timelineEvents(snapshot, zone),
+    ...(display && selected.length ? { hydrateCovers: (events: TimelineEvent[]) => display.hydrateCovers(events, version) } : {}) };
 }
 export async function hydrateTimelinePage(repository: ContentRepository, features: ContentFeatures, events: TimelineEvent[], expectedVersion: string, timeZone?: string): Promise<TimelineEvent[]> {
   if (!repository.readIndex || !events.some(event => event.type === "status")) return events;
