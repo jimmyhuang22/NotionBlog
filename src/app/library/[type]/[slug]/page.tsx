@@ -14,6 +14,7 @@ import { BookPage, FilmPage, GamePage } from "@/components/work-detail";
 import { getSiteConfig } from "@/lib/site";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
+import { trophySetsOf } from "@/lib/game-trophies";
 
 type Props = { params: Promise<{ type: string; slug: string }> };
 
@@ -22,7 +23,7 @@ const read = cache(async (type: string, slug: string) => {
   const section = librarySections[type];
   if (!section || !isEnabledContentKind(section.kind)) return null;
   const detail = await contentRepository.get(section.kind, slug);
-  return detail ? { type, section, item: detail.item as LibraryItem, document: detail.document } : null;
+  return detail ? { type, section, item: detail.item as LibraryItem, document: detail.document, trophySets: trophySetsOf(detail) } : null;
 });
 
 async function load({ params }: Props) {
@@ -105,7 +106,7 @@ export default async function LibraryDetailPage(props: Props) {
   await alwaysFresh();
   const loaded = await load(props);
   if (!loaded) notFound();
-  const { type, section, item, document } = loaded;
+  const { type, section, item, document, trophySets } = loaded;
   const timeZone = getSiteConfig().timeZone;
   // The large cover's address is known here: ask for it with the page, not after it. A game's art runs the width of the page.
   if (item.cover) preload(imagePreviewSrc(item.cover, item.kind === "game" ? 1600 : 800), { as: "image" });
@@ -116,5 +117,5 @@ export default async function LibraryDetailPage(props: Props) {
   );
   if (item.kind === "movie") return <FilmPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
   if (item.kind === "book") return <BookPage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
-  return <GamePage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} />;
+  return <GamePage type={type} label={section.label} item={item} document={document} timeZone={timeZone} neighbours={neighbours} trophySets={trophySets} />;
 }
