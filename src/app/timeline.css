@@ -377,18 +377,21 @@ a.works-card:focus-visible { outline-offset: 3px; border-radius: var(--radius-md
 .works__pane--leaving { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
 /* A pressed order answers at once, as the filters do (M-10): the list it is about to replace steps back while the new one is read.
    No :has() inside :has() (not allowed): the pending mark is matched as a descendant of the order link instead. */
-.works:has(.library__sort a.is-turning, .library__sort a .link-pending[data-pending]) .works__stage { opacity: 0.45; }
+.works:has(.library__sort a.is-turning, .library__sort a .link-pending[data-pending], .works__filters .segmented a .link-pending[data-pending]) .works__stage { opacity: 0.45; }
+/* The years belong to the platform on screen: while another one is on its way they step back (works-shell.tsx). */
+.works__filters[data-stale] { opacity: 0.45; }
 @media (prefers-reduced-motion: no-preference) {
   .works__pill { transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), width 0.34s cubic-bezier(0.3, 1.25, 0.4, 1), height 0.34s cubic-bezier(0.3, 1.25, 0.4, 1); }
   .works__platforms > a { transition: color 0.25s; }
   /* Dims after a short delay, so an order that arrives quickly never flickers; comes back at once, the new cards rising from 45% (round four, M-12). */
-  .works:has(.library__sort a.is-turning, .library__sort a .link-pending[data-pending]) .works__stage { transition: opacity 0.2s 0.1s; }
+  .works:has(.library__sort a.is-turning, .library__sort a .link-pending[data-pending], .works__filters .segmented a .link-pending[data-pending]) .works__stage { transition: opacity 0.2s 0.1s; }
+  .works__filters { transition: opacity 0.2s; }
   .works__stage.is-moving { transition: height 0.42s cubic-bezier(0.22, 0.8, 0.2, 1); }
   /* After a switch a cover that is not ready keeps its soft place and fades in, instead of appearing all at once. */
   .works__stage[data-switched] .works-card__cover { transition: opacity 0.2s; }
   .works__stage[data-switched] .works-card__cover:not([data-shown]) { opacity: 0; }
 }
-/* The platforms and the order beside the title; on a narrow screen they drop under it together. */
+/* The platforms beside the title; on a narrow screen they drop under it. The years and the order are the row below (.library__filters). */
 .works__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
 /* While the list is read: faint cards in the same shapes (works/loading.tsx). */
 .works__more { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 20px; padding-top: 24px; }

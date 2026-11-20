@@ -38,7 +38,7 @@ function arrivals(pane: HTMLElement, direction: number) {
  * image addresses let the browser reuse covers without a second hidden list or image prefetch.
  * While the new list is read, faint cards arrive on the same beat as the real cards.
  */
-export function WorksShell({ current, choices, sort, children }: { current: SocialPlatform; choices: Choice[]; sort: ReactNode; children: ReactNode }) {
+export function WorksShell({ current, choices, filters, children }: { current: SocialPlatform; choices: Choice[]; filters: ReactNode; children: ReactNode }) {
   const [pressed, setPressed] = useState<SocialPlatform>(current);
   const [phase, setPhase] = useState<"idle" | "leaving" | "arriving">("idle");
   const [shown, setShown] = useState<"list" | "waiting" | null>(null);
@@ -141,7 +141,7 @@ export function WorksShell({ current, choices, sort, children }: { current: Soci
     <>
       <header className="page-head library__head">
         <h1>作品</h1>
-        {/* The platforms and the order share the title's row, as the other sections put their status beside it (W-03). */}
+        {/* The platforms beside the title, as the other sections put their status beside it (W-03). */}
         <div className="works__tools">
           <nav ref={nav} className="segmented works__platforms" aria-label="按平台">
             <span ref={pill} className="works__pill" aria-hidden="true" />
@@ -154,16 +154,17 @@ export function WorksShell({ current, choices, sort, children }: { current: Soci
                   setPressed(choice.value);
                 }}>
                 {choice.icon}{choice.label}
-                {/* Another move pressed while this platform was on its way (the order, the header's 作品, a search) takes
+                {/* Another move pressed while this platform was on its way (a year, the order, the header's 作品, a search) takes
                     its place, and this platform will never come: the switch goes back to what is on screen. */}
                 <MoveEnded onEnd={() => { if (choice.value === pressed && current !== pressed) setPressed(current); }} />
               </Link>
             ))}
           </nav>
-          {/* The order stays through a switch, so the row of buttons never shifts (F40). */}
-          {sort}
         </div>
       </header>
+      {/* The years and the order under the head, as on the shelves (the owner's pick 甲, 2026-11-20). The years are the
+          platform's own: while another platform is on its way the row steps back and cannot be pressed. */}
+      <div className="library__filters works__filters" data-stale={ready ? undefined : ""} inert={!ready}>{filters}</div>
       <div ref={stage} className="works__stage" data-switched={switched ? "" : undefined}>
         <div ref={live} className="works__pane" style={phase === "leaving" ? { visibility: "hidden" } : undefined}>{content}</div>
       </div>

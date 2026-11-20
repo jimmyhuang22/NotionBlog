@@ -356,6 +356,8 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 **后端交付（2026-11-20，Codex）**。首屏调用 `socialTimelineRepository.listWorks({ platform, year, order })`，后续页调用现有 `GET /api/social/works/v2`，沿用相同筛选并传 `nextCursor`。列表的 `total` 是所选年份的总数，`yearCounts` 是该平台在全部年份的条数，包含 `years`、`undatedCount` 与 `timeZone`。选「全部」时省略 `year`。前端切换平台、年份或排序时从首屏重新请求。见[接口说明](SOCIAL_WORKS_FILTERS.md)和[验证记录](progress/2026-11-20-social-works-years.md)。
 
+**前端接上（2026-11-20，Claude）**。作品页按甲版接好：年份那一排用 `yearCounts`，选年份时传 `year`，后续页由 `worksQuery` 带上同样的平台、年份、排序和 `nextCursor`；换年份按新键重新取首屏。只在本机演示数据下验收，正式站点随下次发布看。见[进度记录](progress/2026-11-20-works-years-row.md)。
+
 ### 十六、游戏详情的奖杯（2026-11-20，Claude）
 
 **用户选定了游戏详情页的奖杯版式（乙，2026-11-20）**，见[决策](decisions/2026-11-20-game-trophies.md)。左栏时长下面加一组奖杯统计；正文下面加一节“奖杯”，最难拿的三个放成卡片，下面按时间列出最近拿到的六个，其余收进“全部 N 个”“未拿到 N 个”。原型在前端忽略目录 `.local/previews/game-trophies-20261120/`（线上页面上注入，奖杯数据是虚构的）。契约属于共享范围，用户已同意提出；字段名、结构和存放位置由后端定，下面是前端要显示的东西。分两步，第一步可以先单独交付。
