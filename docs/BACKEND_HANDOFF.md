@@ -391,6 +391,8 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 **第二轮细节（2026-11-20，用户全部选推荐）**：两个平台用标题右边的切换、稀有度档位、展开后按月分组、白金横幅都由前端从上面的字段算出，后端不用多给；档位按全球获得率划分，所以获得率请照平台原值给（保留一位小数即可）。详见决策。
 
+**前端已接入（2026-11-20，演示数据）**：页面读 `contentRepository.get` 回应上的 `trophySets`，字段名照后端第一步提案：每套 `id`、`platform`、`earned`、`total`、`progressPercent`、可选 `grades`（四种等级各 `earned`/`total`）。第二步前端暂按这个形状读，名字后端可以改，改了告诉前端：每套加可选 `trophies: { id, name, detail, grade, icon, earned, earnedDate, rarityPercent, hidden }[]`，`grade` 取 `platinum`/`gold`/`silver`/`bronze` 或 `null`（Steam），`icon` 是站内 `ImageAsset` 或 `null`，`earnedDate` 是 `YYYY-MM-DD` 或 `null`，`rarityPercent` 是 0–100 或 `null`。读不懂的套整套不显示；前端自己也会遮住未获得的隐藏奖杯。演示数据里放了逐个奖杯后，`/preview/game-trophies` 这个前端演示页可以换成读演示数据。
+
 **前端会做的**：左栏统计、正文下“奖杯”一节、每套标平台；有奖杯时不再显示“还没有写下记录”那一行，只有正文和奖杯都没有时才显示。字段请都可选，旧回应照常能用。请在演示数据里放：一款两个平台各有一套的游戏、一款一个都没拿到的、一个未获得的隐藏奖杯、一款没有奖杯的任天堂游戏。接口好了告诉用户，前端接上后在正式站点挑 PS、Steam、任天堂各一款核对。
 
 ## 可直接给 Codex 的启动指令
