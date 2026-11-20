@@ -35,6 +35,10 @@ DO $$ BEGIN
   IF (SELECT count(*) FROM game_edit WHERE edited_title IS NOT NULL AND recipe IS NOT NULL) <> 1
   THEN RAISE EXCEPTION 'game with media required'; END IF;
 END $$;
+-- The copy-path regression seeds different historical recipes inside this transaction.
+\if :{?test_copy_history}
+  \ir display-copy-history.sql
+\endif
 GRANT SELECT ON game_edit TO nb_writer;
 SET LOCAL ROLE nb_writer;
 \timing on
@@ -42,6 +46,15 @@ SELECT (nb_freeze_payload_api.apply_delta(op, digest, expected, config, records,
         '[]', recipe, assets, NULL, NULL, bindings)->>'committed')::boolean AS committed FROM game_edit;
 \timing off
 RESET ROLE;
+\if :{?test_copy_history}
+  DO $$ BEGIN
+    IF (SELECT count(*) FROM copy_cases) <> 3 OR EXISTS (
+      SELECT FROM copy_cases c LEFT JOIN nb_display.assets a
+      ON a.asset_id = c.asset_id AND a.run_id = (SELECT op FROM game_edit)
+      WHERE a.recipe IS DISTINCT FROM c.expected OR a.asset IS DISTINCT FROM c.asset
+    ) THEN RAISE EXCEPTION 'copied recipe or full asset differs from expected donor'; END IF;
+  END $$;
+\endif
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM game_edit g JOIN nb_publication.state s ON s.run_id = g.op
                  JOIN nb_v2.records r ON r.run_id = s.run_id AND r.id = g.id
