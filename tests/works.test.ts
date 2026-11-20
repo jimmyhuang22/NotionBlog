@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PublishedSocialCollection, SocialTimelineWork } from "../contracts/social-timeline.ts";
-import { coverPreviewWidths, coverShapes, groupWorksByPublishedYear, leadingFigures, workDayMoment, workLines, workMoment, worksDay } from "../src/lib/works.ts";
+import { coverPreviewWidths, coverShapes, groupWorksByPublishedYear, leadingFigures, workDayMoment, workLines, workMoment, worksDay, worksHref, worksQuery } from "../src/lib/works.ts";
 import { examplePublication } from "./helpers/home-feed-samples.ts";
 
 const unknown = { views: null, likes: null, comments: null, shares: null, collections: null, coins: null, danmaku: null };
@@ -133,4 +133,18 @@ test("ordered by views or likes, a card's day of another year carries its year; 
   assert.equal(text(worksDay(at("2025-06-19T04:00:00.000Z"), "Australia/Melbourne", null, true)), "2025 年 6 月 19 日");
   assert.equal(text(worksDay(at("2026-06-10T04:00:00.000Z"), "Australia/Melbourne", null, true)), "2026 年 6 月 10 日");
   assert.equal(text(worksDay(at("2025-06-19T04:00:00.000Z"), "Australia/Melbourne", null)), "6 月 19 日");
+});
+
+test("a works address leaves out the default platform, every year and the newest-first order, and writes year before order", () => {
+  assert.equal(worksHref("bilibili", null), "/works");
+  assert.equal(worksHref("bilibili", null, 2023), "/works?year=2023");
+  assert.equal(worksHref("bilibili", "views", 2023), "/works?year=2023&order=views");
+  assert.equal(worksHref("xiaohongshu", "likes", "undated"), "/works?platform=xiaohongshu&year=undated&order=likes");
+  assert.equal(worksHref("xiaohongshu", null, null), "/works?platform=xiaohongshu");
+});
+
+test("every page of a works list asks for the same platform, year and order; every year leaves year out", () => {
+  assert.deepEqual(worksQuery("bilibili", null, null, 20), { limit: "20", platform: "bilibili" });
+  assert.deepEqual(worksQuery("bilibili", "2025", "views", 20), { limit: "20", platform: "bilibili", year: "2025", order: "views" });
+  assert.deepEqual(worksQuery("xiaohongshu", "undated", "likes", 12), { limit: "12", platform: "xiaohongshu", year: "undated", order: "likes" });
 });
