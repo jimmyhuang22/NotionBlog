@@ -1,4 +1,5 @@
 import { publicHttpResponse } from "../../server/public-cache/http.ts";
+import { excludeFromSharedCache } from "../../server/public-cache/policy.ts";
 import {
   contentFeatures,
   isEnabledContentKind,
@@ -78,7 +79,9 @@ export async function contentDetailResponse(
     }
     const detail = await repository.get(kind, slug);
     if (!detail) return error("NOT_FOUND", "Content is not available.", 404);
-    return publicHttpResponse(request, Response.json({ data: detail }, { headers }), "content");
+    const response = Response.json({ data: detail }, { headers });
+    // PSN visibility changes independently of the content publication/cache generation.
+    return publicHttpResponse(request, kind === "game" ? excludeFromSharedCache(response) : response, "content");
   } catch (cause) {
     return contentErrorResponse(cause);
   }
