@@ -4,13 +4,14 @@ import { readPrivateFile } from "../notion-sync/state.ts";
 import { GameSyncError, object, required, observations } from "./model.ts";
 import { readEnv, readJson, writeJson, writeText } from "./private.ts";
 import { collectNintendo, finishLogin, loginRequest } from "./nintendo.ts";
-import { collectPsn } from "./psn.ts";
+import { collectPsn, collectPsnWebsiteTrophies } from "./psn.ts";
 import { collectSteam, fixedSteamPolicy, steamPolicy } from "./steam.ts";
 import { syncNotion } from "./notion.ts";
 import type { SyncConfig } from "./notion.ts";
 import { PLAN_VERSION } from "./plan.ts";
 import type { SyncPlan, SyncProgress } from "./plan.ts";
 import { runDaily, safeCode } from "./daily.ts";
+import { planPsnWebsiteTrophies, writePsnWebsiteTrophies } from "./website-trophies.ts";
 
 
 export async function runGameCommand(args: string[], runId: string) {
@@ -28,6 +29,26 @@ export async function runGameCommand(args: string[], runId: string) {
       console.log(JSON.stringify({ connected: true })); return;
     }
     const env = await readEnv(join(root, "credentials.env"));
+    if (command === "collect-psn-trophies") {
+      const snapshot = await collectPsnWebsiteTrophies(env.PSN_NPSSO ?? "", env.PSN_ONLINE_ID ?? "",
+        join(root, "psn-auth.json"), "psn-main");
+      await writeJson(join(root, "psn-trophies-snapshot.json"), snapshot);
+      console.log(JSON.stringify({ products: snapshot.products.length }));
+      return;
+    }
+    if (command === "apply-psn-trophies") {
+      const snapshot = await readJson(join(root, "psn-trophies-snapshot.json"), 8 * 1024 * 1024);
+      const plan = planPsnWebsiteTrophies(snapshot, env.PSN_ONLINE_ID ?? "", await readJson(join(root, "config.json")));
+      const { createDatabasePool, sqlExecutor } = await import("../../src/server/database/connection.ts");
+      const pool = createDatabasePool(env.SYNC_DATABASE_URL, env.DATABASE_TLS ?? "verify", env.DATABASE_CA_CERT);
+      try {
+        const applied = await writePsnWebsiteTrophies(sqlExecutor(pool), plan);
+        console.log(JSON.stringify({ applied, sets: plan.sets.length }));
+      } finally {
+        await pool.end();
+      }
+      return;
+    }
     async function currentSteamPolicy() {
       const policy = await fixedSteamPolicy(root) ?? steamPolicy(await readJson(join(root, "steam-policy.json")));
       if (policy.mode === "fixed-allowlist" && policy.steamId !== env.STEAM_ID) throw new GameSyncError("STEAM_ACCOUNT_MISMATCH");

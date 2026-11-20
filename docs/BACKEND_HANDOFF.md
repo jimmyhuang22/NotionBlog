@@ -28,7 +28,7 @@
 | 八 | 发布前的配合事项 | 状态码、收录、头像、服务端函数 | **真实 HTTP 404 与预览禁止收录已通过**；正式收录、网络及云端发布待后续验收 |
 | 十二 | 作品封面（`SocialWork.cover`） | 作品卡片按各平台的样子显示封面 | 前端已做好；**封面数据全为空，待后端补** |
 | 十五 | 作品页年份筛选 | 年份筛选、排序和各年条数 | 后端接口已实现，待前端接入 |
-| 十六 | 游戏详情的奖杯（统计与逐个奖杯） | 左栏奖杯统计、正文下“奖杯”一节 | 用户已选版式；**待后端，可先交付统计** |
+| 十六 | 游戏详情的奖杯（统计与逐个奖杯） | 左栏奖杯统计、正文下“奖杯”一节 | **PSN 统计已本地联调**，逐个奖杯待第二步 |
 
 接口与缓存口径见 [网站内容能力](WEBSITE_CAPABILITIES.md)。前端已有一条命令的私有本机真实预览入口，无需读取或复制凭据；临时批次到期后明确失败，直接 Notion 排查入口须手动选择。仍待推进的是受保护的云端 v2 预览、博客／项目来源、持续运行与正式发布前的网络／收录验收。
 
@@ -366,7 +366,22 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 - 按“奖杯组”给，每套一条：平台（PS4、PS5、Steam……，前端用来标平台）、已获得数、总数、完成度百分比，以及白金、金、银、铜四种各自的已获得数和总数。Steam 成就没有等级，只给已获得数、总数和百分比。
 - 同一款游戏在几个平台都有奖杯时（例如《女神异闻录３ Reload》PC 和 PS），**每套分开给，不相加、不挑一套**，用户已确认分开显示、各标平台。PS4 和 PS5 两个奖杯组也一样。
-- 现在的平台同步已经采到 PSN 的完成度、已获得总数、总数和白金数，写在 Notion 的平台记录里，没进网站；四种等级的分别计数没有保存（`scripts/game-sync/model.ts` 的 `psnRows` 只把铜银金白加成一个和）。游戏有多个奖杯组时，现在的程序故意不记，这一步需要按组分开记下来。
+
+#### 第一步后端交付（2026-11-20，Codex）
+
+- 前端从 `contentRepository.get("game", slug)` 的详情读取 `trophySets?`。现有 `GET /api/content/game/[slug]` 对应 `data.trophySets`，和 `item`、`document` 同级。统计只出现在游戏详情。
+- 每套包含 `id`（稳定站内键）、`platform`、`earned`、`total`、`progressPercent`，以及 PSN 的 `grades`。`grades` 按 `platinum`、`gold`、`silver`、`bronze` 各给一组 `{ earned, total }`。完成度用 PSN 给出的百分比，缺失时为 `null`。真实 `0 / N` 保留，没有已核实的奖杯套时省略整个字段。
+- PS4 与 PS5 各自有套时分别返回。平台确认同一套跨代共用时只返回一条，标为 `PS4 / PS5`。Steam 成就等待权限确认，当前没有对应数据。
+- 独立的 `collect-psn-trophies` 和 `apply-psn-trophies` 子命令沿用游戏同步的私有目录。后者按现有显式作品绑定和排除名单生成快照，写入[网站数据库扩展](../database/game-trophy-migrations/001_psn_trophy_sets.sql)。隐藏或可见性未知的产品排除，下一次成功导入会撤回旧统计。详情读取重新检查网站发布资格，且绕过共享缓存。启用时应先在目标网站库安装扩展，再启动使用它的网站进程。
+- 离线演示的 `game-clear` 有 PS4、PS5 两套和原有正文，`game-zero-trophies` 只有一套且为 `0 / 8`，`game-wishlist` 是没有奖杯的 Switch 游戏，`game-playing` 是没有奖杯数据的 PC 游戏。
+- 离线演示已核对真零、空值、写入回滚及旧快照拒绝，`npm run check` 与 `npm run build` 均通过。随后用本人 PSN 账号在本机验收，选取一款 PS4、PS5 各有独立套的已绑定游戏，两套的获得数、总数、完成度和四种等级计数均与 PSN 原始回应一致。
+- 用户确认账号里没有需要隐藏的游戏。本机用同一份真实数据回放隐藏标记，再导入临时库，详情去掉旧的 `trophySets`。隐藏保护保留，这项回放可作为第一步的验收证据。此次验证只写入本机内存数据库，未写生产库或部署。见[验收记录](progress/2026-11-20-game-trophy-summaries.md)。
+
+#### 交给 Claude 的第一步联调
+
+- 前端 #405 已接入 `trophySets`，桌面和手机的左栏已用演示数据联调。见[联调记录](progress/2026-11-20-game-trophies-joint-check.md)。
+- `game-clear` 左栏分开显示 PS4 和 PS5，正文照常展示。`game-zero-trophies` 左栏显示 `0 / 8`，空正文照常显示“还没有写下游玩记录”。只有正文下的逐个奖杯一节显示时，才省略这句空正文提示。`game-wishlist` 和 `game-playing` 省略奖杯统计，正文按原规则展示。
+- 第一步验收左栏统计。第二步的逐个奖杯可在预览页查看，游戏详情收到完整清单后才显示正文下的“奖杯”一节。Steam 继续留空。
 
 **第二步：逐个奖杯**（正文下面那一节，只在详情里给，列表不用）
 
@@ -377,7 +392,7 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 - 前端自己挑“最稀有三个”和“最近六个”，所以请给这套的完整清单；顺序无所谓。
 - 来源参考：PSN 现用的 `psn-api` 有奖杯组定义和本人获得情况两类接口（含获得时间、获得率、隐藏标记）；Steam 官方有本人成就、成就定义（名称、图标）和全球成就比例三个接口，现在只调用了已拥有和最近游玩。Steam 读本人成就可能要求个人资料的“游戏详情”公开，前端没有核实。
 
-**存放**：用户的方向是平台数据直接进网站数据库，不再经 Notion 中转（[内容架构重新分析](CONTENT_ARCHITECTURE_REASSESSMENT.md)里“自动字段可逐步直接进入网站数据库”那一条）。逐个奖杯每款几十条、全库上万条，不适合放进 Notion。第一步的统计走哪条路由后端定。Notion 里用户手写的正文暂不处理，去留等用户筛查后另行决定。
+**存放**：奖杯数据直接进网站数据库（[内容架构重新分析](CONTENT_ARCHITECTURE_REASSESSMENT.md)里“自动字段可逐步直接进入网站数据库”那一条）。Notion 里用户手写的正文照常展示，去留等用户筛查后另行决定。
 
 **隐私**
 
@@ -396,7 +411,7 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 **前端已接入（2026-11-20，演示数据）**：页面读 `contentRepository.get` 回应上的 `trophySets`，字段名照后端第一步提案：每套 `id`、`platform`、`earned`、`total`、`progressPercent`、可选 `grades`（四种等级各 `earned`/`total`）。第二步前端暂按这个形状读，名字后端可以改，改了告诉前端：每套加可选 `trophies: { id, name, detail, grade, icon, earned, earnedDate, rarityPercent, hidden }[]`，`grade` 取 `platinum`/`gold`/`silver`/`bronze` 或 `null`（Steam），`icon` 是站内 `ImageAsset` 或 `null`，`earnedDate` 是 `YYYY-MM-DD` 或 `null`，`rarityPercent` 是 0–100 或 `null`。读不懂的套整套不显示；前端自己也会遮住未获得的隐藏奖杯。演示数据里放了逐个奖杯后，`/preview/game-trophies` 这个前端演示页可以换成读演示数据。
 
-**前端会做的**：左栏统计、正文下“奖杯”一节、每套标平台；有奖杯时不再显示“还没有写下记录”那一行，只有正文和奖杯都没有时才显示。字段请都可选，旧回应照常能用。请在演示数据里放：一款两个平台各有一套的游戏、一款一个都没拿到的、一个未获得的隐藏奖杯、一款没有奖杯的任天堂游戏。接口好了告诉用户，前端接上后在正式站点挑 PS、Steam、任天堂各一款核对。
+未获得的隐藏奖杯演示随第二步补齐。发布后在正式站点抽查 PSN 和任天堂的游戏详情，Steam 权限确认后再补验。
 
 ## 可直接给 Codex 的启动指令
 

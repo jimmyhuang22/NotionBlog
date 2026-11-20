@@ -10,6 +10,8 @@ import { cache } from "react";
 import { type ContentRepository } from "../../../contracts/repository.ts";
 import { getNotionRuntime } from "../../server/notion/runtime.ts";
 import { getDatabaseRuntime } from "../../server/database/runtime.ts";
+import { createGameTrophyReader } from "../../server/database/game-trophies.ts";
+import { publicationMode } from "../../server/database/publication.ts";
 import { getSiteConfig } from "../site/index.ts";
 import { createContentService } from "./factory.ts";
 import { readTimelineIndexSnapshot, hydrateTimelinePage } from "./website.ts";
@@ -61,7 +63,20 @@ export function hydrateContentTimelinePage(events: TimelineEvent[], version: str
   return hydrateTimelinePage(getContentService().repository, contentFeatures, events, version, getSiteConfig().timeZone);
 }
 
-export const contentRepository = publicRepository("content", "contentRepository", uncachedRepository);
+const cachedContentRepository = publicRepository("content", "contentRepository", uncachedRepository);
+let gameTrophyReader: ReturnType<typeof createGameTrophyReader> | undefined;
+export const contentRepository: typeof cachedContentRepository = {
+  ...cachedContentRepository,
+  async get(kind, slug) {
+    const detail = await cachedContentRepository.get(kind, slug);
+    if (kind !== "game" || !detail || getContentProvider() !== "database" || process.env.DATABASE_CONTENT_VERSION !== "2") return detail;
+    const readSets = gameTrophyReader ??= createGameTrophyReader(
+      getDatabaseRuntime().cacheStateDb, publicationMode(process.env.DATABASE_PUBLICATION_MODE));
+    // Game-account privacy can change independently of a website content publication.
+    const trophySets = await readSets(detail.item.id, slug);
+    return trophySets.length ? { ...detail, trophySets } : detail;
+  },
+};
 
 /** Live joint SSR entry: deliberately outside publicRepository's completed DTO cache. */
 export function readLibraryFirstPage<K extends LibraryKind>(kind: K, query: ListQuery = {}) {

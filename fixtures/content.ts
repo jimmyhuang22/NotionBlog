@@ -1,5 +1,5 @@
 /** Fictional data for layout and contract validation. Never present as live Notion content. */
-import type { ContentKind, ContentByKind, ContentDocument, CourseTree } from "../contracts/content.ts";
+import type { ContentKind, ContentByKind, ContentDocument, CourseTree, GameTrophySetSummary } from "../contracts/content.ts";
 import { expandFixtures } from "./expand.ts";
 
 export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
@@ -412,7 +412,7 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
       "updatedAt": null,
       "status": "wishlist",
       "platforms": [
-        "PlayStation"
+        "Nintendo Switch"
       ],
       "lastPlayedDate": null,
       "firstPlayedDate": null,
@@ -422,6 +422,12 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
       "estimatedTime": null,
       "progressPercent": null,
       "rating": null
+    },
+    {
+      id: "mock-game-5", kind: "game", slug: "game-zero-trophies", href: "/library/games/game-zero-trophies",
+      title: "[演示] 还没拿到奖杯的游戏", summary: null, tags: [], cover: null, updatedAt: null,
+      status: "playing", platforms: ["PlayStation"], lastPlayedDate: null, firstPlayedDate: null,
+      playedDate: null, releaseDate: null, playedTime: null, estimatedTime: null, progressPercent: null, rating: null,
     }
   ],
   "course": [
@@ -566,6 +572,27 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
     }
   ]
 };
+export const fixtureGameTrophySets: Record<string, GameTrophySetSummary[]> = {
+  "mock-game-1": [
+    { id: "psn:00000000000000000000000000000001", platform: "PS4", earned: 15, total: 30, progressPercent: 46,
+      grades: { platinum: { earned: 0, total: 1 }, gold: { earned: 1, total: 3 },
+        silver: { earned: 4, total: 8 }, bronze: { earned: 10, total: 18 } } },
+    { id: "psn:00000000000000000000000000000002", platform: "PS5", earned: 0, total: 20, progressPercent: 0,
+      grades: { platinum: { earned: 0, total: 1 }, gold: { earned: 0, total: 2 },
+        silver: { earned: 0, total: 5 }, bronze: { earned: 0, total: 12 } } },
+  ],
+  "mock-game-2": [
+    { id: "psn:00000000000000000000000000000003", platform: "PS5", earned: 20, total: 20, progressPercent: 100,
+      grades: { platinum: { earned: 1, total: 1 }, gold: { earned: 2, total: 2 },
+        silver: { earned: 5, total: 5 }, bronze: { earned: 12, total: 12 } } },
+  ],
+  "mock-game-5": [
+    { id: "psn:00000000000000000000000000000004", platform: "PS5", earned: 0, total: 8, progressPercent: 0,
+      grades: { platinum: { earned: 0, total: 1 }, gold: { earned: 0, total: 1 },
+        silver: { earned: 0, total: 2 }, bronze: { earned: 0, total: 4 } } },
+  ],
+};
+
 export const fixtureDocuments: Record<string, ContentDocument> = {
   "mock-post-1": {
     "blocks": [
@@ -900,6 +927,11 @@ export const fixtureDocuments: Record<string, ContentDocument> = {
     ],
     "toc": [],
     "completeness": "partial"
+  },
+  "mock-game-5": {
+    "blocks": [],
+    "toc": [],
+    "completeness": "complete"
   },
   "mock-note-week4": {
     "blocks": [

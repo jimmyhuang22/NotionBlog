@@ -138,6 +138,19 @@ export interface Movie extends ContentBase {
   doubanRating: number | null;
 }
 export type GameStatus = "platinumed" | "clear" | "playing" | "wishlist" | "unknown";
+export interface TrophyCount {
+  earned: number;
+  total: number;
+}
+export type TrophyGrade = "platinum" | "gold" | "silver" | "bronze";
+export interface GameTrophySetSummary extends TrophyCount {
+  /** Stable site key. No platform account or source identifier. */
+  id: string;
+  platform: string;
+  progressPercent: number | null;
+  /** Steam achievements have no trophy grades. */
+  grades?: Record<TrophyGrade, TrophyCount>;
+}
 export interface Game extends ContentBase {
   kind: "game";
   status: GameStatus;
@@ -220,6 +233,8 @@ export interface ContentDetail<T extends ContentBase = ContentBase> {
   item: T;
   document: ContentDocument | null;
   adjacent?: { newer: ContentLink | null; older: ContentLink | null };
+  /** Game details only. Absent when there are no verified trophy sets. */
+  trophySets?: GameTrophySetSummary[];
 }
 export interface ContentByKind {
   post: Post; status: StatusEntry; album: Album; book: Book;
