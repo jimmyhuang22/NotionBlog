@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { PageLoading } from "./page-loading";
 import { SectionWaiting, waitingSections } from "./section-waiting";
 import { sectionLoadingTitle } from "../lib/section-loading.ts";
+import { isPlainClick, prefersReducedMotion } from "../lib/dom.ts";
 
 /**
  * Section roots enter their own loading frame immediately (2026-11-03). A short
@@ -41,6 +42,15 @@ interface Switch {
   giveUpTimer?: number;
   frame: number;
   started: number;
+  /** Looks again, at most once a frame, whether the move has landed (a copied-page move only). */
+  check?: () => void;
+  /** Watches the page area for the new page while a copied-page move waits. */
+  watch?: MutationObserver;
+}
+
+/** The page area still shows a loading state (the hidden section templates inside it do not count). */
+function pageStillLoading(main: ParentNode): boolean {
+  return [...main.querySelectorAll(".page-loading, [data-page-loading]")].some(element => !element.closest("[data-switch-template]"));
 }
 
 let current: Switch | null = null;
@@ -48,7 +58,7 @@ let committedPath = "";
 let loadingTemplate: HTMLElement | null = null;
 let loadingTemplates: HTMLElement | null = null;
 
-const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const still = prefersReducedMotion;
 
 /** A note within its course changes only the note column; anything else changes the whole page area. */
 function areaFor(from: string, to: string): HTMLElement | null {
@@ -123,6 +133,7 @@ function headerBottom(): number {
 /** Takes a switch away at once, with no rise: another one that covers a different area replaces it. */
 function drop(entry: Switch) {
   cancelAnimationFrame(entry.frame);
+  entry.watch?.disconnect();
   clearTimeout(entry.slowTimer);
   clearTimeout(entry.giveUpTimer);
   entry.overlay.remove();
@@ -217,7 +228,7 @@ function arrive(entry: Switch) {
   const shown = !entry.overlay.hidden;
   if (shown) main.style.setProperty("--waited", `${Math.round(performance.now() - entry.started)}ms`); else main.style.removeProperty("--waited");
   if (!shown || still() || entry.target === "/") return;
-  const waiting = () => [...main.querySelectorAll(".page-loading, [data-page-loading]")].some(element => !element.closest("[data-switch-template]"));
+  const waiting = () => pageStillLoading(main);
   const develop = () => {
     for (const part of main.querySelectorAll<HTMLElement>(".wrap > :not(.page-head)")) {
       if (part.closest("[data-switch-template]")) continue;
@@ -249,6 +260,7 @@ function start(from: string, target: string) {
       current.target = target;
       current.started = performance.now();
       if (current.slow) grow(current.bar);
+      current.check?.();
       return;
     }
     drop(current);
@@ -291,12 +303,10 @@ function start(from: string, target: string) {
   if (fading) fading.before(overlay); else document.body.append(overlay);
   document.body.append(bar);
   // A pinned column is drawn where it stood on screen, not where it would fall in a page that does not scroll.
-  for (const [element, was] of pinned) {
-    element.style.position = "relative";
-    element.style.top = "0px";
-    const now = element.getBoundingClientRect();
-    element.style.top = `${was.top - now.top}px`;
-  }
+  // All writes, then all reads, then the last writes: one layout for every column instead of one each.
+  for (const [element] of pinned) { element.style.position = "relative"; element.style.top = "0px"; }
+  const settled = [...pinned].map(([element, was]) => [element, was.top - element.getBoundingClientRect().top] as const);
+  for (const [element, shift] of settled) element.style.top = `${shift}px`;
   const entry: Switch = { target, column, dimmed: performance.now(), overlay, copies, bar, slow: false, slowTimer: 0, frame: 0, started: performance.now() };
   current = entry;
   for (const part of copies) {
@@ -304,15 +314,28 @@ function start(from: string, target: string) {
     part.animate([{ opacity: 1 }, { opacity: 0.55 }], { duration: DIM_MS, easing: "ease", fill: "forwards" });
   }
   entry.slowTimer = window.setTimeout(() => { if (current === entry) wait(entry); }, SLOW_AFTER);
+  // Lands once the address is the target and the page area is past its loading state. Looked at when the page area
+  // changes and when the address commits (PageSwitch), at most once a frame, instead of querying every frame.
   const check = () => {
+    entry.frame = 0;
     if (current !== entry) return;
-    const loading = [...document.querySelectorAll("#main .page-loading, #main [data-page-loading]")]
-      .some(element => !element.closest("[data-switch-template]"));
-    if (location.pathname === entry.target && !loading) { finish(entry); return; }
-    if (performance.now() - entry.started > GIVE_UP_AFTER) { finish(entry); return; }
-    entry.frame = requestAnimationFrame(check);
+    const main = document.getElementById("main");
+    if (location.pathname === entry.target && !(main && pageStillLoading(main))) finish(entry);
   };
-  entry.frame = requestAnimationFrame(check);
+  entry.check = () => { if (!entry.frame) entry.frame = requestAnimationFrame(check); };
+  const main = document.getElementById("main");
+  if (main) {
+    entry.watch = new MutationObserver(entry.check);
+    entry.watch.observe(main, { childList: true, subtree: true });
+  }
+  // Gives up GIVE_UP_AFTER after the latest start: another link pressed while waiting starts the clock again.
+  const giveUp = () => {
+    if (current !== entry) return;
+    const left = GIVE_UP_AFTER - (performance.now() - entry.started);
+    if (left <= 0) finish(entry); else entry.giveUpTimer = window.setTimeout(giveUp, left);
+  };
+  entry.giveUpTimer = window.setTimeout(giveUp, GIVE_UP_AFTER);
+  entry.check();
 }
 
 function grow(bar: HTMLElement) {
@@ -331,7 +354,9 @@ function wait(entry: Switch) {
 
 function finish(entry: Switch) {
   cancelAnimationFrame(entry.frame);
+  entry.watch?.disconnect();
   clearTimeout(entry.slowTimer);
+  clearTimeout(entry.giveUpTimer);
   current = null;
   const done = () => entry.overlay.remove();
   if (entry.slow && !still()) {
@@ -357,7 +382,7 @@ function finish(entry: Switch) {
  * page is on its way the address bar still shows the page left, so a link back to it is a move too (to it).
  */
 function followed(event: MouseEvent): string | null {
-  if (!event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
+  if (!event.defaultPrevented || !isPlainClick(event)) return null;
   const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
   if (!link || (link.target && link.target !== "_self") || link.hasAttribute("download")) return null;
   // A link that opens something in place (the about card on the avatar) is not leaving the page, though it keeps an address for a new tab (M-11).
@@ -393,6 +418,7 @@ export function PageSwitch() {
       if (entry.target === pathname) arrive(entry);
       drop(entry);
     } else if (!current) document.getElementById("main")?.style.removeProperty("--waited");
+    else current.check?.();
   }, [pathname]);
   useEffect(() => {
     const own = template.current?.firstElementChild as HTMLElement | null;

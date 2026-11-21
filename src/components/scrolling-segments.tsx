@@ -1,6 +1,8 @@
 "use client";
 
 import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { isPlainClick } from "../lib/dom.ts";
+import { followPill, placePill } from "./pill";
 
 /** How long a pressed choice may stand before the block goes back to the one the page still shows (a move that never landed). */
 const GIVE_BACK_AFTER = 8000;
@@ -21,13 +23,7 @@ export function Segments({ label, current, scroll = false, children }: { label: 
   const giveBack = useRef<number | undefined>(undefined);
 
   function place(link: Element | null, animate: boolean) {
-    const row = nav.current, block = pill.current;
-    if (!row || !block) return;
-    block.style.transition = animate ? "" : "none";
-    if (!link) { block.style.width = "0px"; row.dataset.pill = ""; return; }
-    const box = row.getBoundingClientRect(), at = link.getBoundingClientRect();
-    Object.assign(block.style, { width: `${at.width}px`, height: `${at.height}px`, top: `${at.top - box.top + row.scrollTop}px`, transform: `translateX(${at.left - box.left + row.scrollLeft}px)` });
-    row.dataset.pill = "";
+    if (nav.current && pill.current) placePill(nav.current, pill.current, link, animate);
   }
 
   function settle(animate: boolean) {
@@ -49,12 +45,8 @@ export function Segments({ label, current, scroll = false, children }: { label: 
       row.scrollLeft = offset - (row.clientWidth - chosen.offsetWidth) / 2;
     }
     // Names change width when the page's font arrives and when the row is resized; the block follows without a slide.
-    const again = () => place(row.querySelector("[data-picked]") ?? row.querySelector("[aria-current]"), false);
-    const watch = new ResizeObserver(again);
-    watch.observe(row);
-    let live = true;
-    document.fonts?.ready.then(() => { if (live) again(); });
-    return () => { live = false; watch.disconnect(); window.clearTimeout(giveBack.current); };
+    const stop = pill.current ? followPill(row, pill.current, () => row.querySelector("[data-picked]") ?? row.querySelector("[aria-current]")) : null;
+    return () => { stop?.(); window.clearTimeout(giveBack.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, scroll]);
 
@@ -65,7 +57,7 @@ export function Segments({ label, current, scroll = false, children }: { label: 
   });
 
   function onClick(event: MouseEvent<HTMLElement>) {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!isPlainClick(event)) return;
     const row = nav.current;
     const link = (event.target as Element).closest("a[href]");
     if (!row || !link || !row.contains(link) || link.hasAttribute("aria-current")) return;

@@ -52,8 +52,12 @@ export function closeOnBackdrop(event: MouseEvent<HTMLDialogElement>) {
   if (event.target === event.currentTarget) event.currentTarget.close();
 }
 
-/** While a menu is open, Escape closes it and puts focus back on its button, and a press outside it closes it. */
-export function useMenuDismiss(open: boolean, close: () => void, group: RefObject<HTMLElement | null>, button: RefObject<HTMLElement | null>) {
+/**
+ * While a menu is open, Escape closes it and puts focus back on its button, and a press outside it closes it.
+ * With `refocus: "inside"` (the contact card) focus goes back only when it was inside the group, so an Escape
+ * pressed elsewhere on the page does not pull focus to the button.
+ */
+export function useMenuDismiss(open: boolean, close: () => void, group: RefObject<HTMLElement | null>, button: RefObject<HTMLElement | null>, refocus: "always" | "inside" = "always") {
   // `close` is a fresh function on every render; the listeners read the latest one, so they are set up only when the menu opens.
   const latestClose = useRef(close);
   useEffect(() => { latestClose.current = close; });
@@ -61,14 +65,15 @@ export function useMenuDismiss(open: boolean, close: () => void, group: RefObjec
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      const back = refocus === "always" || Boolean(group.current?.contains(document.activeElement));
       latestClose.current();
-      button.current?.focus();
+      if (back) button.current?.focus();
     };
     const onDown = (event: PointerEvent) => { if (!group.current?.contains(event.target as Node)) latestClose.current(); };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
-  }, [open, group, button]);
+  }, [open, group, button, refocus]);
 }
 
 /** For a menu's onBlur: tabbing past its last entry leaves the group, which closes it as well. */

@@ -4,7 +4,18 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { spreadRadius } from "../lib/spread.ts";
 import { DEFAULT_SKIN, isScheme, isSkin, rootAttributes, schemeFor, skinAfter, skinOf, skins, type Scheme, type SkinId, type Transition, currentSkin } from "../lib/skins.ts";
 import { closeOnLeave, useMenuDismiss } from "./use-dismiss";
+import { prefersReducedMotion } from "../lib/dom.ts";
 
+
+/**
+ * The island's rounded heading face has a stylesheet of its own (island-font.ts), fetched only once that skin is
+ * in use: when this module first runs on a page already in the island (the head script set the skin before
+ * paint), and when the visitor picks it.
+ */
+function loadIslandFont() {
+  void import("./island-font");
+}
+if (typeof document !== "undefined" && document.documentElement.dataset.skin === "island") loadIslandFont();
 
 /** Width of the soft edge behind the spreading ink front, as a share of the shorter viewport side. */
 const EDGE = 0.14;
@@ -50,6 +61,7 @@ function stored(): { skin: SkinId; theme: Scheme | null } {
 function applyChoice(skin: SkinId, theme: Scheme | null, origin: { x: number; y: number } | null, animate = true) {
   const root = document.documentElement;
   const attributes = rootAttributes(skin, theme);
+  if (skin === "island") loadIslandFont();
   const apply = () => {
     if (attributes.skin) root.dataset.skin = attributes.skin; else delete root.dataset.skin;
     if (attributes.theme) root.dataset.theme = attributes.theme; else delete root.dataset.theme;
@@ -59,7 +71,7 @@ function applyChoice(skin: SkinId, theme: Scheme | null, origin: { x: number; y:
     } catch { /* private mode: the choice lasts for this page only */ }
     syncIcons();
   };
-  if (!animate || typeof document.startViewTransition !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { apply(); return; }
+  if (!animate || typeof document.startViewTransition !== "function" || prefersReducedMotion()) { apply(); return; }
   const marker = markerOf(skinOf(skin).transition);
   // A choice made while the last one is still arriving replaces it: its marker goes too, or the
   // rules of two transitions would both apply to the next one (arrow keys make this an everyday case).

@@ -153,7 +153,7 @@
 
 /* Between phone and desktop the trail sits level with the directory button, and the title keeps clear of both (round four, W-10). */
 @media (min-width: 700px) and (max-width: 1099px) { .reading .note-crumbs { padding-top: 34px; padding-bottom: 32px; } }
-@media (max-width: 699px) {
+@media (max-width: 699.98px) {
   .reading .note-crumbs { display: none; }
   .note-back { display: flex; align-items: center; min-height: 80px; padding-left: 128px; }
   .note-back a { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; color: var(--muted); font-size: var(--text-sm); }
@@ -266,10 +266,7 @@
 /* The kinds are filters, drawn as the same segmented control as the other sections' filters (library.css). */
 .study-views { position: relative; isolation: isolate; }
 .study-views > button { position: relative; z-index: 1; }
-.study-views__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
 .study-overview .study-views.segmented[data-pill] > button[aria-pressed="true"] { background: transparent; box-shadow: none; }
-[data-skin="apple"] .study-views__pill { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
-[data-skin="y2k"] .study-views__pill { background: var(--y2k-button) #1a6ace; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px -4px rgba(22, 103, 199, 0.7); }
 .study-overview { position: relative; }
 .study-entries--leaving { position: absolute; left: 0; right: 0; pointer-events: none; }
 .study-overview__toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; padding-bottom: 12px; }

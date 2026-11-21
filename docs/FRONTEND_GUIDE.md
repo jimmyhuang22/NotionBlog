@@ -88,13 +88,18 @@ src/app/            页面与样式（api/ 与 media/ 是后端的路由，不�
   motion.css        动效：图片淡入、列表追加、展开、看大图开合、首屏入场、页面切换
 src/components/     组件
   platform-signs.tsx  发在其他平台的作品卡片共用的平台标志、数字旁的图标和“在某平台打开”的读屏文字
-  use-dismiss.ts      弹窗（看大图、搜索、关于）的打开与点背景关闭；菜单（主题、更多）的 Esc、点外面、焦点移出关闭
+  use-dismiss.ts      弹窗（看大图、搜索、关于）的打开与点背景关闭；菜单（主题、更多）的 Esc、点外面、焦点移出关闭（联系我卡片也用它，只在焦点原本在卡片里时送回按钮）
+  pill.ts             筛选条、作品平台、学习材料类型共用的滑块：定位与跟随（行变宽、字体到达）
+  island-font.ts      岛屿圆体标题的字体声明，只在岛屿主题下由 theme-toggle.tsx 按需加载
 src/lib/site/       个人信息配置的解析与读取
 src/lib/render/     代码高亮与公式排版（仅服务端），以及供浏览器端正文调用的转换函数；高亮配色里有几种颜色为对比度做了微调，按代码块底色 `--code` 核对，改这个变量时要一并核对并更新测试里的底色值
 src/lib/format.ts   日期、学期、评分的显示
 src/lib/runs.ts     列表按年、按月分组（只把相邻的同组条目合在一起，不重新排序）
 src/lib/library.ts、album.ts、timeline.ts   各栏目的显示逻辑，纯函数，有测试
 src/lib/request-cache.ts   同一请求内的读取去重
+src/lib/dom.ts            “普通左键点击”和“减少动态效果”两个判断
+src/lib/read-api.ts       浏览器端读站内接口：取 data，或给出状态与错误码；限流算“忙”，其余算“失败”
+src/lib/detail-route.ts   博客、项目、相册详情页共用的读取与标题（栏目关闭时一次也不读）
 ```
 
 样式是带前缀的全局类名，没有用 CSS Modules 或工具类框架。新样式放进对应的文件，颜色与圆角一律用 `globals.css` 里的变量，这样浅色、深色和各套主题自动生效。

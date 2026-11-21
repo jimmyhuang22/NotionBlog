@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useMenuDismiss } from "./use-dismiss";
 
 function decode(code: string): string {
   try { return new TextDecoder().decode(Uint8Array.from(atob(code), char => char.charCodeAt(0))); } catch { return ""; }
@@ -27,18 +28,12 @@ export function ContactCard({ code, place, label, className, children }: { code:
   const id = useId();
   const email = open ? decode(code) : "";
 
+  const close = () => { setOpen(false); setCopied(""); setNoMail(false); window.clearTimeout(mailTimer.current); };
+  useMenuDismiss(open, close, root, trigger, "inside");
   useEffect(() => {
     if (!open) return;
     first.current?.focus();
-    const close = (back: boolean) => {
-      setOpen(false); setCopied(""); setNoMail(false); window.clearTimeout(mailTimer.current);
-      if (back) trigger.current?.focus();
-    };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(Boolean(root.current?.contains(document.activeElement))); };
-    const onPress = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) close(false); };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPress);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onPress); window.clearTimeout(mailTimer.current); };
+    return () => window.clearTimeout(mailTimer.current);
   }, [open]);
 
   // A mail app taking over pulls focus from the page; if the page still has it a moment later, nothing opened.
