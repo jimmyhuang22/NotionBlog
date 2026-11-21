@@ -59,6 +59,11 @@ const uncachedRepository: ContentRepository & Required<Pick<ContentRepository, "
 export function readContentTimelineSnapshot() {
   return readTimelineIndexSnapshot(getContentService().repository, contentFeatures, getSiteConfig().timeZone);
 }
+export function readHomeTimelineSnapshot() {
+  const service = getContentService();
+  const display = service.provider === "database" ? getDatabaseRuntime().homeTimeline : undefined;
+  return readTimelineIndexSnapshot(service.repository, contentFeatures, getSiteConfig().timeZone, display);
+}
 export function hydrateContentTimelinePage(events: TimelineEvent[], version: string) {
   return hydrateTimelinePage(getContentService().repository, contentFeatures, events, version, getSiteConfig().timeZone);
 }
