@@ -9,6 +9,8 @@ import { studyOverviewEntries, studyReadingNodes, studyEntryType, studyDateText,
 import { LinkPending } from "@/components/link-pending";
 import { FindIcon, countStudyNodes } from "@/components/find-icon";
 import { StudyTypeIcon } from "@/components/study-type-icon";
+import { prefersReducedMotion } from "../lib/dom.ts";
+import { followPill, placePill } from "./pill";
 
 const views: [StudyView, string][] = [["all", "总览"], ["notes", "笔记"], ["courses", "周课"], ["assignments", "作业"]];
 
@@ -59,23 +61,16 @@ export function StudyOverview({ nodes, timeZone, quickLinks = [] }: { nodes: Stu
   const pill = useRef<HTMLSpanElement>(null);
   const list = useRef<HTMLUListElement>(null);
   useLayoutEffect(() => {
-    const place = (animate: boolean) => {
-      const box = nav.current?.getBoundingClientRect();
-      const button = nav.current?.querySelector('button[aria-pressed="true"]')?.getBoundingClientRect();
-      if (!box || !button || !pill.current || !nav.current) return;
-      pill.current.style.transition = animate ? "" : "none";
-      Object.assign(pill.current.style, { width: `${button.width}px`, height: `${button.height}px`, top: `${button.top - box.top}px`, transform: `translateX(${button.left - box.left}px)` });
-      nav.current.dataset.pill = "";
-    };
-    place(nav.current?.dataset.pill !== undefined);
-    const resized = () => place(false);
-    window.addEventListener("resize", resized);
-    return () => window.removeEventListener("resize", resized);
+    const row = nav.current, block = pill.current;
+    if (!row || !block) return;
+    const find = () => row.querySelector('button[aria-pressed="true"]');
+    placePill(row, block, find(), row.dataset.pill !== undefined);
+    return followPill(row, block, find);
   }, [view]);
   function choose(next: StudyView) {
     if (next === view) return;
     const old = list.current;
-    if (old && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (old && !prefersReducedMotion()) {
       const ghost = old.cloneNode(true) as HTMLElement;
       ghost.classList.add("study-entries--leaving");
       ghost.setAttribute("aria-hidden", "true");

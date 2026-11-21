@@ -10,6 +10,8 @@ import { announceMove } from "./page-switch";
 import { Marked } from "./search-results";
 import { SearchContextLine } from "./search-context-line";
 import { closeOnBackdrop, useModal } from "./use-dismiss";
+import { isPlainClick } from "../lib/dom.ts";
+import { readApi, readProblem } from "../lib/read-api.ts";
 
 const LIMIT = 6;
 const DELAY = 280;
@@ -103,16 +105,15 @@ export function SearchPalette() {
     const timer = setTimeout(async () => {
       setResults({ status: "loading", query, hits: [], total: null });
       try {
-        const response = await fetch(`/api/search?${new URLSearchParams({ q: query, limit: String(LIMIT) })}`, { cache: "no-store", signal: control.signal });
-        const body = await response.json().catch(() => null);
+        const reply = await readApi<Page<SearchHit>>(`/api/search?${new URLSearchParams({ q: query, limit: String(LIMIT) })}`, { signal: control.signal });
         if (control.signal.aborted) return;
-        if (response.ok && body?.data) {
-          const page = body.data as Page<SearchHit>;
+        if (reply.data) {
+          const page = reply.data;
           const done: Results = { status: "done", query, hits: page.items, total: page.total ?? null };
           setResults(done); setPrevious(done);
           setActive(page.items.length ? 0 : -1);
         } else {
-          setResults({ status: body?.error?.code === "RATE_LIMITED" ? "busy" : "failed", query, hits: [], total: null }); setPrevious(null);
+          setResults({ status: readProblem(reply.code), query, hits: [], total: null }); setPrevious(null);
           setActive(-1);
         }
       } catch {
@@ -164,7 +165,7 @@ export function SearchPalette() {
         className="icon-button" href="/search" aria-label="搜索" aria-haspopup="dialog" aria-keyshortcuts="/ Control+K Meta+K" prefetch={false}
         onClick={event => {
           // Modified clicks keep their meaning (new tab), and on the search page the link is already there.
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0 || pathname === "/search") return;
+          if (!isPlainClick(event) || pathname === "/search") return;
           event.preventDefault();
           setOpen(true);
         }}

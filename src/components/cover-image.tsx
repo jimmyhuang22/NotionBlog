@@ -22,11 +22,6 @@ interface Props {
   sized?: boolean;
   /** What stands in when the picture cannot be read: the quiet block when left out, nothing when null. */
   fallback?: ReactNode;
-  /**
-   * A larger preview for a wide picture on a sharp screen, offered beside `previewWidth`; the browser
-   * picks by `sizes`, the width the picture is shown at. Only where the larger tier is registered.
-   */
-  larger?: { width: 1600; sizes: string };
 }
 
 /**
@@ -41,16 +36,12 @@ export function CoverImage(props: Props) {
   // A replacement must not inherit the old image's terminal error or original fallback.
   return <CoverImageContent key={props.image.src} {...props} />;
 }
-function CoverImageContent({ image, className, previewWidth, label, alt, lazy = false, priority = false, sized = true, fallback, larger }: Props) {
+function CoverImageContent({ image, className, previewWidth, label, alt, lazy = false, priority = false, sized = true, fallback }: Props) {
   const ref = useRef<HTMLImageElement>(null);
   const [shown, setShown] = useState(false);
   const preview = imagePreviewSrc(image, previewWidth);
   // The same retry as content and library pictures: while waiting, a transparent placeholder stands in, so no broken mark shows.
-  const { src, original, failed, retrying, lost } = useImageFailure(preview, image.src, ref);
-  const big = larger && !original ? imagePreviewSrc(image, larger.width) : null;
-  // Both tiers must be real previews; falling back to the original drops the choice with them, or the browser could keep picking the failed one.
-  // No srcset while a retry waits either, or the browser would fetch from it at once.
-  const srcSet = !retrying && big && big !== image.src && src !== image.src ? `${src} ${previewWidth}w, ${big} ${larger!.width}w` : undefined;
+  const { src, failed, retrying, lost } = useImageFailure(preview, image.src, ref);
   // A cover can be there before the page is interactive, when no load event reaches here (a failure then is the hook's).
   useEffect(() => {
     const img = ref.current;
@@ -63,7 +54,7 @@ function CoverImageContent({ image, className, previewWidth, label, alt, lazy = 
   }
   return (
     <img
-      ref={ref} className={`${className} cover-image`} src={src} srcSet={srcSet} sizes={srcSet ? larger!.sizes : undefined} alt={image.alt || alt || ""}
+      ref={ref} className={`${className} cover-image`} src={src} alt={image.alt || alt || ""}
       width={sized ? image.width ?? undefined : undefined} height={sized ? image.height ?? undefined : undefined}
       loading={priority ? "eager" : lazy ? "lazy" : undefined} fetchPriority={priority ? "high" : undefined}
       decoding={lazy ? "async" : undefined} data-shown={shown ? "" : undefined}

@@ -1,40 +1,22 @@
 import Link from "next/link";
-import { cache } from "react";
-import type { Metadata } from "next";
-import { contentMetadata } from "@/lib/seo/metadata";
-import { notFound } from "next/navigation";
 import { TocList } from "@/components/blocks";
 import { PostPager } from "@/components/post-pager";
 import { RichDocumentBody } from "@/components/rich-document";
-import { contentRepository } from "@/lib/content";
+import { detailRoute } from "@/lib/detail-route";
 import { CoverImage } from "@/components/cover-image";
 import { rangeLabel } from "@/lib/format";
 import { getSiteConfig } from "@/lib/site";
-import { isEnabledContentKind } from "../../../../config/features.ts";
-import { freshWhenUncached } from "@/lib/page-freshness";
 
 // Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
 export const revalidate = 86399;
 
 type Props = { params: Promise<{ slug: string }> };
 
-/** One read shared by the metadata and the page within a request. */
-const getPost = cache((slug: string) => contentRepository.get("post", slug));
+const route = detailRoute("post", "文章");
+export const generateMetadata = route.generateMetadata;
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  try {
-    const post = isEnabledContentKind("post") ? await getPost((await params).slug) : null;
-    return { ...contentMetadata(post?.item ?? null), title: post?.item.title ?? "文章" };
-  } catch {
-    return { ...contentMetadata(null), title: "文章" };
-  }
-}
-
-export default async function PostPage({ params }: Props) {
-  await freshWhenUncached();
-  if (!isEnabledContentKind("post")) notFound();
-  const detail = await getPost((await params).slug);
-  if (!detail) notFound();
+export default async function PostPage(props: Props) {
+  const detail = await route.load(props);
   const { item, document } = detail;
   const toc = document?.toc ?? [];
   return (

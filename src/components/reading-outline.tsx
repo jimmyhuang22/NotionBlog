@@ -2,14 +2,17 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { OutlineEntry } from "../lib/headings.ts";
+import { prefersReducedMotion } from "../lib/dom.ts";
 
 /**
  * The heading the reader is in: the last one above the line under the header, else the first. Shared by the
- * outline beside the article and the one opened from its button (page-outline.tsx).
+ * outline beside the article and the one opened from its button (page-outline.tsx). Only one of the two is on
+ * screen at a time, so each follows the reading only while `enabled`; the other measures nothing as the page scrolls.
  */
-export function useCurrentHeading(toc: OutlineEntry[]) {
+export function useCurrentHeading(toc: OutlineEntry[], enabled = true) {
   const [active, setActive] = useState("");
   useEffect(() => {
+    if (!enabled) return;
     // A heading folded into an entry (a number and its title, X-15) counts as reading that entry.
     const owner = new Map<Element, string>();
     const headings = toc.flatMap(entry => [entry.id, ...entry.covers ?? []].flatMap(id => {
@@ -42,14 +45,14 @@ export function useCurrentHeading(toc: OutlineEntry[]) {
       window.removeEventListener("hashchange", update);
       cancelAnimationFrame(frame);
     };
-  }, [toc]);
+  }, [toc, enabled]);
   return [active, setActive] as const;
 }
 
 /** A chapter reached from an outline is marked once under its heading, so the eye knows where it landed. */
 export function markArrival(id: string) {
   const heading = document.getElementById(id);
-  if (!heading || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!heading || prefersReducedMotion()) return;
   heading.classList.remove("is-arrived");
   void heading.offsetWidth;
   heading.classList.add("is-arrived");
@@ -58,7 +61,9 @@ export function markArrival(id: string) {
 
 /** The outline follows the article, showing detail only for the current chapter. */
 export function ReadingOutline({ toc }: { toc: OutlineEntry[] }) {
-  const [active, setActive] = useCurrentHeading(toc);
+  // The outline beside the article is hidden below its width (study.css); while hidden it follows nothing.
+  const [onScreen, setOnScreen] = useState(false);
+  const [active, setActive] = useCurrentHeading(toc, onScreen);
   const [expanded, setExpanded] = useState(false);
   const base = Math.min(...toc.map(entry => entry.level));
   const current = toc.findIndex(entry => entry.id === active);
@@ -69,6 +74,14 @@ export function ReadingOutline({ toc }: { toc: OutlineEntry[] }) {
   // The current chapter's mark slides along the outline instead of jumping (2026-10-20); placed without motion the first time.
   const list = useRef<HTMLUListElement>(null);
   const mark = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    // A hidden list has no size: the observer reports when it is shown or hidden as the window changes width.
+    const sizes = new ResizeObserver(() => setOnScreen(element.getClientRects().length > 0));
+    sizes.observe(element);
+    return () => sizes.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const link = list.current?.querySelector<HTMLElement>("a[aria-current]");
     if (!list.current || !mark.current) return;

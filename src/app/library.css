@@ -10,7 +10,8 @@
  */
 .segmented--slide { position: relative; isolation: isolate; }
 .segmented--slide > a { position: relative; z-index: 1; }
-.segmented__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
+/* The sliding block of every row that has one (pill.ts): the filter rows, the works platforms, the study kinds. */
+.segmented__pill, .works__pill, .study-views__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
 .segmented--slide[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
 /* While the list pressed for is on its way the names have already changed places: the one pressed reads as chosen, the one left as any other. */
 .segmented--slide > a[data-picked] { color: var(--ink); font-weight: 600; }
@@ -331,7 +332,7 @@
 .work-game__unrated { margin-top: 8px; color: var(--muted); }
 .work-game__state { display: inline-block; padding: 1px 12px; border-radius: 999px; background: var(--ink); font-size: var(--text-xs); color: var(--bg); }
 .work-game__state--playing { background: var(--accent); color: var(--card); }
-.work-game__state--platinumed { background: linear-gradient(135deg, #d6dae2, #8a92a4); color: #1a1d24; }
+.work-game__state--platinumed { background: linear-gradient(135deg, var(--platinum-light), var(--platinum-deep)); color: #1a1d24; }
 .work-game__state--wishlist { background: var(--soft); color: var(--ink); }
 .game-time__played { font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .game-time__note { color: var(--muted); }
@@ -368,7 +369,7 @@
 }
 
 /* A game's trophies (layout 乙, 2026-11-20): a summary in the side column, then a section under the write-up. */
-:root { --trophy-platinum: #8f98ab; --trophy-gold: #c08f22; --trophy-silver: #8f97a4; --trophy-bronze: #a8683a; }
+:root { --platinum-light: #d6dae2; --platinum-deep: #8a92a4; --trophy-platinum: #8f98ab; --trophy-gold: #c08f22; --trophy-silver: #8f97a4; --trophy-bronze: #a8683a; }
 :root[data-theme="dark"] { --trophy-platinum: #b9c1d2; --trophy-gold: #e0b04a; --trophy-silver: #b3bac6; --trophy-bronze: #cf8a58; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --trophy-platinum: #b9c1d2; --trophy-gold: #e0b04a; --trophy-silver: #b3bac6; --trophy-bronze: #cf8a58; } }
 .game-trophy__grade { --grade: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
@@ -409,9 +410,9 @@
 .game-trophy__icon--blank.game-trophy__icon--off { filter: none; opacity: 1; background: transparent; }
 .game-trophy__icon--blank.game-trophy__icon--off svg { stroke: var(--muted); opacity: 0.6; }
 .game-trophy__rate { font-variant-numeric: tabular-nums; }
-.game-trophies__platinum { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; margin: 0 0 16px; padding: 16px 18px; border-radius: var(--radius-sm); background: linear-gradient(135deg, color-mix(in srgb, #d6dae2 55%, var(--card)), color-mix(in srgb, #8a92a4 30%, var(--card))); box-shadow: inset 0 0 0 1px color-mix(in srgb, #8a92a4 45%, transparent); }
-:root[data-theme="dark"] .game-trophies__platinum { background: linear-gradient(135deg, color-mix(in srgb, #d6dae2 20%, var(--card)), color-mix(in srgb, #8a92a4 12%, var(--card))); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .game-trophies__platinum { background: linear-gradient(135deg, color-mix(in srgb, #d6dae2 20%, var(--card)), color-mix(in srgb, #8a92a4 12%, var(--card))); } }
+.game-trophies__platinum { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; margin: 0 0 16px; padding: 16px 18px; border-radius: var(--radius-sm); background: linear-gradient(135deg, color-mix(in srgb, var(--platinum-light) 55%, var(--card)), color-mix(in srgb, var(--platinum-deep) 30%, var(--card))); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--platinum-deep) 45%, transparent); }
+:root[data-theme="dark"] .game-trophies__platinum { background: linear-gradient(135deg, color-mix(in srgb, var(--platinum-light) 20%, var(--card)), color-mix(in srgb, var(--platinum-deep) 12%, var(--card))); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .game-trophies__platinum { background: linear-gradient(135deg, color-mix(in srgb, var(--platinum-light) 20%, var(--card)), color-mix(in srgb, var(--platinum-deep) 12%, var(--card))); } }
 .game-trophies__platinum .game-trophy__icon { width: 56px; height: 56px; }
 .game-trophies__platinum b { display: block; font-size: var(--text-lg); font-weight: 600; color: var(--ink); }
 .game-trophies__platinum span { font-size: var(--text-sm); color: var(--muted); }
