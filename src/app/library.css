@@ -340,13 +340,19 @@
 .game-time__bar { display: grid; grid-template-columns: 2.5em minmax(40px, 1fr) auto; align-items: center; gap: 10px; margin-top: 6px; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .game-time__bar i { height: 8px; border-radius: 999px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--share) 100% no-repeat, var(--soft); }
 .game-time__bar--expected i { background: linear-gradient(var(--muted), var(--muted)) 0 / var(--share) 100% no-repeat, var(--soft); }
-.game-timeline { margin: 0; padding: 0 0 0 18px; border-left: 2px solid var(--rule); list-style: none; }
-.game-timeline li { position: relative; margin: 0 0 12px; line-height: 1.5; }
-.game-timeline li:last-child { margin-bottom: 0; }
-.game-timeline li::before { content: ""; position: absolute; left: -25px; top: 5px; box-sizing: border-box; width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
-.game-timeline li.game-timeline__own::before { background: var(--ink); }
-.game-timeline b { display: block; font-weight: 500; color: var(--ink); }
-.game-timeline span { color: var(--muted); font-variant-numeric: tabular-nums; }
+/*
+ * The days in a strip across the main column (2026-11-21): a dot for each, the owner's own filled, a line to the next
+ * with how long it was standing on the line. Upright on a phone, the gap under its date.
+ */
+.game-dates { display: grid; grid-template-columns: repeat(var(--steps), minmax(0, 1fr)); margin: 4px 0 24px; padding: 0; list-style: none; font-size: var(--text-sm); line-height: 1.5; }
+.game-dates li { position: relative; padding: 24px 12px 0 0; }
+.game-dates li::before { content: ""; position: absolute; top: 2px; left: 0; z-index: 1; box-sizing: border-box; width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
+.game-dates li.game-dates__own::before { background: var(--ink); }
+.game-dates li:not(:last-child)::after { content: ""; position: absolute; top: 7px; left: 16px; right: 4px; height: 2px; background: var(--rule); }
+.game-dates b { display: block; font-weight: 500; color: var(--ink); }
+.game-dates span { display: block; color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-dates small { display: block; font-size: var(--text-xs); color: var(--ink); font-variant-numeric: tabular-nums; }
+.game-dates em { position: absolute; top: 0; left: calc(50% + 8px); z-index: 2; padding: 0 6px; transform: translateX(-50%); font-size: var(--text-xs); font-style: normal; line-height: 16px; color: var(--muted); background: var(--bg); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .work-game__main { min-width: 0; padding-top: 2px; }
 .work-game__main > .reading__tags { margin: 0 0 6px; }
 .work-game__main > .reading__article { margin-top: 18px; }
@@ -363,8 +369,14 @@
   .work-game { grid-template-columns: minmax(0, 1fr); margin-top: -12px; }
   .work-game__facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
   .work-game__group { padding: 0 0 14px; border-top: 0; }
-  .work-game__dates { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--rule); }
-  .work-game__main { padding-top: 6px; }
+  .work-game__main { padding-top: 14px; border-top: 1px solid var(--rule); }
+  .game-dates { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
+  .game-dates li { padding: 0 0 14px 24px; }
+  .game-dates li:last-child { padding-bottom: 0; }
+  .game-dates li::before { top: 5px; }
+  .game-dates li:not(:last-child)::after { top: 21px; bottom: 4px; left: 5px; right: auto; width: 2px; height: auto; }
+  .game-dates em { position: static; display: block; margin-top: 4px; padding: 0; transform: none; background: none; }
+  .game-dates em::before { content: "↓ " / ""; }
 }
 
 /* A game's trophies (layout 乙, 2026-11-20): a summary in the side column, then a section under the write-up. */
