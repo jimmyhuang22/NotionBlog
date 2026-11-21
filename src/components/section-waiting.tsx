@@ -59,9 +59,12 @@ export function SectionWaiting({ path, heading }: { path: string; heading?: Reac
           <div className="segmented works__platforms">
             {worksPlatforms.map((entry, index) => <a key={entry.value} aria-current={index === 0 ? "true" : undefined}><WorksPlatformIcon platform={entry.value} />{entry.label}</a>)}
           </div>
-          <SortShell label="最近" swap />
         </div>
       </header>
+      <div className="library__filters works__filters" aria-hidden="true">
+        <span className="skeleton waiting__years" />
+        <SortShell label="最近" swap />
+      </div>
       <WorksWaiting platform={worksPlatforms[0]!.value} />
     </div>
   );

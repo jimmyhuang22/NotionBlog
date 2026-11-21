@@ -10,6 +10,8 @@ import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
 import { PlatformChips } from "./platform-chips";
 import { ExcerptFold } from "./excerpt-fold";
+import { GameTrophies } from "./game-trophies";
+import { gradeLabel, gradeOrder, setPercent, trophyPlatformTone, type TrophySet } from "../lib/game-trophies.ts";
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -26,13 +28,16 @@ export function RatingValue({ rating }: { rating: Rating | null }) {
 }
 
 /** The record below the facts, or one quiet line when there is none; shared by every kind. */
-export function WorkRecord({ item, document }: { item: LibraryItem; document: ContentDocument | null }) {
+export function WorkRecord({ item, document, quiet = false }: { item: LibraryItem; document: ContentDocument | null; quiet?: boolean }) {
   // Many works are a record without a write-up: no body means no empty reading card.
   if (document && (document.blocks.length > 0 || document.completeness === "partial")) return <article className="reading__article card" aria-label="我的记录"><RichDocumentBody document={document} imagePreviewWidth={800} /></article>;
   // Where a write-up would be, a quiet slip says there is none yet (W-05, 2026-10-20); a wish has nothing to write.
   // A body that was not loaded (null, unlike an empty one) is not "none yet": the slip says it did not load.
   if (item.status === "wishlist") return null;
   if (document === null) return <p className="work__record-empty">{recordWords[item.kind]}暂时没有加载，稍后刷新再试。</p>;
+  // A game whose trophy section shows already has something under its facts: "none yet" shows only when both are
+  // missing (2026-11-20). The side summary alone does not count: the column beside it would be left empty.
+  if (quiet) return null;
   return <p className="work__record-empty">还没有写下{recordWords[item.kind]}。</p>;
 }
 
@@ -239,13 +244,43 @@ function GameTimeline({ item, timeZone }: { item: Game; timeZone: string }) {
 }
 
 /**
+ * Trophies in the side column (2026-11-20, step one): earned of total with a bar and each grade's count for one set;
+ * a row per platform when there are several, never added together. No sets, no group: a Nintendo game has none.
+ */
+function TrophySummary({ sets }: { sets: TrophySet[] }) {
+  if (!sets.length) return null;
+  const bar = (set: TrophySet) => <i style={{ "--share": `${setPercent(set)}%` } as React.CSSProperties} aria-hidden="true" />;
+  if (sets.length > 1) {
+    return (
+      <div className="work-game__group game-trophy-sum">
+        <dt className="game-trophy-sum__title">奖杯</dt>
+        <dd>
+          <ul className="game-trophy-sum__sets">
+            {sets.map(set => <li key={set.id}><span className={`platform-chip platform-chip--${trophyPlatformTone(set.platform)}`}>{set.platform}</span>{bar(set)}<span><b>{set.earned}</b> / {set.total}</span></li>)}
+          </ul>
+        </dd>
+      </div>
+    );
+  }
+  const [set] = sets as [TrophySet];
+  return (
+    <div className="work-game__group game-trophy-sum">
+      <dt className="visually-hidden">奖杯</dt>
+      <dd className="game-trophy-sum__count">{set.earned}<small> / {set.total} 个奖杯</small></dd>
+      <dd className="game-trophy-sum__bar">{bar(set)}<span>{setPercent(set)}%</span></dd>
+      {set.grades ? <dd className="game-trophy-sum__grades">{gradeOrder.map(grade => <span key={grade} className={`game-trophy__grade game-trophy__grade--${grade}`}>{gradeLabel[grade]} {set.grades![grade].earned}<small>/{set.grades![grade].total}</small></span>)}</dd> : null}
+    </div>
+  );
+}
+
+/**
  * A game (the owner's pick 乙 of 2026-11-19, "全幅主视觉", after the PlayStation Store and Apple TV): every game's
  * cover is wide key art, so it runs the width of the page unblurred and fades into the paper; the title and the
  * platforms stand on it. Below, as on a film's page, a side column holds the status, the owner's rating, the time
  * played (against the estimate when there is one) and the days in order, and the write-up runs beside it. Most
  * recent games have no write-up, so the column alone carries the page.
  */
-export function GamePage({ type, label, item, document, timeZone, neighbours }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode }) {
+export function GamePage({ type, label, item, document, timeZone, neighbours, trophySets = [] }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode; trophySets?: TrophySet[] }) {
   const record = gameRecord(document);
   const played = cardTimeLabel(item.playedTime);
   const expected = cardTimeLabel(item.estimatedTime);
@@ -280,12 +315,14 @@ export function GamePage({ type, label, item, document, timeZone, neighbours }: 
                 <dd className="game-time__note">{played ? "已玩" : ""}{expected ? `${played ? "，" : ""}预计 ${expected}` : ""}</dd>
                 <dd><TimeBars item={item} /></dd>
               </div>}
+              <TrophySummary sets={trophySets} />
               {timelineRows(item, timeZone).length ? <div className="work-game__group work-game__dates"><dt className="visually-hidden">日期</dt><dd><GameTimeline item={item} timeZone={timeZone} /></dd></div> : null}
             </dl>
           </aside>
           <div className="work-game__main">
             {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
-            <WorkRecord item={item} document={record} />
+            <WorkRecord item={item} document={record} quiet={trophySets.some(set => set.trophies?.length)} />
+            <GameTrophies sets={trophySets} />
             {neighbours}
           </div>
         </div>

@@ -2,7 +2,7 @@ import type {
   AnyContent, ContentKind, ContentByKind, ListQuery, Page, ContentDetail, StudyNode,
 } from "../contracts/content.ts";
 import { ContentServiceError, type ContentRepository } from "../contracts/repository.ts";
-import { fixtureItems, fixtureDocuments, fixtureTrees } from "../fixtures/content.ts";
+import { fixtureItems, fixtureDocuments, fixtureGameTrophySets, fixtureTrees } from "../fixtures/content.ts";
 import { createHash } from "node:crypto";
 import { validateListQuery, validateLibraryYearsQuery } from "../src/lib/content/query.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../src/lib/content/status.ts";
@@ -107,7 +107,9 @@ export function createMockRepository(options: StatusReadOptions = {}): ContentRe
     async get<K extends ContentKind>(kind: K, slug: string): Promise<ContentDetail<ContentByKind[K]> | null> {
       const item = fixtureItems[kind].find(x => x.slug === slug);
       if (!item) return null;
-      return clone({ item: publicItem(item), document: fixtureDocuments[item.id] ?? null }) as ContentDetail<ContentByKind[K]>;
+      const trophySets = kind === "game" ? fixtureGameTrophySets[item.id] : undefined;
+      return clone({ item: publicItem(item), document: fixtureDocuments[item.id] ?? null,
+        ...(trophySets ? { trophySets } : {}) }) as ContentDetail<ContentByKind[K]>;
     },
     async getHome() {
       return clone({

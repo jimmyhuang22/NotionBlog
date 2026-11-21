@@ -4,8 +4,18 @@ import { exchangeNpssoForAccessCode, exchangeAccessCodeForAuthTokens, exchangeRe
 import type { AuthTokensResponse } from "psn-api";
 import { GameSyncError, object, psnRows, required } from "./model.ts";
 import { readJson, writeJson } from "./private.ts";
+import { psnWebsiteTrophySnapshot } from "./website-trophies.ts";
 
 export async function collectPsn(npsso: string, onlineId: string, cachePath: string, account: string) {
+  return (await collectPsnData(npsso, onlineId, cachePath, account)).rows;
+}
+
+export async function collectPsnWebsiteTrophies(npsso: string, onlineId: string, cachePath: string, account: string) {
+  const { observedAt, rows, trophies } = await collectPsnData(npsso, onlineId, cachePath, account);
+  return psnWebsiteTrophySnapshot(onlineId, observedAt, rows, trophies);
+}
+
+async function collectPsnData(npsso: string, onlineId: string, cachePath: string, account: string) {
   if (!/^[A-Za-z0-9_-]{64}$/.test(npsso) || !onlineId) throw new GameSyncError("LOGIN_REQUIRED");
   const fingerprint = createHash("sha256").update(npsso).digest("hex");
   const cached = await readJson(cachePath);
@@ -74,12 +84,13 @@ export async function collectPsn(npsso: string, onlineId: string, cachePath: str
       for (const t of response.titles) {
         if (!ids.includes(t.npTitleId) || trophies.has(t.npTitleId) || !Array.isArray(t.trophyTitles)) throw new GameSyncError("SCOPE_INCOMPLETE");
         trophies.set(t.npTitleId, t.trophyTitles.map(value => {
-        const summary = bySet.get(value.npCommunicationId);
-        // Only the complete privacy-aware list can authorize a product, not a partial title lookup.
-        return summary ? { ...object(value), ...summary } : { ...object(value), hiddenFlag: undefined };
+          const summary = bySet.get(value.npCommunicationId);
+          // The complete privacy-aware list authorizes each product.
+          return summary ? { ...object(value), ...summary } : { ...object(value), hiddenFlag: undefined };
         }));
       }
     }
-    return psnRows(titles, account, new Date().toISOString(), trophies);
+    const observedAt = new Date().toISOString();
+    return { observedAt, rows: psnRows(titles, account, observedAt, trophies), trophies };
   } catch (e) { if (e instanceof GameSyncError) throw e; throw new GameSyncError(`PSN_${stage}_UNAVAILABLE_OR_LOGIN_REQUIRED`); }
 }
