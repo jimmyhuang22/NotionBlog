@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rangeLabel } from "../src/lib/format.ts";
-import { gameDateRows, platformDay } from "../src/lib/game-dates.ts";
+import { dateStripNotes, gameDateRows, platformDay, spanLabel } from "../src/lib/game-dates.ts";
 
 const day = (start: string) => ({ start, end: null, precision: "date" as const });
 const moment = (start: string, end: string | null = null) => ({ start, end, precision: "datetime" as const });
@@ -46,4 +46,27 @@ test("the first play the platforms report has its own row, only when there is on
   // It is a platform date like the other: to the day, and the owner's date, when written, is named apart from it.
   assert.deepEqual(gameDateRows({ playedDate: null, firstPlayedDate: moment("2025-01-02T15:00:00.000Z") }, zone), [["首次游玩", day("2025-01-03")]]);
   assert.deepEqual(gameDateRows({ playedDate: day("2024-05-06"), firstPlayedDate: day("2025-01-02") }, zone), [["首次游玩", day("2025-01-02")], ["体验日期", day("2024-05-06")]]);
+});
+
+test("the strip of dates says how long between them and how long a range runs", () => {
+  const range = (start: string, end: string) => ({ start, end, precision: "date" as const });
+  assert.deepEqual(dateStripNotes([day("2024-02-02"), range("2024-02-11", "2024-03-27"), day("2024-03-27"), day("2026-01-05")], zone), [
+    { length: null, gap: "9 天后" },
+    { length: "共 46 天", gap: "同一天" },
+    { length: null, gap: "21 个月后" },
+    { length: null, gap: null },
+  ]);
+  // A missing date, or one that starts before the last ends, gets no gap; the end of the list has none either.
+  assert.deepEqual(dateStripNotes([day("2024-02-02"), null], zone), [{ length: null, gap: null }, { length: null, gap: null }]);
+  assert.deepEqual(dateStripNotes([range("2024-02-01", "2024-03-01"), day("2024-02-15")], zone)[0], { length: "共 30 天", gap: null });
+  // Moments are counted by the day they fall on in the site's zone.
+  assert.deepEqual(dateStripNotes([moment("2025-06-15T10:00:00.000Z"), moment("2025-06-15T15:00:00.000Z")], zone)[0]!.gap, "1 天后");
+});
+
+test("stretches read in days, then months, then years", () => {
+  assert.equal(spanLabel(59), "59 天");
+  assert.equal(spanLabel(60), "2 个月");
+  assert.equal(spanLabel(729), "24 个月");
+  assert.equal(spanLabel(730), "2 年");
+  assert.equal(spanLabel(1200), "3.3 年");
 });

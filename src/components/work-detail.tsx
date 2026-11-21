@@ -4,7 +4,7 @@ import type { Book, ContentDocument, DateRange, Game, Movie, Rating, TimeAmount 
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
-import { gameDateRows } from "../lib/game-dates.ts";
+import { dateStripNotes, gameDateRows } from "../lib/game-dates.ts";
 import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
@@ -232,12 +232,24 @@ function timelineRows(item: Game, timeZone: string) {
   return [...known, ...unknown];
 }
 
-function GameTimeline({ item, timeZone }: { item: Game; timeZone: string }) {
+/**
+ * The days across the top of the main column (the owner's pick 乙 of 2026-11-21): most games have no write-up, and
+ * there the column was empty beside a long side column. Between two dates, how long it was; under a range, how many
+ * days it ran. On a phone the strip stands upright.
+ */
+function GameDates({ item, timeZone }: { item: Game; timeZone: string }) {
   const rows = timelineRows(item, timeZone);
+  if (!rows.length) return null;
+  const notes = dateStripNotes(rows.map(row => row.range), timeZone);
   return (
-    <ol className="game-timeline">
-      {rows.map(row => (
-        <li key={row.label} className={row.own ? "game-timeline__own" : undefined}><b>{row.label}</b><span>{(row.range && rangeLabel(row.range, timeZone)) ?? "日期未记录"}</span></li>
+    <ol className="game-dates" aria-label="日期" style={{ "--steps": rows.length } as React.CSSProperties}>
+      {rows.map((row, index) => (
+        <li key={row.label} className={row.own ? "game-dates__own" : undefined}>
+          <b>{row.label}</b>
+          <span>{(row.range && rangeLabel(row.range, timeZone)) ?? "日期未记录"}</span>
+          {notes[index]!.length ? <small>{notes[index]!.length}</small> : null}
+          {notes[index]!.gap ? <em>{notes[index]!.gap}</em> : null}
+        </li>
       ))}
     </ol>
   );
@@ -277,8 +289,8 @@ function TrophySummary({ sets }: { sets: TrophySet[] }) {
  * A game (the owner's pick 乙 of 2026-11-19, "全幅主视觉", after the PlayStation Store and Apple TV): every game's
  * cover is wide key art, so it runs the width of the page unblurred and fades into the paper; the title and the
  * platforms stand on it. Below, as on a film's page, a side column holds the status, the owner's rating, the time
- * played (against the estimate when there is one) and the days in order, and the write-up runs beside it. Most
- * recent games have no write-up, so the column alone carries the page.
+ * played (against the estimate when there is one) and the trophies; the days in order run across the top of the
+ * main column, above the write-up (2026-11-21), since most recent games have no write-up.
  */
 export function GamePage({ type, label, item, document, timeZone, neighbours, trophySets = [] }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode; trophySets?: TrophySet[] }) {
   const record = gameRecord(document);
@@ -316,11 +328,11 @@ export function GamePage({ type, label, item, document, timeZone, neighbours, tr
                 <dd><TimeBars item={item} /></dd>
               </div>}
               <TrophySummary sets={trophySets} />
-              {timelineRows(item, timeZone).length ? <div className="work-game__group work-game__dates"><dt className="visually-hidden">日期</dt><dd><GameTimeline item={item} timeZone={timeZone} /></dd></div> : null}
             </dl>
           </aside>
           <div className="work-game__main">
             {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
+            <GameDates item={item} timeZone={timeZone} />
             <WorkRecord item={item} document={record} quiet={trophySets.some(set => set.trophies?.length)} />
             <GameTrophies sets={trophySets} />
             {neighbours}
