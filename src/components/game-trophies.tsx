@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent } from "react";
-import { earnedByMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, trophyDay, trophyPlatformTone, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
+import { useId, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { earnedByMonth, earnedPerMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, trophyDay, trophyPlatformTone, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
 
 const RECENT = 6;
 
@@ -44,6 +44,42 @@ function Row({ trophy, withYear = true }: { trophy: Trophy; withYear?: boolean }
   );
 }
 
+/**
+ * When the trophies came (round three 甲, 2026-11-21): one thin bar per month from the first earned to the last,
+ * empty months kept, so the stretches of play and the gaps between them show. Years are marked under it.
+ */
+function TrophyMonths({ trophies }: { trophies: Trophy[] }) {
+  const months = earnedPerMonth(trophies);
+  if (!months) return null;
+  const { start, counts, total } = months;
+  const most = Math.max(...counts);
+  const busiest = counts.indexOf(most);
+  const at = (offset: number) => { const index = start.year * 12 + start.month - 1 + offset; return { year: Math.floor(index / 12), month: index % 12 + 1 }; };
+  const end = at(counts.length - 1);
+  const peak = at(busiest);
+  // Each January is marked, every other or third year over a long span; the first month is marked too unless a January follows within four months.
+  const step = counts.length > 96 ? 3 : counts.length > 48 ? 2 : 1;
+  const januaries = counts.flatMap((_, offset) => at(offset).month === 1 && at(offset).year % step === 0 ? [{ offset, year: at(offset).year }] : []);
+  const ticks = (januaries[0]?.offset ?? Infinity) >= 4 ? [{ offset: 0, year: start.year }, ...januaries] : januaries;
+  // A mark in the last tenth would run past the right edge; it is dropped unless it is the only one.
+  const shown = ticks.length > 1 ? ticks.filter(tick => tick.offset / counts.length <= 0.9) : ticks;
+  const summary = `${start.year} 年 ${start.month} 月到 ${end.year} 年 ${end.month} 月拿到 ${total} 个，最多的是 ${peak.year} 年 ${peak.month} 月（${most} 个）`;
+  return (
+    <figure className="game-trophy-months">
+      {/* A short span keeps its bars thin rather than stretching a few of them across the width. */}
+      <div className="game-trophy-months__plot" style={{ "--months": counts.length } as CSSProperties}>
+        <div className={`game-trophy-months__bars${counts.length > 60 ? " game-trophy-months__bars--dense" : ""}`} role="img" aria-label={summary}>
+          {counts.map((count, offset) => <i key={offset} style={{ "--h": count ? `${Math.max(12, (count / most) * 100)}%` : "0%" } as CSSProperties} />)}
+        </div>
+        <div className="game-trophy-months__years" aria-hidden="true">
+          {shown.map(tick => <span key={tick.offset} style={{ left: `${(tick.offset / counts.length) * 100}%` }}>{tick.year}</span>)}
+        </div>
+      </div>
+      <figcaption>每根是一个月 · 最多一个月 {most} 个</figcaption>
+    </figure>
+  );
+}
+
 function SetBody({ set }: { set: TrophySet }) {
   const trophies = set.trophies ?? [];
   const platinum = earnedPlatinum(trophies);
@@ -56,10 +92,11 @@ function SetBody({ set }: { set: TrophySet }) {
   const toggle = (which: "all" | "missing") => setOpen(current => current === which ? "none" : which);
   return (
     <>
+      <TrophyMonths trophies={trophies} />
       {platinum ? (
         <div className="game-trophies__platinum">
           <TrophyIcon trophy={platinum} large />
-          <div><b>白金 · {nameOf(platinum)}</b>{detailOf(platinum) ? <span>{detailOf(platinum)}</span> : null}</div>
+          <div><b><small className="game-trophies__platinum-label">白金<span className="visually-hidden">：</span></small>{nameOf(platinum)}</b>{detailOf(platinum) ? <span>{detailOf(platinum)}</span> : null}</div>
           <span className="game-trophies__platinum-when">
             {platinum.earnedDate ? trophyDay(platinum.earnedDate) : "日期未记录"}
             {platinum.rarityPercent !== null ? <small>全球 {platinum.rarityPercent}% 的玩家拿到</small> : null}
@@ -69,14 +106,13 @@ function SetBody({ set }: { set: TrophySet }) {
       {rare.length ? (
         <ol className="game-trophies__rare" aria-label="最难拿到的">
           {rare.map(trophy => (
-            <li key={trophy.id}>
+            <li key={trophy.id} className={`game-trophies__medal game-trophies__medal--${trophy.grade ?? "none"}`}>
               <TrophyIcon trophy={trophy} large />
               <b>{nameOf(trophy)}</b>
               {detailOf(trophy) ? <span className="game-trophies__rare-detail">{detailOf(trophy)}</span> : null}
               <span className="game-trophies__rare-meta">
                 <Grade trophy={trophy} />
-                <span className="game-trophies__tier">{rarityTier(trophy.rarityPercent!)}</span>
-                <span className="game-trophy__rate"><span className="visually-hidden">全球获得率 </span>{trophy.rarityPercent}%</span>
+                <span>{rarityTier(trophy.rarityPercent!)} <span className="game-trophy__rate"><span className="visually-hidden">全球获得率 </span>{trophy.rarityPercent}%</span></span>
               </span>
             </li>
           ))}
