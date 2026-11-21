@@ -29,6 +29,7 @@
 | 十二 | 作品封面（`SocialWork.cover`） | 作品卡片按各平台的样子显示封面 | 前端已做好；**封面数据全为空，待后端补** |
 | 十五 | 作品页年份筛选 | 年份筛选、排序和各年条数 | 后端接口已实现，待前端接入 |
 | 十六 | 游戏详情的奖杯（统计与逐个奖杯） | 左栏奖杯统计、正文下“奖杯”一节 | **PSN 统计已本地联调**，逐个奖杯待第二步 |
+| 十七 | 读取顺序与缓存口径（前端审查，2026-11-21） | 课程、笔记、作品详情少几次串行读取；笔记页缓存说法一致 | **待后端回答或实现**；第五项要用户定 |
 
 接口与缓存口径见 [网站内容能力](WEBSITE_CAPABILITIES.md)。前端已有一条命令的私有本机真实预览入口，无需读取或复制凭据；临时批次到期后明确失败，直接 Notion 排查入口须手动选择。仍待推进的是受保护的云端 v2 预览、博客／项目来源、持续运行与正式发布前的网络／收录验收。
 
@@ -412,6 +413,55 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 **前端已接入（2026-11-20，演示数据）**：页面读 `contentRepository.get` 回应上的 `trophySets`，字段名照后端第一步提案：每套 `id`、`platform`、`earned`、`total`、`progressPercent`、可选 `grades`（四种等级各 `earned`/`total`）。第二步前端暂按这个形状读，名字后端可以改，改了告诉前端：每套加可选 `trophies: { id, name, detail, grade, icon, earned, earnedDate, rarityPercent, hidden }[]`，`grade` 取 `platinum`/`gold`/`silver`/`bronze` 或 `null`（Steam），`icon` 是站内 `ImageAsset` 或 `null`，`earnedDate` 是 `YYYY-MM-DD` 或 `null`，`rarityPercent` 是 0–100 或 `null`。读不懂的套整套不显示；前端自己也会遮住未获得的隐藏奖杯。演示数据里放了逐个奖杯后，`/preview/game-trophies` 这个前端演示页可以换成读演示数据。
 
 未获得的隐藏奖杯演示随第二步补齐。发布后在正式站点抽查 PSN 和任天堂的游戏详情，Steam 权限确认后再补验。
+
+### 十七、读取顺序与缓存口径（2026-11-21，Claude）
+
+用户 2026-11-21 让前端在发布 #409 之前做了一次代码审查，前端能独立改的已在 [#415](https://github.com/jimmyhuang22/NotionBlog/pull/415) 里处理（进度记录 `docs/progress/2026-11-21-frontend-cleanup.md` 随它合入）。下面五项牵涉内容服务的连接预算、缓存或契约，交给后端判断。行号按 develop `51659e3`。前四项都不改公开范围；第二项要改契约，第五项是缓存口径，都需要用户确认。
+
+**1. 学习：课程正文和目录一前一后读**
+
+- 笔记布局 `src/app/study/[course]/notes/layout.tsx:46` 先等 `getCourseMetadata`，再交给 `getStudyReadingTree`。后者在 `src/lib/content/study-reading.ts:10-12` 先等 `getCourse`（整篇课程正文），读完才开始 `getCourseTree`。读整篇正文只是为了取快捷链接（`courseQuickLinks(detail.document)`）。
+- 课程页 `src/app/study/[course]/page.tsx:56` 先等 `getCourse`，正文渲染到 `Materials`（`:32`）才开始读目录。
+- 所以第一次打开一门课的笔记或课程页时，侧栏目录要多等一到两次上游往返。
+- `study-reading.ts:8-9` 的注释说这个顺序是为了少开一条冷连接，`request-study.ts:23-31` 又把同一请求里的课程和笔记读取配成一次 `readStudyNote`。前端不清楚改成并行后两者会不会冲突，所以没有动。
+- **请后端回答**：课程正文和目录能否并行读（`Promise.all`）；并行时 `readStudyNote` 的配对会不会被拆开（提前读 `getCourse` 会先填进 `courseDetails`，`:40-45`）。
+- **可选**：课程元数据如果能直接带上快捷链接，目录就不必等整篇课程正文。
+- **前端配合**：后端说可以并行，前端就在课程页读详情的同时开始读目录（`void getCourseTree(course)`，`getCourseTree` 已是请求内去重），`study-reading.ts` 由后端改。
+
+**2. 作品库详情的“上一部／下一部”最多要串行读六次以上**
+
+- `src/app/library/[type]/[slug]/page.tsx:49-82` 的 `Neighbours`：同一年里最多一页一页读三页 50 条，到年份边上再读一次 `getLibraryYears`，然后每往前或往后跨一年就读一次 1 条的列表。这些全是为了画两个链接。
+- 它在 Suspense 里流式送出，不挡正文，但公开缓存关着时是这条路由最重的读取。
+- **请后端实现**：作品库详情和博客一样带上相邻条目（博客详情已有 `detail.adjacent`，见 `src/app/blog/[slug]/page.tsx`）。顺序照列表本身：同一年内按日期从新到旧，跨年接相邻年份，无日期排在所有年份之后。每个相邻条目要标题、`href`、封面、日期。
+- 这要改契约（`ContentDetail` 或作品库详情），属于共享范围，先请用户确认。
+- **前端配合**：字段到位后 `Neighbours` 直接读它；在那之前，前端会先把 `getLibraryYears` 和第一页并行读，少一次往返。
+
+**3. 游戏详情的奖杯读取**
+
+- `src/lib/content/index.ts:68-79`：每次 `contentRepository.get("game", …)`，都在读完详情之后再查一次奖杯。查询要用 `detail.item.id`，所以是串行的；每个游戏详情页因此多一次往返。
+- `src/server/database/game-trophies.ts:15-18` 把“扩展装没装”的检查结果记在进程里，只在出错时清掉。所以先启动网站进程、后装扩展的话，进程重启之前奖杯一直不显示。
+- **请后端回答**：
+  - 能否只凭 slug 查奖杯（发布资格在 SQL 里核对），从而和详情并行读。
+  - “没装”能否不记住，或者只记一段时间，只把“已装”记在进程里。
+
+**4. 作品详情的标题读取（包括悬停预取）读了整篇正文**
+
+- `src/app/library/[type]/[slug]/page.tsx:21-41`：`generateMetadata` 和正文共用 `read` → `contentRepository.get`，拿到的是完整详情：正文，加上游戏的奖杯查询。
+- [前端接手说明](FRONTEND_GUIDE.md)“影视、书籍、游戏的卡片按意图预取”一条写的是“服务器为此读一次这部作品，不读正文”，和代码不符。
+- **请后端回答**：
+  - 标题改用 `getContentMetadata`（已有，走 `metadataAdmission`，`src/server/public-cache/runtime.ts:44`）是否合适。这样一次完整访问就会变成一次元数据读取加一次详情读取。
+  - 两者在数据库和缓存上的代价各是多少。
+- **另外请确认一件前端没核实的事**：这个 Next 版本悬停预取一个按请求生成的页面时，到底会不会执行 `generateMetadata`。不会的话，这一项只影响真正打开页面的那一次。
+- **前端配合**：要改由前端改页面，后端给出口径即可。
+
+**5. 笔记页的缓存设置不起作用（要用户定）**
+
+- 笔记页写了 `export const revalidate = 86399` 和 `freshWhenUncached()`（`src/app/study/[course]/notes/[slug]/page.tsx:23`、`:44`）。
+- 但包住它的笔记布局第一行是 `alwaysFresh()`，也就是 `connection()`（`src/app/study/[course]/notes/layout.tsx:44`）。在目前的缓存模型下（`next.config.ts` 没开 `cacheComponents`），父布局调用动态接口会让整条路由按请求生成。所以笔记从来没有按页缓存，数据仍走共享缓存。
+- [前端接手说明](FRONTEND_GUIDE.md)“公开页面可缓存”一节自相矛盾：一处把笔记列为可缓存的详情页，另一处要求笔记布局 `alwaysFresh()`。
+- **请后端先确认上面的判断**，再由用户选一种：
+  - 甲：接受笔记按请求生成。前端删掉笔记页那两行，改正说明。
+  - 乙：笔记要按页缓存。目录读取失败时的提示得移出缓存的标记，比如改由浏览器端读目录，布局就不必再调用 `connection()`。前端改页面，后端核对缓存的刷新与撤回。
 
 ## 可直接给 Codex 的启动指令
 
