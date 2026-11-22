@@ -11,7 +11,7 @@ import { ContentServiceError, type ContentRepository } from "../../../contracts/
 import { getNotionRuntime } from "../../server/notion/runtime.ts";
 import { getDatabaseRuntime } from "../../server/database/runtime.ts";
 import { createLibraryUrlProjection } from "../../server/database/library-urls.ts";
-import { createGameTrophyReader } from "../../server/database/game-trophies.ts";
+import { createCombinedGameTrophyReader } from "../../server/database/game-trophies.ts";
 import { publicationMode } from "../../server/database/publication.ts";
 import { getSiteConfig } from "../site/index.ts";
 import { createContentService } from "./factory.ts";
@@ -84,14 +84,14 @@ export function hydrateContentTimelinePage(events: TimelineEvent[], version: str
 }
 
 const cachedContentRepository = publicRepository("content", "contentRepository", uncachedRepository);
-let gameTrophyReader: ReturnType<typeof createGameTrophyReader> | undefined;
+let gameTrophyReader: ReturnType<typeof createCombinedGameTrophyReader> | undefined;
 export const contentRepository: typeof cachedContentRepository = {
   ...cachedContentRepository,
   async get(kind, slug) {
     const detail = await cachedContentRepository.get(kind, slug);
     if (kind !== "game" || !detail || getContentProvider() !== "database" || process.env.DATABASE_CONTENT_VERSION !== "2") return detail;
     const runtime = getDatabaseRuntime();
-    const readSets = gameTrophyReader ??= createGameTrophyReader(
+    const readSets = gameTrophyReader ??= createCombinedGameTrophyReader(
       runtime.cacheStateDb, publicationMode(process.env.DATABASE_PUBLICATION_MODE));
     // Game-account privacy can change independently of a website content publication.
     const storageSlug = process.env.DATABASE_LIBRARY_URLS === "title" ? detail.item.id : slug;
