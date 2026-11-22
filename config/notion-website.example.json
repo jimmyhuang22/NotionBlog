@@ -12,7 +12,7 @@
     {
       "key": "games", "kind": "game", "enabled": true,
       "dataSourceId": "00000000000000000000000000000002",
-      "fields": { "title": "Name", "status": "Status", "playedDate": "Date", "lastPlayedDate": "Platform Last Played", "firstPlayedDate": "Platform First Played", "playedTime": "Played Time", "platforms": "Platform", "rating": "Rating" },
+      "fields": { "title": "Name", "status": "Status", "playedDate": "Date", "lastPlayedDate": "Platform Last Played", "lastPlayedPlatforms": "Platform Last Played Sources", "firstPlayedDate": "Platform First Played", "playedTime": "Played Time", "platforms": "Platform", "rating": "Rating" },
       "playedTimeUnit": "hour",
       "statusMap": { "Clear": "clear", "Platinumed": "platinumed", "Playing": "playing", "Wish List": "wishlist" },
       "cover": { "strategy": "files-property", "property": "Cover" },

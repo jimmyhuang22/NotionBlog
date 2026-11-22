@@ -282,7 +282,7 @@ export function timelineEvents(snapshot: PublicContentSnapshot, zone: string): T
       case "game":
         if (["playing", "clear", "platinumed"].includes(item.status)) {
           if (item.status === "playing" || occurredAt) type = item.status === "clear" ? "game-cleared" : `game-${item.status}` as typeof type;
-          rating = item.rating; progressPercent = item.progressPercent; extra = item.platforms.join(" · ") || null;
+          rating = item.rating; progressPercent = item.progressPercent;
           if (item.status !== "playing") {
             const latest = platformPlayDay(item.lastPlayedDate, zone);
             if (latest && (!occurredAt || latest.start > dayOf(occurredAt))) replayAt = latest;
@@ -298,7 +298,15 @@ export function timelineEvents(snapshot: PublicContentSnapshot, zone: string): T
       // A snapshot contains the current state of each work; duplicate observations on a day collapse.
       const previous = events.get(id);
       if (previous && (previous.occurredAt?.start ?? "") > (occurredAt?.start ?? "")) return;
-      events.set(id, { id, type, occurredAt, title: item.title, summary: item.summary, cover: item.cover, href: item.href, externalUrl: null, rating, progressPercent, detail: extra,
+      let eventDetail = extra;
+      if (item.kind === "game") {
+        const observed = item.lastPlayedPlatforms;
+        const fromPlatform = observed?.length && type === "game-playing" && occurredAt?.precision === "date" &&
+          occurredAt.start === platformPlayDay(item.lastPlayedDate, zone)?.start;
+        const platforms = fromPlatform ? observed : item.platforms;
+        eventDetail = platforms.join(" · ") || null;
+      }
+      events.set(id, { id, type, occurredAt, title: item.title, summary: item.summary, cover: item.cover, href: item.href, externalUrl: null, rating, progressPercent, detail: eventDetail,
         ...(item.kind === "game" ? { playedTime: item.playedTime ? { ...item.playedTime } : null } : {}) });
     };
     if (type) addEvent(type, occurredAt);
