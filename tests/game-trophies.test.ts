@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { earnedByMonth, earnedPerMonth, earnedPlatinum, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, trophyDay, trophyPlatformTone, trophySetsOf, type Trophy } from "../src/lib/game-trophies.ts";
+import { earnedByMonth, earnedPlatinum, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, setPlatinum, trophyDay, trophyPlatformIcon, trophyPlatformTone, trophySetsOf, trophySpan, type Trophy } from "../src/lib/game-trophies.ts";
 
 const counts = (earned: number, total: number) => ({ earned, total });
 const grades = { platinum: counts(0, 1), gold: counts(1, 3), silver: counts(4, 8), bronze: counts(10, 18) };
@@ -84,11 +84,29 @@ test("labels: day without a time, platform tones", () => {
   assert.deepEqual(["PS4", "PS5", "PlayStation", "Steam", "Xbox"].map(trophyPlatformTone), ["playstation", "playstation", "playstation", "pc", "other"]);
 });
 
-test("trophies per month: every month between the first and last, gaps kept; nothing when too little", () => {
-  const got = (id: string, earnedDate: string | null) => trophy(id, { earned: true, earnedDate });
-  assert.deepEqual(earnedPerMonth([got("a", "2024-11-30"), got("b", "2025-02-01"), got("c", "2025-02-14"), got("d", null), trophy("e")]),
-    { start: { year: 2024, month: 11 }, counts: [1, 0, 0, 2], total: 3 });
-  assert.equal(earnedPerMonth([got("a", "2025-01-01"), got("b", "2025-03-01")]), null);
-  assert.equal(earnedPerMonth([got("a", "2025-01-01"), got("b", "2025-01-09"), got("c", "2025-01-20")]), null);
-  assert.equal(earnedPerMonth([]), null);
+test("when the trophies came: first day and the platinum's day counted from it, else first to last", () => {
+  const got = (id: string, earnedDate: string | null, extra: Partial<Trophy> = {}) => trophy(id, { earned: true, earnedDate, ...extra });
+  const line = (trophies: Trophy[]) => trophySpan(trophies)?.parts.map(part => part.text).join("") ?? null;
+  // The platinum on the twelfth day, both ends counted, as the date strip counts "共 12 天".
+  assert.equal(line([got("a", "2023-01-24"), got("b", "2023-01-30"), got("p", "2023-02-04", { grade: "platinum" })]), "2023 年 1 月 24 日拿到第一个，第 12 天拿到白金");
+  assert.equal(trophySpan([got("a", "2023-01-24"), got("p", "2023-02-04", { grade: "platinum" })])!.platinum, true);
+  assert.equal(line([got("a", "2023-01-24"), got("p", "2023-01-24", { grade: "platinum" })]), "2023 年 1 月 24 日拿到第一个，当天拿到白金");
+  // Without a platinum: first to last, the year written again only when it changed; undated ones are not counted.
+  assert.equal(line([got("a", "2021-03-18"), got("b", "2021-07-20"), got("c", null), trophy("d")]), "2021 年 3 月 18 日到 7 月 20 日拿到 2 个");
+  assert.equal(line([got("a", "2021-12-30"), got("b", "2022-01-02")]), "2021 年 12 月 30 日到 2022 年 1 月 2 日拿到 2 个");
+  assert.equal(line([got("a", "2021-03-18"), got("b", "2021-03-18")]), "2021 年 3 月 18 日拿到 2 个");
+  assert.equal(line([got("a", "2021-03-18")]), "2021 年 3 月 18 日拿到 1 个");
+  // A platinum without a day says nothing of its day; nothing dated, no line.
+  assert.equal(line([got("a", "2021-03-18"), got("p", null, { grade: "platinum" })]), "2021 年 3 月 18 日拿到 1 个");
+  assert.equal(trophySpan([got("a", null), trophy("b")]), null);
+  assert.equal(trophySpan([]), null);
+});
+
+test("platinum sets and platform outlines", () => {
+  assert.equal(setPlatinum({ id: "a", platform: "PS5", earned: 53, total: 53, progressPercent: 100, grades: { ...grades, platinum: counts(1, 1) } }), true);
+  assert.equal(setPlatinum({ id: "a", platform: "PS4", earned: 16, total: 53, progressPercent: 26, grades }), false);
+  // Without grade counts the list tells; a Steam set has neither and is never platinum.
+  assert.equal(setPlatinum({ id: "a", platform: "PS5", earned: 2, total: 2, progressPercent: null, trophies: [trophy("p", { grade: "platinum", earned: true })] }), true);
+  assert.equal(setPlatinum({ id: "s", platform: "Steam", earned: 53, total: 53, progressPercent: 100 }), false);
+  assert.deepEqual(["PS4", "PS5", "PS3", "PlayStation", "Steam", "steam", "Xbox"].map(trophyPlatformIcon), ["playstation", "playstation", "playstation", "playstation", "steam", "steam", null]);
 });
