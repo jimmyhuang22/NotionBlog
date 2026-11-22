@@ -146,8 +146,8 @@ src/lib/request-cache.ts   同一请求内的读取去重
 - **图片一律用普通 `<img>`**，不要换成图片优化组件。站内媒体地址每次访问都会重新检查资格，经过优化缓存会绕过这层检查。
 - **目录、笔记和学习首页的课程卡片都是 `prefetch={false}`**。一门课可能有几十篇笔记，每篇预取都要读上游；课程地址在送出页面之前也要先向内容服务核对一次，十几张卡片就是十几次。
 - **公开页面可缓存（2026-10-21，用户的决定；后端缓存开关默认关）**。接口与后端机制见 [公开内容缓存](PUBLIC_CONTENT_CACHE.md)，页面这一侧的规矩：
-  - 失败时直接报错的详情页（相册、笔记、学习项目、博客与项目详情）写字面量 `export const revalidate = 86399`，页面函数第一行 `await freshWhenUncached()`（`src/lib/page-freshness.ts`）：缓存开关关着时它让页面照旧按请求生成，否则这一天的页面没人刷新。
-  - 自己显示失败提示的页面（首页的动态、课程页与笔记布局的目录）第一行 `await alwaysFresh()`，始终按请求生成，免得“没加载成功”被当成页面缓存一天；它们的数据仍走共享缓存。关于、学习首页、相册列表、项目列表和作品库详情 2026-10-22 也改成了 `alwaysFresh()`（[进度记录](progress/2026-10-22-public-cache-list-refresh.md)第 3 条），不要照上一条改回去。
+  - 失败时直接报错的详情页（相册、学习项目、博客与项目详情）写字面量 `export const revalidate = 86399`，页面函数第一行 `await freshWhenUncached()`（`src/lib/page-freshness.ts`）：缓存开关关着时它让页面照旧按请求生成，否则这一天的页面没人刷新。
+  - 自己显示失败提示的页面（首页的动态、课程页与笔记布局的目录）第一行 `await alwaysFresh()`，始终按请求生成，免得“没加载成功”被当成页面缓存一天；它们的数据仍走共享缓存。笔记页随父布局按请求生成，省略 `revalidate` 和 `freshWhenUncached()`（2026-11-22，用户选甲）。关于、学习首页、相册列表、项目列表和作品库详情 2026-10-22 也改成了 `alwaysFresh()`（[进度记录](progress/2026-10-22-public-cache-list-refresh.md)第 3 条），不要照上一条改回去。
   - 带地址查询的页面（作品库列表、动态、作品页、博客列表）读查询本身就按请求生成，不写这两行。搜索与预览保持 `force-dynamic`。
   - 页面不再传服务器时刻 `now`，“今天”和是否省略年份都在浏览器端判断（见下面 `use-today.ts` 一条）。
   - 版本监听 `public-cache-watch.tsx` 挂在 `PageTransition` 里，根布局不动：根元素有 `data-public-cache="tagged-v1"` 时，页面可见期间每 30 秒问一次 `/api/content/version`，页面重新显示时也问一次；版本变了先清 `use-paged-list` 的记忆再 `router.refresh()`；404 即停。不要给列表或图片再各加轮询。
