@@ -183,3 +183,38 @@ test("CLI parsing rejects implicit paths, duplicate flags and unapproved modes w
     ["status", "--runtime-dir", "/tmp/example", "--config", "/tmp/config"], ["publish", "--runtime-dir", "/tmp/example"]]) assert.throws(() => parseIncrementalArguments(args));
   assert.deepEqual(parseIncrementalArguments(["status", "--runtime-dir", "/tmp/example"]), { command: "status", runtimeDirectory: "/tmp/example" });
 });
+
+test("status reconciliation confirms repeated trash, restores an eligible page, and holds unknown source state", async t => {
+  const f = await hostFixture(); t.after(() => f.close());
+  assert.equal((await runIncrementalHost(f.options, f.deps)).outcome, "initialized");
+  const id = demoId(1000), page = f.demo.pages.get(id)!;
+  const scope = { digest: f.digest, sourceKeys: f.config.sources.map(s => s.key) };
+  async function reconcile(eventId: string) {
+    const queue = await openIncrementalQueue(join(f.options.runtimeDirectory, "queue"), scope);
+    try { queue.enqueue([{ eventId, sourceKey: "status", pageKey: id, reason: "reconcile", observedAt: Date.now() }]); }
+    finally { queue.close(); }
+    return runIncrementalHost({ ...f.options, command: "run" }, f.deps);
+  }
+  async function published() {
+    const cache = await openContentCache(join(f.options.runtimeDirectory, "content"), f.digest, scope.sourceKeys);
+    try { return cache.readPublished({ sourceKey: "status", pageKey: id }, await readPublicationState(f.db)); }
+    finally { cache.close(); }
+  }
+  page.in_trash = true;
+  assert.equal((await reconcile("trash")).published, 1);
+  assert.equal(await published(), null);
+  const before = f.counts.submits;
+  const repeated = await reconcile("still-in-trash");
+  assert.equal(repeated.outcome, "unchanged", JSON.stringify(repeated));
+  assert.equal(repeated.unchanged, 1); assert.equal(repeated.queue?.needs_review, 0);
+  assert.equal(f.counts.submits, before);
+  page.in_trash = false;
+  assert.equal((await reconcile("restore")).published, 1);
+  assert.equal((await published())?.record.detail.item.id, id);
+  page.in_trash = true;
+  assert.equal((await reconcile("trash-again")).published, 1);
+  f.demo.pages.delete(id);
+  const unknown = await reconcile("unreadable");
+  assert.equal(unknown.queue?.needs_review, 1, JSON.stringify(unknown));
+  assert.equal(unknown.published, 0); assert.equal(await published(), null);
+});
