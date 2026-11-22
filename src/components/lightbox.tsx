@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type C
 import { UNZOOMED, clampPan, zoomAbout, type Zoom } from "../lib/zoom.ts";
 import { nearestShown } from "../lib/photo-order.ts";
 import { useModal } from "./use-dismiss";
+import { prefersReducedMotion } from "../lib/dom.ts";
 
 export interface Photo {
   key: string; src: string; alt: string; caption: string;
@@ -31,7 +32,7 @@ const GROW_MS = 280;
 const SHRINK_MS = 240;
 const FLIGHT_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
-const moving = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const moving = () => !prefersReducedMotion();
 
 /**
  * The keyframes that carry the viewer's picture from a thumbnail's box to where it stands. A thumbnail may be a
@@ -252,14 +253,16 @@ export function LightboxProvider({ className, children }: { className?: string; 
   function applyZoom(next: Zoom, eased = false) {
     const img = image.current, box = stage.current;
     if (!img || !box) return;
-    const bounded = clampPan(next, { width: img.offsetWidth, height: img.offsetHeight }, { width: box.clientWidth, height: box.clientHeight });
+    // Read before the writes below: reading after them would force a fresh layout on every pinch, drag and wheel step.
+    const width = img.offsetWidth;
+    const bounded = clampPan(next, { width, height: img.offsetHeight }, { width: box.clientWidth, height: box.clientHeight });
     zoom.current = bounded.scale === 1 ? UNZOOMED : bounded;
     img.classList.toggle("is-eased", eased);
     img.style.transform = zoom.current === UNZOOMED ? "" : `translate(${bounded.x}px, ${bounded.y}px) scale(${bounded.scale})`;
     setZoomed(zoom.current !== UNZOOMED);
     // A tenth of slack, so the original is fetched only when the 1600 would visibly soften.
     const key = onLarge.current;
-    if (key && bounded.scale > 1 && img.offsetWidth * bounded.scale * (window.devicePixelRatio || 1) > img.naturalWidth * 1.1) setWanted(key);
+    if (key && bounded.scale > 1 && width * bounded.scale * (window.devicePixelRatio || 1) > img.naturalWidth * 1.1) setWanted(key);
   }
   /** A viewport point measured from where the photo's centre sits when it is not moved. */
   function fromCentre(x: number, y: number) {

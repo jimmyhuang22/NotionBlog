@@ -9,6 +9,7 @@ import { StudyTypeIcon } from "@/components/study-type-icon";
 import { LinkPending } from "@/components/link-pending";
 import { useStudyLinkContexts } from "@/components/study-reading-context";
 import { FindIcon } from "@/components/find-icon";
+import { prefersReducedMotion } from "../lib/dom.ts";
 
 function contains(node: StudyNode, href: string): boolean {
   return node.href === href || (node.children ?? []).some(child => contains(child, href));
@@ -38,12 +39,11 @@ function Branch({ node, current }: { node: StudyNode; current: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
   const pressed = useRef(false);
-  const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function toggle() {
     const element = box.current;
     if (!open) { pressed.current = true; setOpen(true); return; }
     if (closing) return;
-    if (!element || still()) { setOpen(false); return; }
+    if (!element || prefersReducedMotion()) { setOpen(false); return; }
     setClosing(true);
     element.style.overflow = "hidden";
     const done = () => { element.style.overflow = ""; setClosing(false); setOpen(false); };
@@ -53,7 +53,7 @@ function Branch({ node, current }: { node: StudyNode; current: string }) {
     const element = box.current;
     if (!open || !pressed.current || !element) return;
     pressed.current = false;
-    if (still()) return;
+    if (prefersReducedMotion()) return;
     element.style.overflow = "hidden";
     const done = () => { element.style.overflow = ""; };
     element.animate([{ height: "0px", opacity: 0 }, { height: `${element.offsetHeight}px`, opacity: 1 }], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" }).finished.then(done, done);

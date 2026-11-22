@@ -7,6 +7,8 @@ import { updatedLabel } from "../lib/format.ts";
 import { BrowserDocumentBody } from "./browser-document";
 import { Avatar } from "./avatar";
 import { closeOnBackdrop, useModal } from "./use-dismiss";
+import { isPlainClick } from "../lib/dom.ts";
+import { readApi, readProblem } from "../lib/read-api.ts";
 
 type About = { status: "idle" | "loading" | "busy" | "failed" | "gone" } | { status: "done"; page: SitePage };
 
@@ -29,11 +31,10 @@ export function AboutDialog({ timeZone, avatar = null, name = "" }: { timeZone: 
     loading.current = true;
     setAbout({ status: "loading" });
     try {
-      const response = await fetch("/api/pages/about", { cache: "no-store" });
-      const body = await response.json().catch(() => null);
-      if (response.ok && body?.data) setAbout({ status: "done", page: body.data as SitePage });
+      const reply = await readApi<SitePage>("/api/pages/about");
+      if (reply.data) setAbout({ status: "done", page: reply.data });
       // The page can be withdrawn between the home page being drawn and the picture being pressed.
-      else setAbout({ status: response.status === 404 ? "gone" : body?.error?.code === "RATE_LIMITED" ? "busy" : "failed" });
+      else setAbout({ status: reply.status === 404 ? "gone" : readProblem(reply.code) });
     } catch {
       setAbout({ status: "failed" });
     } finally {
@@ -47,7 +48,7 @@ export function AboutDialog({ timeZone, avatar = null, name = "" }: { timeZone: 
   /** A link in the text leads away from the home page, so the dialog goes first; a link within the text does not. */
   function onPanelClick(event: MouseEvent<HTMLDivElement>) {
     // A link opened in another tab or window (a modifier, or not the main button) leaves this page and the card as they are.
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!isPlainClick(event)) return;
     const link = (event.target as Element).closest("a[href]");
     if (link && link.getAttribute("target") !== "_blank" && !link.getAttribute("href")!.startsWith("#")) close();
   }
@@ -59,7 +60,7 @@ export function AboutDialog({ timeZone, avatar = null, name = "" }: { timeZone: 
         className="hero__about" href="/about" aria-label="关于我" aria-haspopup="dialog" prefetch={false}
         onClick={event => {
           // Modified clicks keep their meaning (new tab).
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+          if (!isPlainClick(event)) return;
           event.preventDefault();
           setOpen(true);
           // What was read once is kept; an opening after a failure tries again.

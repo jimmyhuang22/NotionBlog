@@ -1,40 +1,22 @@
 import Link from "next/link";
-import { cache } from "react";
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { TocList } from "@/components/blocks";
 import { ProjectLinks, ProjectStack } from "@/components/project-list";
 import { RichDocumentBody } from "@/components/rich-document";
-import { contentRepository } from "@/lib/content";
+import { detailRoute } from "@/lib/detail-route";
 import { CoverImage } from "@/components/cover-image";
 import { projectMeta } from "@/lib/project";
-import { contentMetadata } from "@/lib/seo/metadata";
 import { getSiteConfig } from "@/lib/site";
-import { isEnabledContentKind } from "../../../../config/features.ts";
-import { freshWhenUncached } from "@/lib/page-freshness";
 
 // Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
 export const revalidate = 86399;
 
 type Props = { params: Promise<{ slug: string }> };
 
-/** One read shared by the metadata and the page within a request. */
-const getProject = cache((slug: string) => contentRepository.get("project", slug));
+const route = detailRoute("project", "项目");
+export const generateMetadata = route.generateMetadata;
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  try {
-    const project = isEnabledContentKind("project") ? await getProject((await params).slug) : null;
-    return { ...contentMetadata(project?.item ?? null), title: project?.item.title ?? "项目" };
-  } catch {
-    return { ...contentMetadata(null), title: "项目" };
-  }
-}
-
-export default async function ProjectPage({ params }: Props) {
-  await freshWhenUncached();
-  if (!isEnabledContentKind("project")) notFound();
-  const detail = await getProject((await params).slug);
-  if (!detail) notFound();
+export default async function ProjectPage(props: Props) {
+  const detail = await route.load(props);
   const { item, document } = detail;
   const toc = document?.toc ?? [];
   return (

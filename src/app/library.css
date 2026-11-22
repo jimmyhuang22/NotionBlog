@@ -10,7 +10,8 @@
  */
 .segmented--slide { position: relative; isolation: isolate; }
 .segmented--slide > a { position: relative; z-index: 1; }
-.segmented__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
+/* The sliding block of every row that has one (pill.ts): the filter rows, the works platforms, the study kinds. */
+.segmented__pill, .works__pill, .study-views__pill { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; background: var(--picked); box-shadow: var(--shadow); pointer-events: none; }
 .segmented--slide[data-pill] > a[aria-current] { background: transparent; box-shadow: none; }
 /* While the list pressed for is on its way the names have already changed places: the one pressed reads as chosen, the one left as any other. */
 .segmented--slide > a[data-picked] { color: var(--ink); font-weight: 600; }
@@ -168,6 +169,8 @@
 /* A work with only one neighbour shows it at half width on its own side, where it stands when both are there (W-08). */
 .work__neighbours:has(> a:only-child) a { flex: 0 1 calc(50% - 5px); }
 .work__neighbours:has(> .pager__next:only-child) { justify-content: flex-end; }
+/* On a phone two neighbours stack at full width; a lone one does too, or its title breaks a character a line. */
+@media (max-width: 640px) { .work__neighbours:has(> a:only-child) a { flex: 1 1 100%; } }
 .work__neighbours-pending { min-height: 92px; }
 .work__neighbours-failed { font-size: var(--text-sm); color: var(--muted); }
 /* No record yet: said in one quiet line, under it the small stroke the list's end has (W-09, 2026-10-21; it replaced a dashed slip). */
@@ -331,7 +334,7 @@
 .work-game__unrated { margin-top: 8px; color: var(--muted); }
 .work-game__state { display: inline-block; padding: 1px 12px; border-radius: 999px; background: var(--ink); font-size: var(--text-xs); color: var(--bg); }
 .work-game__state--playing { background: var(--accent); color: var(--card); }
-.work-game__state--platinumed { background: linear-gradient(135deg, #d6dae2, #8a92a4); color: #1a1d24; }
+.work-game__state--platinumed { background: linear-gradient(135deg, var(--platinum-light), var(--platinum-deep)); color: #1a1d24; }
 .work-game__state--wishlist { background: var(--soft); color: var(--ink); }
 .game-time__played { font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .game-time__note { color: var(--muted); }
@@ -340,13 +343,19 @@
 .game-time__bar { display: grid; grid-template-columns: 2.5em minmax(40px, 1fr) auto; align-items: center; gap: 10px; margin-top: 6px; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .game-time__bar i { height: 8px; border-radius: 999px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--share) 100% no-repeat, var(--soft); }
 .game-time__bar--expected i { background: linear-gradient(var(--muted), var(--muted)) 0 / var(--share) 100% no-repeat, var(--soft); }
-.game-timeline { margin: 0; padding: 0 0 0 18px; border-left: 2px solid var(--rule); list-style: none; }
-.game-timeline li { position: relative; margin: 0 0 12px; line-height: 1.5; }
-.game-timeline li:last-child { margin-bottom: 0; }
-.game-timeline li::before { content: ""; position: absolute; left: -25px; top: 5px; box-sizing: border-box; width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
-.game-timeline li.game-timeline__own::before { background: var(--ink); }
-.game-timeline b { display: block; font-weight: 500; color: var(--ink); }
-.game-timeline span { color: var(--muted); font-variant-numeric: tabular-nums; }
+/*
+ * The days in a strip across the main column (2026-11-21): a dot for each, the owner's own filled, a line to the next
+ * with how long it was standing on the line. Upright on a phone, the gap under its date.
+ */
+.game-dates { display: grid; grid-template-columns: repeat(var(--steps), minmax(0, 1fr)); margin: 4px 0 24px; padding: 0; list-style: none; font-size: var(--text-sm); line-height: 1.5; }
+.game-dates li { position: relative; padding: 24px 12px 0 0; }
+.game-dates li::before { content: ""; position: absolute; top: 2px; left: 0; z-index: 1; box-sizing: border-box; width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); }
+.game-dates li.game-dates__own::before { background: var(--ink); }
+.game-dates li:not(:last-child)::after { content: ""; position: absolute; top: 7px; left: 16px; right: 4px; height: 2px; background: var(--rule); }
+.game-dates b { display: block; font-weight: 500; color: var(--ink); }
+.game-dates span { display: block; color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-dates small { display: block; font-size: var(--text-xs); color: var(--ink); font-variant-numeric: tabular-nums; }
+.game-dates em { position: absolute; top: 0; left: calc(50% + 8px); z-index: 2; padding: 0 6px; transform: translateX(-50%); font-size: var(--text-xs); font-style: normal; line-height: 16px; color: var(--muted); background: var(--bg); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .work-game__main { min-width: 0; padding-top: 2px; }
 .work-game__main > .reading__tags { margin: 0 0 6px; }
 .work-game__main > .reading__article { margin-top: 18px; }
@@ -363,12 +372,18 @@
   .work-game { grid-template-columns: minmax(0, 1fr); margin-top: -12px; }
   .work-game__facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
   .work-game__group { padding: 0 0 14px; border-top: 0; }
-  .work-game__dates { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--rule); }
-  .work-game__main { padding-top: 6px; }
+  .work-game__main { padding-top: 14px; border-top: 1px solid var(--rule); }
+  .game-dates { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
+  .game-dates li { padding: 0 0 14px 24px; }
+  .game-dates li:last-child { padding-bottom: 0; }
+  .game-dates li::before { top: 5px; }
+  .game-dates li:not(:last-child)::after { top: 21px; bottom: 4px; left: 5px; right: auto; width: 2px; height: auto; }
+  .game-dates em { position: static; display: block; margin-top: 4px; padding: 0; transform: none; background: none; }
+  .game-dates em::before { content: "↓ " / ""; }
 }
 
 /* A game's trophies (layout 乙, 2026-11-20): a summary in the side column, then a section under the write-up. */
-:root { --trophy-platinum: #8f98ab; --trophy-gold: #c08f22; --trophy-silver: #8f97a4; --trophy-bronze: #a8683a; }
+:root { --platinum-light: #d6dae2; --platinum-deep: #8a92a4; --trophy-platinum: #8f98ab; --trophy-gold: #c08f22; --trophy-silver: #8f97a4; --trophy-bronze: #a8683a; }
 :root[data-theme="dark"] { --trophy-platinum: #b9c1d2; --trophy-gold: #e0b04a; --trophy-silver: #b3bac6; --trophy-bronze: #cf8a58; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --trophy-platinum: #b9c1d2; --trophy-gold: #e0b04a; --trophy-silver: #b3bac6; --trophy-bronze: #cf8a58; } }
 .game-trophy__grade { --grade: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
@@ -381,7 +396,8 @@
 .game-trophy-sum__count small { font-size: var(--text-sm); font-weight: 400; color: var(--muted); }
 .game-trophy-sum__bar, .game-trophy-sum__sets li { display: grid; grid-template-columns: minmax(40px, 1fr) auto; align-items: center; gap: 10px; margin-top: 6px; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .game-trophy-sum__bar i, .game-trophy-sum__sets i { height: 8px; border-radius: 999px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--share) 100% no-repeat, var(--soft); }
-.game-trophy-sum__grades { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px !important; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--ink); }
+/* Two rows of two, so no grade drops to a line of its own (round three, 2026-11-21). */
+.game-trophy-sum__grades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin-top: 10px !important; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--ink); }
 .game-trophy-sum__grades small { font-size: inherit; color: var(--muted); }
 .game-trophy-sum__title { margin-bottom: 8px; font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
 .game-trophy-sum__sets { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
@@ -409,21 +425,39 @@
 .game-trophy__icon--blank.game-trophy__icon--off { filter: none; opacity: 1; background: transparent; }
 .game-trophy__icon--blank.game-trophy__icon--off svg { stroke: var(--muted); opacity: 0.6; }
 .game-trophy__rate { font-variant-numeric: tabular-nums; }
-.game-trophies__platinum { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; margin: 0 0 16px; padding: 16px 18px; border-radius: var(--radius-sm); background: linear-gradient(135deg, color-mix(in srgb, #d6dae2 55%, var(--card)), color-mix(in srgb, #8a92a4 30%, var(--card))); box-shadow: inset 0 0 0 1px color-mix(in srgb, #8a92a4 45%, transparent); }
-:root[data-theme="dark"] .game-trophies__platinum { background: linear-gradient(135deg, color-mix(in srgb, #d6dae2 20%, var(--card)), color-mix(in srgb, #8a92a4 12%, var(--card))); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .game-trophies__platinum { background: linear-gradient(135deg, color-mix(in srgb, #d6dae2 20%, var(--card)), color-mix(in srgb, #8a92a4 12%, var(--card))); } }
-.game-trophies__platinum .game-trophy__icon { width: 56px; height: 56px; }
-.game-trophies__platinum b { display: block; font-size: var(--text-lg); font-weight: 600; color: var(--ink); }
-.game-trophies__platinum span { font-size: var(--text-sm); color: var(--muted); }
-.game-trophies__platinum-when { display: grid; justify-items: end; color: var(--ink) !important; font-variant-numeric: tabular-nums; }
-.game-trophies__platinum-when small { font-size: var(--text-xs); color: var(--muted); }
+/* The platinum as a plate of brushed metal with a streak of light (round three 乙, 2026-11-21); its own colours in either theme. */
+.game-trophies__platinum { --plate-ink: #1d2333; --plate-muted: #4b5368; --plate-ring: #fff; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; margin: 0 0 16px; padding: 20px 22px; border-radius: var(--radius-sm);
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.65) 44%, transparent 58%), linear-gradient(135deg, #eef1f6, #c4cad6 48%, #e9ecf2 70%, #b5bccb);
+  box-shadow: inset 0 0 0 1px rgb(120 130 150 / 0.45), 0 10px 28px -14px rgb(60 70 95 / 0.55); }
+:root[data-theme="dark"] .game-trophies__platinum { --plate-ink: #eef1f6; --plate-muted: #b9c0cf; --plate-ring: var(--platinum-light); background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.1) 44%, transparent 58%), linear-gradient(135deg, #3b4150, #565e71 48%, #3a404e 70%, #4c5466); box-shadow: inset 0 0 0 1px rgb(185 193 210 / 0.35), 0 10px 28px -14px rgb(0 0 0 / 0.7); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .game-trophies__platinum { --plate-ink: #eef1f6; --plate-muted: #b9c0cf; --plate-ring: var(--platinum-light); background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.1) 44%, transparent 58%), linear-gradient(135deg, #3b4150, #565e71 48%, #3a404e 70%, #4c5466); box-shadow: inset 0 0 0 1px rgb(185 193 210 / 0.35), 0 10px 28px -14px rgb(0 0 0 / 0.7); } }
+.game-trophies__platinum .game-trophy__icon { width: 56px; height: 56px; box-shadow: 0 0 0 2px var(--plate-ring), 0 0 0 3px rgb(120 130 150 / 0.5), 0 0 22px rgb(150 165 195 / 0.9); }
+.game-trophies__platinum b { display: block; font-size: var(--text-lg); font-weight: 600; color: var(--plate-ink); }
+.game-trophies__platinum-label { display: block; margin-bottom: 2px; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.2em; color: var(--plate-muted); }
+.game-trophies__platinum span { font-size: var(--text-sm); color: var(--plate-muted); }
+.game-trophies__platinum-when { display: grid; justify-items: end; color: var(--plate-ink) !important; font-variant-numeric: tabular-nums; }
+.game-trophies__platinum-when small { font-size: var(--text-xs); color: var(--plate-muted); }
 .game-trophies__rare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.game-trophies__rare li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: start; gap: 3px 12px; padding: 14px; border: 1px solid var(--rule); border-radius: var(--radius-sm); }
-.game-trophies__rare .game-trophy__icon { grid-row: span 3; }
+/* Medal cards (round three 丙, 2026-11-21): the picture centred and larger over a faint wash of the grade's colour. */
+.game-trophies__medal { --grade: var(--muted); }
+.game-trophies__medal--platinum { --grade: var(--trophy-platinum); }
+.game-trophies__medal--gold { --grade: var(--trophy-gold); }
+.game-trophies__medal--silver { --grade: var(--trophy-silver); }
+.game-trophies__medal--bronze { --grade: var(--trophy-bronze); }
+.game-trophies__rare li { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 4px; padding: 18px 14px 14px; border: 1px solid var(--rule); border-radius: var(--radius-sm); text-align: center; background: linear-gradient(color-mix(in srgb, var(--grade) 14%, transparent), transparent 55%); }
+.game-trophies__rare .game-trophy__icon { width: 56px; height: 56px; margin-bottom: 6px; box-shadow: 0 0 0 1px var(--rule), 0 6px 16px -6px var(--grade); }
 .game-trophies__rare b { font-weight: 600; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
-.game-trophies__rare-detail { font-size: var(--text-sm); line-height: 1.45; color: var(--muted); }
-.game-trophies__rare-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; font-size: var(--text-xs); color: var(--muted); }
-.game-trophies__tier { padding: 0 7px; border-radius: 999px; background: var(--soft); line-height: 1.6; color: var(--ink); }
+.game-trophies__rare-detail { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: var(--text-sm); line-height: 1.45; color: var(--muted); }
+.game-trophies__rare-meta { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 10px; margin-top: 4px; font-size: var(--text-xs); color: var(--muted); }
+/* When the trophies came: one bar a month, the years marked underneath. */
+.game-trophy-months { margin: 0 0 18px; }
+.game-trophy-months__plot { width: min(100%, calc(var(--months) * 18px)); }
+.game-trophy-months__bars { display: flex; align-items: flex-end; gap: 2px; height: 44px; border-bottom: 1px solid var(--rule); }
+.game-trophy-months__bars--dense { gap: 1px; }
+.game-trophy-months__bars i { flex: 1; height: var(--h); border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--ink) 70%, transparent); }
+.game-trophy-months__years { position: relative; height: 20px; font-size: var(--text-xs); line-height: 1.2; color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-trophy-months__years span { position: absolute; top: 4px; padding-left: 4px; border-left: 1px solid var(--rule); }
+.game-trophy-months figcaption { font-size: var(--text-xs); color: var(--muted); }
 .game-trophies__sub { margin: 22px 0 6px; font-size: var(--text-sm); font-weight: 500; color: var(--muted); }
 .game-trophies__list { margin: 0; padding: 0; list-style: none; }
 .game-trophy-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
@@ -443,10 +477,11 @@
   .game-trophy-sum { grid-column: 1 / -1; padding-top: 14px !important; border-top: 1px solid var(--rule) !important; }
   /* Three small cards in one row on a phone: the picture on top, the name, grade and rate; no description. */
   .game-trophies__rare { gap: 8px; }
-  .game-trophies__rare li { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 4px; padding: 10px; }
-  .game-trophies__rare .game-trophy__icon { grid-row: auto; margin-bottom: 4px; }
+  .game-trophies__rare li { padding: 14px 8px 10px; }
+  .game-trophies__rare .game-trophy__icon { width: 44px; height: 44px; margin-bottom: 4px; }
   .game-trophies__rare b { font-size: var(--text-sm); }
   .game-trophies__rare-detail { display: none; }
+  .game-trophies__rare-meta { display: grid; gap: 0; justify-items: center; }
   .game-trophies__platinum { grid-template-columns: auto minmax(0, 1fr); }
   .game-trophies__platinum-when { grid-column: 1 / -1; justify-items: start; }
 }

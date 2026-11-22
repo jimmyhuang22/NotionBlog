@@ -4,16 +4,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Page } from "../../contracts/content.ts";
 import { resumeAfter, resumeBudget } from "../lib/paging-resume.ts";
 import { canRestoreList, initialPageIdentity } from "../lib/paging-cache.ts";
+import { readApi, readProblem } from "../lib/read-api.ts";
 
 export type PagingProblem = "busy" | "failed" | null;
 
 async function fetchPage<T>(endpoint: string, query: Record<string, string>, cursor: string | null, signal?: AbortSignal): Promise<{ page?: Page<T>; code?: string }> {
   const params = new URLSearchParams(query);
   if (cursor) params.set("cursor", cursor);
-  const response = await fetch(`${endpoint}?${params}`, { cache: "no-store", signal });
-  const body = await response.json().catch(() => null);
-  if (response.ok && body?.data) return { page: body.data as Page<T> };
-  return { code: body?.error?.code ?? "CONTENT_UNAVAILABLE" };
+  const reply = await readApi<Page<T>>(`${endpoint}?${params}`, { signal });
+  return reply.data ? { page: reply.data } : { code: reply.code ?? "CONTENT_UNAVAILABLE" };
 }
 
 /**
@@ -165,7 +164,7 @@ export function usePagedList<T extends { id: string }>(endpoint: string, query: 
         if (resumed.kind === "lost" && live()) resumed = await resumeAfter(items, next => fetchPage<T>(endpoint, query, next, signal), budget);
         if (!live()) return;
         if (resumed.kind === "error") {
-          setProblem(resumed.code === "RATE_LIMITED" ? "busy" : "failed");
+          setProblem(readProblem(resumed.code));
           return;
         }
         if (resumed.kind === "resumed") {
@@ -184,7 +183,7 @@ export function usePagedList<T extends { id: string }>(endpoint: string, query: 
         fresh = true;
       }
       if (!result.page) {
-        setProblem(result.code === "RATE_LIMITED" ? "busy" : "failed");
+        setProblem(readProblem(result.code ?? null));
         return;
       }
       const page = result.page;

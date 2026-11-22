@@ -1,4 +1,5 @@
 import type { ImageAsset } from "../../contracts/content.ts";
+import { platformChip, type PlatformTone } from "./library.ts";
 
 /**
  * A game's trophies on its detail page (decision 2026-11-20-game-trophies, layout 乙).
@@ -109,11 +110,13 @@ export function rarityTier(rate: number): string {
   return "常见";
 }
 
-/** A platform as a coloured box beside its set, in the same tones as the game's own platform boxes. */
-export function trophyPlatformTone(platform: string): "playstation" | "pc" | "nintendo" | "other" {
-  if (/^(ps\d|playstation)/iu.test(platform)) return "playstation";
-  if (/^(steam|pc)$/iu.test(platform)) return "pc";
-  return "other";
+/**
+ * A platform as a coloured box beside its set, in the same tones as the game's own platform boxes (`platformChip`).
+ * Trophy sets name the console ("PS5") or the store ("Steam"), which a game's own platforms never do.
+ */
+export function trophyPlatformTone(platform: string): PlatformTone {
+  const name = platform.trim();
+  return platformChip(/^ps\d/iu.test(name) ? "PlayStation" : /^steam$/iu.test(name) ? "PC" : name).tone;
 }
 
 /** The earned platinum, which leads the section as its own banner when there is one. */
@@ -138,10 +141,28 @@ export function earnedByMonth(trophies: Trophy[]): { key: string; label: string;
   const groups = new Map<string, Trophy[]>();
   for (const trophy of recentEarned(trophies)) {
     const key = trophy.earnedDate?.slice(0, 7) ?? "undated";
-    groups.set(key, [...(groups.get(key) ?? []), trophy]);
+    const group = groups.get(key);
+    if (group) group.push(trophy);
+    else groups.set(key, [trophy]);
   }
   return [...groups].map(([key, list]) => ({ key, trophies: list,
     label: key === "undated" ? "日期未记录" : `${Number(key.slice(0, 4))} 年 ${Number(key.slice(5, 7))} 月` }));
+}
+
+/**
+ * Earned trophies counted per calendar month, every month from the first to the last one present, empty ones
+ * included, so the gaps show (round three, 2026-11-21). Null when there is too little to draw: fewer than three
+ * dated trophies, or all of them in one month. Undated trophies are left out, not placed anywhere.
+ */
+export function earnedPerMonth(trophies: Trophy[]): { start: { year: number; month: number }; counts: number[]; total: number } | null {
+  const index = (day: string) => Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1;
+  const months = trophies.filter(trophy => trophy.earned && trophy.earnedDate).map(trophy => index(trophy.earnedDate!));
+  if (months.length < 3) return null;
+  const first = Math.min(...months), last = Math.max(...months);
+  if (first === last) return null;
+  const counts = Array.from({ length: last - first + 1 }, () => 0);
+  for (const month of months) counts[month - first]! += 1;
+  return { start: { year: Math.floor(first / 12), month: first % 12 + 1 }, counts, total: months.length };
 }
 
 /** Not yet earned: by grade (platinum first), then the most common first, as the nearest to get. */

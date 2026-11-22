@@ -13,7 +13,16 @@ export function WorkStrip({ label, children }: { label: string; children: ReactN
   useEffect(() => {
     const element = list.current;
     if (!element) return;
-    const read = () => setEdges({ back: element.scrollLeft > 4, on: element.scrollLeft + element.clientWidth < element.scrollWidth - 4 });
+    // Once a frame at most, and a render only when an edge actually turns on or off.
+    let frame = 0;
+    const read = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const back = element.scrollLeft > 4, on = element.scrollLeft + element.clientWidth < element.scrollWidth - 4;
+        setEdges(edges => edges.back === back && edges.on === on ? edges : { back, on });
+      });
+    };
     // Observing reports the first size as well, so nothing is measured during render.
     const sizes = new ResizeObserver(read);
     sizes.observe(element);
@@ -21,7 +30,7 @@ export function WorkStrip({ label, children }: { label: string; children: ReactN
     const cards = new MutationObserver(read);
     cards.observe(element, { childList: true });
     element.addEventListener("scroll", read, { passive: true });
-    return () => { sizes.disconnect(); cards.disconnect(); element.removeEventListener("scroll", read); };
+    return () => { sizes.disconnect(); cards.disconnect(); element.removeEventListener("scroll", read); cancelAnimationFrame(frame); };
   }, []);
   const step = (direction: 1 | -1) => list.current?.scrollBy({ left: direction * list.current.clientWidth * 0.8 });
   return (

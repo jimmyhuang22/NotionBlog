@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { holdPage } from "./use-dismiss";
+import { isPlainClick } from "../lib/dom.ts";
 
 /** Where the directory stands beside the note instead of waiting behind its button (study.css says the same). */
 const COLUMN = "(min-width: 1100px)";
@@ -88,7 +89,7 @@ export function StudyReadingDirectory({ children }: { children: ReactNode }) {
       onClick={event => {
         // Selecting the current note needs no navigation, but should still return to reading.
         const link = (event.target as Element).closest("a[aria-current='page']");
-        if (open && link && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) setOpen(false);
+        if (open && link && isPlainClick(event)) setOpen(false);
       }}>
       <div className="reading-directory-head"><h2 id={titleId}>课程目录</h2><button type="button" className="icon-button" aria-label="关闭课程目录" onClick={() => setOpen(false)}><span aria-hidden="true">×</span></button></div>
       {children}

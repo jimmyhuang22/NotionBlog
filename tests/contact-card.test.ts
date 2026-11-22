@@ -37,7 +37,8 @@ test("the contact code carries the configured address, and nothing when no email
 });
 
 test("the profile icons and the closed card carry no plain address or mailto link", () => {
-  const { ContactCard } = view("src/components/contact-card.tsx");
+  // Dismissal only listens once the card is open; the closed card rendered here never reaches it.
+  const { ContactCard } = view("src/components/contact-card.tsx", { "./use-dismiss": { useMenuDismiss: () => {} } });
   const SocialLinks = view("src/components/social-links.tsx", {
     "@/lib/contact": { contactCode },
     "./contact-card": { ContactCard },
