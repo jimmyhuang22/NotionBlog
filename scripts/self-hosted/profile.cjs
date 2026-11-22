@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const allowed = new Set([
   'DATABASE_READER_URL', 'DATABASE_TLS', 'DATABASE_CA_CERT', 'DATABASE_CONTENT_VERSION',
   'DATABASE_READ_PROJECTION', 'DATABASE_PUBLICATION_MODE', 'DATABASE_SEARCH_PROJECTION',
-  'DATABASE_LIBRARY_PAGE',
+  'DATABASE_LIBRARY_PAGE', 'DATABASE_LIBRARY_URLS',
   'SITE_URL', 'SITE_CONFIG_JSON', 'CONTENT_FEATURES_JSON', 'SOCIAL_PROVIDER',
   'SOCIAL_READER_DATABASE_URL', 'SOCIAL_READER_DATABASE_TLS', 'SOCIAL_READER_DATABASE_CA_CERT',
   'SOCIAL_READER_CONNECTION_MODE', 'SOCIAL_DISPLAY_MODE', 'SOCIAL_COLLECTION_PLAYBACK',
@@ -104,6 +104,7 @@ function loadProfile(filename, localOnly) {
   if (env.DATABASE_CONTENT_VERSION !== '2' ||
       (env.DATABASE_PUBLICATION_MODE !== 'qualified' && !publishedPrivateDisk(env, publicWebsite)) ||
       !['legacy', 'compact'].includes(env.DATABASE_LIBRARY_PAGE) ||
+      !['legacy', 'title'].includes(env.DATABASE_LIBRARY_URLS ?? 'legacy') ||
       env.DATABASE_LIBRARY_PAGE === 'compact' && env.DATABASE_READ_PROJECTION !== 'scoped' ||
       !['legacy', 'scoped'].includes(env.DATABASE_READ_PROJECTION) || !['disabled', 'database'].includes(env.SOCIAL_PROVIDER) ||
       !(publicWebsite ? ['configured', 'transaction'] : ['configured']).includes(env.SOCIAL_READER_CONNECTION_MODE)) fail();
