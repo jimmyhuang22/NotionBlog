@@ -2,10 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
+import type { Album } from "../contracts/content.ts";
+import type { TimelineEvent } from "../contracts/website.ts";
+import { defaultContentFeatures } from "../config/features.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../contracts/website-sync.ts";
 import { displayDeliveryMode, readDisplayMedia } from "../src/server/database/display.ts";
+import { scopedReader } from "../src/server/database/scoped-reads.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
-import { databaseDisplayProjectionSql, databaseDisplayResponse } from "../src/server/media/display.ts";
+import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
+import { createHomeFeedV2Repository } from "../src/lib/content/home-feed-v2-core.ts";
+import { homeFeedResponse } from "../src/lib/content/home-feed-http.ts";
+import { readTimelineIndexSnapshot } from "../src/lib/content/website.ts";
+import { databaseDisplayProjectionSql, databaseDisplayResponse, hydrateTimelineDisplayCovers } from "../src/server/media/display.ts";
 import { DISPLAY_V2_RECIPE, type DisplayAsset } from "../src/server/self-hosted-media/manifest.ts";
 import { verifyDisplayBytes } from "../src/server/self-hosted-media/files.ts";
 
@@ -51,6 +59,67 @@ test("display mappings add delivery metadata in one bounded read and fail closed
   assert.equal(mappings, 1); assert.equal(Object.hasOwn(image, "delivery"), false);
   const missing: SqlExecutor = { async query<T>() { return { rows: [{ result: { runId, revision: "1", assets: [] } }] as T[] }; } };
   await assert.rejects(databaseDisplayProjectionSql(content, missing, "qualified").query("existing-content-query", [1]), /display projection is unavailable/);
+});
+
+test("home feed projects only each page's eligible covers at the index revision", async () => {
+  const { asset } = await fixture();
+  const records = Array.from({ length: 48 }, (_, index) => {
+    const id = "album-" + index;
+    const coverId = "a1." + index.toString(16).padStart(64, "0");
+    const item: Album = { id, kind: "album", slug: id, href: "/photos/" + id, title: id, summary: null, tags: [],
+      cover: { id: coverId, src: "/media/v2/" + coverId, alt: "", width: null, height: null }, updatedAt: null,
+      date: { start: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10), end: null, precision: "date" }, photoCount: null };
+    return { item, document: null };
+  });
+  const eligible = records.slice(0, -1).map(record => record.item.cover!.id);
+  const mappingRequests: string[][] = [];
+  let mappingRevision = "1", removeMapping = false;
+  const db: SqlExecutor = { async query<T>(sql: string, values?: unknown[]) {
+    if (sql.startsWith("SELECT nb_read_api.check_capability(")) return { rows: [{ result: true }] as T[] };
+    if (sql === "SELECT nb_read_api.read_snapshot('published',$1::text[],false,true) AS result") {
+      assert.deepEqual(values, [["album"]]);
+      return { rows: [{ result: { schemaDigest: WEBSITE_SCHEMA_DIGEST, runId, revision: "1",
+        records, links: records.map(record => record.item.href), mediaIds: eligible } }] as T[] };
+    }
+    assert.equal(sql, "SELECT nb_display_api.read_assets($1,$2::text[],$3,$4) AS result");
+    const ids = values?.[1] as string[];
+    assert.deepEqual(values?.slice(0, 3), [runId, ids, "published"]);
+    assert.ok(ids.length <= 16 && ids.every(id => eligible.includes(id)));
+    mappingRequests.push(ids);
+    const assets = (removeMapping ? ids.slice(1) : ids).map(assetId => ({ ...asset, assetId }));
+    return { rows: [{ result: { runId, revision: mappingRevision, assets } }] as T[] };
+  } };
+  const repository = createWebsiteDatabaseRepository(scopedReader(databaseDisplayProjectionSql(db, db, "published"), "published"), { scoped: true });
+  const display = {
+    readIndex: createWebsiteDatabaseRepository(scopedReader(db, "published"), { scoped: true }).readIndex!,
+    hydrateCovers: (events: TimelineEvent[], version: string) =>
+      hydrateTimelineDisplayCovers(db, "published", events, version),
+  };
+  const features = { ...defaultContentFeatures, status: false, album: true };
+  const feed = createHomeFeedV2Repository({ content: () => readTimelineIndexSnapshot(repository, features, "UTC", display),
+    sources: { content: "database", social: "disabled" }, timeZone: "UTC" });
+  const page = await feed.getPage({ limit: 16 });
+  assert.equal(page.total, 48);
+  assert.equal(page.items.length, 16);
+  assert.ok(page.nextCursor);
+  const first = page.items[0];
+  assert.ok(first.source === "content" && first.event.type === "album-new");
+  assert.equal(first.event.title, "album-47");
+  assert.equal(first.event.cover, null);
+  const second = page.items[1];
+  assert.ok(second.source === "content" && second.event.type === "album-new");
+  assert.deepEqual(second.event.cover?.delivery, { mode: "display-only", maxWidth: 6, maxHeight: 2 });
+  const later = await feed.getPage({ limit: 16, cursor: page.nextCursor });
+  assert.equal(later.items.length, 16);
+  assert.equal(new Set([...page.items, ...later.items].map(item => item.id)).size, 32);
+  assert.deepEqual(mappingRequests, [eligible.slice(32).reverse(), eligible.slice(16, 32).reverse()]);
+  for (const failure of ["changed-revision", "missing-mapping"]) {
+    mappingRevision = failure === "changed-revision" ? "2" : "1";
+    removeMapping = failure === "missing-mapping";
+    const response = await homeFeedResponse(new Request("http://example.test/api/home/feed-v2?limit=16"), feed);
+    assert.equal(response.status, 503);
+    assert.equal(await response.text(), '{"error":{"code":"CONTENT_UNAVAILABLE","message":"Home feed is temporarily unavailable."}}');
+  }
 });
 
 test("display media verifies bytes and requalifies after reading without any original fallback", async () => {

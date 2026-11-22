@@ -3,6 +3,7 @@ import type { SocialTimelineWork } from "../../contracts/social-timeline.ts";
 import { dateParts, momentLabel, type CalendarDay, type MomentLabel } from "./format.ts";
 import { socialWorkPublishedAt } from "./content/social-works-query.ts";
 import { runsBy } from "./runs.ts";
+import type { YearChoice } from "./year-filter.ts";
 import { collectionFigures, collectionKinds, collectionSize, isNoticedActivity, publicationFigures, publicationKinds, type Figure } from "./home-feed.ts";
 
 /** The moment a work is listed under: a collection's latest activity, else the work's own date. Null when neither is known. */
@@ -92,10 +93,21 @@ export const worksPlatforms: { value: SocialPlatform; label: string; order: "vie
   { value: "xiaohongshu", label: "小红书", order: "likes", orderLabel: "点赞最多" },
 ];
 
-/** A works-page address; the default platform and the newest-first order are left out, so each view has one address. */
-export function worksHref(platform: SocialPlatform, order: "views" | "likes" | null): string {
-  const params = new URLSearchParams({ ...(platform === "bilibili" ? {} : { platform }), ...(order ? { order } : {}) });
+/**
+ * A works-page address; the default platform, every year and the newest-first order are left out, so each view has
+ * one address. Platform, year and order in that order, as the shelves write theirs.
+ */
+export function worksHref(platform: SocialPlatform, order: "views" | "likes" | null, year: YearChoice = null): string {
+  const params = new URLSearchParams({ ...(platform === "bilibili" ? {} : { platform }), ...(year === null ? {} : { year: String(year) }), ...(order ? { order } : {}) });
   return params.size ? `/works?${params}` : "/works";
+}
+
+/**
+ * What every page of one works list asks the v2 endpoint for: the same platform, year and order as the first page,
+ * so a later page never brings another year's works. Every year leaves `year` out; the cursor is added per page.
+ */
+export function worksQuery(platform: SocialPlatform, year: string | null, order: "views" | "likes" | null, limit: number): Record<string, string> {
+  return { limit: String(limit), platform, ...(year === null ? {} : { year }), ...(order ? { order } : {}) };
 }
 
 /**

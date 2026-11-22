@@ -1,6 +1,6 @@
-# 作品页平台筛选与排序（F27）
+# 作品页平台、年份筛选与排序
 
-`/api/social/works/v2` 与服务端 `socialTimelineRepository.listWorks` 共用 `SocialWorksQuery`。默认一页12条、最大20条，响应仍为 `{data:{items,total,hasMore,nextCursor}}`，作品DTO没有新增字段。页面的默认B站选择由前端显式传入，接口省略platform仍返回全部作品。
+`/api/social/works/v2` 与服务端 `socialTimelineRepository.listWorks` 共用 `SocialWorksQuery`。默认一页 12 条，最多 20 条。HTTP 返回 `{data:{items,total,hasMore,nextCursor,yearCounts}}`。前端为默认 B 站显式传入 `platform=bilibili`，省略 `platform` 时两平台合计。
 
 ## 参数
 
@@ -11,8 +11,11 @@
 | `platform=xiaohongshu` | 小红书作品，按日期 |
 | `platform=bilibili&order=views` | B站按精确播放量降序 |
 | `platform=xiaohongshu&order=likes` | 小红书按精确点赞量降序 |
+| `platform=bilibili&year=2025&order=views` | B 站 2025 年作品按精确播放量降序 |
+| `platform=xiaohongshu&year=2025&order=likes` | 小红书 2025 年作品按精确点赞量降序 |
+| `year=undated` | 仅取发布日期未知的作品，可叠加平台和排序 |
 
-不带platform的order、小红书views、B站likes、`order=time`、未知值、重复参数、未知参数、不合法limit/cursor均为400 `INVALID_QUERY`。按时间时省略order。禁用仍404；真实reader失败仍503，不回退演示数据。响应保持 `private, no-store` 与 `noindex, nofollow`。
+`year` 接受 1 到 9999 的整数或 `undated`。选全部年份时省略 `year`，按发布日期时省略 `order`。不带platform的order、小红书views、B站likes、`order=time`、未知值、重复参数、未知参数以及不合法的year/limit/cursor均为400 `INVALID_QUERY`。禁用仍404；真实reader失败仍503，不回退演示数据。响应保持 `private, no-store` 与 `noindex, nofollow`。
 
 数字未知排在真实零后；同数按作品页日期降序，日期未知最后，最终按作品ID字节顺序打破并列。合集直接用合集总统计；普通作品只加总首要平台的精确值，一条未知则总值未知，超出安全整数也不造近似整数。小红书“1.2万”等显示文字仍保留，不能拿来猜精确排序数。
 
@@ -42,13 +45,15 @@ import {
 import { socialTimelineRepository } from "@/lib/content/social-timeline";
 import { parseSocialWorksQuery } from "@/lib/content/social-works-query";
 
-const query = parseSocialWorksQuery(new URLSearchParams("platform=bilibili&order=views"));
+const query = parseSocialWorksQuery(new URLSearchParams("platform=bilibili&year=2025&order=views"));
 const initial = await socialTimelineRepository.listWorks({ ...query, limit: 20 });
 ```
 
-首屏统一入口支持相同platform/order，后续页向v2 HTTP接口传相同参数与nextCursor。切换平台或排序后旧游标400，从首批重来。total是筛选后的完整数量，空集合正常返回0、空items、无nextCursor。
+首屏与后续页传相同的 `platform`、`year`、`order`，后续页再传 `nextCursor`。切换平台、年份或排序时从首批重来，旧游标返回 400。`total` 是所选年份的完整数量，空结果返回 0、空 `items` 和 `nextCursor: null`。
 
-每页重新读当前受限快照；撤回与资格变化不保存为旧缓存。游标绑定原快照身份、平台、排序及作品页排序键。按时间翻页继续容忍纯统计刷新；按播放/点赞翻页在相应精确数字变化后保守地返回400，避免在新顺序中按旧偏移跳页或重复。不要把统计变更排除在热度游标身份之外。标题/成员/资格等已有失效规则保留。
+`yearCounts` 采用 `{ years: [{ year, count }], undatedCount, timeZone }`。它和列表取自同一份合格快照，统计范围由平台决定，包含该平台的所有年份。年份按倒序返回，只有至少一件作品的年份才出现在 `years` 中。当前年份、排序和游标都不改变这些条数。省略平台时给两平台合计。
+
+每页重新读当前受限快照；撤回与资格变化不保存为旧缓存。游标绑定原快照身份、平台、年份、排序及作品页排序键，指定年份时还绑定站点时区。按时间翻页继续容忍纯统计刷新；按播放/点赞翻页在相应精确数字变化后保守地返回400，避免在新顺序中按旧偏移跳页或重复。不要把统计变更排除在热度游标身份之外。标题/成员/资格等已有失效规则保留。
 
 ## 本机演示
 
