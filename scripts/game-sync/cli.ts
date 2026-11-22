@@ -22,6 +22,7 @@ async function main() {
   const [command, rootArg, flag] = process.argv.slice(2);
   if (!rootArg || !["nintendo-login", "nintendo-finish", "collect-psn", "collect-nintendo", "collect-steam",
     "collect-psn-trophies", "apply-psn-trophies", "collect-psn-trophy-details", "apply-psn-trophy-details",
+    "collect-steam-achievements", "apply-steam-achievements",
     "dry-run", "apply", "daily", "unlock-stale"].includes(command)) {
     throw new GameSyncError("USAGE: node scripts/game-sync/cli.ts <command> <private-directory>");
   }

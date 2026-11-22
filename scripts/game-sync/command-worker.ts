@@ -13,6 +13,7 @@ import type { SyncPlan, SyncProgress } from "./plan.ts";
 import { runDaily, safeCode } from "./daily.ts";
 import { planPsnWebsiteTrophies, writePsnWebsiteTrophies } from "./website-trophies.ts";
 import { maxTrophySnapshotBytes, planPsnTrophyDetails, writePsnTrophyDetails } from "./psn-trophy-details.ts";
+import { collectSteamAchievements, maxSteamAchievementSnapshotBytes, planSteamAchievements, writeSteamAchievements } from "./steam-achievements.ts";
 
 
 export async function runGameCommand(args: string[], runId: string) {
@@ -30,6 +31,30 @@ export async function runGameCommand(args: string[], runId: string) {
       console.log(JSON.stringify({ connected: true })); return;
     }
     const env = await readEnv(join(root, "credentials.env"));
+    if (command === "collect-steam-achievements" || command === "apply-steam-achievements") {
+      const config = await readJson(join(root, "config.json"));
+      const policy = await fixedSteamPolicy(root);
+      if (!policy) throw new GameSyncError("STEAM_ALLOWLIST_REQUIRED");
+      const steamId = env.STEAM_ID ?? "", path = join(root, "steam-achievements-snapshot.json");
+      if (command === "collect-steam-achievements") {
+        const snapshot = await collectSteamAchievements(env.STEAM_WEB_API_KEY ?? "", steamId, policy, config, flag);
+        const text = JSON.stringify(snapshot) + "\n";
+        if (Buffer.byteLength(text) > maxSteamAchievementSnapshotBytes) throw new GameSyncError("STEAM_ACHIEVEMENT_ICON_BUDGET");
+        await writeText(path, text);
+        console.log(JSON.stringify({ total: snapshot.set.trophies.length }));
+        return;
+      }
+      const plan = planSteamAchievements(await readJson(path, maxSteamAchievementSnapshotBytes), steamId, policy, config);
+      const { createDatabasePool, sqlExecutor } = await import("../../src/server/database/connection.ts");
+      const pool = createDatabasePool(env.SYNC_DATABASE_URL, env.DATABASE_TLS ?? "verify", env.DATABASE_CA_CERT);
+      try {
+        const applied = await writeSteamAchievements(sqlExecutor(pool), plan);
+        console.log(JSON.stringify({ applied, sets: 1 }));
+      } finally {
+        await pool.end();
+      }
+      return;
+    }
     if (command === "collect-psn-trophies") {
       const snapshot = await collectPsnWebsiteTrophies(env.PSN_NPSSO ?? "", env.PSN_ONLINE_ID ?? "",
         join(root, "psn-auth.json"), "psn-main");
