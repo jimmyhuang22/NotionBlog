@@ -382,6 +382,7 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
         "end": null,
         "precision": "date"
       },
+      "lastPlayedPlatforms": ["Steam"],
       "firstPlayedDate": {
         "start": "2025-01-02",
         "end": null,

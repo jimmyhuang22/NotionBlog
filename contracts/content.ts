@@ -172,6 +172,8 @@ export interface Game extends ContentBase {
   playedDate: DateRange | null;
   /** Latest observed linked-platform play, day only in the site zone. Legacy snapshots may omit it. */
   lastPlayedDate?: DateRange | null;
+  /** Verified platforms observed on lastPlayedDate in the site's time zone. Unknown or unavailable is null. */
+  lastPlayedPlatforms?: string[] | null;
   /** Earliest observed linked-platform play, day only. Unknown (including Steam) stays null. */
   firstPlayedDate?: DateRange | null;
   /** Stable archive day: the personal experience range's end, otherwise its start; unknown stays null. */
