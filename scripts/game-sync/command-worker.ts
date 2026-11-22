@@ -4,7 +4,7 @@ import { readPrivateFile } from "../notion-sync/state.ts";
 import { GameSyncError, object, required, observations } from "./model.ts";
 import { readEnv, readJson, writeJson, writeText } from "./private.ts";
 import { collectNintendo, finishLogin, loginRequest } from "./nintendo.ts";
-import { collectPsn, collectPsnWebsiteTrophies } from "./psn.ts";
+import { collectPsn, collectPsnTrophyDetails, collectPsnWebsiteTrophies } from "./psn.ts";
 import { collectSteam, fixedSteamPolicy, steamPolicy } from "./steam.ts";
 import { syncNotion } from "./notion.ts";
 import type { SyncConfig } from "./notion.ts";
@@ -12,6 +12,7 @@ import { PLAN_VERSION } from "./plan.ts";
 import type { SyncPlan, SyncProgress } from "./plan.ts";
 import { runDaily, safeCode } from "./daily.ts";
 import { planPsnWebsiteTrophies, writePsnWebsiteTrophies } from "./website-trophies.ts";
+import { maxTrophySnapshotBytes, planPsnTrophyDetails, writePsnTrophyDetails } from "./psn-trophy-details.ts";
 
 
 export async function runGameCommand(args: string[], runId: string) {
@@ -36,13 +37,25 @@ export async function runGameCommand(args: string[], runId: string) {
       console.log(JSON.stringify({ products: snapshot.products.length }));
       return;
     }
-    if (command === "apply-psn-trophies") {
-      const snapshot = await readJson(join(root, "psn-trophies-snapshot.json"), 8 * 1024 * 1024);
-      const plan = planPsnWebsiteTrophies(snapshot, env.PSN_ONLINE_ID ?? "", await readJson(join(root, "config.json")));
+    if (command === "collect-psn-trophy-details") {
+      const snapshot = await collectPsnTrophyDetails(env.PSN_NPSSO ?? "", env.PSN_ONLINE_ID ?? "",
+        join(root, "psn-auth.json"), await readJson(join(root, "config.json")), flag);
+      const serialised = JSON.stringify(snapshot) + "\n";
+      if (Buffer.byteLength(serialised) > maxTrophySnapshotBytes) throw new GameSyncError("PSN_TROPHY_ICON_BUDGET");
+      await writeText(join(root, "psn-trophy-details-snapshot.json"), serialised);
+      console.log(JSON.stringify({ sets: Object.keys(snapshot.details).length }));
+      return;
+    }
+    if (command === "apply-psn-trophies" || command === "apply-psn-trophy-details") {
+      const details = command === "apply-psn-trophy-details";
+      const snapshot = await readJson(join(root, details ? "psn-trophy-details-snapshot.json" : "psn-trophies-snapshot.json"),
+        details ? maxTrophySnapshotBytes : 8 * 1024 * 1024);
+      const config = await readJson(join(root, "config.json")), onlineId = env.PSN_ONLINE_ID ?? "";
+      const plan = details ? planPsnTrophyDetails(snapshot, onlineId, config) : planPsnWebsiteTrophies(snapshot, onlineId, config);
       const { createDatabasePool, sqlExecutor } = await import("../../src/server/database/connection.ts");
       const pool = createDatabasePool(env.SYNC_DATABASE_URL, env.DATABASE_TLS ?? "verify", env.DATABASE_CA_CERT);
       try {
-        const applied = await writePsnWebsiteTrophies(sqlExecutor(pool), plan);
+        const applied = details ? await writePsnTrophyDetails(sqlExecutor(pool), plan) : await writePsnWebsiteTrophies(sqlExecutor(pool), plan);
         console.log(JSON.stringify({ applied, sets: plan.sets.length }));
       } finally {
         await pool.end();
