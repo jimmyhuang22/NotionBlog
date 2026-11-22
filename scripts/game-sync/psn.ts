@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { exchangeNpssoForAccessCode, exchangeAccessCodeForAuthTokens, exchangeRefreshTokenForAuthTokens,
-  getProfileFromAccountId, getUserPlayedGames, getUserTrophiesForSpecificTitle, getUserTrophyProfileSummary, getUserTitles } from "psn-api";
+  getProfileFromAccountId, getTitleTrophies, getUserPlayedGames, getUserTrophiesEarnedForTitle,
+  getUserTrophiesForSpecificTitle, getUserTrophyProfileSummary, getUserTitles } from "psn-api";
 import type { AuthTokensResponse } from "psn-api";
 import { GameSyncError, object, psnRows, required } from "./model.ts";
 import { readJson, writeJson } from "./private.ts";
-import { psnWebsiteTrophySnapshot } from "./website-trophies.ts";
+import { planPsnWebsiteTrophies, psnTrophySetId, psnWebsiteTrophySnapshot } from "./website-trophies.ts";
+import { createPsnTrophyIconCollector, projectPsnTrophyList, readPsnTrophyPages } from "./psn-trophy-details.ts";
 
 export async function collectPsn(npsso: string, onlineId: string, cachePath: string, account: string) {
   return (await collectPsnData(npsso, onlineId, cachePath, account)).rows;
@@ -13,6 +15,38 @@ export async function collectPsn(npsso: string, onlineId: string, cachePath: str
 export async function collectPsnWebsiteTrophies(npsso: string, onlineId: string, cachePath: string, account: string) {
   const { observedAt, rows, trophies } = await collectPsnData(npsso, onlineId, cachePath, account);
   return psnWebsiteTrophySnapshot(onlineId, observedAt, rows, trophies);
+}
+
+export async function collectPsnTrophyDetails(npsso: string, onlineId: string, cachePath: string, config: unknown, timeZone: string) {
+  if (!timeZone) throw new GameSyncError("PSN_TROPHY_TIME_ZONE_REQUIRED");
+  try { new Intl.DateTimeFormat("en", { timeZone }); }
+  catch { throw new GameSyncError("PSN_TROPHY_TIME_ZONE_REQUIRED"); }
+  const { auth, observedAt, rows, trophies } = await collectPsnData(npsso, onlineId, cachePath, "psn-main");
+  const summary = psnWebsiteTrophySnapshot(onlineId, observedAt, rows, trophies);
+  const { sets } = planPsnWebsiteTrophies(summary, onlineId, config);
+  const sourceByKey = new Map<string, { title: string; service: "trophy" | "trophy2" }>();
+  for (const batch of trophies.values()) for (const set of batch) {
+    const title = required(set.npCommunicationId), service = set.npServiceName;
+    if (service === "trophy" || service === "trophy2") sourceByKey.set(psnTrophySetId(title), { title, service });
+  }
+  const details: Record<string, Awaited<ReturnType<typeof projectPsnTrophyList>>> = {};
+  const readIcon = createPsnTrophyIconCollector();
+  try {
+    for (const set of sets) {
+      const source = sourceByKey.get(set.id);
+      if (!source) throw new GameSyncError("PSN_TROPHY_DETAILS_INCOMPLETE");
+      const definitions = await readPsnTrophyPages((offset, limit) =>
+        getTitleTrophies(auth, source.title, "all", { npServiceName: source.service, offset, limit }));
+      const earnings = await readPsnTrophyPages((offset, limit) =>
+        getUserTrophiesEarnedForTitle(auth, "me", source.title, "all", { npServiceName: source.service, offset, limit }));
+      details[set.id] = await projectPsnTrophyList(set, definitions, earnings, timeZone,
+        (url, id) => readIcon(url, set.id, id));
+    }
+  } catch (error) {
+    if (error instanceof GameSyncError) throw error;
+    throw new GameSyncError("PSN_TROPHY_DETAILS_UNAVAILABLE");
+  }
+  return { summary, details };
 }
 
 async function collectPsnData(npsso: string, onlineId: string, cachePath: string, account: string) {
@@ -91,6 +125,6 @@ async function collectPsnData(npsso: string, onlineId: string, cachePath: string
       }
     }
     const observedAt = new Date().toISOString();
-    return { observedAt, rows: psnRows(titles, account, observedAt, trophies), trophies };
+    return { auth, observedAt, rows: psnRows(titles, account, observedAt, trophies), trophies };
   } catch (e) { if (e instanceof GameSyncError) throw e; throw new GameSyncError(`PSN_${stage}_UNAVAILABLE_OR_LOGIN_REQUIRED`); }
 }
