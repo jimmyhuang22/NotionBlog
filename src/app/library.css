@@ -168,6 +168,8 @@
 /* A work with only one neighbour shows it at half width on its own side, where it stands when both are there (W-08). */
 .work__neighbours:has(> a:only-child) a { flex: 0 1 calc(50% - 5px); }
 .work__neighbours:has(> .pager__next:only-child) { justify-content: flex-end; }
+/* On a phone two neighbours stack at full width; a lone one does too, or its title breaks a character a line. */
+@media (max-width: 640px) { .work__neighbours:has(> a:only-child) a { flex: 1 1 100%; } }
 .work__neighbours-pending { min-height: 92px; }
 .work__neighbours-failed { font-size: var(--text-sm); color: var(--muted); }
 /* No record yet: said in one quiet line, under it the small stroke the list's end has (W-09, 2026-10-21; it replaced a dashed slip). */
