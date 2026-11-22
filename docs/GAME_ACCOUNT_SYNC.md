@@ -114,6 +114,8 @@ node scripts/game-sync/cli.ts apply .local/game-sync nintendo
 
 Steam 在独立隐私核验完成且证据仍新鲜时使用 `collect-steam`、`dry-run ... steam`、`apply ... steam`。政策格式见模板；模板故意无有效核验，不能直接运行。`bindings` 用 `Provider:Platform:Product ID` 指向已确认的 Game 页面 ID，`excluded` 使用相同键。改动配置或快照后，先重跑 dry-run。
 
+获准发布 Steam 成就时，在私有配置的 `steamAchievementAppIds` 写本批明确选择的 AppID，并配置对应的 `Steam:PC:<AppID>` 作品绑定。安装 `004_steam_achievement_batches.sql` 后，可以手动运行 `collect-steam-achievement-batch <私有目录> <站点时区>` 和 `apply-steam-achievement-batch <私有目录>`。每批最多 12 款，快照上限为 24 MiB。导入前重新检查固定允许名单、私人及隐藏排除；独立执行 `withdraw-excluded-steam-achievements <私有目录>` 可以撤回已经放进排除名单的套组，无需先请求 Steam 成就。日常时长同步仍只执行原有入口。
+
 Notion 内部集成需要 Read content、Insert content、Update content，只直接连接 Game 和平台记录两个库；库内子页和内嵌数据库仍按 Notion 权限继承。程序额外校验来源，只写平台记录及其 Game 关系。网站只读 Token 不复用或提权。独立 `NOTION_GAME_SYNC_TOKEN` 已在 Mac mini 配置并完成身份、来源权限、真实写入及回读验证。后续沿用当前私有输入，配置或执行设备改变时重新核对，不重复创建集成或用历史交接包覆盖更新的会话。
 
 ## 执行、复核与交接

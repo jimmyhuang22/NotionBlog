@@ -4,7 +4,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import sharp from "sharp";
 import { fixtureItems } from "../fixtures/content.ts";
-import { collectSteamAchievements, planSteamAchievements, writeSteamAchievements } from "../scripts/game-sync/steam-achievements.ts";
+import { collectSteamAchievements, planSteamAchievements, steamAchievementSetId, writeSteamAchievements } from "../scripts/game-sync/steam-achievements.ts";
+import { planSteamAchievementBatch, planSteamAchievementWithdrawals, readActiveSteamAchievementSets,
+  writeSteamAchievementBatch } from "../scripts/game-sync/steam-achievement-batch.ts";
 import { writePsnWebsiteTrophies } from "../scripts/game-sync/website-trophies.ts";
 import { createCombinedGameTrophyReader } from "../src/server/database/game-trophies.ts";
 import { publicationWriter } from "../src/server/database/publication.ts";
@@ -73,6 +75,7 @@ test("Steam uses explicit scope, public icons, and local unlock dates while hidi
 
   const { db, close } = await ownerInstallFixture();
   try {
+    const secondItem = { ...item, id: "b".repeat(32), slug: "steam-batch-secondary", href: "/library/games/steam-batch-secondary" };
     const role = (name: "nb_reader" | "nb_writer"): SqlExecutor => ({
       query: <T>(sql: string, values?: unknown[]) => db.transaction(async tx => {
         await tx.exec(`SET LOCAL ROLE ${name}`);
@@ -88,9 +91,11 @@ test("Steam uses explicit scope, public icons, and local unlock dates while hidi
     await db.query("SELECT nb_v2_api.configure_policy($1,600,$2::jsonb,'[]')", [digest, JSON.stringify(sources)]);
     const publication = publicationWriter(writer, "published");
     const lease = await publication.begin(randomUUID(), digest);
-    await publication.stage(lease, [{ detail: { item, document: { blocks: [], toc: [], completeness: "complete" } },
-      evidence: { sourceKey: "game", dataSourceId: "fixture-source", databaseParentId: null, courseId: null, parentId: null, ordinal: 0 } }]);
-    await publication.promote(lease, { records: 1, media: 0, complete: true });
+    await publication.stage(lease, [item, secondItem].map((item, ordinal) => ({
+      detail: { item, document: { blocks: [], toc: [], completeness: "complete" } },
+      evidence: { sourceKey: "game", dataSourceId: "fixture-source", databaseParentId: null, courseId: null, parentId: null, ordinal },
+    })));
+    await publication.promote(lease, { records: 2, media: 0, complete: true });
     assert.equal(await writePsnWebsiteTrophies(writer, { observedAt: plan.observedAt, sets: [{
       id: "psn:" + "b".repeat(32), gameId: item.id, platform: "PS5", earned: 1, total: 1, progressPercent: 100,
       grades: { platinum: { earned: 0, total: 0 }, gold: { earned: 0, total: 0 },
@@ -115,6 +120,48 @@ test("Steam uses explicit scope, public icons, and local unlock dates while hidi
       [later, JSON.stringify({ ...plan.set, trophies: [earned, earned] })]), /duplicate key/);
     assert.equal((await readSets(item.id, item.slug))[1].total, 3);
     await assert.rejects(reader.query("SELECT * FROM nb_game_trophies.steam_achievements"), /permission denied/);
+
+    await db.exec(await readFile(new URL("../database/game-trophy-migrations/004_steam_achievement_batches.sql", import.meta.url), "utf8"));
+    assert.deepEqual(await readSets(item.id, item.slug), [oldSet, steam]);
+    const secondApp = appId + 1, secondSetId = steamAchievementSetId(secondApp);
+    const both = { ...policy, verifiedPublicAppIds: [appId, secondApp],
+      products: { ...policy.products, [secondApp]: { type: "Game" } } };
+    const selected = { ...config, steamAchievementAppIds: [secondApp],
+      bindings: { ...config.bindings, [`Steam:PC:${secondApp}`]: secondItem.id } };
+    const next = { version: 1, entries: [{ appId: secondApp, snapshot: { ...payload, observedAt: later,
+      set: { id: secondSetId, gameId: secondItem.id, trophies: [{ ...earned, id: "b".repeat(32), icon: null }] },
+    } }] };
+    const before = await readActiveSteamAchievementSets(writer);
+    assert.deepEqual(before, [steam.id]);
+    const batch = planSteamAchievementBatch(next, steamId, both, selected, before, Date.parse(later));
+    assert.equal(await writeSteamAchievementBatch(writer, batch), true);
+    assert.equal(await writeSteamAchievementBatch(writer, batch), false);
+    assert.deepEqual(await readSets(item.id, item.slug), [oldSet, steam]);
+    assert.deepEqual((await readSets(secondItem.id, secondItem.slug)).map(s => [s.id, s.earned, s.total]), [[secondSetId, 1, 1]]);
+    await assert.rejects(writer.query("SELECT nb_game_trophies_api.replace_steam_achievements($1,NULL)",
+      [new Date(Date.parse(later) + 1000).toISOString()]), /NB_QUERY_INVALID/);
+
+    const refreshed = new Date(Date.parse(later) + 1000).toISOString();
+    await assert.rejects(writer.query("SELECT nb_game_trophies_api.apply_steam_achievement_batch($1,$2::jsonb)", [
+      refreshed, JSON.stringify([
+        { id: steam.id, gameId: null },
+        { id: secondSetId, gameId: secondItem.id, trophies: [earned, earned] },
+      ]),
+    ]), /duplicate key/);
+    assert.deepEqual(await readSets(item.id, item.slug), [oldSet, steam]);
+    const updated = { ...next, entries: [{ ...next.entries[0], snapshot: { ...next.entries[0].snapshot, observedAt: refreshed } }] };
+    const active = await readActiveSteamAchievementSets(writer);
+    const privacy = { ...both, hiddenAppIds: [appId], privateAppIds: [secondApp] };
+    const withdrawal = planSteamAchievementBatch(updated, steamId, privacy, selected, active, Date.parse(refreshed));
+    assert.equal(withdrawal.changes.length, 2);
+    assert.ok(withdrawal.changes.every(change => change.gameId === null));
+    assert.deepEqual(planSteamAchievementWithdrawals(steamId, privacy, selected, active, Date.parse(refreshed)), withdrawal);
+    assert.equal(await writeSteamAchievementBatch(writer, withdrawal), true);
+    assert.equal(await writeSteamAchievementBatch(writer, batch), false);
+    assert.deepEqual(await readSets(secondItem.id, secondItem.slug), []);
+    assert.deepEqual(await readSets(item.id, item.slug), [oldSet]);
+    assert.equal((await trophyIconResponse(reader, "published", earned.icon.id)).status, 404);
+
     await db.query("SELECT nb_v2_api.set_denied($1,true)", [item.id]);
     assert.deepEqual(await readSets(item.id, item.slug), []);
     assert.equal((await trophyIconResponse(reader, "published", earned.icon.id)).status, 404);
