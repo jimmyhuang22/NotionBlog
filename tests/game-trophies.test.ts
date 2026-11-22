@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { earnedByMonth, earnedPlatinum, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, trophyDay, trophyPlatformTone, trophySetsOf, type Trophy } from "../src/lib/game-trophies.ts";
+import { earnedByMonth, earnedPerMonth, earnedPlatinum, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, trophyDay, trophyPlatformTone, trophySetsOf, type Trophy } from "../src/lib/game-trophies.ts";
 
 const counts = (earned: number, total: number) => ({ earned, total });
 const grades = { platinum: counts(0, 1), gold: counts(1, 3), silver: counts(4, 8), bronze: counts(10, 18) };
@@ -82,4 +82,13 @@ test("labels: day without a time, platform tones", () => {
   assert.equal(trophyDay("2025-11-02"), "2025 年 11 月 2 日");
   assert.equal(trophyDay("2025-11-02", false), "11 月 2 日");
   assert.deepEqual(["PS4", "PS5", "PlayStation", "Steam", "Xbox"].map(trophyPlatformTone), ["playstation", "playstation", "playstation", "pc", "other"]);
+});
+
+test("trophies per month: every month between the first and last, gaps kept; nothing when too little", () => {
+  const got = (id: string, earnedDate: string | null) => trophy(id, { earned: true, earnedDate });
+  assert.deepEqual(earnedPerMonth([got("a", "2024-11-30"), got("b", "2025-02-01"), got("c", "2025-02-14"), got("d", null), trophy("e")]),
+    { start: { year: 2024, month: 11 }, counts: [1, 0, 0, 2], total: 3 });
+  assert.equal(earnedPerMonth([got("a", "2025-01-01"), got("b", "2025-03-01")]), null);
+  assert.equal(earnedPerMonth([got("a", "2025-01-01"), got("b", "2025-01-09"), got("c", "2025-01-20")]), null);
+  assert.equal(earnedPerMonth([]), null);
 });
