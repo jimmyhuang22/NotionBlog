@@ -1,13 +1,16 @@
 import type { HomeFeedOptions } from "./home-feed-core.ts";
 import { pageHomeFeedItems, validFeedSnapshot, hydrateHomeContent } from "./home-feed-core.ts";
-import { validateCursorQuery } from "./website.ts";
+import { validateCursorQuery, type TimelineIndexSnapshot } from "./website.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { HomeFeedV2Item, HomeFeedV2Repository, SocialTimelineWork } from "../../../contracts/social-timeline.ts";
 import { MAX_SOCIAL_WORKS } from "./social-limits.ts";
 import { measureContentRead, measureContentReadAsync, traceContentRead } from "../../server/content-read-timing.ts";
 import { hydrateSelectedSocialCovers, type SocialCoverSnapshot } from "../../server/social/cover-hydration.ts";
 
-export function createHomeFeedV2Repository(options:Omit<HomeFeedOptions,"social"> & {social?:()=>Promise<SocialCoverSnapshot<SocialTimelineWork>>}):HomeFeedV2Repository {
+export function createHomeFeedV2Repository(options:Omit<HomeFeedOptions,"content"|"social"> & {
+  content: () => Promise<TimelineIndexSnapshot>;
+  social?: () => Promise<SocialCoverSnapshot<SocialTimelineWork>>;
+}):HomeFeedV2Repository {
   const unavailable=()=>new ContentServiceError("CONTENT_UNAVAILABLE","Home feed is temporarily unavailable.");
   if(!["mock","notion","database"].includes(options.sources.content) || !["disabled","database"].includes(options.sources.social) ||
     (options.sources.social==="database")!==(options.social!==undefined) || typeof options.content!=="function" ||
@@ -30,8 +33,13 @@ export function createHomeFeedV2Repository(options:Omit<HomeFeedOptions,"social"
       return {result,total:items.length};
     });
     const selected = result.items.filter(item => item.source === "social").map(item => item.work);
+    const hydrateCovers = content.hydrateCovers;
+    const hydrateContent: HomeFeedOptions["hydrateContent"] = hydrateCovers ? async (events, version) => {
+      const covered = await hydrateCovers(events);
+      return options.hydrateContent ? options.hydrateContent(covered, version) : covered;
+    } : options.hydrateContent;
     const [items,works] = await Promise.all([
-      measureContentReadAsync("home-hydrate", () => hydrateHomeContent(result.items,content.version,options.hydrateContent)),
+      measureContentReadAsync("home-hydrate", () => hydrateHomeContent(result.items,content.version,hydrateContent)),
       social ? hydrateSelectedSocialCovers(social,selected) : [],
     ]);
     const covers = new Map(works.map(work => [work.id,work]));

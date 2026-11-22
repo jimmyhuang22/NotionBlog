@@ -38,7 +38,28 @@ if(prop("Platform Time Count") > 0, prop("Platform Playtime Minutes") / 60,
 
 常用游戏画廊按原 `Date` 降序、`Name` 升序排列，资料整理和账户同步不再借编辑时间改变体验顺序。Playing 卡片保留原名称、平台和评分，从视图隐藏旧 `Progress`；原公式和原值仍保留，未知体验日期不补造。
 
-网站栏目按手填体验结束日（否则开始日）稳定归年，平台最近游玩不改变归属；在玩时间线仍可跟随较新的平台活动，完成事件沿用手填结束端。v2 来源配置把 `lastPlayedDate` 映射到 `Platform Last Played`；读取支持普通日期属性及完成的 `latest_date` 日期汇总，错误聚合、不完整或不支持的汇总明确失败。平台记录继续私有，不作为网站的新增内容来源，浏览器只得到作品上的汇总日期。
+网站栏目按手填体验结束日（否则开始日）稳定归年，平台最近游玩不改变归属；在玩时间线仍可跟随较新的平台活动，完成事件沿用手填结束端。v2 来源配置把 `lastPlayedDate` 映射到 `Platform Last Played`；读取支持普通日期属性及完成的 `latest_date` 日期汇总，错误聚合、不完整或不支持的汇总明确失败。平台记录继续私有，网站使用作品上的聚合数据。
+
+### F59 最近游玩的来源平台
+
+可选的 `fields.lastPlayedPlatforms` 读取 Game 私有来源上的字符串公式。继续用现有 `Platform Records` 关系和 `Platform Last Played` 汇总，采集时由站点时区将时间归日。配置缺失、最新时刻与汇总不匹配、当日有不认识的平台或公式数据不完整时，回退为原有标签。存在该映射时需要配置 `lastPlayedDate` 和站点收集时区。只在已核对访问范围的私有 Game 来源安装公式。
+
+以下公式示例使用现有平台记录属性。结果仅供网站采集器使用。示例上限考虑到 [Notion 页面响应的引用分页与计算限制](https://developers.notion.com/reference/page-property-values#paginated-page-properties)。
+
+```text
+lets(
+  records, prop("Platform Records"),
+  active, records.filter(current.prop("Sync Status") == "Current" and not empty(current.prop("Last Played"))),
+  if(records.length() >= 25, "", active.map(
+    format(timestamp(dateStart(current.prop("Last Played")))) + "|" +
+    format(current.prop("Provider")) + "|" + current.prop("Platform")
+  ).join("\n"))
+)
+```
+
+`Game.lastPlayedPlatforms` 只公开平台标签。Steam 的 `PC` 记为 `Steam`，PS4 与 PS5 合为 `PlayStation`，Nintendo 区分 `Switch` 和 `Switch 2`。主页时间线复用 `TimelineEvent.detail`。数据库 v2 沿用原 JSONB 形状，已安装的紧凑作品读取也会随选中条目返回字段。可另装 [紧凑选择器扩展](../database/library-page-migrations/001_last_played_platforms.sql)，把该字段纳入第一阶段的快照一致性检查。
+
+部署接续时，先用只读网站身份核对公式值及隐藏平台记录的排除结果，再按现役采集程序的配置摘要流程启用字段。元数据公式变化可能不改 Game 的编辑时间，需要已支持计算字段指纹的发现路径。真实 Notion 属性、生产配置和采集运行须另行授权。
 
 Game DTO 的 `lastPlayedDate` 是兼容可选字段；新采集返回日期或 null，旧批次缺字段时沿用人工 `playedDate`。来源映射改变后需要同版同步程序、配置摘要和已获准发布策略共同接入，再让新的批次进入网站；不要把新字段写进仍运行旧解析器的输入，也不要为日期修复重抓游戏封面或扩大账户范围。网站前端发布与运行包安装分别按正常交接执行。
 

@@ -213,14 +213,22 @@ export async function readTimelineSnapshot(repository: ContentRepository, featur
   const snapshot = await publicSnapshot(repository, selected, true), zone = statusTimeZone({ timeZone });
   return { version: timelineVersion(snapshot.version, selected, zone), items: timelineEvents(snapshot, zone) };
 }
+export interface TimelineIndexSnapshot extends FeedSnapshot<TimelineEvent> {
+  hydrateCovers?: (events: TimelineEvent[]) => Promise<TimelineEvent[]>;
+}
+
 /** Sort the full metadata index, then hydrate only the Status entries selected
  * for the outgoing page. Older adapters keep their existing snapshot path. */
-export async function readTimelineIndexSnapshot(repository: ContentRepository, features: ContentFeatures, timeZone?: string): Promise<FeedSnapshot<TimelineEvent>> {
+export async function readTimelineIndexSnapshot(repository: ContentRepository, features: ContentFeatures, timeZone?: string,
+  display?: { readIndex: NonNullable<ContentRepository["readIndex"]>; hydrateCovers: (events: TimelineEvent[], version: string) => Promise<TimelineEvent[]> },
+): Promise<TimelineIndexSnapshot> {
   if (!repository.readIndex) return readTimelineSnapshot(repository, features, timeZone);
   const selected = CONTENT_KINDS.filter(kind => features[kind] && !["course", "study-note", "page"].includes(kind));
-  const snapshot = await publicSnapshot({ ...repository, readSnapshot: repository.readIndex }, selected), zone = statusTimeZone({ timeZone });
+  const snapshot = await publicSnapshot({ ...repository, readSnapshot: display?.readIndex ?? repository.readIndex }, selected), zone = statusTimeZone({ timeZone });
   if (snapshot.records.some(record => record.document !== null)) unavailable();
-  return { version: timelineVersion(snapshot.version, selected, zone), items: timelineEvents(snapshot, zone) };
+  const version = snapshot.version;
+  return { version: timelineVersion(version, selected, zone), items: timelineEvents(snapshot, zone),
+    ...(display && selected.length ? { hydrateCovers: (events: TimelineEvent[]) => display.hydrateCovers(events, version) } : {}) };
 }
 export async function hydrateTimelinePage(repository: ContentRepository, features: ContentFeatures, events: TimelineEvent[], expectedVersion: string, timeZone?: string): Promise<TimelineEvent[]> {
   if (!repository.readIndex || !events.some(event => event.type === "status")) return events;
@@ -274,7 +282,7 @@ export function timelineEvents(snapshot: PublicContentSnapshot, zone: string): T
       case "game":
         if (["playing", "clear", "platinumed"].includes(item.status)) {
           if (item.status === "playing" || occurredAt) type = item.status === "clear" ? "game-cleared" : `game-${item.status}` as typeof type;
-          rating = item.rating; progressPercent = item.progressPercent; extra = item.platforms.join(" · ") || null;
+          rating = item.rating; progressPercent = item.progressPercent;
           if (item.status !== "playing") {
             const latest = platformPlayDay(item.lastPlayedDate, zone);
             if (latest && (!occurredAt || latest.start > dayOf(occurredAt))) replayAt = latest;
@@ -290,7 +298,15 @@ export function timelineEvents(snapshot: PublicContentSnapshot, zone: string): T
       // A snapshot contains the current state of each work; duplicate observations on a day collapse.
       const previous = events.get(id);
       if (previous && (previous.occurredAt?.start ?? "") > (occurredAt?.start ?? "")) return;
-      events.set(id, { id, type, occurredAt, title: item.title, summary: item.summary, cover: item.cover, href: item.href, externalUrl: null, rating, progressPercent, detail: extra,
+      let eventDetail = extra;
+      if (item.kind === "game") {
+        const observed = item.lastPlayedPlatforms;
+        const fromPlatform = observed?.length && type === "game-playing" && occurredAt?.precision === "date" &&
+          occurredAt.start === platformPlayDay(item.lastPlayedDate, zone)?.start;
+        const platforms = fromPlatform ? observed : item.platforms;
+        eventDetail = platforms.join(" · ") || null;
+      }
+      events.set(id, { id, type, occurredAt, title: item.title, summary: item.summary, cover: item.cover, href: item.href, externalUrl: null, rating, progressPercent, detail: eventDetail,
         ...(item.kind === "game" ? { playedTime: item.playedTime ? { ...item.playedTime } : null } : {}) });
     };
     if (type) addEvent(type, occurredAt);

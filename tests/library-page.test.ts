@@ -10,11 +10,11 @@ import type { StoredMedia } from "../contracts/sync.ts";
 import type { ContentRepository } from "../contracts/repository.ts";
 import { createContentService, createFeatureGatedRepository } from "../src/lib/content/factory.ts";
 import { readLibraryFirstPageFrom } from "../src/lib/content/library-page.ts";
-import { createLibraryPageReader, readLibraryPageMode, LIBRARY_SELECTED_SQL } from "../src/server/database/library-page.ts";
+import { createLibraryPageReader, readLibraryPageMode, LIBRARY_SELECTED_SQL, LIBRARY_SELECTORS_SQL } from "../src/server/database/library-page.ts";
 import { createLibraryDisplayPreparation } from "../src/server/database/library-display.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
 import { createWebsiteWriter } from "../src/server/database/website-writer.ts";
-import { configDigest, mediaIdentity } from "../src/server/database/website-validation.ts";
+import { configDigest, mediaIdentity, validateWebsiteRecord } from "../src/server/database/website-validation.ts";
 import { scopedReader } from "../src/server/database/scoped-reads.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 import { databaseDisplayProjectionSql } from "../src/server/media/display.ts";
@@ -52,6 +52,11 @@ async function setup() {
       document: { toc: [], completeness: "complete", blocks: [{ id: "body", type: "paragraph", text: [{ text: "SYNTHETIC_BODY_EXCLUDED" }] }] } },
     evidence: { sourceKey: kind, dataSourceId: "synthetic-" + kind, databaseParentId: null, courseId: null, parentId: null, ordinal: i } });
   }
+  const game = records.find(record => record.detail.item.id === "game-0")!.detail.item;
+  if (game.kind === "game") {
+    game.lastPlayedPlatforms = ["Steam"];
+    game.lastPlayedDate = { start: "2026-11-22", end: null, precision: "date" };
+  }
   const sha256 = "b".repeat(64), assetId = mediaIdentity("movie-0", "cover", sha256);
   const media: StoredMedia = { assetId, ownerPageId: "movie-0", sha256, objectKey: "sha256/" + sha256, mime: "image/png", byteSize: 23, width: 1, height: 1 };
   records[0].detail.item.cover = { id: assetId, src: "/media/v2/" + assetId, alt: "Synthetic cover", width: 1, height: 1 };
@@ -61,6 +66,36 @@ async function setup() {
   const repo = (mode: "qualified" | "published" = "qualified", sql = reader) => createWebsiteDatabaseRepository(scopedReader(sql, mode), { scoped: true });
   return { db, role, reader, records, media, lease, repo };
 }
+
+test("compact game pages carry play platforms with either selector version and reject raw platform data", async t => {
+  const h = await setup();
+  t.after(() => h.db.close());
+  const record = h.records.find(record => record.detail.item.id === "game-0")!;
+  validateWebsiteRecord(record);
+  for (const invalid of [["PS5"], ["Steam", "Steam"], ["2026-11-22T00:00:00Z"], []]) {
+    const changed = structuredClone(record);
+    Object.assign(changed.detail.item, { lastPlayedPlatforms: invalid });
+    assert.throws(() => validateWebsiteRecord(changed), /Invalid synchronization payload/);
+  }
+  const invalidDate = structuredClone(record);
+  Object.assign(invalidDate.detail.item, { lastPlayedDate: null });
+  assert.throws(() => validateWebsiteRecord(invalidDate), /Invalid synchronization payload/);
+
+  const read = createLibraryPageReader(h.reader, { mode: "published" });
+  const selectorSQL = () => h.reader.query<{ result: { records: { item: Record<string, unknown> }[] } }>(
+    LIBRARY_SELECTORS_SQL, ["published", "game", protocol.migration.sha256]);
+  const selectors = async () => (await selectorSQL()).rows[0].result.records.find(row => row.item.id === "game-0")!.item;
+  const page = () => read("game", { limit: 20 });
+  assert.equal(Object.hasOwn(await selectors(), "lastPlayedPlatforms"), false);
+  assert.deepEqual((await page()).page.items.find(game => game.id === "game-0")!.lastPlayedPlatforms, ["Steam"]);
+
+  const migration = await readFile(new URL(`../database/library-page-migrations/${protocol.playPlatformsMigration.file}`, import.meta.url));
+  assert.equal(createHash("sha256").update(migration).digest("hex"), protocol.playPlatformsMigration.sha256);
+  await h.db.exec(migration.toString());
+  assert.deepEqual((await selectors()).lastPlayedPlatforms, ["Steam"]);
+  assert.deepEqual((await page()).page.items.find(game => game.id === "game-0")!.lastPlayedPlatforms, ["Steam"]);
+  await assert.rejects(h.role("nb_reader").query("SELECT nb_library.selector('{}')"), /permission denied/);
+});
 
 test("live library SSR: permissions, cursor/year equivalence, display barrier and fail-closed protocol", async () => {
   const h = await setup();

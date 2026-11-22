@@ -98,6 +98,9 @@ test("a game card names its platforms short in their makers' colours, writes tim
   assert.deepEqual(platformChip("PlayStation"), { label: "PlayStation", tone: "playstation" });
   assert.deepEqual(platformChip("Personal Computer"), { label: "PC", tone: "pc" });
   assert.deepEqual(platformChip("Xbox"), { label: "Xbox", tone: "other" });
+  // Switch 2 is its own short name, not the long one (F60, 2026-11-22).
+  assert.deepEqual(platformChip("Nintendo Switch 2"), { label: "Switch 2", tone: "nintendo" });
+  assert.deepEqual(platformChips(["Nintendo Switch", "Nintendo Switch 2"]).map(chip => chip.label), ["Switch", "Switch 2"]);
   // Whole hours from a hundred on, one decimal below; none at all and unknown are left out.
   assert.equal(cardTimeLabel({ value: 1902.9, unit: "hour" }), "1903 小时");
   assert.equal(cardTimeLabel({ value: 100, unit: "hour" }), "100 小时");
@@ -129,4 +132,18 @@ test("a work's page says when and what in one sentence, and the rest as words of
   assert.equal(workSentence({ ...fixtureItems.game[0]!, status: "platinumed" }, undefined), "白金");
   assert.deepEqual([["导演", "凌子风"], ["上映", "1982 年 8 月 18 日"], ["豆瓣评分", "8.5"], ["类型", "电影"], ["最近游玩", "2026 年 10 月 1 日"]].map(([label, value]) => workFactText(label!, value!)),
     ["凌子风 导演", "1982 年 8 月 18 日上映", "豆瓣 8.5", "电影", "最近游玩 2026 年 10 月 1 日"]);
+});
+
+test("a game tag's platforms each have an outline when known, Switch 2 sharing the Switch one, the rest none", async () => {
+  const { gamePlatformIcon, platformChip } = await import("../src/lib/library.ts");
+  const icon = (name: string) => gamePlatformIcon(platformChip(name).label);
+  assert.equal(icon("Steam"), "steam");
+  assert.equal(icon("steam"), "steam");
+  assert.equal(icon("PlayStation 5"), "playstation");
+  assert.equal(icon("Nintendo Switch"), "switch");
+  assert.equal(icon("Nintendo Switch 2"), "switch");
+  assert.equal(icon("New Nintendo 3DS"), "3ds");
+  assert.equal(icon("Personal Computer"), "pc");
+  assert.equal(icon("Xbox"), null);
+  assert.equal(icon("Demo Console"), null);
 });

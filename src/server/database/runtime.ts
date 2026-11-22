@@ -21,7 +21,8 @@ import { readSearchContextMode } from "./search-context.ts";
 import { selfHostedDisplayStore } from "../self-hosted-media/runtime.ts";
 import { displayProjectionSql } from "../self-hosted-media/projection.ts";
 import { displayDeliveryMode, readDisplayMedia } from "./display.ts";
-import { databaseDisplayProjectionSql } from "../media/display.ts";
+import { databaseDisplayProjectionSql, hydrateTimelineDisplayCovers } from "../media/display.ts";
+import type { TimelineEvent } from "../../../contracts/website.ts";
 import { createThumbnailSql } from "./thumbnail-query.ts";
 
 let runtime: ReturnType<typeof createRuntime>|undefined;
@@ -74,6 +75,11 @@ function createRuntime() {
     mode,timeZone:()=>getSiteConfig().timeZone,
     ...((displayStore||cloudDisplay)?{prepareDelivery:createLibraryDisplayPreparation(project)}:{}),
   })}:baseRepository;
-  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository,storage};
+  // The mixed homepage reads the same live scoped index before resolving cover sizes.
+  const homeTimeline = cloudDisplay && projection === "scoped" ? {
+    readIndex: createWebsiteDatabaseRepository(scopedReader(rawDb,mode), { scoped: true, timeZone: () => getSiteConfig().timeZone }).readIndex!,
+    hydrateCovers: (events: TimelineEvent[], version: string) => hydrateTimelineDisplayCovers(rawDb, mode, events, version),
+  } : undefined;
+  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository,homeTimeline,storage};
 }
 export function getDatabaseRuntime() { return measureContentRead("database-runtime", () => runtime??=createRuntime()); }

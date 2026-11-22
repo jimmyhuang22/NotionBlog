@@ -143,6 +143,17 @@ export interface TrophyCount {
   total: number;
 }
 export type TrophyGrade = "platinum" | "gold" | "silver" | "bronze";
+export interface GameTrophy {
+  id: string;
+  name: string | null;
+  detail: string | null;
+  grade: TrophyGrade | null;
+  icon: ImageAsset | null;
+  earned: boolean;
+  earnedDate: string | null;
+  rarityPercent: number | null;
+  hidden: boolean;
+}
 export interface GameTrophySetSummary extends TrophyCount {
   /** Stable site key. No platform account or source identifier. */
   id: string;
@@ -150,6 +161,8 @@ export interface GameTrophySetSummary extends TrophyCount {
   progressPercent: number | null;
   /** Steam achievements have no trophy grades. */
   grades?: Record<TrophyGrade, TrophyCount>;
+  /** Complete verified list. Absent when only the summary is available. */
+  trophies?: GameTrophy[];
 }
 export interface Game extends ContentBase {
   kind: "game";
@@ -159,6 +172,8 @@ export interface Game extends ContentBase {
   playedDate: DateRange | null;
   /** Latest observed linked-platform play, day only in the site zone. Legacy snapshots may omit it. */
   lastPlayedDate?: DateRange | null;
+  /** Verified platforms observed on lastPlayedDate in the site's time zone. Unknown or unavailable is null. */
+  lastPlayedPlatforms?: string[] | null;
   /** Earliest observed linked-platform play, day only. Unknown (including Steam) stays null. */
   firstPlayedDate?: DateRange | null;
   /** Stable archive day: the personal experience range's end, otherwise its start; unknown stays null. */

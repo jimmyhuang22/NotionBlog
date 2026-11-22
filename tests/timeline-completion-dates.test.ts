@@ -27,6 +27,29 @@ function snapshot(items: AnyContent[]): PublicContentSnapshot {
 }
 function events(item: AnyContent) { return timelineEvents(snapshot([item]), zone); }
 
+test("game activity uses only recorded platforms on the winning day and retains completion platforms", () => {
+  const item = { ...game("playing", date("2026-10-20")), platforms: ["Personal Computer", "PlayStation 5"],
+    lastPlayedDate: date("2026-11-22"), lastPlayedPlatforms: ["Steam"] };
+  const playDetail = (game: Game) => {
+    const event = events(game).find(event => event.type === "game-playing");
+    return event && event.type !== "status" ? event.detail : undefined;
+  };
+  const all = "Personal Computer · PlayStation 5";
+  assert.equal(playDetail(item), "Steam");
+  assert.equal(playDetail({ ...item, playedDate: date("2026-11-22") }), "Steam");
+  assert.equal(playDetail({ ...item, lastPlayedPlatforms: ["PlayStation", "Steam"] }), "PlayStation · Steam");
+  assert.equal(playDetail({ ...item, lastPlayedDate: date("2026-11-23"), lastPlayedPlatforms: ["PlayStation"] }), "PlayStation");
+  assert.equal(playDetail({ ...item, playedDate: date("2026-11-24") }), all);
+  assert.equal(playDetail({ ...item, lastPlayedPlatforms: undefined }), all);
+  assert.equal(playDetail({ ...item, lastPlayedPlatforms: null }), all);
+  assert.equal(playDetail({ ...item, lastPlayedDate: null }), all);
+  assert.equal(playDetail({ ...item, platforms: ["Nintendo Switch"], lastPlayedPlatforms: ["Switch"] }), "Switch");
+  assert.equal(playDetail({ ...item, platforms: [], lastPlayedPlatforms: null }), null);
+  for (const status of ["clear", "platinumed"] as const) {
+    assert.deepEqual(events({ ...item, status }).map(event => event.type !== "status" && event.detail), ["Steam", all]);
+  }
+});
+
 test("finished and abandoned books use the range end or single date; reading uses the start", () => {
   for (const range of [date("2022-07-19", "2022-09-14"), date("2022-09-14")]) {
     for (const status of ["read", "given-up"] as const) {
