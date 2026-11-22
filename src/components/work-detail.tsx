@@ -4,14 +4,15 @@ import type { Book, ContentDocument, DateRange, Game, Movie, Rating, TimeAmount 
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
-import { dateStripNotes, gameDateRows } from "../lib/game-dates.ts";
+import { dateStripNotes, gameDateRows, stripDate } from "../lib/game-dates.ts";
 import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
 import { PlatformChips } from "./platform-chips";
 import { ExcerptFold } from "./excerpt-fold";
 import { GameTrophies } from "./game-trophies";
-import { gradeLabel, gradeOrder, setPercent, trophyPlatformTone, type TrophySet } from "../lib/game-trophies.ts";
+import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
+import { gradeLabel, gradeOrder, setPercent, setPlatinum, type TrophySet } from "../lib/game-trophies.ts";
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -235,29 +236,43 @@ function timelineRows(item: Game, timeZone: string) {
 /**
  * The days across the top of the main column (the owner's pick 乙 of 2026-11-21): most games have no write-up, and
  * there the column was empty beside a long side column. Between two dates, how long it was; under a range, how many
- * days it ran. On a phone the strip stands upright.
+ * days it ran. Each date leads with its year in large type and the day under it (乙 of 2026-11-22), so the strip reads
+ * year to year; a year the date before already showed is quieter. A narrow column stands the strip upright.
  */
 function GameDates({ item, timeZone }: { item: Game; timeZone: string }) {
   const rows = timelineRows(item, timeZone);
   if (!rows.length) return null;
   const notes = dateStripNotes(rows.map(row => row.range), timeZone);
+  let shownYear: number | null = null;
   return (
     <ol className="game-dates" aria-label="日期" style={{ "--steps": rows.length } as React.CSSProperties}>
-      {rows.map((row, index) => (
-        <li key={row.label} className={row.own ? "game-dates__own" : undefined}>
-          <b>{row.label}</b>
-          <span>{(row.range && rangeLabel(row.range, timeZone)) ?? "日期未记录"}</span>
-          {notes[index]!.length ? <small>{notes[index]!.length}</small> : null}
-          {notes[index]!.gap ? <em>{notes[index]!.gap}</em> : null}
-        </li>
-      ))}
+      {rows.map((row, index) => {
+        const date = row.range ? stripDate(row.range, timeZone) : null;
+        const again = !!date && date.first === shownYear;
+        if (date) shownYear = date.last;
+        return (
+          <li key={row.label} className={row.own ? "game-dates__own" : undefined}>
+            <b>{row.label}</b>
+            {date ? (
+              <span className="game-dates__when">
+                <strong className={`game-dates__year${again ? " game-dates__year--again" : ""}${date.first !== date.last ? " game-dates__year--span" : ""}`}>{date.year.replace(" – ", "\u00a0– ")}<span className="visually-hidden"> 年</span></strong>
+                <span className="game-dates__days">{date.days.map((piece, at) => <span key={at}>{at ? " " : null}<span className="game-dates__piece">{piece}</span></span>)}</span>
+              </span>
+            ) : <span className="game-dates__none">日期未记录</span>}
+            {notes[index]!.length ? <small>{notes[index]!.length}</small> : null}
+            {notes[index]!.gap ? <em>{notes[index]!.gap}</em> : null}
+          </li>
+        );
+      })}
     </ol>
   );
 }
 
 /**
  * Trophies in the side column (2026-11-20, step one): earned of total with a bar and each grade's count for one set;
- * a row per platform when there are several, never added together. No sets, no group: a Nintendo game has none.
+ * a row per platform when there are several, never added together (甲, 2026-11-22): the platform's outline and name,
+ * the bars starting on one line and the counts at one edge; a set with its platinum has a platinum bar and says
+ * "白金", one with nothing earned is quiet. No sets, no group: a Nintendo game has none.
  */
 function TrophySummary({ sets }: { sets: TrophySet[] }) {
   if (!sets.length) return null;
@@ -268,7 +283,18 @@ function TrophySummary({ sets }: { sets: TrophySet[] }) {
         <dt className="game-trophy-sum__title">奖杯</dt>
         <dd>
           <ul className="game-trophy-sum__sets">
-            {sets.map(set => <li key={set.id}><span className={`platform-chip platform-chip--${trophyPlatformTone(set.platform)}`}>{set.platform}</span>{bar(set)}<span><b>{set.earned}</b> / {set.total}</span></li>)}
+            {sets.map(set => {
+              const platinum = setPlatinum(set);
+              return (
+                <li key={set.id} className={platinum ? "game-trophy-sum__set--platinum" : set.earned === 0 ? "game-trophy-sum__set--none" : undefined}>
+                  <TrophyPlatform platform={set.platform} />{bar(set)}
+                  <span className="game-trophy-sum__n">
+                    {platinum ? <PlatinumCup className="game-trophy-sum__cup" /> : null}
+                    {platinum && set.earned === set.total ? <>白金<span className="visually-hidden">，{set.earned} / {set.total}</span></> : <><b>{set.earned}</b> / {set.total}</>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </dd>
       </div>
@@ -279,8 +305,8 @@ function TrophySummary({ sets }: { sets: TrophySet[] }) {
     <div className="work-game__group game-trophy-sum">
       <dt className="visually-hidden">奖杯</dt>
       <dd className="game-trophy-sum__count">{set.earned}<small> / {set.total} 个奖杯</small></dd>
-      <dd className="game-trophy-sum__bar">{bar(set)}<span>{setPercent(set)}%</span></dd>
-      {set.grades ? <dd className="game-trophy-sum__grades">{gradeOrder.map(grade => <span key={grade} className={`game-trophy__grade game-trophy__grade--${grade}`}>{gradeLabel[grade]} {set.grades![grade].earned}<small>/{set.grades![grade].total}</small></span>)}</dd> : null}
+      <dd className={`game-trophy-sum__bar${setPlatinum(set) ? " game-trophy-sum__bar--platinum" : ""}`}>{bar(set)}<span>{setPercent(set)}%</span></dd>
+      {set.grades ? <dd className="game-trophy-sum__grades">{gradeOrder.map(grade => <span key={grade} className={`game-trophy__grade game-trophy__grade--${grade}`}><span>{gradeLabel[grade]} {set.grades![grade].earned}<small>/{set.grades![grade].total}</small></span></span>)}</dd> : null}
     </div>
   );
 }
