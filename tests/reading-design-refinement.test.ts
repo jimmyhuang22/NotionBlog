@@ -168,3 +168,24 @@ test("a heading that is only a number joins the heading after it and leads to th
   // Headings with words and numbers are not numbers.
   assert.equal(mergeNumberedHeadings([{ id: "a", title: "Week 3", level: 2 }, { id: "b", title: "2024", level: 2 }, { id: "c", title: "x", level: 2 }]).length, 2);
 });
+
+test("a game's tag on the home timeline draws each known platform's outline before its name and reads as before (F60)", async () => {
+  const library = await import("../src/lib/library.ts");
+  const { GameTag } = view("src/components/game-tag.tsx", { "../lib/library.ts": library });
+  const html = (platforms: string[]) => renderToStaticMarkup(React.createElement(GameTag, { platforms }));
+  const text = (markup: string) => markup.replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/<[^>]+>/g, "");
+  // No platform: the plain word, no icon.
+  assert.equal(html([]), "在玩");
+  const one = html(["Steam"]);
+  assert.equal(text(one), "在 Steam 上玩");
+  // The outline is the text's own colour, hidden from screen readers, inside the same unbreakable run as the name.
+  assert.match(one, /<span class="game-platform"><svg class="game-platform__icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><path d="[^"]+"><\/path><\/svg>Steam<\/span>/);
+  const two = html(["Steam", "PlayStation"]);
+  assert.equal(text(two), "在 Steam、PlayStation 上玩");
+  assert.equal(two.match(/<svg/g)?.length, 2);
+  // A platform not known has its name alone: no empty box.
+  const unknown = html(["Xbox", "Switch 2"]);
+  assert.equal(text(unknown), "在 Xbox、Switch 2 上玩");
+  assert.equal(unknown.match(/<svg/g)?.length, 1);
+  assert.match(unknown, /<span class="game-platform">Xbox<\/span>/);
+});
