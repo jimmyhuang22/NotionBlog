@@ -15,24 +15,34 @@ function hash(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-/** The playtime allowlist and the site's explicit selection and binding must all agree. */
-function steamAchievementScope(steamId: string, policyInput: unknown, config: unknown) {
+export function allowedSteamAchievementApps(steamId: string, policyInput: unknown, config: unknown) {
   const policy = steamPolicy(policyInput), site = object(config);
   if (policy.mode !== "fixed-allowlist" || policy.steamId !== steamId) throw new GameSyncError("STEAM_ACCOUNT_MISMATCH");
+  if (!Array.isArray(site.excluded) || site.excluded.some(entry => typeof entry !== "string")) {
+    throw new GameSyncError("PRIVATE_CONFIG_INVALID");
+  }
+  const excluded = new Set(site.excluded), hidden = new Set([...policy.hiddenAppIds, ...policy.privateAppIds]);
+  return new Set(policy.verifiedPublicAppIds.filter(appId =>
+    !hidden.has(appId) && !excluded.has(`Steam:PC:${appId}`) &&
+    Object.hasOwn(policy.products, String(appId)) && policy.products[appId]?.type === "Game"));
+}
+
+export const steamAchievementSetId = (appId: number) => "steam:" + hash(`Steam:PC:${appId}`).slice(0, 32);
+
+/** The playtime allowlist and the site's explicit selection and binding must all agree. */
+function steamAchievementScope(steamId: string, policyInput: unknown, config: unknown) {
+  const allowed = allowedSteamAchievementApps(steamId, policyInput, config), site = object(config);
   const appId = site.steamAchievementAppId;
-  if (typeof appId !== "number" || !policy.verifiedPublicAppIds.includes(appId) ||
-      policy.hiddenAppIds.includes(appId) || policy.privateAppIds.includes(appId) ||
-      !Object.hasOwn(policy.products, String(appId)) || policy.products[appId]?.type !== "Game") {
+  if (typeof appId !== "number" || !allowed.has(appId)) {
     throw new GameSyncError("STEAM_ACHIEVEMENT_SCOPE_REQUIRED");
   }
   const key = `Steam:PC:${appId}`, bindings = object(site.bindings);
   const binding = Object.hasOwn(bindings, key) ? bindings[key] : undefined;
   const gameId = typeof binding === "string" ? normalizedId(binding) : "";
-  if (!Array.isArray(site.excluded) || site.excluded.some(entry => typeof entry !== "string") ||
-      site.excluded.includes(key) || !/^[0-9a-f]{32}$/.test(gameId)) {
+  if (!/^[0-9a-f]{32}$/.test(gameId)) {
     throw new GameSyncError("STEAM_ACHIEVEMENT_SCOPE_REQUIRED");
   }
-  return { appId, gameId, owner: hash(steamId), setId: "steam:" + hash(key).slice(0, 32) };
+  return { appId, gameId, owner: hash(steamId), setId: steamAchievementSetId(appId) };
 }
 
 function achievementRows(value: unknown, idField: string) {

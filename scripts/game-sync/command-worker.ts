@@ -14,6 +14,8 @@ import { runDaily, safeCode } from "./daily.ts";
 import { planPsnWebsiteTrophies, writePsnWebsiteTrophies } from "./website-trophies.ts";
 import { maxTrophySnapshotBytes, planPsnTrophyDetails, writePsnTrophyDetails } from "./psn-trophy-details.ts";
 import { collectSteamAchievements, maxSteamAchievementSnapshotBytes, planSteamAchievements, writeSteamAchievements } from "./steam-achievements.ts";
+import { collectSteamAchievementBatch, planSteamAchievementBatch, planSteamAchievementWithdrawals,
+  readActiveSteamAchievementSets, writeSteamAchievementBatch } from "./steam-achievement-batch.ts";
 
 
 export async function runGameCommand(args: string[], runId: string) {
@@ -31,25 +33,39 @@ export async function runGameCommand(args: string[], runId: string) {
       console.log(JSON.stringify({ connected: true })); return;
     }
     const env = await readEnv(join(root, "credentials.env"));
-    if (command === "collect-steam-achievements" || command === "apply-steam-achievements") {
+    if (["collect-steam-achievements", "apply-steam-achievements", "collect-steam-achievement-batch",
+      "apply-steam-achievement-batch", "withdraw-excluded-steam-achievements"].includes(command)) {
       const config = await readJson(join(root, "config.json"));
       const policy = await fixedSteamPolicy(root);
       if (!policy) throw new GameSyncError("STEAM_ALLOWLIST_REQUIRED");
-      const steamId = env.STEAM_ID ?? "", path = join(root, "steam-achievements-snapshot.json");
-      if (command === "collect-steam-achievements") {
-        const snapshot = await collectSteamAchievements(env.STEAM_WEB_API_KEY ?? "", steamId, policy, config, flag);
+      const steamId = env.STEAM_ID ?? "";
+      const batch = command.endsWith("-batch");
+      const file = join(root, batch ? "steam-achievement-batch.json" : "steam-achievements-snapshot.json");
+      if (command.startsWith("collect-")) {
+        const collect = batch ? collectSteamAchievementBatch : collectSteamAchievements;
+        const snapshot = await collect(env.STEAM_WEB_API_KEY ?? "", steamId, policy, config, flag);
         const text = JSON.stringify(snapshot) + "\n";
         if (Buffer.byteLength(text) > maxSteamAchievementSnapshotBytes) throw new GameSyncError("STEAM_ACHIEVEMENT_ICON_BUDGET");
-        await writeText(path, text);
-        console.log(JSON.stringify({ total: snapshot.set.trophies.length }));
+        await writeText(file, text);
+        console.log(JSON.stringify({ sets: "entries" in snapshot ? snapshot.entries.length : 1 }));
         return;
       }
-      const plan = planSteamAchievements(await readJson(path, maxSteamAchievementSnapshotBytes), steamId, policy, config);
       const { createDatabasePool, sqlExecutor } = await import("../../src/server/database/connection.ts");
       const pool = createDatabasePool(env.SYNC_DATABASE_URL, env.DATABASE_TLS ?? "verify", env.DATABASE_CA_CERT);
       try {
-        const applied = await writeSteamAchievements(sqlExecutor(pool), plan);
-        console.log(JSON.stringify({ applied, sets: 1 }));
+        const db = sqlExecutor(pool);
+        if (command === "apply-steam-achievements") {
+          const plan = planSteamAchievements(await readJson(file, maxSteamAchievementSnapshotBytes), steamId, policy, config);
+          console.log(JSON.stringify({ applied: await writeSteamAchievements(db, plan), sets: 1 }));
+        } else {
+          const active = await readActiveSteamAchievementSets(db);
+          const plan = batch
+            ? planSteamAchievementBatch(await readJson(file, maxSteamAchievementSnapshotBytes), steamId, policy, config, active)
+            : planSteamAchievementWithdrawals(steamId, policy, config, active);
+          console.log(JSON.stringify({ applied: await writeSteamAchievementBatch(db, plan),
+            sets: plan.changes.filter(change => change.gameId !== null).length,
+            withdrawals: plan.changes.filter(change => change.gameId === null).length }));
+        }
       } finally {
         await pool.end();
       }
