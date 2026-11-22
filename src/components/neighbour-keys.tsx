@@ -4,8 +4,9 @@ import { useEffect } from "react";
 
 /**
  * The left and right arrow keys open the previous and next work (2026-11-22, with the edge handles of 乙): the key
- * presses the card at the foot of the page, so the move goes through the same link, pending state and page switch as
- * a click. Left is "上一款", the work before this one in the list's order, as it sits to the left on the shelf.
+ * presses whichever link is on screen, the edge handle or the card at the foot of the page, so the move goes through
+ * the same link, pending state and page switch as a click. Left is "上一款", the work before this one in the list's
+ * order, as it sits to the left on the shelf.
  *
  * The keys stay with whatever else wants them: nothing happens while typing, with a modifier held (back and forward,
  * selection), when something already handled the key (the trophy platform tabs), inside a widget that moves with
@@ -22,7 +23,7 @@ export function NeighbourKeys() {
       for (let node = target; node && node !== document.body; node = node.parentElement) {
         if (node.scrollWidth > node.clientWidth + 1 && /auto|scroll/u.test(getComputedStyle(node).overflowX)) return;
       }
-      const link = document.querySelector<HTMLAnchorElement>(`.work__neighbours .pager__${side}`);
+      const link = [...document.querySelectorAll<HTMLAnchorElement>(`.work__edge--${side}, .work__neighbours .pager__${side}`)].find(anchor => anchor.getClientRects().length > 0);
       if (!link) return;
       event.preventDefault();
       link.click();

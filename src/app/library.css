@@ -389,19 +389,21 @@
 .work__neighbours--wide .work__neighbour-poster .cover { width: 72px; aspect-ratio: 16 / 9; object-fit: cover; }
 /*
  * A game's neighbours at the screen's edges (乙, 2026-11-22): a half-round handle on each side, middle of the screen,
- * that opens into a small card with the art, the name and the date under a pointer. Only where there is a pointer to
- * hover and room beside the 980 column; the cards at the foot of the page stay everywhere.
+ * that opens into a small card with the art, the name and the date under a pointer or the keyboard's focus. Only where
+ * there is a pointer to hover and room beside the 980 column; there they take the place of the cards at the foot of
+ * the page (2026-11-23), which stay everywhere else.
  */
 .work__edges { display: none; }
 @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
   .work__edges { display: block; }
+  .work-game__main .work__neighbours, .work-game__main .work__neighbours-pending { display: none; }
   .work__edge { position: fixed; top: 50%; z-index: 15; display: flex; align-items: center; gap: 10px; height: 88px; max-width: 46px; padding: 0 12px; overflow: hidden; translate: 0 -50%; border-radius: 0 44px 44px 0; background: var(--card); box-shadow: var(--shadow), 0 0 0 1px var(--rule); color: var(--ink); text-decoration: none; transition: max-width 0.25s cubic-bezier(0.3, 0.8, 0.3, 1), box-shadow 0.2s; }
   .work__edge--prev { left: 0; }
   .work__edge--next { right: 0; flex-direction: row-reverse; border-radius: 44px 0 0 44px; }
-  .work__edge:hover { max-width: 400px; box-shadow: var(--shadow-lift), 0 0 0 1px var(--rule); }
+  .work__edge:is(:hover, :focus-visible) { max-width: 400px; box-shadow: var(--shadow-lift), 0 0 0 1px var(--rule); }
   .work__edge-arrow { flex: none; width: 22px; font-size: var(--text-xl); line-height: 1; text-align: center; color: var(--muted); }
   .work__edge-body { display: flex; align-items: center; gap: 12px; width: 300px; flex: none; opacity: 0; transition: opacity 0.2s; }
-  .work__edge:hover .work__edge-body { opacity: 1; }
+  .work__edge:is(:hover, :focus-visible) .work__edge-body { opacity: 1; }
   .work__edge--next .work__edge-body { flex-direction: row-reverse; text-align: right; }
   .work__edge-cover { flex: none; width: 104px; }
   .work__edge-cover .cover { width: 104px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-xs); box-shadow: none; }
