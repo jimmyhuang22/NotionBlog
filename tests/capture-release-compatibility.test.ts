@@ -13,7 +13,7 @@ const directNotionSources: Record<string, string> = {
   'src/server/notion/runtime.ts': '1e85c7dc9b44f6bee3637243afe594d0dd50614ae5259048b7092164c0439a93',
   'src/server/notion/media.ts': '2c449ec24e117c49ac8097e9fe5960f715b1f69b26c517132ddc63cf10c4824e',
   'src/server/notion/repository.ts': 'd49598f05cb3836e75049bb92b6b4a32e1921cbd7c217d4aa9193fc69f1a8d08',
-  'src/server/notion/website-repository.ts': 'e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9',
+  'src/server/notion/website-repository.ts': 'a76d7bc0beb74446870d0fe4f54ca8a66d332bf94fc06a94c87138d6635216d8',
   'src/server/notion/automatic-study.ts': '443c7c17f3e5568b218644bb5a4ba878200b6cfae76392df51ede2ecedfbc822',
   'src/app/media/[assetId]/route.ts': '36088b487cbd05b6a8a18dddc70c808a0406eff9c8cc80c030b841760f2668e1',
 };
@@ -24,7 +24,8 @@ function laterPublicationRepair(path:string,current:string,prior:string,producer
     // Both the historical B20 mapper and current N08 page-mention producer stay
     // outside these old capture transitions. These are rejection observations.
     for (const sha256 of [current, ...(path === "src/server/notion/website-repository.ts"
-      ? ["b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51"] : [])]) {
+      ? ["b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51",
+        "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9"] : [])]) {
       const changed = structuredClone(consumer); changed.files.find(file => file.path === path)!.sha256 = sha256;
       assert.throws(() => checkCaptureReleaseCompatibility(producer, changed), { code: "RELEASE_INVALID" });
     }

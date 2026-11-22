@@ -115,10 +115,29 @@ export interface PlatformChip { label: string; tone: PlatformTone }
 export function platformChip(platform: string): PlatformChip {
   const name = platform.trim();
   if (/^nintendo switch$/iu.test(name)) return { label: "Switch", tone: "nintendo" };
+  if (/^(nintendo )?switch ?2$/iu.test(name)) return { label: "Switch 2", tone: "nintendo" };
   if (/3ds$/iu.test(name)) return { label: "3DS", tone: "nintendo" };
   if (/^playstation/iu.test(name)) return { label: "PlayStation", tone: "playstation" };
   if (/^(personal computer|pc)$/iu.test(name)) return { label: "PC", tone: "pc" };
   return { label: name, tone: "other" };
+}
+
+export type GamePlatformIcon = "steam" | "playstation" | "switch" | "3ds" | "pc";
+
+/**
+ * The outline drawn before a platform's name in the home timeline's game tag (F60, the owner's pick 甲,
+ * 2026-11-22), by the label `platformChip` gives it. Switch 2 shares the Switch outline: its name already
+ * says 2, and a numeral inside a 13-pixel icon only blurs. A platform not known here has its name alone.
+ */
+export function gamePlatformIcon(label: string): GamePlatformIcon | null {
+  switch (label.toLowerCase()) {
+    case "steam": return "steam";
+    case "playstation": return "playstation";
+    case "switch": case "switch 2": return "switch";
+    case "3ds": return "3ds";
+    case "pc": return "pc";
+    default: return null;
+  }
 }
 
 /** A game's platforms as chips, each label once: a PlayStation 4 and 5 game is one "PlayStation", not two. */

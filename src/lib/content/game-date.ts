@@ -4,6 +4,13 @@ import { dateParts } from "../format.ts";
 /** Invalidate cursors made with the former latest-play archive policy. */
 export const GAME_DATE_POLICY = "experience-day-v3";
 
+const observedPlatforms = new Set(["Steam", "PlayStation", "Switch", "Switch 2", "3DS", "Wii U"]);
+
+export function isObservedGamePlatformList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= observedPlatforms.size &&
+    value.every(platform => observedPlatforms.has(platform)) && new Set(value).size === value.length;
+}
+
 function day(value: string, precision: DateRange["precision"], timeZone: string): string | null {
   const calendar = value.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(calendar)) return null;
@@ -41,6 +48,10 @@ export function gameBrowsingDate(game: Game, timeZone = "UTC"): DateRange | null
 
 /** Recompute derived data in the reader's zone; never trust a stale stored archiveDate. */
 export function projectGameDates(game: Game, timeZone: string): Game {
-  return { ...game, lastPlayedDate: platformPlayDay(game.lastPlayedDate, timeZone),
+  const lastPlayedDate = platformPlayDay(game.lastPlayedDate, timeZone);
+  return { ...game, lastPlayedDate,
+    ...(game.lastPlayedPlatforms === undefined ? {} : {
+      lastPlayedPlatforms: lastPlayedDate && isObservedGamePlatformList(game.lastPlayedPlatforms) ? game.lastPlayedPlatforms : null,
+    }),
     firstPlayedDate: platformPlayDay(game.firstPlayedDate, timeZone), archiveDate: resolvedArchiveDate(game, timeZone) };
 }
