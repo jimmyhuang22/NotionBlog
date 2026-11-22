@@ -52,7 +52,7 @@ export function SectionWaiting({ path, heading }: { path: string; heading?: Reac
   );
 
   if (path === "/works") return (
-    <div className="wrap works page-loading">
+    <div className="wrap works page-loading" role="status" aria-label={label}>
       <header className="page-head library__head">
         {head}
         <div className="works__tools" aria-hidden="true">

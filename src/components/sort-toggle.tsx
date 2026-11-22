@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LinkPending } from "@/components/link-pending";
 import { FILTER_TRANSITION } from "@/lib/transitions";
+import { isPlainClick, prefersReducedMotion } from "../lib/dom.ts";
 
 type Mark = "down" | "up" | "swap";
 
@@ -37,7 +38,7 @@ export function SortToggle({ href, now, next }: { href: string; now: { label: st
   };
   function press() {
     const anchor = link.current;
-    if (!anchor || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!anchor || prefersReducedMotion()) return;
     const old = anchor.querySelector(".library__sort-now");
     if (old) {
       const ghost = old.cloneNode(true) as HTMLElement;
@@ -69,7 +70,7 @@ export function SortToggle({ href, now, next }: { href: string; now: { label: st
   return (
     <nav className="library__sort" aria-label="排序">
       <Link ref={link} href={href} aria-label={`排序：${now.label}，点按改为${next.label}`} transitionTypes={FILTER_TRANSITION} className={turning ? "is-turning" : undefined}
-        onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) press(); }}>
+        onClick={event => { if (isPlainClick(event)) press(); }}>
         <span className="library__sort-now">{now.label}<SortMark mark={now.mark} /></span>
         <span className="library__sort-next" aria-hidden="true">{next.label}<SortMark mark={next.mark} /></span>
         <LinkPending />

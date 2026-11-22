@@ -31,9 +31,10 @@ type Tab = "page" | "course";
  * a single heading, never shows it.
  */
 export function PageOutline({ toc }: { toc: OutlineEntry[] }) {
-  const [active] = useCurrentHeading(toc);
   const [shown, setShown] = useState(false);
   const [open, setOpen] = useState(false);
+  // The button names the current chapter, so the reading is followed while it shows or the sheet is open.
+  const [active] = useCurrentHeading(toc, toc.length >= FEWEST && (shown || open));
   const [tab, setTab] = useState<Tab>("page");
   const [courseTab, setCourseTab] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);

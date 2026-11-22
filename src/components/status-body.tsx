@@ -12,6 +12,8 @@ import { holdScrollAnchor, releaseAfter } from "../lib/scroll-anchor.ts";
 import { scrollAlong, type Timed } from "../lib/scroll-along.ts";
 import { RichText } from "./rich-text";
 import { useTypesetInline } from "./typeset-inline";
+import { prefersReducedMotion } from "../lib/dom.ts";
+import { readApi, readProblem } from "../lib/read-api.ts";
 
 type Problem = "busy" | "failed" | null;
 
@@ -56,7 +58,7 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   // The height moves on the inner body so the card keeps its shadow and the island's tail unclipped.
   const card = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
-  const [motion] = useState(() => createSizeMotion(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches));
+  const [motion] = useState(() => createSizeMotion(prefersReducedMotion));
   const returning = useRef(false);
   // While the content swaps and the card eases to its new size, the page keeps its scroll position instead of
   // the browser holding the button still (F51): released once the motion ends (scroll-anchor.ts).
@@ -135,7 +137,7 @@ export function StatusBody({ entry, titleLevel = 4 }: {
     if (open) {
       const box = body.current?.getBoundingClientRect(), cardWidth = card.current?.getBoundingClientRect().width;
       const was = folded.current;
-      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const still = prefersReducedMotion();
       if (box && was && !still && Math.abs(box.width - was.width) < 0.5 && Math.abs((cardWidth ?? 0) - was.cardWidth) < 0.5 && Math.abs(box.height - was.height) > 0.5) {
         back.current?.();
         back.current = null;
@@ -155,15 +157,14 @@ export function StatusBody({ entry, titleLevel = 4 }: {
     setPending(true);
     setProblem(null);
     try {
-      const response = await fetch(`/api/content/status/${encodeURIComponent(entry.slug)}`, { cache: "no-store" });
-      const reply = await response.json().catch(() => null);
-      if (response.ok && reply?.data) {
+      const reply = await readApi<{ document?: ContentDocument | null }>(`/api/content/status/${encodeURIComponent(entry.slug)}`);
+      if (reply.data) {
         // The card stays as it is while "正在加载…" shows; it eases open only once the body is here.
         change(true);
         setLoaded({ document: reply.data.document ?? null });
         setOpen(true);
       } else {
-        setProblem(reply?.error?.code === "RATE_LIMITED" ? "busy" : "failed");
+        setProblem(readProblem(reply.code));
       }
     } catch {
       setProblem("failed");

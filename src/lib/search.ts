@@ -9,8 +9,6 @@ export const searchKinds: [ContentKind, string][] = [
 ];
 
 export const kindLabels: Record<string, string> = Object.fromEntries(searchKinds);
-/** One character per kind for the search page's list marks, as the course overview marks its entries. */
-export const kindMarks: Record<string, string> = { status: "动", "study-note": "记", course: "课", post: "文", movie: "影", book: "书", game: "游", album: "相", project: "项", page: "页" };
 
 export const MAX_QUERY = 128;
 

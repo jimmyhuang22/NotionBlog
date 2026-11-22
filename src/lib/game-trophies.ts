@@ -1,4 +1,5 @@
 import type { ImageAsset } from "../../contracts/content.ts";
+import { platformChip, type PlatformTone } from "./library.ts";
 
 /**
  * A game's trophies on its detail page (decision 2026-11-20-game-trophies, layout 乙).
@@ -109,11 +110,13 @@ export function rarityTier(rate: number): string {
   return "常见";
 }
 
-/** A platform as a coloured box beside its set, in the same tones as the game's own platform boxes. */
-export function trophyPlatformTone(platform: string): "playstation" | "pc" | "nintendo" | "other" {
-  if (/^(ps\d|playstation)/iu.test(platform)) return "playstation";
-  if (/^(steam|pc)$/iu.test(platform)) return "pc";
-  return "other";
+/**
+ * A platform as a coloured box beside its set, in the same tones as the game's own platform boxes (`platformChip`).
+ * Trophy sets name the console ("PS5") or the store ("Steam"), which a game's own platforms never do.
+ */
+export function trophyPlatformTone(platform: string): PlatformTone {
+  const name = platform.trim();
+  return platformChip(/^ps\d/iu.test(name) ? "PlayStation" : /^steam$/iu.test(name) ? "PC" : name).tone;
 }
 
 /** The earned platinum, which leads the section as its own banner when there is one. */
@@ -138,7 +141,9 @@ export function earnedByMonth(trophies: Trophy[]): { key: string; label: string;
   const groups = new Map<string, Trophy[]>();
   for (const trophy of recentEarned(trophies)) {
     const key = trophy.earnedDate?.slice(0, 7) ?? "undated";
-    groups.set(key, [...(groups.get(key) ?? []), trophy]);
+    const group = groups.get(key);
+    if (group) group.push(trophy);
+    else groups.set(key, [trophy]);
   }
   return [...groups].map(([key, list]) => ({ key, trophies: list,
     label: key === "undated" ? "日期未记录" : `${Number(key.slice(0, 4))} 年 ${Number(key.slice(5, 7))} 月` }));

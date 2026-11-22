@@ -3,6 +3,8 @@
 import Link, { useLinkStatus } from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { SocialPlatform } from "../../contracts/social.ts";
+import { isPlainClick, prefersReducedMotion } from "../lib/dom.ts";
+import { followPill, placePill } from "./pill";
 
 interface Choice { value: SocialPlatform; label: string; href: string; icon: ReactNode }
 
@@ -18,7 +20,7 @@ const IN = { duration: 420, easing: "cubic-bezier(.22, .8, .2, 1)", shift: 120, 
 const ARRIVE_AT = 120;
 const STILL = { out: 160, in: 200 };
 
-const stillMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const stillMotion = prefersReducedMotion;
 
 /** Each first-screen card's row, and its column counted from the side the cards come in from. */
 function arrivals(pane: HTMLElement, direction: number) {
@@ -57,18 +59,11 @@ export function WorksShell({ current, choices, filters, children }: { current: S
 
   // The chosen look slides between the names instead of jumping (motion.css); until it is placed, the link keeps its own.
   useLayoutEffect(() => {
-    const place = (animate: boolean) => {
-      const box = nav.current?.getBoundingClientRect();
-      const link = nav.current?.querySelector<HTMLElement>(`a[data-platform="${pressed}"]`)?.getBoundingClientRect();
-      if (!box || !link || !pill.current || !nav.current) return;
-      pill.current.style.transition = animate ? "" : "none";
-      Object.assign(pill.current.style, { width: `${link.width}px`, height: `${link.height}px`, top: `${link.top - box.top}px`, transform: `translateX(${link.left - box.left}px)` });
-      nav.current.dataset.pill = "";
-    };
-    place(nav.current?.dataset.pill !== undefined);
-    const resized = () => place(false);
-    window.addEventListener("resize", resized);
-    return () => window.removeEventListener("resize", resized);
+    const row = nav.current, block = pill.current;
+    if (!row || !block) return;
+    const find = () => row.querySelector(`a[data-platform="${pressed}"]`);
+    placePill(row, block, find(), row.dataset.pill !== undefined);
+    return followPill(row, block, find);
   }, [pressed]);
 
   function leave(target: SocialPlatform) {
@@ -149,7 +144,7 @@ export function WorksShell({ current, choices, filters, children }: { current: S
               <Link key={choice.value} href={choice.href} prefetch={false} data-platform={choice.value}
                 aria-current={choice.value === pressed ? "true" : undefined}
                 onClick={event => {
-                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0 || choice.value === pressed) return;
+                  if (!isPlainClick(event) || choice.value === pressed) return;
                   leave(choice.value);
                   setPressed(choice.value);
                 }}>
