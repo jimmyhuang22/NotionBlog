@@ -52,6 +52,8 @@ test("title-based addresses replace stored work paths across publication, route 
   const game = work("game", 3, "Fall of the Stars");
   const gameAgain = work("game", 4, "Fall of the Stars");
   const restored = work("book", 5, "Restored Work");
+  const thai = work("movie", 7, "Fictional Thai Film");
+  if (thai.detail.item.kind === "movie") thai.detail.item.originalTitle = "ยินดี";
   book.detail.document!.blocks.push({
     id: "work-links", type: "paragraph",
     text: [
@@ -67,7 +69,7 @@ test("title-based addresses replace stored work paths across publication, route 
     await writer.stage(lease, records);
     await writer.promote(lease, { records: records.length, media: 0, complete: true });
   };
-  const works = [book, movie, game, gameAgain, restored];
+  const works = [book, movie, game, gameAgain, restored, thai];
   await publish(works);
   await db.query("SELECT nb_v2_api.set_denied($1,true)", [restored.detail.item.id]);
   const migration = await readFile(new URL("../database/library-url-migrations/001_library_urls.sql", import.meta.url), "utf8");
@@ -85,7 +87,10 @@ test("title-based addresses replace stored work paths across publication, route 
   const repository = createContentService({ provider: "database", features, databaseRepository:
     projection.repository(createWebsiteDatabaseRepository(publicationReader(reader, "published"))),
   }).repository;
-  const cases = [[book, "远山笔记"], [movie, "silver-screen"], [game, "fall-of-the-stars"], [gameAgain, "fall-of-the-stars-2026"]] as const;
+  const cases = [
+    [book, "远山笔记"], [movie, "silver-screen"], [game, "fall-of-the-stars"],
+    [gameAgain, "fall-of-the-stars-2026"], [thai, "ยินดี"],
+  ] as const;
   for (const [record, slug] of cases) {
     const old = record.detail.item;
     const kind = old.kind as LibraryKind, href = libraryDetailHref(kind, slug);
@@ -99,6 +104,7 @@ test("title-based addresses replace stored work paths across publication, route 
     assert.equal((await repository.list(kind)).items.find(item => item.id === old.id)?.href, href);
   }
   assert.equal((await repository.get("book", encodeURIComponent("远山笔记")))?.item.id, book.detail.item.id);
+  assert.equal((await repository.get("movie", encodeURIComponent("ยินดี")))?.item.id, thai.detail.item.id);
   assert.equal(await repository.get("book", encodeURIComponent(encodeURIComponent("远山笔记"))), null);
   const body = (await repository.get("book", "远山笔记"))?.document?.blocks[0];
   assert(body?.type === "paragraph");

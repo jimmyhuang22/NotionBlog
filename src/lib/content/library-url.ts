@@ -4,7 +4,8 @@ const notionId = /^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$
 
 export function isLibraryTitleSlug(slug: string): boolean {
   return [...slug].length <= 96 && !notionId.test(slug)
-    && /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u.test(slug);
+    // Some writing systems use combining marks even in normalized text.
+    && /^[\p{L}\p{N}\p{M}]+(?:-[\p{L}\p{N}\p{M}]+)*$/u.test(slug);
 }
 
 /** Next can pass an encoded path segment to the page while route qualification
