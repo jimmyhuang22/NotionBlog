@@ -80,7 +80,7 @@ node --env-file=/absolute/.local/operator.env scripts/public-cache/withdraw-cli.
 
 Codex 负责根布局、middleware、HTTP／媒体、缓存及本机入口；Claude 负责页面和组件。
 
-1. 去掉公开页面与学习笔记 layout 的 `force-dynamic`。适合 ISR 的页面可用字面量 `export const revalidate = 86399`；不要在 route config 中引用运行时变量。带 searchParams 的页面仍可能按请求渲染，但统一 DTO 已可跨请求复用，不宣称删一行即可全部静态化。
+1. 适合 ISR 的公开页面可用字面量 `export const revalidate = 86399`；不要在 route config 中引用运行时变量。笔记布局调用 `alwaysFresh()` 以便按请求渲染目录和重试提示，笔记页随父布局按请求生成。缓存启用时，笔记与目录的数据继续复用带标签的共享缓存。带 `searchParams` 的页面也可能按请求渲染，统一 DTO 仍可跨请求复用。
 2. 页面继续只调用原有统一入口，不自行缓存 Token、来源快照或错误。后端数据标签已自动绑定。搜索、预览和错误保持原动态语义。
 3. 相对日期的 now 改为客户端计算，避免缓存 HTML 的“几小时前”固定。保留已有主题、切换动画和 F21 的一次读取处理。
 4. 根 html 的 `data-public-cache=tagged-v1` 标记仅在启用时出现。只装一个可见标签页的版本监听，建议每 30 秒读取 `/api/content/version`；返回 `{version:1,revision:"摘要"}`，源站内容只含摘要，托管 CDN 最多 15 秒。404 时停用；不要给每张图／每个列表各加轮询。

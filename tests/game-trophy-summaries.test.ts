@@ -70,6 +70,30 @@ test("PSN plans keep per-set grades and zero, and reject private, missing or amb
   assert.equal(forGame(snapshot(observedAt, [], [{ ...ps5, progress: undefined }]))[0].progressPercent, null);
 });
 
+test("one reader discovers a newly installed extension after the negative capability window", async t => {
+  let now = Date.now(), capabilities = 0, available = false;
+  t.mock.method(Date, "now", () => now);
+  const db: SqlExecutor = { async query<T>(sql: string) {
+    if (sql.includes("pg_catalog.pg_proc")) {
+      capabilities++;
+      return { rows: [{ result: available }] as T[] };
+    }
+    return { rows: [{ result: [{ id: "fixture-trophy-set" }] }] as T[] };
+  } };
+  const read = createGameTrophyReader(db, "published");
+  assert.deepEqual(await Promise.all([read(item.id, item.slug), read(item.id, item.slug)]), [[], []]);
+  available = true;
+  now += 29_999;
+  assert.deepEqual(await read(item.id, item.slug), []);
+  assert.equal(capabilities, 1);
+  now += 1;
+  const results = await Promise.all([read(item.id, item.slug), read(item.id, item.slug)]);
+  assert.deepEqual(results, [[{ id: "fixture-trophy-set" }], [{ id: "fixture-trophy-set" }]]);
+  now += 30_000;
+  assert.deepEqual(await read(item.id, item.slug), results[0]);
+  assert.equal(capabilities, 2);
+});
+
 test("local PostgreSQL stores PSN sets atomically and reads only currently eligible games", async t => {
   const db = await PGlite.create();
   t.after(() => db.close());
