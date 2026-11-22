@@ -18,6 +18,7 @@ import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.
 import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/content/movie-rating.ts";
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
+import { readLastPlayedPlatforms } from "./game-play-platforms.ts";
 import { mapBounded } from "./bounded-work.ts";
 import type { NotionReadClient } from "./types.ts";
 import { AutomaticStudySession, studyOverride, type StudyDiscoveryProgress } from "./automatic-study.ts";
@@ -335,9 +336,11 @@ class ReadSession {
     }
     if (source.kind === "game") {
       const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime), estimated = getNumber(page, f.estimatedTime);
-      return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms: getValues(page, f.platforms), playedDate: getDate(page, f.playedDate), lastPlayedDate: getLastPlayedDate(page, f.lastPlayedDate), firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
+      const zone = statusTimeZone(this.options), lastPlayedDate = getLastPlayedDate(page, f.lastPlayedDate);
+      return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms: getValues(page, f.platforms), playedDate: getDate(page, f.playedDate), lastPlayedDate, firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
+        ...(f.lastPlayedPlatforms ? { lastPlayedPlatforms: readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) } : {}),
         playedTime: minutes !== null ? { value: minutes, unit: "minute" } : historical !== null && source.playedTimeUnit ? { value: historical, unit: source.playedTimeUnit } : null,
-        estimatedTime: estimated !== null && source.playedTimeUnit ? { value: estimated, unit: source.playedTimeUnit } : null, progressPercent: null, rating: getRating(page, f.rating) }, statusTimeZone(this.options));
+        estimatedTime: estimated !== null && source.playedTimeUnit ? { value: estimated, unit: source.playedTimeUnit } : null, progressPercent: null, rating: getRating(page, f.rating) }, zone);
     }
     if (source.kind === "project") return { ...base, kind: "project", period: getDate(page, f.period), role: getSelect(page, f.role), stack: getValues(page, f.stack), links: [["代码", getPublicUrl(page, f.repositoryUrl)], ["演示", getPublicUrl(page, f.demoUrl)]].filter((link): link is [string, string] => link[1] !== null).map(([label, url]) => ({ label, url })) };
     const breadcrumbs: ContentLink[] = [{ title: "学习", href: "/study" }];

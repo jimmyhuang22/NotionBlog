@@ -382,6 +382,7 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
         "end": null,
         "precision": "date"
       },
+      "lastPlayedPlatforms": ["Steam"],
       "firstPlayedDate": {
         "start": "2025-01-02",
         "end": null,
@@ -572,24 +573,39 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
     }
   ]
 };
+function withDemoTrophies(set: GameTrophySetSummary & { grades: NonNullable<GameTrophySetSummary["grades"]> }): GameTrophySetSummary {
+  const trophies = (Object.keys(set.grades) as Array<keyof typeof set.grades>).flatMap(grade => {
+    const counts = set.grades[grade];
+    return Array.from({ length: counts.total }, (_, index) => {
+      const earned = index < counts.earned, hidden = grade === "gold" && index === counts.total - 1;
+      return { id: `${grade}-${index}`, grade, hidden, earned, icon: null,
+        name: hidden && !earned ? null : `演示奖杯 ${grade} ${index + 1}`,
+        detail: hidden && !earned ? null : "这是一条演示奖杯记录。",
+        earnedDate: earned ? `2026-10-${String(index + 1).padStart(2, "0")}` : null,
+        rarityPercent: index === 2 ? null : 1.5 + index * 2 };
+    });
+  });
+  return { ...set, trophies };
+}
+
 export const fixtureGameTrophySets: Record<string, GameTrophySetSummary[]> = {
   "mock-game-1": [
-    { id: "psn:00000000000000000000000000000001", platform: "PS4", earned: 15, total: 30, progressPercent: 46,
+    withDemoTrophies({ id: "psn:00000000000000000000000000000001", platform: "PS4", earned: 15, total: 30, progressPercent: 46,
       grades: { platinum: { earned: 0, total: 1 }, gold: { earned: 1, total: 3 },
-        silver: { earned: 4, total: 8 }, bronze: { earned: 10, total: 18 } } },
-    { id: "psn:00000000000000000000000000000002", platform: "PS5", earned: 0, total: 20, progressPercent: 0,
+        silver: { earned: 4, total: 8 }, bronze: { earned: 10, total: 18 } } }),
+    withDemoTrophies({ id: "psn:00000000000000000000000000000002", platform: "PS5", earned: 0, total: 20, progressPercent: 0,
       grades: { platinum: { earned: 0, total: 1 }, gold: { earned: 0, total: 2 },
-        silver: { earned: 0, total: 5 }, bronze: { earned: 0, total: 12 } } },
+        silver: { earned: 0, total: 5 }, bronze: { earned: 0, total: 12 } } }),
   ],
   "mock-game-2": [
-    { id: "psn:00000000000000000000000000000003", platform: "PS5", earned: 20, total: 20, progressPercent: 100,
+    withDemoTrophies({ id: "psn:00000000000000000000000000000003", platform: "PS5", earned: 20, total: 20, progressPercent: 100,
       grades: { platinum: { earned: 1, total: 1 }, gold: { earned: 2, total: 2 },
-        silver: { earned: 5, total: 5 }, bronze: { earned: 12, total: 12 } } },
+        silver: { earned: 5, total: 5 }, bronze: { earned: 12, total: 12 } } }),
   ],
   "mock-game-5": [
-    { id: "psn:00000000000000000000000000000004", platform: "PS5", earned: 0, total: 8, progressPercent: 0,
+    withDemoTrophies({ id: "psn:00000000000000000000000000000004", platform: "PS5", earned: 0, total: 8, progressPercent: 0,
       grades: { platinum: { earned: 0, total: 1 }, gold: { earned: 0, total: 1 },
-        silver: { earned: 0, total: 2 }, bronze: { earned: 0, total: 4 } } },
+        silver: { earned: 0, total: 2 }, bronze: { earned: 0, total: 4 } } }),
   ],
 };
 

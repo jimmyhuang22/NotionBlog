@@ -109,6 +109,12 @@
 /* Updates from other sections: a hollow dot, a plain label and a compact linked card. */
 .entry--event::before { border-color: var(--muted); }
 .entry__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+/* A game's tag names its platforms with their outlines before them, in the tag's own colour (F60, 甲, 2026-11-22). One
+   inline run, so the spaces around the names stay; a platform's icon and name never part. The tag as a whole moves
+   to the next line when the row runs short, and breaks between platforms only if it is wider than the row itself. */
+.game-platform { display: inline-flex; align-items: center; gap: 4px; vertical-align: top; }
+.game-platform__icon { flex: none; width: 13px; height: 13px; }
+.game-tag__sep { margin-left: 2px; }
 /* A work's row is marked by its platforms' own signs in their colours (2026-11-19), leading to the works page. */
 .work-marks { position: relative; display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
 .work-marks svg { display: block; }

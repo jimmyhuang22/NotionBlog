@@ -1,4 +1,6 @@
 import type {StoredMedia} from "../../../contracts/sync.ts";
+import type {ImageAsset} from "../../../contracts/content.ts";
+import type {TimelineEvent} from "../../../contracts/website.ts";
 import {readMediaObject} from "./storage-read.ts";
 import type {SqlExecutor} from "../database/sql.ts";
 import type {PublicationMode} from "../database/publication.ts";
@@ -31,6 +33,45 @@ export async function databaseDisplayResponse(assetId:string,width:400|800|1600|
  if(!current||JSON.stringify(current)!==JSON.stringify(first))return missing();
  return new Response(Buffer.from(bytes),{headers:{...cacheableMediaHeaders(headers),"Content-Type":file.mime,"Content-Length":String(bytes.byteLength)}});
 }
+function deliveryHint(asset: DisplayAsset): NonNullable<ImageAsset["delivery"]> {
+ return { mode: "display-only", maxWidth: asset.base.width, maxHeight: asset.base.height };
+}
+
+async function displayMappings(db: SqlExecutor, mode: PublicationMode, runId: string, revision: unknown, ids: string[]) {
+ const response = await readDisplayAssets(db, runId, ids, mode);
+ if (revision !== undefined && String(revision) !== response.revision) throw new DisplayError("DISPLAY_VERSION_CHANGED");
+ if (response.assets.length !== ids.length) throw new DisplayError("DISPLAY_MEDIA_NOT_READY");
+ return new Map(response.assets.map(asset => [asset.assetId, asset]));
+}
+
+function timelineCover(event: TimelineEvent): ImageAsset | null {
+ const cover = event.type === "status" ? null : event.cover;
+ return cover && cover.src === "/media/v2/" + cover.id ? cover : null;
+}
+
+/** Resolve the already-qualified card covers against the same live publication.
+ * Status bodies and their images are hydrated by the existing Status read. */
+export async function hydrateTimelineDisplayCovers(db: SqlExecutor, mode: PublicationMode, events: TimelineEvent[], version: string): Promise<TimelineEvent[]> {
+ const ids = [...new Set(events.flatMap(event => {
+  const cover = timelineCover(event);
+  return cover ? [cover.id] : [];
+ }))];
+ if (!ids.length) return events;
+ const pin = /^([^:]+):([0-9]{1,20})$/.exec(version);
+ if (!pin) throw new ContentServiceError("CONTENT_UNAVAILABLE", "Invalid timeline display version.");
+ try {
+  const assets = await displayMappings(db, mode, pin[1], pin[2], ids);
+  return events.map(event => {
+   if (event.type === "status") return event;
+   const cover = timelineCover(event);
+   return cover ? { ...event, cover: { ...cover, delivery: deliveryHint(assets.get(cover.id)!) } } : event;
+  });
+ } catch (error) {
+  if (error instanceof DisplayError) throw new ContentServiceError("CONTENT_UNAVAILABLE", "The display projection is unavailable.");
+  throw error;
+ }
+}
+
 /** One bounded mapping read per content envelope, rather than a query per image.
  * The existing content/cache projections and their query text are preserved. */
 export function databaseDisplayProjectionSql(content:SqlExecutor,mappings:SqlExecutor,mode:PublicationMode):SqlExecutor{
@@ -53,16 +94,13 @@ export function databaseDisplayProjectionSql(content:SqlExecutor,mappings:SqlExe
      Object.values(obj).forEach(x=>collect(x,level+1));
     }collect(p.records,depth+1);
     if(!requested.size)return value;
-    const response=await readDisplayAssets(mappings,p.runId,[...requested],mode);
-    if(p.revision!==undefined&&String(p.revision)!==response.revision)throw new DisplayError("DISPLAY_VERSION_CHANGED");
-    const assets=new Map(response.assets.map(a=>[a.assetId,a]));
-    if(assets.size!==requested.size)throw new DisplayError("DISPLAY_MEDIA_NOT_READY");
+    const assets=await displayMappings(mappings,mode,p.runId,p.revision,[...requested]);
     function project(v:unknown,level:number):unknown{
      if(++visited>200000||level>64)throw new DisplayError("DISPLAY_LIMIT");
      if(Array.isArray(v))return v.map(x=>project(x,level+1));
      if(!v||typeof v!=="object")return v;
      const obj=v as Record<string,unknown>;
-     if(image(obj)){const a=assets.get(obj.id as string);if(!a)throw new DisplayError("DISPLAY_MEDIA_NOT_READY");return {...obj,delivery:{mode:"display-only",maxWidth:a.base.width,maxHeight:a.base.height}};}
+     if(image(obj)){const a=assets.get(obj.id as string);if(!a)throw new DisplayError("DISPLAY_MEDIA_NOT_READY");return {...obj,delivery:deliveryHint(a)};}
      return Object.fromEntries(Object.entries(obj).map(([k,x])=>[k,project(x,level+1)]));
     }
     return {...p,records:project(p.records,depth+1)};

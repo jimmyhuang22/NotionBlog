@@ -45,9 +45,10 @@ const fields = {
   movie: ["status", "mediaType", "watchedDate"], book: ["status", "readingDate"],
   game: ["status", "platforms", "playedDate", "lastPlayedDate", "firstPlayedDate", "archiveDate"],
 };
-function selectorOf(item: AnyContent) {
+function selectorOf(item: AnyContent, includePlayPlatforms: boolean) {
   const o = item as unknown as Record<string, unknown>;
-  return Object.fromEntries(["id", "kind", "slug", "href", "title", "tags", ...fields[item.kind as LibraryKind]]
+  return Object.fromEntries(["id", "kind", "slug", "href", "title", "tags", ...fields[item.kind as LibraryKind],
+    ...(includePlayPlatforms && item.kind === "game" ? ["lastPlayedPlatforms"] : [])]
     .filter(key => Object.hasOwn(o, key)).map(key => [key, o[key]]));
 }
 
@@ -98,7 +99,9 @@ export function createLibraryPageReader(db: SqlExecutor, options: LibraryReadOpt
     const byId = new Map(records.map(d => [d.item.id, d.item]));
     const items = page.items.map(selector => {
       const item = byId.get(selector.id);
-      if (!item || !isDeepStrictEqual(selectorOf(item), selectorOf(selector))) return changed();
+      // Older compact installations omit the field from selectors, but still hydrate it from the selected item.
+      const includePlayPlatforms = Object.hasOwn(selector, "lastPlayedPlatforms");
+      if (!item || !isDeepStrictEqual(selectorOf(item, includePlayPlatforms), selectorOf(selector, includePlayPlatforms))) return changed();
       return item as ContentByKind[K];
     });
     return { page: { ...page, items }, years, year };

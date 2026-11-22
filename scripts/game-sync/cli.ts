@@ -21,7 +21,8 @@ async function notifyFailure() {
 async function main() {
   const [command, rootArg, flag] = process.argv.slice(2);
   if (!rootArg || !["nintendo-login", "nintendo-finish", "collect-psn", "collect-nintendo", "collect-steam",
-    "collect-psn-trophies", "apply-psn-trophies", "dry-run", "apply", "daily", "unlock-stale"].includes(command)) {
+    "collect-psn-trophies", "apply-psn-trophies", "collect-psn-trophy-details", "apply-psn-trophy-details",
+    "dry-run", "apply", "daily", "unlock-stale"].includes(command)) {
     throw new GameSyncError("USAGE: node scripts/game-sync/cli.ts <command> <private-directory>");
   }
   if (![24, 25, 26].includes(Number(process.versions.node.split(".")[0]))) throw new GameSyncError("NODE_VERSION_UNSUPPORTED");

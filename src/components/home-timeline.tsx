@@ -7,6 +7,7 @@ import { isNoticedActivity, platformNames } from "../lib/home-feed.ts";
 import { entryMoment, eventDetail, eventKinds, eventMoment, feedRuns, spanMoment, type WorkEvent } from "../lib/timeline.ts";
 import { CoverImage } from "./cover-image";
 import { cardTimeLabel, platformChips } from "../lib/library.ts";
+import { GameTag } from "./game-tag";
 import { EntryMoment } from "./entry-moment";
 import { MonthLabel } from "./month-label";
 import { HomeWorkLine, HomeWorks, workPlatforms } from "./home-works";
@@ -21,16 +22,10 @@ function gamePlatforms(event: WorkEvent): string[] {
   return platformChips((event.detail ?? "").split(" · ").map(name => name.trim()).filter(Boolean)).map(chip => chip.label);
 }
 
-/** The date row's tag for a game (2026-11-19, the owner's pick 丙一): "在 Switch 上玩", or "在玩" when no platform is recorded. */
-function gameTag(event: WorkEvent): string {
-  const platforms = gamePlatforms(event);
-  return platforms.length ? `在 ${platforms.join("、")} 上玩` : "在玩";
-}
-
 /**
  * A game on the home timeline, drawn as a work published elsewhere is (2026-11-19, the owner's pick 丙): its wide
  * cover in the same 144 by 81 frame with the hours played at its foot, and the title alone beside it. What it is
- * and where it was played are said by the date row's tag ("在 Switch 上玩", gameTag), so nothing is said twice. Every
+ * and where it was played are said by the date row's tag ("在 Switch 上玩", GameTag), so nothing is said twice. Every
  * game reads "playing" whatever its status: a playing entry stands on the day it was last played; a platinum or
  * cleared one on its completion day (F47). Each game keeps its own row and day (2026-11-13).
  */
@@ -181,7 +176,7 @@ export function HomeTimeline({ initial, pageSize, timeZone }: { initial: HomeFee
               <article className="entry entry--event">
                 <p className="entry__meta">
                   {moment ? <span className="entry__time"><EntryMoment moment={moment} /></span> : null}
-                  <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{item.event.type.startsWith("game-") ? gameTag(item.event) : eventKinds[item.event.type].section}</span>
+                  <span className={`tag tag--${eventKinds[item.event.type].kind}`}>{item.event.type.startsWith("game-") ? <GameTag platforms={gamePlatforms(item.event)} /> : eventKinds[item.event.type].section}</span>
                   {demo}
                 </p>
                 <WorkCard event={item.event} priorityCover={priorityCover} />

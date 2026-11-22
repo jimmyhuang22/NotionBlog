@@ -39,6 +39,10 @@ export function psnTrophyOwner(onlineId: string) {
   return createHash("sha256").update(required(onlineId).toLowerCase()).digest("hex");
 }
 
+export function psnTrophySetId(sourceId: string) {
+  return "psn:" + createHash("sha256").update(sourceId).digest("hex").slice(0, 32);
+}
+
 /** Use the same complete, verified PSN collection and product visibility as the playtime collector. */
 export function psnWebsiteTrophySnapshot(owner: string, observedAt: string, rows: Observation[],
   byProduct: ReadonlyMap<string, Record<string, unknown>[]>) {
@@ -49,7 +53,7 @@ export function psnWebsiteTrophySnapshot(owner: string, observedAt: string, rows
     const allowed = row.visibility === "allowed";
     const sets = (byProduct.get(row.productId) ?? []).map(set => {
       const sourceId = required(set.npCommunicationId);
-      const id = "psn:" + createHash("sha256").update(sourceId).digest("hex").slice(0, 32);
+      const id = psnTrophySetId(sourceId);
       const labels = typeof set.trophyTitlePlatform === "string" ? set.trophyTitlePlatform.split(",").map(v => v.trim()) : [];
       const label: Platform = labels.includes("PS4") && labels.includes("PS5") ? "PS4 / PS5"
         : labels.includes("PS4") ? "PS4" : labels.includes("PS5") ? "PS5" : platform;

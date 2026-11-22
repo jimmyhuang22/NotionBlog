@@ -29,15 +29,15 @@ test("external video transition accepts only its exact producer, mapper pair and
   for (const pair of transition.files) {
     const actual = createHash("sha256").update(await readFile(new URL("../" + pair.path, import.meta.url))).digest("hex");
     if (pair.path === "src/server/notion/website-repository.ts" || pair.path === "src/server/notion/blocks.ts") {
-      // The old video-only transition rejects the historical B19/B20 sources
-      // and the current N08 page-mention producer; no runtime allowlist changes.
+      // The old video-only transition rejects later mappers without changing the runtime allowlist.
       assert.equal(actual, pair.path === "src/server/notion/blocks.ts"
         ? "9132d007c16a768bc61668fb657d057329f99c74b3520a918fe35b070547db04"
-        : "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9");
+        : "a76d7bc0beb74446870d0fe4f54ca8a66d332bf94fc06a94c87138d6635216d8");
       const historical = pair.path === "src/server/notion/blocks.ts"
-        ? "b4a8d0bab7412aee6ef5923591cf239ea99705d86fde0acd88f351b94a994e26"
-        : "b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51";
-      for (const sha256 of [historical, actual]) {
+        ? ["b4a8d0bab7412aee6ef5923591cf239ea99705d86fde0acd88f351b94a994e26"]
+        : ["b58d5613898d960b0f06ef7c5f0218de51ffbaca90d1d725d5bd0be78a1c6b51",
+          "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9"];
+      for (const sha256 of [...historical, actual]) {
         const newerMapper = structuredClone(consumer);
         newerMapper.files.find(file => file.path === pair.path)!.sha256 = sha256;
         assert.throws(() => checkCaptureReleaseCompatibility(producer, newerMapper), { code: "RELEASE_INVALID" });
