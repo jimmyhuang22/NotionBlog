@@ -1,5 +1,5 @@
 import type { ImageAsset } from "../../contracts/content.ts";
-import { platformChip, type PlatformTone } from "./library.ts";
+import { gamePlatformIcon, platformChip, type GamePlatformIcon, type PlatformTone } from "./library.ts";
 
 /**
  * A game's trophies on its detail page (decision 2026-11-20-game-trophies, layout 乙).
@@ -150,19 +150,34 @@ export function earnedByMonth(trophies: Trophy[]): { key: string; label: string;
 }
 
 /**
- * Earned trophies counted per calendar month, every month from the first to the last one present, empty ones
- * included, so the gaps show (round three, 2026-11-21). Null when there is too little to draw: fewer than three
- * dated trophies, or all of them in one month. Undated trophies are left out, not placed anywhere.
+ * When the trophies came, in one line under the heading (甲, 2026-11-22; it replaces round three's month bars, which
+ * real sets, mostly earned within a month or two, left as one or two bars): the first day and the day the platinum
+ * came, counted from the first, both ends included ("第 12 天", as the date strip counts "共 12 天"); without a
+ * platinum, from the first day to the last and how many in between. Only dated trophies count; null when none is.
  */
-export function earnedPerMonth(trophies: Trophy[]): { start: { year: number; month: number }; counts: number[]; total: number } | null {
-  const index = (day: string) => Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1;
-  const months = trophies.filter(trophy => trophy.earned && trophy.earnedDate).map(trophy => index(trophy.earnedDate!));
-  if (months.length < 3) return null;
-  const first = Math.min(...months), last = Math.max(...months);
-  if (first === last) return null;
-  const counts = Array.from({ length: last - first + 1 }, () => 0);
-  for (const month of months) counts[month - first]! += 1;
-  return { start: { year: Math.floor(first / 12), month: first % 12 + 1 }, counts, total: months.length };
+export function trophySpan(trophies: Trophy[]): { parts: { text: string; strong?: true }[]; platinum: boolean } | null {
+  const dated = trophies.filter(trophy => trophy.earned && trophy.earnedDate).map(trophy => trophy.earnedDate!).sort();
+  if (!dated.length) return null;
+  const first = dated[0]!, last = dated[dated.length - 1]!;
+  const platinum = earnedPlatinum(trophies)?.earnedDate ?? null;
+  const dayCount = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+  if (platinum) {
+    const days = dayCount(first, platinum);
+    return { platinum: true, parts: days <= 1 ? [{ text: `${trophyDay(first)}拿到第一个，` }, { text: "当天", strong: true }, { text: "拿到白金" }] : [{ text: `${trophyDay(first)}拿到第一个，` }, { text: `第 ${days} 天`, strong: true }, { text: "拿到白金" }] };
+  }
+  if (first === last) return { platinum: false, parts: [{ text: `${trophyDay(first)}拿到 ${dated.length} 个` }] };
+  return { platinum: false, parts: [{ text: `${trophyDay(first)}到 ${trophyDay(last, last.slice(0, 4) !== first.slice(0, 4))}拿到 ${dated.length} 个` }] };
+}
+
+/** A set whose platinum is earned, by its grade counts or, without them, by its list. */
+export function setPlatinum(set: TrophySet): boolean {
+  return (set.grades?.platinum.earned ?? 0) > 0 || !!(set.trophies && earnedPlatinum(set.trophies));
+}
+
+/** A trophy set's platform outline, as the home timeline draws platforms: every PlayStation console is PlayStation's. */
+export function trophyPlatformIcon(platform: string): GamePlatformIcon | null {
+  const name = platform.trim();
+  return /^ps\d/iu.test(name) ? "playstation" : gamePlatformIcon(platformChip(name).label);
 }
 
 /** Not yet earned: by grade (platinum first), then the most common first, as the nearest to get. */

@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { earnedByMonth, earnedPerMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, trophyDay, trophyPlatformTone, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
+import { useId, useState, type KeyboardEvent } from "react";
+import { earnedByMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, setPlatinum, trophyDay, trophyPlatformTone, trophySpan, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
+import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
 
 const RECENT = 6;
 
@@ -45,38 +46,17 @@ function Row({ trophy, withYear = true }: { trophy: Trophy; withYear?: boolean }
 }
 
 /**
- * When the trophies came (round three 甲, 2026-11-21): one thin bar per month from the first earned to the last,
- * empty months kept, so the stretches of play and the gaps between them show. Years are marked under it.
+ * When the trophies came, in one quiet line under the heading (甲, 2026-11-22, in place of round three's month bars):
+ * "2023 年 1 月 24 日拿到第一个，第 12 天拿到白金", or from the first day to the last and how many.
  */
-function TrophyMonths({ trophies }: { trophies: Trophy[] }) {
-  const months = earnedPerMonth(trophies);
-  if (!months) return null;
-  const { start, counts, total } = months;
-  const most = Math.max(...counts);
-  const busiest = counts.indexOf(most);
-  const at = (offset: number) => { const index = start.year * 12 + start.month - 1 + offset; return { year: Math.floor(index / 12), month: index % 12 + 1 }; };
-  const end = at(counts.length - 1);
-  const peak = at(busiest);
-  // Each January is marked, every other or third year over a long span; the first month is marked too unless a January follows within four months.
-  const step = counts.length > 96 ? 3 : counts.length > 48 ? 2 : 1;
-  const januaries = counts.flatMap((_, offset) => at(offset).month === 1 && at(offset).year % step === 0 ? [{ offset, year: at(offset).year }] : []);
-  const ticks = (januaries[0]?.offset ?? Infinity) >= 4 ? [{ offset: 0, year: start.year }, ...januaries] : januaries;
-  // A mark in the last tenth would run past the right edge; it is dropped unless it is the only one.
-  const shown = ticks.length > 1 ? ticks.filter(tick => tick.offset / counts.length <= 0.9) : ticks;
-  const summary = `${start.year} 年 ${start.month} 月到 ${end.year} 年 ${end.month} 月拿到 ${total} 个，最多的是 ${peak.year} 年 ${peak.month} 月（${most} 个）`;
+function TrophySpan({ trophies }: { trophies: Trophy[] }) {
+  const span = trophySpan(trophies);
+  if (!span) return null;
   return (
-    <figure className="game-trophy-months">
-      {/* A short span keeps its bars thin rather than stretching a few of them across the width. */}
-      <div className="game-trophy-months__plot" style={{ "--months": counts.length } as CSSProperties}>
-        <div className={`game-trophy-months__bars${counts.length > 60 ? " game-trophy-months__bars--dense" : ""}`} role="img" aria-label={summary}>
-          {counts.map((count, offset) => <i key={offset} style={{ "--h": count ? `${Math.max(12, (count / most) * 100)}%` : "0%" } as CSSProperties} />)}
-        </div>
-        <div className="game-trophy-months__years" aria-hidden="true">
-          {shown.map(tick => <span key={tick.offset} style={{ left: `${(tick.offset / counts.length) * 100}%` }}>{tick.year}</span>)}
-        </div>
-      </div>
-      <figcaption>每根是一个月 · 最多一个月 {most} 个</figcaption>
-    </figure>
+    <p className="game-trophy-span">
+      {span.platinum ? <PlatinumCup className="game-trophy-span__cup" /> : null}
+      {span.parts.map((part, index) => part.strong ? <b key={index}>{part.text}</b> : <span key={index}>{part.text}</span>)}
+    </p>
   );
 }
 
@@ -92,7 +72,7 @@ function SetBody({ set }: { set: TrophySet }) {
   const toggle = (which: "all" | "missing") => setOpen(current => current === which ? "none" : which);
   return (
     <>
-      <TrophyMonths trophies={trophies} />
+      <TrophySpan trophies={trophies} />
       {platinum ? (
         <div className="game-trophies__platinum">
           <TrophyIcon trophy={platinum} large />
@@ -151,6 +131,20 @@ function SetBody({ set }: { set: TrophySet }) {
 }
 
 /**
+ * A platform tab's count (乙, 2026-11-22): a set with its platinum says so with the cup, "白金" when every trophy is
+ * earned and the count beside the cup when some (often a later add-on's) are still missing.
+ */
+function TabCount({ set }: { set: TrophySet }) {
+  const platinum = setPlatinum(set);
+  return (
+    <small>
+      {platinum ? <PlatinumCup className="game-trophies__tab-cup" /> : null}
+      {platinum && set.earned === set.total ? <>白金<span className="visually-hidden">，{set.earned} / {set.total}</span></> : `${set.earned} / ${set.total}`}
+    </small>
+  );
+}
+
+/**
  * The "奖杯" section under the write-up (layout 乙, 2026-11-20): the platinum as a banner when earned, the three
  * rarest as cards, the six most recent, and the rest behind two buttons. Several platforms each keep their own set
  * behind a switch beside the heading. Only sets the backend sent in full are here; the side summary covers the rest.
@@ -177,8 +171,9 @@ export function GameTrophies({ sets }: { sets: TrophySet[] }) {
         {full.length > 1 ? (
           <div className="game-trophies__tabs" role="tablist" aria-label="平台" onKeyDown={onKey}>
             {full.map((set, index) => (
-              <button key={set.id} type="button" role="tab" id={`${base}-t${index}`} aria-controls={`${base}-p`} aria-selected={index === chosen} tabIndex={index === chosen ? 0 : -1} onClick={() => setChosen(index)}>
-                {set.platform}<small>{label(set)}</small>
+              <button key={set.id} type="button" role="tab" id={`${base}-t${index}`} aria-controls={`${base}-p`} aria-selected={index === chosen} tabIndex={index === chosen ? 0 : -1} onClick={() => setChosen(index)}
+                className={setPlatinum(set) ? "game-trophies__tab--platinum" : set.earned === 0 ? "game-trophies__tab--none" : undefined}>
+                <TrophyPlatform platform={set.platform} /><TabCount set={set} />
               </button>
             ))}
           </div>

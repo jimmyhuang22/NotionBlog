@@ -16,7 +16,7 @@ const PATHS: Record<GamePlatformIcon, string> = {
 };
 
 /** A platform's outline, sized by its stylesheet (`.game-platform__icon`); hidden from screen readers, which hear the name. */
-function GamePlatformIconMark({ icon }: { icon: GamePlatformIcon }) {
+export function GamePlatformIconMark({ icon }: { icon: GamePlatformIcon }) {
   return <svg className="game-platform__icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><path d={PATHS[icon]} /></svg>;
 }
 

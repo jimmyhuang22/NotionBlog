@@ -1,5 +1,5 @@
 import type { DateRange } from "../../contracts/content.ts";
-import { dateParts } from "./format.ts";
+import { dateParts, dayLabel } from "./format.ts";
 
 type Dated = { playedDate: DateRange | null; lastPlayedDate?: DateRange | null; firstPlayedDate?: DateRange | null };
 
@@ -67,4 +67,23 @@ export function dateStripNotes(ranges: (DateRange | null)[], timeZone: string): 
     const gap = next.start - (here.end ?? here.start);
     return { length, gap: gap < 0 ? null : gap === 0 ? "同一天" : `${spanLabel(gap)}后` };
   });
+}
+
+/**
+ * A date on the strip split for its large year (the owner's pick 乙 of 2026-11-22): the year or years in large type,
+ * the rest beside it in pieces that never break inside themselves. A range within one year keeps one year and drops
+ * the month when it ends in the same month ("1 月 24 日", "– 30 日"); a range across years shows both years and both
+ * days ("2022 – 2023", "12 月 20 日", "– 1 月 5 日"). `first` and `last` are the years it starts and ends in, so the
+ * page can quiet a year the date before it already showed. Null when the date cannot be read.
+ */
+export function stripDate(range: DateRange, timeZone: string): { year: string; days: string[]; first: number; last: number } | null {
+  const start = dateParts(range.start, range.precision, timeZone);
+  if (!start) return null;
+  const end = range.end ? dateParts(range.end, range.precision, timeZone) : null;
+  const sameDay = !!end && end.year === start.year && end.month === start.month && end.day === start.day;
+  if (!end || (sameDay && end.time === start.time)) return { year: String(start.year), days: [dayLabel(start)], first: start.year, last: start.year };
+  if (sameDay) return { year: String(start.year), days: [dayLabel(start), ...(end.time ? [`– ${end.time}`] : [])], first: start.year, last: start.year };
+  if (end.year !== start.year) return { year: `${start.year} – ${end.year}`, days: [dayLabel(start), `– ${dayLabel(end)}`], first: start.year, last: end.year };
+  const tail = end.month === start.month && !end.time ? `${end.day} 日` : dayLabel(end);
+  return { year: String(start.year), days: [dayLabel(start), `– ${tail}`], first: start.year, last: start.year };
 }

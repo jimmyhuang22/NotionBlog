@@ -15,6 +15,7 @@ import { getSiteConfig } from "@/lib/site";
 import { isEnabledContentKind } from "../../../../../config/features.ts";
 import { alwaysFresh } from "@/lib/page-freshness";
 import { trophySetsOf } from "@/lib/game-trophies";
+import { WorkEdges } from "@/components/work-edges";
 
 type Props = { params: Promise<{ type: string; slug: string }> };
 
@@ -89,11 +90,18 @@ async function Neighbours({ item, timeZone }: { item: LibraryItem; timeZone: str
         <span className="work__neighbour-poster" aria-hidden="true"><Cover image={entry.cover} title={entry.title} previewWidth={400} /></span>
       </Link>
     );
-    return (
+    const nav = (
       <nav className={`pager work__neighbours work__neighbours--posters${item.kind === "game" ? " work__neighbours--wide" : ""}`} aria-label={`上一${measure}和下一${measure}`}>
         {newer ? card(newer, `上一${measure}`, "pager__prev") : null}
         {older ? card(older, `下一${measure}`, "pager__next") : null}
       </nav>
+    );
+    if (item.kind !== "game") return nav;
+    return (
+      <>
+        {nav}
+        <WorkEdges newer={newer} older={older} measure={measure} timeZone={timeZone} />
+      </>
     );
   } catch {
     return <p className="work__neighbours-failed">前后的条目暂时取不到。</p>;

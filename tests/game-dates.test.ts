@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rangeLabel } from "../src/lib/format.ts";
-import { dateStripNotes, gameDateRows, platformDay, spanLabel } from "../src/lib/game-dates.ts";
+import { dateStripNotes, gameDateRows, platformDay, spanLabel, stripDate } from "../src/lib/game-dates.ts";
 
 const day = (start: string) => ({ start, end: null, precision: "date" as const });
 const moment = (start: string, end: string | null = null) => ({ start, end, precision: "datetime" as const });
@@ -69,4 +69,21 @@ test("stretches read in days, then months, then years", () => {
   assert.equal(spanLabel(729), "24 个月");
   assert.equal(spanLabel(730), "2 年");
   assert.equal(spanLabel(1200), "3.3 年");
+});
+
+test("a date on the strip: its year apart, the rest in pieces, for every kind of span", () => {
+  const range = (start: string, end: string | null) => ({ start, end, precision: "date" as const });
+  // One day.
+  assert.deepEqual(stripDate(day("2020-02-20"), zone), { year: "2020", days: ["2 月 20 日"], first: 2020, last: 2020 });
+  // A range in one year, across months and inside one month.
+  assert.deepEqual(stripDate(range("2023-01-24", "2023-02-04"), zone), { year: "2023", days: ["1 月 24 日", "– 2 月 4 日"], first: 2023, last: 2023 });
+  assert.deepEqual(stripDate(range("2023-01-24", "2023-01-30"), zone), { year: "2023", days: ["1 月 24 日", "– 30 日"], first: 2023, last: 2023 });
+  // Across years: both years above, both days below.
+  assert.deepEqual(stripDate(range("2022-12-20", "2023-01-05"), zone), { year: "2022 – 2023", days: ["12 月 20 日", "– 1 月 5 日"], first: 2022, last: 2023 });
+  // A range that ends on its first day is that day.
+  assert.deepEqual(stripDate(range("2023-01-24", "2023-01-24"), zone), { year: "2023", days: ["1 月 24 日"], first: 2023, last: 2023 });
+  // Times of day stay with their days, as rangeLabel writes them.
+  assert.deepEqual(stripDate(moment("2025-06-15T01:00:00.000Z", "2025-06-15T03:00:00.000Z"), zone), { year: "2025", days: ["6 月 15 日 11:00", "– 13:00"], first: 2025, last: 2025 });
+  assert.deepEqual(stripDate(moment("2025-06-15T01:00:00.000Z", "2025-06-17T03:00:00.000Z"), zone), { year: "2025", days: ["6 月 15 日 11:00", "– 6 月 17 日 13:00"], first: 2025, last: 2025 });
+  assert.equal(stripDate(moment("not a time"), zone), null);
 });
