@@ -17,10 +17,6 @@ import { getSiteConfig } from "@/lib/site";
 import { studyProjectForCourse } from "@/lib/study-projects";
 import { documentStudyLinks } from "@/lib/study-overview";
 import type { StudyNoteType } from "../../../../../../contracts/content.ts";
-import { freshWhenUncached } from "@/lib/page-freshness";
-
-// Kept for a day at most and dropped when the published content changes; see src/lib/page-freshness.ts.
-export const revalidate = 86399;
 
 type Props = { params: Promise<{ course: string; slug: string }> };
 
@@ -41,7 +37,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function NotePage({ params }: Props) {
-  await freshWhenUncached();
   const { course, slug } = await params;
   const [courseItem, note] = await Promise.all([getCourseMetadata(course), getNote(slug)]);
   // A note reached through another course's address is treated as not available.
