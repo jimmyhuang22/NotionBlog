@@ -2,15 +2,16 @@ import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { PublicationMode } from "../database/publication.ts";
 import type { SqlExecutor } from "../database/sql.ts";
 
-export const isTrophyIconId = (id: string) => /^psn-trophy-[0-9a-f]{64}$/.test(id);
+export const isTrophyIconId = (id: string) => /^(psn|steam)-trophy-[0-9a-f]{64}$/.test(id);
 
 export async function trophyIconResponse(db: SqlExecutor, mode: PublicationMode, id: string): Promise<Response> {
   const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
   const missing = () => new Response(null, { status: 404, headers });
   if (!isTrophyIconId(id)) return missing();
   try {
+    const readIcon = id.startsWith("steam-") ? "read_steam_icon" : "read_trophy_icon";
     const { rows: [icon] } = await db.query<{ bytes: Buffer; mime: string }>(
-      "SELECT bytes, mime FROM nb_game_trophies_api.read_trophy_icon($1,$2)", [id, mode]);
+      `SELECT bytes, mime FROM nb_game_trophies_api.${readIcon}($1,$2)`, [id, mode]);
     if (!icon) return missing();
     return new Response(Uint8Array.from(icon.bytes), { headers: { ...headers, "Content-Type": icon.mime } });
   } catch (error) {

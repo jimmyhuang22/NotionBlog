@@ -1,18 +1,15 @@
-import { createHash } from "node:crypto";
-import sharp from "sharp";
 import type { GameTrophySetSummary, TrophyGrade } from "../../contracts/content.ts";
 import { platformPlayDay } from "../../src/lib/content/game-date.ts";
 import { sanitizePublicText } from "../../src/server/notion/public-text.ts";
 import { callSql, type SqlExecutor } from "../../src/server/database/sql.ts";
 import { GameSyncError, object } from "./model.ts";
 import { planPsnWebsiteTrophies } from "./website-trophies.ts";
+import { createTrophyIconCollector, type CollectedTrophyIcon } from "./trophy-icons.ts";
 
 const maxSetTrophies = 10000;
-const maxIconBytes = 256 * 1024;
 export const maxTrophySnapshotBytes = 96 * 1024 * 1024;
 const grades = ["platinum", "gold", "silver", "bronze"] as const;
 const iconHosts = new Set(["image.api.playstation.com", "psnobj.prod.dl.playstation.net"]);
-const mimeTypes = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" } as const;
 
 interface Definition {
   trophyId: number;
@@ -73,12 +70,10 @@ function rarity(value: string | undefined): number | null {
   return percent <= 100 ? Math.round(percent * 10) / 10 : null;
 }
 
-type Icon = { id: string; bytes: string; type: string; width: number; height: number };
-
 export async function projectPsnTrophyList(set: GameTrophySetSummary,
   definitions: { version: string; trophies: ReadonlyMap<number, Definition> },
   earnings: { version: string; trophies: ReadonlyMap<number, Earning> }, timeZone: string,
-  readIcon: (url: string, trophyId: number) => Promise<Icon | null>,
+  readIcon: (url: string, trophyId: number) => Promise<CollectedTrophyIcon | null>,
 ) {
   if (definitions.version !== earnings.version || definitions.trophies.size !== set.total || earnings.trophies.size !== set.total)
     throw new GameSyncError("PSN_TROPHY_DETAILS_INCOMPLETE");
@@ -107,45 +102,8 @@ export async function projectPsnTrophyList(set: GameTrophySetSummary,
   return result;
 }
 
-/** Limit reads to known PSN image hosts and preserve the validated original raster bytes. */
 export function createPsnTrophyIconCollector() {
-  let downloaded = 0;
-  return async (input: string, setId: string, trophyId: number): Promise<Icon | null> => {
-    if (downloaded >= 64 * 1024 * 1024) throw new GameSyncError("PSN_TROPHY_ICON_BUDGET");
-    try {
-      const url = new URL(input);
-      if (url.protocol !== "https:" || !iconHosts.has(url.hostname) || url.port || url.username || url.password) return null;
-      const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000) });
-      if (!response.ok || !response.body || Number(response.headers.get("content-length")) > maxIconBytes) {
-        await response.body?.cancel();
-        return null;
-      }
-      const reader = response.body.getReader(), chunks: Uint8Array[] = [];
-      let size = 0;
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          size += value.byteLength;
-          downloaded += value.byteLength;
-          if (downloaded >= 64 * 1024 * 1024) throw new GameSyncError("PSN_TROPHY_ICON_BUDGET");
-          if (size > maxIconBytes) return null;
-          chunks.push(value);
-        }
-      } finally { await reader.cancel().catch(() => {}); }
-      const bytes = Buffer.concat(chunks, size);
-      const image = sharp(bytes, { failOn: "warning", limitInputPixels: 1024 * 1024 });
-      const { format, width, height, pages } = await image.metadata();
-      if (!format || !Object.hasOwn(mimeTypes, format) || !width || !height || width > 1024 || height > 1024 || (pages ?? 1) !== 1)
-        return null;
-      await image.raw().toBuffer();
-      const hash = createHash("sha256").update(`${setId}:${trophyId}:`).update(bytes).digest("hex");
-      return { id: `psn-trophy-${hash}`, bytes: bytes.toString("base64"), type: mimeTypes[format as keyof typeof mimeTypes], width, height };
-    } catch (error) {
-      if (error instanceof GameSyncError) throw error;
-      return null;
-    }
-  };
+  return createTrophyIconCollector("psn", 64 * 1024 * 1024, "PSN_TROPHY_ICON_BUDGET", url => iconHosts.has(url.hostname));
 }
 
 export function planPsnTrophyDetails(input: unknown, onlineId: string, config: unknown) {
