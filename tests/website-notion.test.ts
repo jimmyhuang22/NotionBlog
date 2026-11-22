@@ -117,6 +117,45 @@ test("Game rollups stay independent of stable experience years and do not expose
  await assert.rejects(repo.list("game"),error=>error instanceof ContentServiceError&&error.code==="MISCONFIGURED");
 });
 
+test("Game play platform formula is checked against the last-play rollup and the collection time zone", async () => {
+ const s = setup(), page = s.pages.get(id(10))!, zone = "Australia/Melbourne";
+ const last = "2026-11-22T01:10:00Z", previousDay = "2026-11-21T10:00:00Z", sameDay = "2026-11-21T14:10:00Z";
+ const row = (when: string, provider: string, platform: string) => `${Date.parse(when)}|${provider}|${platform}`;
+ const formula = (value: string) => { page.properties.Sources = { id: "p", type: "formula", formula: { type: "string", string: value } }; };
+ const selectLast = (value: string) => { page.properties.Last = { id: "l", type: "date", date: { start: value, end: null, time_zone: null } }; };
+ selectLast(last);
+ formula([row(previousDay, "Nintendo", "Nintendo Switch 2"), row(sameDay, "PSN", "PS4"), row(last, "Steam", "PC"), row(sameDay, "PSN", "PS5")].join("\n"));
+ const source = s.config.sources[0];
+ const configured = { schemaVersion: 2, timeZone: zone,
+  sources: [{ ...source, fields: { ...source.fields, lastPlayedDate: "Last", lastPlayedPlatforms: "p" } }] };
+ const getSchema = s.client.getDataSource;
+ s.client.getDataSource = async key => {
+  const schema = await getSchema(key);
+  if (schema && key === id(1)) Object.assign(schema.properties, { Last: { id: "l", name: "Last", type: "date", date: {} },
+   Sources: { id: "p", name: "Sources", type: "formula", formula: { expression: "Synthetic formula" } } });
+  return schema;
+ };
+ assert.throws(() => parseWebsiteNotionConfig({ ...configured, timeZone: undefined }));
+ const repo = createWebsiteNotionRepository({ client: s.client, config: parseWebsiteNotionConfig(configured), timeZone: () => zone });
+ const read = async () => (await repo.getContentMetadata!("game", id(10)))!;
+ const dto = await read();
+ assert.deepEqual(dto.lastPlayedPlatforms, ["PlayStation", "Steam"]);
+ assert.deepEqual(dto.lastPlayedDate, { start: "2026-11-22", end: null, precision: "date" });
+ assert.doesNotMatch(JSON.stringify(dto), /01:10|14:10|Nintendo Switch 2|PS4/);
+ const later = "2026-11-22T17:00:00Z";
+ selectLast(later);
+ formula([row(last, "Steam", "PC"), row(later, "Nintendo", "Nintendo Switch 2")].join("\n"));
+ assert.deepEqual((await read()).lastPlayedPlatforms, ["Switch 2"]);
+ for (const bad of [row(last, "Steam", "PC"), row(later, "Account fixture", "Unknown"), `${row(later, "PSN", "PS5")}\ninvalid`,
+  Array.from({ length: 25 }, () => row(later, "PSN", "PS5")).join("\n"), ""]) {
+  formula(bad);
+  assert.equal((await read()).lastPlayedPlatforms, null);
+ }
+ const legacy = { ...configured, sources: [{ ...source, fields: { ...source.fields, lastPlayedDate: "Last" } }] };
+ const old = createWebsiteNotionRepository({ client: s.client, config: parseWebsiteNotionConfig(legacy), timeZone: () => zone });
+ assert.equal(Object.hasOwn((await old.getContentMetadata!("game", id(10)))!, "lastPlayedPlatforms"), false);
+});
+
 test("Notion library years respect allowlists, trash and combined filters without reading bodies or media", async () => {
  const s=setup();
  const source=s.config.sources[0];
