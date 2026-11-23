@@ -9,6 +9,7 @@ import type { ContentDocument, Game, TimeAmount } from "../contracts/content.ts"
 import type { HomeFeedV2Page } from "../contracts/social-timeline.ts";
 import { WEBSITE_SCHEMA_DIGEST, type WebsiteRecord } from "../contracts/website-sync.ts";
 import { createContentService } from "../src/lib/content/factory.ts";
+import { readRecentGamesFrom } from "../src/lib/content/recent-games.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
 import { createWebsiteWriter } from "../src/server/database/website-writer.ts";
 import { configDigest, mediaIdentity } from "../src/server/database/website-validation.ts";
@@ -330,4 +331,38 @@ test("database and paged home feeds retain game playtime without detail reads or
       }
     }
   } finally { await f.db.close(); }
+});
+
+test("the recent game carousel reads one eligible snapshot and drops withdrawn games on the next request", async t => {
+  const f = await setup();
+  t.after(() => f.db.close());
+  const sources = [{ key: "games", kind: "game", mode: "all", dataSourceId: "source-games", databaseParentId: null, pageId: null }];
+  const digest = configDigest(sources);
+  await f.db.query("SELECT nb_v2_api.configure_policy($1,600,$2::jsonb,'[]')", [digest, JSON.stringify(sources)]);
+  const games: Game[] = Array.from({ length: 10 }, (_, index) => {
+    const id = `recent-game-${index}`;
+    return {
+      ...fixtureItems.game[0], id, slug: id, href: `/library/games/${id}`, title: id, cover: null, boxArt: null,
+      lastPlayedDate: index === 0 ? null : { start: `2026-11-1${index}`, end: null, precision: "date" },
+    };
+  });
+  const lease = await f.writer.begin(randomUUID(), digest);
+  await f.writer.stage(lease, games.map((item, ordinal) => ({
+    detail: { item, document: body("") },
+    evidence: { sourceKey: "games", dataSourceId: "source-games", databaseParentId: null, courseId: null, parentId: null, ordinal },
+  })));
+  await f.writer.promote(lease, { records: games.length, media: 0, complete: true });
+  await f.db.query("SELECT nb_publication_api.activate($1)", [lease.runId]);
+
+  const reads: string[] = [];
+  const repository = f.service(f.repo("published", true, {
+    query: (sql, args) => { reads.push(sql); return f.reader.query(sql, args); },
+  }));
+  const newest = games.slice(1).reverse();
+  const read = async () => (await readRecentGamesFrom(repository, "UTC")).map(game => game.id);
+  assert.deepEqual(await read(), newest.slice(0, 8).map(game => game.id));
+  await f.db.query("SELECT nb_v2_api.set_denied($1,true)", [newest[0].id]);
+  assert.deepEqual(await read(), newest.slice(1).map(game => game.id));
+  assert.equal(reads.filter(sql => sql.includes("nb_read_api.read_snapshot(")).length, 2);
+  assert.equal(reads.length, 3); // Two snapshots and the initial capable-reader check.
 });

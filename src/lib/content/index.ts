@@ -21,6 +21,7 @@ import { contentFeatures } from "../../../config/features.ts";
 import { measureContentRead, traceContentRead } from "../../server/content-read-timing.ts";
 import { requestCourseMetadata } from "./request-course.ts";
 import { requestStudyRepository } from "./request-study.ts";
+import { readRecentGamesFrom } from "./recent-games.ts";
 
 function databaseLibraryUrls(runtime: ReturnType<typeof getDatabaseRuntime>) {
   const mode = process.env.DATABASE_LIBRARY_URLS ?? "legacy";
@@ -104,3 +105,7 @@ export const contentRepository: typeof cachedContentRepository = {
 export function readLibraryFirstPage<K extends LibraryKind>(kind: K, query: ListQuery = {}) {
   return traceContentRead("works", kind, () => readLibraryFirstPageFrom(getContentService().repository, contentRepository, kind, query));
 }
+
+// Recheck the current publication for each render. React only shares this read within the render.
+export const readRecentGames = cache(() =>
+  readRecentGamesFrom(getContentService().repository, getSiteConfig().timeZone));
