@@ -19,7 +19,7 @@ import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/conte
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
 import { isUsableGameBoxArt } from "../../lib/content/game-case.ts";
-import { readGameCaseFields } from "./game-case-fields.ts";
+import { readGameBoxArtPosition, readGameCaseFields } from "./game-case-fields.ts";
 import { readLastPlayedPlatforms } from "./game-play-platforms.ts";
 import { mapBounded } from "./bounded-work.ts";
 import type { NotionReadClient } from "./types.ts";
@@ -341,6 +341,7 @@ class ReadSession {
       const zone = statusTimeZone(this.options), lastPlayedDate = getLastPlayedDate(page, f.lastPlayedDate);
       const lastPlayedPlatforms = f.lastPlayedPlatforms ? readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) : null;
       const caseMarked = Boolean(f.boxArtPlatform && getSelect(page, f.boxArtPlatform));
+      const boxArtPosition = readGameBoxArtPosition(page, f.boxArtPosition);
       const { platforms, platformPlayTime, platform, boxArtProperty } = readGameCaseFields(page, f, lastPlayedPlatforms);
       const boxArt = cover && boxArtProperty && platform
         ? await this.cover(resolved, boxArtProperty, dimensions => isUsableGameBoxArt(dimensions, platform))
@@ -349,6 +350,7 @@ class ReadSession {
         ...(f.lastPlayedPlatforms ? { lastPlayedPlatforms } : {}),
         ...(f.platformPlayTime && (!f.boxArtPlatform || caseMarked) ? { platformPlayTime: platforms.length > 1 ? platformPlayTime : null } : {}),
         ...(f.boxArt && caseMarked ? { boxArt: boxArt && platform && isUsableGameBoxArt(boxArt, platform) ? boxArt : null } : {}),
+        ...(boxArtPosition !== null ? { boxArtPosition } : {}),
         playedTime: minutes !== null ? { value: minutes, unit: "minute" } : historical !== null && source.playedTimeUnit ? { value: historical, unit: source.playedTimeUnit } : null,
         estimatedTime: estimated !== null && source.playedTimeUnit ? { value: estimated, unit: source.playedTimeUnit } : null, progressPercent: null, rating: getRating(page, f.rating) }, zone);
     }

@@ -6,7 +6,7 @@ import { checkCaptureReleaseCompatibility } from "../../scripts/website-sync/cap
 export const gameCaseRuntime: Readonly<Record<string, string>> = {
   "scripts/website-sync/worker.ts": "eaba75fa41d6799ca627ffcc58c47336209963bb7a362dc51c975da95bafbfbf",
   "src/server/notion/blocks.ts": "8e8547c2223c6112fdec2190680e39e2bfae1a30249a26da1b615eabf6c9b91e",
-  "src/server/notion/website-repository.ts": "72eb9e5b03b9af077b53add41859616c38ad566589b59a12580a5be01f653360",
+  "src/server/notion/website-repository.ts": "b1c8b5430df15def227707fe521404887981efe77f42aabc9c3fb1379763bf71",
 };
 export function laterGameCaseRuntime(path: string, current: string, prior: string,
   producer: Parameters<typeof checkCaptureReleaseCompatibility>[0], consumer: Parameters<typeof checkCaptureReleaseCompatibility>[1]): boolean {

@@ -47,13 +47,18 @@ function stableMetadata(value: unknown, depth = 0): unknown {
   return Object.fromEntries(Object.entries(object).map(([key, v]) => [key, stableMetadata(v, depth + 1)]));
 }
 function directoryProperties(page: PageObjectResponse, gameFields?: Readonly<Record<string, string>>) {
-  if (!gameFields || gameFields.platformPlayTime && !gameFields.boxArtPlatform) return page.properties;
+  if (!gameFields) return page.properties;
+  const position = getProperty(page, gameFields.boxArtPosition ?? "竖图取景");
+  const inactive: PageObjectResponse["properties"][string][] = position?.type === "select" && position.select === null ? [position] : [];
   const platform = gameFields.boxArtPlatform ?? "Box Art Platform";
-  if (getSelect(page, platform)) return page.properties;
   // Creating unused case fields must not turn the entire game library into pending work.
-  const inactive = [platform, gameFields.boxArt ?? "Box Art", gameFields.platformPlayTime ?? "Platform Play Time Sources"]
-    .map(field => getProperty(page, field));
-  return Object.fromEntries(Object.entries(page.properties).filter(([, value]) => !inactive.includes(value)));
+  if (!(gameFields.platformPlayTime && !gameFields.boxArtPlatform) && !getSelect(page, platform)) {
+    for (const field of [platform, gameFields.boxArt ?? "Box Art", gameFields.platformPlayTime ?? "Platform Play Time Sources"]) {
+      const property = getProperty(page, field);
+      if (property) inactive.push(property);
+    }
+  }
+  return inactive.length ? Object.fromEntries(Object.entries(page.properties).filter(([, value]) => !inactive.includes(value))) : page.properties;
 }
 
 export function directoryPageMember(page: PageObjectResponse, nativeCover: boolean, gameFields?: Readonly<Record<string, string>>): DirectoryMember {

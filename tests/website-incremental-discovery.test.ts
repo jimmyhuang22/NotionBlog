@@ -259,7 +259,15 @@ test("unused game box art fields keep the existing directory fingerprint", async
   });
   assert.deepEqual((await read()).members, before.members);
   Object.assign(f.pages[0].properties, { "Box Art Platform": { id: "case-platform", type: "select", select: { name: "Steam" } } });
-  assert.notEqual((await read()).members[0].fingerprint, before.members[0].fingerprint);
+  const marked = await read();
+  assert.notEqual(marked.members[0].fingerprint, before.members[0].fingerprint);
+  const position = { id: "crop", type: "select" as const, select: null as { id: string; name: string; color: "default" } | null };
+  Object.assign(f.pages[0].properties, { "竖图取景": position });
+  assert.deepEqual((await read()).members, marked.members);
+  position.select = { id: "up", name: "靠上", color: "default" };
+  assert.notEqual((await read()).members[0].fingerprint, marked.members[0].fingerprint);
+  position.select = null;
+  assert.deepEqual((await read()).members, marked.members);
 });
 
 test("property changes sharing a timestamp are detected and object-key order is ignored", async () => {

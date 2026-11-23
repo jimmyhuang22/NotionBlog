@@ -1,5 +1,5 @@
 import type { PageObjectResponse } from "@notionhq/client";
-import type { GamePlatformPlayTime } from "../../../contracts/content.ts";
+import type { GameBoxArtPosition, GamePlatformPlayTime } from "../../../contracts/content.ts";
 import { gameCasePlatformKey, selectGameCasePlatform } from "../../lib/content/game-case.ts";
 import { getProperty, getSelect, getValues } from "./properties.ts";
 
@@ -62,9 +62,21 @@ export function readGameCaseFields(page: PageObjectResponse, fields: Readonly<Re
   return { platforms, platformPlayTime, platform, boxArtProperty: artMatches ? fields.boxArt : undefined };
 }
 
-/** Formula values can change while the parent page's edit timestamp stays put. */
+export function readGameBoxArtPosition(page: PageObjectResponse, field?: string): GameBoxArtPosition | null {
+  const property = getProperty(page, field);
+  if (property?.type !== "select") return null;
+  switch (property.select?.name) {
+    case "靠上": return "top";
+    case "居中": return "center";
+    case "靠下": return "bottom";
+    default: return null;
+  }
+}
+
+/** Capture source fields that can change independently of the captured edit timestamp. */
 export function gameCaseSourceRevision(page: PageObjectResponse, fields: Readonly<Record<string, string>>) {
-  if (!fields.boxArt && !fields.platformPlayTime) return null;
-  return [fields.platforms, fields.platformPlayTime, fields.lastPlayedDate, fields.lastPlayedPlatforms, fields.boxArtPlatform]
+  if (!fields.boxArt && !fields.platformPlayTime && !fields.boxArtPosition) return null;
+  return [fields.platforms, fields.platformPlayTime, fields.lastPlayedDate, fields.lastPlayedPlatforms, fields.boxArtPlatform,
+    ...(fields.boxArtPosition ? [fields.boxArtPosition] : [])]
     .map(field => getProperty(page, field));
 }

@@ -8,7 +8,8 @@ import type {NotionReadClient} from "../src/server/notion/types.ts";
 import {parseWebsiteNotionConfig} from "../src/server/notion/website-config.ts";
 import {createWebsiteNotionRepository} from "../src/server/notion/website-repository.ts";
 import {websitePolicy,runWebsiteSync} from "../scripts/website-sync/worker.ts";
-import { configDigest } from "../src/server/database/website-validation.ts";
+import { configDigest, validateWebsiteRecord } from "../src/server/database/website-validation.ts";
+import { readGameBoxArtPosition } from "../src/server/notion/game-case-fields.ts";
 import { prepareSinglePage } from "../scripts/website-incremental-sync/source.ts";
 import { createIndependentMediaPort } from "../scripts/website-incremental-sync/independent-media.ts";
 import { createHostBudget } from "../scripts/website-incremental-sync/host-budget.ts";
@@ -193,11 +194,14 @@ test("v2 game cases publish original box art only for the selected edition and p
  page.cover = { type: "external", external: { url: coverUrl } };
  const formula = { id: "pt", type: "formula" as const, formula: { type: "string" as const, string: "PSN|PS5|120\nPSN|PS4|18\nSteam|PC|0\nNintendo|Nintendo Switch 2|777" } };
  const edition = { id: "ap", type: "select" as const, select: { id: "ps5", name: "PS5", color: "default" as const } };
+ const choice = (name: string) => ({ id: name, name, color: "default" as const });
+ const position = { id: "crop", type: "select" as const, select: choice("靠上") as ReturnType<typeof choice> | null };
  const props = {
    Platforms: { id: "p", type: "multi_select", multi_select: [
      { id: "ps", name: "PlayStation", color: "default" }, { id: "steam", name: "Steam", color: "default" }] },
    PlayTime: formula,
    ArtPlatform: edition,
+   Position: position,
    BoxArt: { id: "art", type: "files", files: [{ name: "original", type: "external", external: { url: artUrl } }] },
  };
  Object.assign(page.properties, props);
@@ -210,7 +214,7 @@ test("v2 game cases publish original box art only for the selected edition and p
  };
  const primary = s.config.sources[0];
  const config = { ...s.config, sources: [{ ...primary, cover: { strategy: "native-page-cover" }, fields: {
-   ...primary.fields, platforms: "Platforms", platformPlayTime: "PlayTime", boxArt: "BoxArt", boxArtPlatform: "ArtPlatform",
+   ...primary.fields, platforms: "Platforms", platformPlayTime: "PlayTime", boxArt: "BoxArt", boxArtPlatform: "ArtPlatform", boxArtPosition: "Position",
  } }, ...s.config.sources.slice(1)] };
  const original = await sharp({ create: { width: 620, height: 820, channels: 3, background: "#557799" } }).png().toBuffer();
  const low = await sharp({ create: { width: 300, height: 500, channels: 3, background: "#446699" } }).png().toBuffer();
@@ -231,7 +235,7 @@ test("v2 game cases publish original box art only for the selected edition and p
    const record = records.find(row => row.detail.item.id === id(10))!;
    const game = record.detail.item;
    if (game.kind !== "game") assert.fail("Expected a game");
-   return { game, media, stored };
+   return { game, record, media, stored };
  };
 
  const good = await run();
@@ -241,14 +245,30 @@ test("v2 game cases publish original box art only for the selected edition and p
  ]);
  assert.deepEqual([good.game.cover?.width, good.game.cover?.height], [300, 500]);
  assert.deepEqual([good.game.boxArt?.width, good.game.boxArt?.height], [620, 820]);
+ assert.equal(good.game.boxArtPosition, "top");
  assert.deepEqual(good.stored.get(good.game.boxArt!.id), original);
  assert.equal(artReads, 1);
  assert.equal(good.media.length, 2);
+
+ for (const [name, expected] of [["靠下", "bottom"], ["居中", "center"], ["未知", undefined], [null, undefined]] as const) {
+   position.select = name === null ? null : choice(name);
+   assert.equal(readGameBoxArtPosition(page, "Position"), expected ?? null);
+ }
+ position.select = choice("靠上");
+ for (const boxArtPosition of ["top", "center", "bottom", null] as const) {
+   assert.doesNotThrow(() => validateWebsiteRecord({ ...good.record, detail: { ...good.record.detail, item: { ...good.game, boxArtPosition } } }));
+ }
+ for (const boxArtPosition of ["靠上", "left", 0, { align: "top" }]) {
+   const invalid = structuredClone(good.record);
+   Object.assign(invalid.detail.item, { boxArtPosition });
+   assert.throws(() => validateWebsiteRecord(invalid));
+ }
 
  const selected = edition.select;
  Object.assign(edition, { select: null });
  const fallback = await run();
  assert(!Object.hasOwn(fallback.game, "boxArt") && !Object.hasOwn(fallback.game, "platformPlayTime"));
+ assert.equal(fallback.game.boxArtPosition, "top");
  assert.equal(fallback.media.length, 1);
  assert.equal(artReads, 1);
  edition.select = selected;
@@ -287,6 +307,9 @@ test("v2 game cases publish original box art only for the selected edition and p
  if (prepared.outcome !== "ready" || prepared.record.detail.item.kind !== "game") assert.fail();
  assert.equal(prepared.record.detail.item.boxArt, null);
  assert.deepEqual(prepared.media, []);
+
+ s.client.listBlocks = async () => { position.select = choice("靠下"); return []; };
+ assert.deepEqual(await prepareSinglePage(options), { outcome: "pending", code: "SOURCE_CHANGED_DURING_PREPARATION" });
 
  s.client.listBlocks = async () => { formula.formula.string = "PSN|PS5|120\nSteam|PC|200"; return []; };
  assert.deepEqual(await prepareSinglePage(options), { outcome: "pending", code: "SOURCE_CHANGED_DURING_PREPARATION" });
