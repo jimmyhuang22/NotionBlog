@@ -1,3 +1,4 @@
+import { gamePlayVideoUrl } from "../../lib/content/game-detail-data.ts";
 import { directPageDenied, primeDirectDenials } from "./direct-policy.ts";
 import { createHash } from "node:crypto";
 import type { SearchContext, SearchSnapshot } from "../../../contracts/website.ts";
@@ -337,7 +338,11 @@ class ReadSession {
         ratingSource: publicRating === null ? null : normalizeMovieRatingSource(getSelect(page, f.ratingSource)) };
     }
     if (source.kind === "game") {
-      const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime), estimated = getNumber(page, f.estimatedTime);
+      const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime);
+      const intro = getSelect(page, f.gameSummary)?.trim() || null;
+      const developers = [...new Set(getTags(page, f.developers))];
+      const publishers = [...new Set(getTags(page, f.publishers))];
+      const playVideo = gamePlayVideoUrl(getPublicUrl(page, f.playVideoUrl));
       const zone = statusTimeZone(this.options), lastPlayedDate = getLastPlayedDate(page, f.lastPlayedDate);
       const lastPlayedPlatforms = f.lastPlayedPlatforms ? readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) : null;
       const caseMarked = Boolean(f.boxArtPlatform && getSelect(page, f.boxArtPlatform));
@@ -352,7 +357,9 @@ class ReadSession {
         ...(f.boxArt && caseMarked ? { boxArt: boxArt && platform && isUsableGameBoxArt(boxArt, platform) ? boxArt : null } : {}),
         ...(boxArtPosition !== null ? { boxArtPosition } : {}),
         playedTime: minutes !== null ? { value: minutes, unit: "minute" } : historical !== null && source.playedTimeUnit ? { value: historical, unit: source.playedTimeUnit } : null,
-        estimatedTime: estimated !== null && source.playedTimeUnit ? { value: estimated, unit: source.playedTimeUnit } : null, progressPercent: null, rating: getRating(page, f.rating) }, zone);
+        ...(intro || developers.length || publishers.length ? { about: { summary: intro, developers, publishers } } : {}),
+        ...(playVideo ? { playVideo: { url: playVideo, work: null } } : {}),
+        progressPercent: null, rating: getRating(page, f.rating) }, zone);
     }
     if (source.kind === "project") return { ...base, kind: "project", period: getDate(page, f.period), role: getSelect(page, f.role), stack: getValues(page, f.stack), links: [["代码", getPublicUrl(page, f.repositoryUrl)], ["演示", getPublicUrl(page, f.demoUrl)]].filter((link): link is [string, string] => link[1] !== null).map(([label, url]) => ({ label, url })) };
     const breadcrumbs: ContentLink[] = [{ title: "学习", href: "/study" }];

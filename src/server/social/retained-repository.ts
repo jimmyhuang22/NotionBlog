@@ -11,13 +11,14 @@ export function socialDisplayMode(value:string|undefined):"trial"|"retained" {
   throw new ContentServiceError("MISCONFIGURED","Unsupported social display mode.");
 }
 // Fixed trusted view names; no SQL identifier is taken from an HTTP request or environment value.
-const retainedSql=(sql:string)=>sql
+export const retainedSql=(sql:string)=>sql
   .replaceAll("social_sync.website_collections","social_sync.retained_website_collections")
   .replaceAll("social_sync.website_publications","social_sync.retained_website_publications")
   .replaceAll("social_sync.website_collection_members","social_sync.retained_website_collection_members")
+  .replaceAll("social_sync.website_collection_playbacks","social_sync.retained_website_collection_playbacks")
   .replace("publications AS NOT MATERIALIZED","publications AS MATERIALIZED");
 export const retainedTimelineSql=retainedSql(socialTimelineSql);
-export const retainedPlaybackTimelineSql=retainedSql(socialPlaybackTimelineSql).replaceAll("social_sync.website_collection_playbacks","social_sync.retained_website_collection_playbacks");
+export const retainedPlaybackTimelineSql=retainedSql(socialPlaybackTimelineSql);
 export async function readRetainedSocialSnapshot(sql:SqlExecutor,playback=false,day:CollectionDayOptions={}) {
   try {
     const meta=(await sql.query<{version:number}>("SELECT version FROM social_sync.retained_meta WHERE singleton")).rows;

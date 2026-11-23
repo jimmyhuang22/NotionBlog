@@ -17,7 +17,7 @@ const fields: Record<ContentKind, Record<string, PropertyType[]>> = {
   album: { ...common, date, photoCount: number },
   book: { ...common, authors: [...label, "multi_select"], status: label, readingDate: date, pagesRead: number, totalPages: number, personalRating: [...label, "number"], doubanRating: number, externalUrl: ["url"] },
   movie: { ...common, originalTitle: label, mediaType: label, status: label, watchedDate: date, releaseDate: date, director: label, actors: [...label, "multi_select"], rating: [...label, "number"], doubanRating: number, publicRating: number, ratingSource: label },
-  game: { ...common, status: label, platforms: ["multi_select"], boxArt: ["files"], boxArtPlatform: ["select"], boxArtPosition: ["select"], platformPlayTime: ["formula"], playedDate: date, lastPlayedDate: ["date", "rollup"], lastPlayedPlatforms: ["formula"], firstPlayedDate: ["date", "rollup"], releaseDate: date, playedTime: number, estimatedTime: number, platformMinutes: number, steamMinutes: number, rating: [...label, "number"] },
+  game: { ...common, status: label, platforms: ["multi_select"], boxArt: ["files"], boxArtPlatform: ["select"], boxArtPosition: ["select"], platformPlayTime: ["formula"], playedDate: date, lastPlayedDate: ["date", "rollup"], lastPlayedPlatforms: ["formula"], firstPlayedDate: ["date", "rollup"], releaseDate: date, playedTime: number, estimatedTime: number, gameSummary: ["rich_text"], developers: ["multi_select"], publishers: ["multi_select"], playVideoUrl: ["url"], platformMinutes: number, steamMinutes: number, rating: [...label, "number"] },
   project: { ...common, period: date, role: label, stack: ["multi_select"], repositoryUrl: ["url"], demoUrl: ["url"] },
   page: { title: ["title"] },
 };
@@ -79,7 +79,7 @@ export function parseWebsiteNotionConfig(input: unknown): WebsiteNotionConfig {
     for (const [from, to] of Object.entries(object(s.statusMap ?? {}))) { if (!states[kind]?.includes(text(to))) bad(); statusMap[text(from)] = to as string; }
     const unit = s.playedTimeUnit ?? null;
     if (unit !== null && unit !== "hour" && unit !== "minute") bad();
-    if (kind === "game" && (mapping.playedTime || mapping.estimatedTime) && unit === null) bad();
+    if (kind === "game" && mapping.playedTime && unit === null) bad();
     if (kind === "game" && (mapping.boxArt || mapping.boxArtPlatform || mapping.platformPlayTime) && !mapping.platforms) bad();
     if (kind === "game" && (Boolean(mapping.boxArt) !== Boolean(mapping.boxArtPlatform) ||
         mapping.boxArt && (mapping.boxArt === cover.property || mapping.boxArt === mapping.cover))) bad();
@@ -103,6 +103,8 @@ export function websiteCollectionTimeZone(config: WebsiteNotionConfig): string {
 export function assertWebsiteSourceSchema(source: WebsiteNotionSource, schema: DataSourceObjectResponse): void {
   const resolve = (name: string) => schema.properties[name] ?? Object.values(schema.properties).find(p => { try { return decodeURIComponent(p.id) === decodeURIComponent(name); } catch { return p.id === name; } });
   for (const [field, name] of Object.entries(source.fields)) {
+    // Retain the legacy mapping in config digests, but collection no longer uses it.
+    if (source.kind === "game" && field === "estimatedTime") continue;
     if (field === "order" && !resolve(name)) continue;
     if (!resolve(name) || !fields[source.kind][field]?.includes(resolve(name)!.type)) bad();
     const property = resolve(name);

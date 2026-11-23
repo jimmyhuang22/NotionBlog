@@ -34,7 +34,10 @@ function project<T>(value: T, snapshot: Pick<Projection, "links" | "mediaIds">, 
     if(o.type==="child-page"&&(!o.target||!links.has((o.target as {href:string}).href)))return {id:o.id,type:"child-page",title:"Unavailable page",target:null};
     if(typeof o.href==="string"&&!o.kind&&!links.has(o.href))return null;
     const out=Object.fromEntries(Object.entries(o).map(([k,v])=>[k,visit(v)]));
-    if(o.kind==="game")return projectGameDates(out as unknown as Game,timeZone);
+    if(o.kind==="game") {
+      delete out.estimatedTime;
+      return projectGameDates(out as unknown as Game,timeZone);
+    }
     if(o.type==="image"&&out.image===null)return {id:o.id,type:"unsupported",label:"Image unavailable"};
     if(o.link&&out.link&&(out.link as {kind:string}).kind==="unavailable")out.text="Unavailable page";
     return out;

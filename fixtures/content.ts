@@ -303,10 +303,6 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
         "value": 45,
         "unit": "hour"
       },
-      "estimatedTime": {
-        "value": 60,
-        "unit": "hour"
-      },
       "progressPercent": 75,
       "rating": {
         "value": 4,
@@ -344,10 +340,6 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
       "releaseDate": null,
       "playedTime": {
         "value": 45,
-        "unit": "hour"
-      },
-      "estimatedTime": {
-        "value": 60,
         "unit": "hour"
       },
       "progressPercent": 75,
@@ -394,10 +386,6 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
         "value": 12,
         "unit": "hour"
       },
-      "estimatedTime": {
-        "value": 60,
-        "unit": "hour"
-      },
       "progressPercent": 20,
       "rating": null
     },
@@ -420,7 +408,6 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
       "playedDate": null,
       "releaseDate": null,
       "playedTime": null,
-      "estimatedTime": null,
       "progressPercent": null,
       "rating": null
     },
@@ -428,7 +415,7 @@ export const fixtureItems: { [K in ContentKind]: ContentByKind[K][] } = {
       id: "mock-game-5", kind: "game", slug: "game-zero-trophies", href: "/library/games/game-zero-trophies",
       title: "[演示] 还没拿到奖杯的游戏", summary: null, tags: [], cover: null, updatedAt: null,
       status: "playing", platforms: ["PlayStation"], lastPlayedDate: null, firstPlayedDate: null,
-      playedDate: null, releaseDate: null, playedTime: null, estimatedTime: null, progressPercent: null, rating: null,
+      playedDate: null, releaseDate: null, playedTime: null, progressPercent: null, rating: null,
     }
   ],
   "course": [
