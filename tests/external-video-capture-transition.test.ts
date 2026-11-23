@@ -15,6 +15,7 @@ import { createCollectionCapture } from "../scripts/website-sync/collection-capt
 import { prepareCollectionResume } from "../scripts/website-sync/collection-revalidation.ts";
 import { runWebsiteSync, websitePolicy } from "../scripts/website-sync/worker.ts";
 import { checkCaptureReleaseCompatibility } from "../scripts/website-sync/capture-release-compatibility.ts";
+import { laterGameCaseRuntime } from "./helpers/game-case-runtime-sources.ts";
 import transition from "../database/capture-external-video-compatibility.json" with { type: "json" };
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
 import revalidation from "../database/qualified-revalidation-protocol.json" with { type: "json" };
@@ -28,7 +29,9 @@ test("external video transition accepts only its exact producer, mapper pair and
   assert.equal(checkCaptureReleaseCompatibility(producer, consumer).format, "capture-external-video-links-v1");
   for (const pair of transition.files) {
     const actual = createHash("sha256").update(await readFile(new URL("../" + pair.path, import.meta.url))).digest("hex");
-    if (pair.path === "src/server/notion/website-repository.ts" || pair.path === "src/server/notion/blocks.ts") {
+    if (laterGameCaseRuntime(pair.path, actual, pair.after, producer, consumer)) {
+      // The current producer stays outside this historical video transition.
+    } else if (pair.path === "src/server/notion/website-repository.ts" || pair.path === "src/server/notion/blocks.ts") {
       // The old video-only transition rejects later mappers without changing the runtime allowlist.
       assert.equal(actual, pair.path === "src/server/notion/blocks.ts"
         ? "9132d007c16a768bc61668fb657d057329f99c74b3520a918fe35b070547db04"

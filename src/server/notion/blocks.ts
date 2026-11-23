@@ -19,6 +19,8 @@ export interface RegisterBlockImageInput {
   expiryTime?: string;
   width?: number;
   height?: number;
+  /** Optional v2 pre-publication image acceptance. A false result is a known empty slot. */
+  acceptDimensions?: (image: Pick<ImageAsset, "width" | "height">) => boolean;
 }
 
 export interface BlockConversionContext {
