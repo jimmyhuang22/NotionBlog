@@ -438,6 +438,21 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 
 **隐私与空值**：照现有规则排除隐藏的游戏；时长只到小时，不给平台账户和原始时间戳；缺了就是 `null`，不推断。
 
+### 二十、竖版封面的取景位置（2026-11-24，Claude）
+
+**用户已确认新增这个字段**（2026-11-24），见[决策](decisions/2026-11-24-game-box-art-position.md)。PlayStation 卡盒比 2:3 的竖图宽，居中填满时上下各切掉约 11%，很多封面的标题正好印在顶端或底端。试装了 14 张，9 张要靠上，3 张要靠下，没有一种统一的位置能同时照顾两边。时长仍放在封面左下角，不移动。
+
+- **Notion**：游戏库加一列单选“竖图取景”，选项是靠上、居中、靠下。空着就是居中，所以已上线的竖图不用补填。
+- **DTO**：`Game.boxArtPosition?: "top" | "center" | "bottom" | null`，契约已加在 `contracts/content.ts`（`GameBoxArtPosition`）。靠上对应 `top`，居中对应 `center`，靠下对应 `bottom`；空值或旧快照不带这一项都按居中处理。列表和详情回应都带上它，跟着 `boxArt` 走。
+- **前端已接入**（`src/components/game-case.tsx`，`library.css` 的 `.game-case__art[data-position]`）：只作用于竖图，横图回退仍然居中。认不出的值按居中处理，不会报错。
+- **校验**：只接受这三个值或 `null`；没有 `boxArt` 时这一项没有意义，可以照传，前端会忽略。
+- **首批要填的值**（来自 Codex 2026-11-24 交接包里的候选图，图上线时一起填）：
+  - 靠上：古墓丽影、幽灵行者 (PlayStation 5)、双人成行、瑞奇与叮当 时空跳转、勇者斗恶龙 创世小玩家２　破坏神席德与空荡岛（PlayStation 那条）、深海迷航、古墓丽影：暗影 Definitive Edition、破晓传奇、艾尔登法环。
+  - 靠下：绯红结系、荒野大镖客：救赎2、黑暗之魂3。
+  - 王国之泪、星之卡比 探索发现是 Switch 盒，上下不切，留空即可。
+- **仍需素材核查**：古墓丽影只能用 Xbox 的 Definitive Edition 图（Steam 那张是 GOTY）；古墓丽影：暗影的图上没有 Definitive Edition 字样；幽灵行者的图来自 Steam 本体，PS5 版次未确认。
+- **交付后告诉前端**：字段同步到两站的时间。前端会在真实数据下复看两种盒形。
+
 ## 可直接给 Codex 的启动指令
 
 ```text
