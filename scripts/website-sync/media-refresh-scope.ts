@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { ContentServiceError } from "../../contracts/repository.ts";
+import { gameCaseSourceRevision } from "../../src/server/notion/game-case-fields.ts";
 import { normalizeId } from "../../src/server/notion/config.ts";
 import type { PublicNotionPage } from "../../src/server/notion/website-repository.ts";
 import { configDigest } from "../../src/server/database/website-validation.ts";
@@ -13,7 +14,8 @@ type Scope = { owner: string; expected: string; used: boolean; closed: boolean;
 export function collectionOwnerDigest(page: PublicNotionPage): string {
   const identity = (p: PublicNotionPage["page"]) => ({ id: normalizeId(p.id), parent: p.parent,
     edited: p.last_edited_time, archived: p.archived, trash: p.in_trash, isArchived: p.is_archived });
-  return configDigest({ page: identity(page.page), source: page.source,
+  const game = page.source.kind === "game" ? gameCaseSourceRevision(page.page, page.source.fields) : null;
+  return configDigest({ page: identity(page.page), source: page.source, ...(game ? { game } : {}),
     course: page.course ? { page: identity(page.course.page), source: page.course.source } : null,
     ancestors: page.ancestors.map(identity) });
 }

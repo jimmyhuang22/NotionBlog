@@ -63,7 +63,10 @@ export function createRuntimeSources(options: { config: WebsiteNotionConfig; sto
     } },
     study(current: PublicationState, signal: AbortSignal): StudyChangeSource {
       select(current); return createWebsiteStudyChangeSource({ config, client: transport(signal).client, deniedPageIds: options.deniedPageIds,
-        registerImage: async input => (await media.prepare(input, signal)).image });
+        registerImage: async input => {
+          const prepared = await media.prepare(input, signal);
+          return prepared === "dimensions-rejected" ? null : prepared.image;
+        } });
     },
     assets(records: WebsiteRecord[], current: PublicationState, signal: AbortSignal) {
       select(current); signal.throwIfAborted(); return media.assets(records);

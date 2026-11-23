@@ -19,32 +19,36 @@ export function createIndependentMediaPort(options: { budget: HostBudget; storag
   const { budget, storage } = options, prepared = new Map<string, StoredMedia>(), objects = new Set<string>();
   let reused = 0, uploaded = 0;
   const guard = (s: AbortSignal) => { budget.guard(); s.throwIfAborted(); };
-  return {
-    async prepare(input: RegisterBlockImageInput, signal: AbortSignal): Promise<PreparedImage> {
-      guard(signal);
-      if (input.expiryTime && (!Number.isFinite(Date.parse(input.expiryTime)) || Date.parse(input.expiryTime) <= Date.now())) hostFail("HOST_MEDIA_PENDING");
-      const image = await hostAwait(budget, () => options.download(input.url, signal), signal); guard(signal);
-      const dimensions = await imageDimensions(image.bytes); guard(signal);
-      const sha256 = createHash("sha256").update(image.bytes).digest("hex"), ownerPageId = normalizeId(input.ownerPageId);
-      const media: StoredMedia = { assetId: mediaIdentity(ownerPageId, input.blockId ?? input.property ?? "cover", sha256),
-        ownerPageId, sha256, objectKey: `sha256/${sha256}`, byteSize: image.bytes.length, mime: image.mime, ...dimensions };
-      validateMedia(media); verifyMediaBytes(media, image.bytes);
-      const cached = options.cached(media.assetId, ownerPageId);
-      if (cached && canonicalJson(cached) !== canonicalJson(media)) hostFail("HOST_MEDIA_MISMATCH");
-      if (!objects.has(media.objectKey)) {
-        if (!cached) {
-          budget.charge("mediaBytes", media.byteSize); guard(signal);
-          await hostAwait(budget, () => storage.put(media, image.bytes), signal); guard(signal); uploaded++;
-        }
+  function prepare(input: RegisterBlockImageInput & { acceptDimensions?: undefined }, signal: AbortSignal): Promise<PreparedImage>;
+  function prepare(input: RegisterBlockImageInput, signal: AbortSignal): Promise<PreparedImage | "dimensions-rejected">;
+  async function prepare(input: RegisterBlockImageInput, signal: AbortSignal): Promise<PreparedImage | "dimensions-rejected"> {
+    guard(signal);
+    if (input.expiryTime && (!Number.isFinite(Date.parse(input.expiryTime)) || Date.parse(input.expiryTime) <= Date.now())) hostFail("HOST_MEDIA_PENDING");
+    const image = await hostAwait(budget, () => options.download(input.url, signal), signal); guard(signal);
+    const dimensions = await imageDimensions(image.bytes); guard(signal);
+    if (input.acceptDimensions && !input.acceptDimensions(dimensions)) return "dimensions-rejected";
+    const sha256 = createHash("sha256").update(image.bytes).digest("hex"), ownerPageId = normalizeId(input.ownerPageId);
+    const media: StoredMedia = { assetId: mediaIdentity(ownerPageId, input.blockId ?? input.property ?? "cover", sha256),
+      ownerPageId, sha256, objectKey: `sha256/${sha256}`, byteSize: image.bytes.length, mime: image.mime, ...dimensions };
+    validateMedia(media); verifyMediaBytes(media, image.bytes);
+    const cached = options.cached(media.assetId, ownerPageId);
+    if (cached && canonicalJson(cached) !== canonicalJson(media)) hostFail("HOST_MEDIA_MISMATCH");
+    if (!objects.has(media.objectKey)) {
+      if (!cached) {
         budget.charge("mediaBytes", media.byteSize); guard(signal);
-        const stored = await hostAwait(budget, () => storage.read(media), signal); guard(signal); verifyMediaBytes(media, stored);
-        objects.add(media.objectKey); if (cached) reused++;
+        await hostAwait(budget, () => storage.put(media, image.bytes), signal); guard(signal); uploaded++;
       }
-      if (prepared.size >= 2000 && !prepared.has(media.assetId)) hostFail("HOST_MEDIA_LIMIT");
-      prepared.set(media.assetId, media);
-      return { verified: true, media, image: { id: media.assetId, src: `/media/v2/${media.assetId}`,
-        alt: sanitizePublicText(input.alt), ...dimensions } };
-    },
+      budget.charge("mediaBytes", media.byteSize); guard(signal);
+      const stored = await hostAwait(budget, () => storage.read(media), signal); guard(signal); verifyMediaBytes(media, stored);
+      objects.add(media.objectKey); if (cached) reused++;
+    }
+    if (prepared.size >= 2000 && !prepared.has(media.assetId)) hostFail("HOST_MEDIA_LIMIT");
+    prepared.set(media.assetId, media);
+    return { verified: true, media, image: { id: media.assetId, src: `/media/v2/${media.assetId}`,
+      alt: sanitizePublicText(input.alt), ...dimensions } };
+  }
+  return {
+    prepare,
     assets(records: WebsiteRecord[]) {
       const found = new Map<string, StoredMedia>();
       for (const record of records) {

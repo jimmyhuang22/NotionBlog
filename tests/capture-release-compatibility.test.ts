@@ -4,6 +4,7 @@ import { checkCaptureReleaseCompatibility } from "../scripts/website-sync/captur
 import { collectionResumePlan } from "../scripts/website-sync/collection-resume-plan.ts";
 import type { CollectedPage } from "../scripts/website-sync/collection-capture.ts";
 import { demoId } from "../scripts/notion-sync/demo.ts";
+import { laterGameCaseRuntime } from "./helpers/game-case-runtime-sources.ts";
 import { laterRecoveryRuntime } from "./helpers/recovery-runtime-sources.ts";
 import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 import publicationRepair from "../database/capture-publication-revalidation-compatibility.json" with { type: "json" };
@@ -99,7 +100,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
   assert.equal(checkCaptureReleaseCompatibility(producer,consumer).originalCaptureUnchanged,true);
   for(const pair of spec.files){
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
-    if(laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer)) {
+    if(laterGameCaseRuntime(pair.path,current,pair.after,producer,consumer)||laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer)) {
       // Exact newer bytes are checked above without weakening this old spec.
     } else if(pair.path==="src/server/notion/website-repository.ts" || pair.path==="src/server/database/website-repository.ts") {
       // New mapper/website reader releases (including reader-only filtering) stay
@@ -135,7 +136,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
   assert.equal(checkCaptureReleaseCompatibility(producer, consumer).format, path.includes("media-reuse") ? "capture-bounded-media-reuse-compatibility-v1" : "capture-versioned-proof-compatibility-v1");
   for(const pair of spec.files) {
     const current=createHash("sha256").update(await readFile(new URL("../"+pair.path,import.meta.url))).digest("hex");
-    if(laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer))continue;
+    if(laterGameCaseRuntime(pair.path,current,pair.after,producer,consumer)||laterRecoveryRuntime(pair.path,current,pair.after,producer,consumer)||laterPublicationRepair(pair.path,current,pair.after,producer,consumer))continue;
     // New website/development capabilities remain outside these frozen transitions.
     // The opt-in display route/runtime are pinned here and still reject old captures.
     // Pin the current cloud-preview launcher without admitting it into the old capture runtime.

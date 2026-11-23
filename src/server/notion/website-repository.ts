@@ -18,6 +18,8 @@ import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.
 import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/content/movie-rating.ts";
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
+import { isUsableGameBoxArt } from "../../lib/content/game-case.ts";
+import { readGameBoxArtPosition, readGameCaseFields } from "./game-case-fields.ts";
 import { readLastPlayedPlatforms } from "./game-play-platforms.ts";
 import { mapBounded } from "./bounded-work.ts";
 import type { NotionReadClient } from "./types.ts";
@@ -337,8 +339,18 @@ class ReadSession {
     if (source.kind === "game") {
       const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime), estimated = getNumber(page, f.estimatedTime);
       const zone = statusTimeZone(this.options), lastPlayedDate = getLastPlayedDate(page, f.lastPlayedDate);
-      return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms: getValues(page, f.platforms), playedDate: getDate(page, f.playedDate), lastPlayedDate, firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
-        ...(f.lastPlayedPlatforms ? { lastPlayedPlatforms: readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) } : {}),
+      const lastPlayedPlatforms = f.lastPlayedPlatforms ? readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) : null;
+      const caseMarked = Boolean(f.boxArtPlatform && getSelect(page, f.boxArtPlatform));
+      const boxArtPosition = readGameBoxArtPosition(page, f.boxArtPosition);
+      const { platforms, platformPlayTime, platform, boxArtProperty } = readGameCaseFields(page, f, lastPlayedPlatforms);
+      const boxArt = cover && boxArtProperty && platform
+        ? await this.cover(resolved, boxArtProperty, dimensions => isUsableGameBoxArt(dimensions, platform))
+        : null;
+      return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms, playedDate: getDate(page, f.playedDate), lastPlayedDate, firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
+        ...(f.lastPlayedPlatforms ? { lastPlayedPlatforms } : {}),
+        ...(f.platformPlayTime && (!f.boxArtPlatform || caseMarked) ? { platformPlayTime: platforms.length > 1 ? platformPlayTime : null } : {}),
+        ...(f.boxArt && caseMarked ? { boxArt: boxArt && platform && isUsableGameBoxArt(boxArt, platform) ? boxArt : null } : {}),
+        ...(boxArtPosition !== null ? { boxArtPosition } : {}),
         playedTime: minutes !== null ? { value: minutes, unit: "minute" } : historical !== null && source.playedTimeUnit ? { value: historical, unit: source.playedTimeUnit } : null,
         estimatedTime: estimated !== null && source.playedTimeUnit ? { value: estimated, unit: source.playedTimeUnit } : null, progressPercent: null, rating: getRating(page, f.rating) }, zone);
     }
@@ -349,18 +361,18 @@ class ReadSession {
     return { ...base, kind: "study-note", courseId: courseId!, parentId: resolved.ancestors.length ? normalizeId(resolved.ancestors.at(-1)!.id) : null, noteType: noteType(getSelect(page, source.fields.type)), date: getDate(page, source.fields.date), breadcrumbs };
   }
 
-  private async cover(resolved: PublicNotionPage): Promise<ImageAsset | null> {
+  private async cover(resolved: PublicNotionPage, filesProperty?: string,
+    acceptDimensions?: RegisterBlockImageInput["acceptDimensions"]): Promise<ImageAsset | null> {
     const { page, source } = resolved;
-    if (!this.options.registerImage || source.cover.strategy === "none") return null;
-    let file = page.cover;
-    let property: string | undefined;
-    if (source.cover.strategy === "files-property") {
-      property = source.cover.property;
-      const value = getProperty(page, property);
-      file = value?.type === "files" ? value.files[0] ?? null : null;
-    }
+    if (!this.options.registerImage || (!filesProperty && source.cover.strategy === "none")) return null;
+    const property = filesProperty ?? (source.cover.strategy === "files-property" ? source.cover.property : undefined);
+    const value = property ? getProperty(page, property) : null;
+    const file = property ? value?.type === "files" ? value.files[0] ?? null : null : page.cover;
     if (!file || (file.type !== "file" && file.type !== "external")) return null;
-    return this.options.registerImage({ ownerPageId: normalizeId(page.id), ...(property ? { property } : {}), alt: getTitle(page, source.fields.title), url: file.type === "file" ? file.file.url : file.external.url, ...(file.type === "file" ? { expiryTime: file.file.expiry_time } : {}) });
+    return this.options.registerImage({ ownerPageId: normalizeId(page.id), ...(property ? { property } : {}),
+      ...(acceptDimensions ? { acceptDimensions } : {}), alt: getTitle(page, source.fields.title),
+      url: file.type === "file" ? file.file.url : file.external.url,
+      ...(file.type === "file" ? { expiryTime: file.file.expiry_time } : {}) });
   }
 
   private async courseDatabaseRepresented(resolved: PublicNotionPage, databaseId: string): Promise<boolean> {

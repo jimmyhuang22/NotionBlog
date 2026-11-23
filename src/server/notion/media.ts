@@ -30,6 +30,7 @@ export function createMediaSigner(secret: string) {
     propertyTag,
     async registerImage(input: RegisterBlockImageInput): Promise<ImageAsset | null> {
       const url = safeMediaUrl(input.url);
+      if (input.acceptDimensions && !input.acceptDimensions({ width: input.width ?? null, height: input.height ?? null })) return null;
       if (!url || (input.expiryTime === undefined && isNotionPageHost(new URL(url).hostname)) ||
         (input.blockId && input.property) || (input.property !== undefined && (!input.property || input.property.length > 256))) return null;
       const location: AssetLocation = { page: normalizeId(input.ownerPageId) };

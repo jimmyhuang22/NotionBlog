@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { checkCaptureReleaseCompatibility } from "../scripts/website-sync/capture-release-compatibility.ts";
+import { gameCaseRuntime } from "./helpers/game-case-runtime-sources.ts";
 import { syncDiagnosticSources } from "./helpers/sync-diagnostic-sources.ts";
 
 test("diagnostic source integration does not reinterpret or admit any frozen capture transition", async t => {
   const files = await Promise.all(Object.entries(syncDiagnosticSources).map(async ([path, expected]) => {
     const sha256 = createHash("sha256").update(await readFile(new URL("../" + path, import.meta.url))).digest("hex");
-    assert.equal(sha256, expected, path);
+    assert.equal(sha256, gameCaseRuntime[path] ?? expected, path);
     return { path, sha256 };
   }));
   for (const name of ["requalification", "proof", "media-reuse", "external-video", "publication-revalidation"]) {
