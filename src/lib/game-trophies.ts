@@ -126,9 +126,13 @@ export function earnedPlatinum(trophies: Trophy[]): Trophy | null {
 
 const byDayDesc = (a: Trophy, b: Trophy) => (b.earnedDate ?? "").localeCompare(a.earnedDate ?? "") || (a.rarityPercent ?? 101) - (b.rarityPercent ?? 101);
 
-/** The hardest earned trophies first; a trophy without a known rarity cannot be ranked, so it is left out. */
-export function rarestEarned(trophies: Trophy[], limit = 3): Trophy[] {
-  return trophies.filter(trophy => trophy.earned && trophy.rarityPercent !== null).sort((a, b) => a.rarityPercent! - b.rarityPercent! || a.id.localeCompare(b.id)).slice(0, limit);
+/**
+ * The hardest earned trophies first, at most three, and only those earned by at most a fifth of players (the "稀有"
+ * tier and rarer, 甲 of 2026-11-23): a card for a trophy most players have says nothing. A trophy without a known
+ * rarity cannot be ranked, so it is left out.
+ */
+export function rarestEarned(trophies: Trophy[], limit = 3, ceiling = 20): Trophy[] {
+  return trophies.filter(trophy => trophy.earned && trophy.rarityPercent !== null && trophy.rarityPercent <= ceiling).sort((a, b) => a.rarityPercent! - b.rarityPercent! || a.id.localeCompare(b.id)).slice(0, limit);
 }
 
 /** Earned trophies, newest first; those without a day go last. */
@@ -167,6 +171,16 @@ export function trophySpan(trophies: Trophy[]): { parts: { text: string; strong?
   }
   if (first === last) return { platinum: false, parts: [{ text: `${trophyDay(first)}拿到 ${dated.length} 个` }] };
   return { platinum: false, parts: [{ text: `${trophyDay(first)}到 ${trophyDay(last, last.slice(0, 4) !== first.slice(0, 4))}拿到 ${dated.length} 个` }] };
+}
+
+/**
+ * How many dated trophies were earned, when every one of them falls within the days given (both ends included,
+ * `YYYY-MM-DD`): the date strip then says it under the owner's own dates (甲, 2026-11-23) instead of the trophy
+ * section repeating the same days. Null when none is dated or any falls outside.
+ */
+export function earnedWithin(trophies: Trophy[], start: string, end: string): number | null {
+  const days = trophies.filter(trophy => trophy.earned && trophy.earnedDate).map(trophy => trophy.earnedDate!);
+  return days.length && days.every(day => day >= start && day <= end) ? days.length : null;
 }
 
 /** A set whose platinum is earned, by its grade counts or, without them, by its list. */
