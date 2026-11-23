@@ -342,7 +342,7 @@ test("the recent game carousel reads one eligible snapshot and drops withdrawn g
   const games: Game[] = Array.from({ length: 10 }, (_, index) => {
     const id = `recent-game-${index}`;
     return {
-      ...fixtureItems.game[0], id, slug: id, href: `/library/games/${id}`, title: id, cover: null, boxArt: null,
+      ...fixtureItems.game[0], id, slug: id, href: `/library/games/${id}`, title: id, cover: null,
       lastPlayedDate: index === 0 ? null : { start: `2026-11-1${index}`, end: null, precision: "date" },
     };
   });
