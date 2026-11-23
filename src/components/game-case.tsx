@@ -32,12 +32,18 @@ function WideArt({ game, width }: { game: Game; width: 400 | 800 }) {
     </span>
   );
 }
+/**
+ * Upright art fills its window and is cropped around the middle, unless the owner set the cover to keep its top or
+ * its bottom (2026-11-24): a PlayStation window is wider than 2:3 art and loses about a tenth at each end, which is
+ * where most covers print their title. Only the upright art follows it; the wide fallback stays centred.
+ */
 function Art({ game, width }: { game: Game; width: 400 | 800 }) {
   const [lost, setLost] = useState(false);
   const box = game.boxArt;
   if (!box || lost) return <WideArt game={game} width={width} />;
+  const position = game.boxArtPosition === "top" || game.boxArtPosition === "bottom" ? game.boxArtPosition : undefined;
   return (
-    <span className="game-case__art">
+    <span className="game-case__art" data-position={position}>
       <CaseImage key={box.src} image={box} width={width} onLost={() => setLost(true)} />
     </span>
   );

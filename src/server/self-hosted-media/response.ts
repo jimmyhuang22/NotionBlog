@@ -1,18 +1,18 @@
 import type { ThumbnailProjection } from "../database/thumbnail-index.ts";
 import type { DisplayStore } from "./files.ts";
 import { verifyDisplayBytes } from "./files.ts";
-import { displayAssetId, selectDisplayFile, type DisplayAsset } from "./manifest.ts";
+import { displayAssetId, selectDisplayFile, type DisplayAsset, type DisplayWidth } from "./manifest.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { checkContentReadBudget } from "../content-read-budget.ts";
 
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex, nofollow" };
-export function displayWidth(url: string): 400 | 800 | 1600 | null {
+export function displayWidth(url: string): DisplayWidth | null {
   const params = new URL(url).searchParams;
   if (!params.size) return null;
   const values = params.getAll("thumbnail");
-  if (params.size !== 1 || values.length !== 1 || !["400", "800", "1600"].includes(values[0]))
+  if (params.size !== 1 || values.length !== 1 || !["400", "800", "1600", "1920"].includes(values[0]))
     throw new ContentServiceError("INVALID_QUERY", "Invalid display image width.");
-  return Number(values[0]) as 400 | 800 | 1600;
+  return Number(values[0]) as DisplayWidth;
 }
 function binding(projection: ThumbnailProjection) {
   return [projection.version, projection.runId, projection.source.media.assetId, projection.source.media.ownerPageId,
@@ -24,7 +24,7 @@ function matches(asset: DisplayAsset, projection: ThumbnailProjection) {
     asset.sourceFingerprint === projection.source.binding.sourceFingerprint;
 }
 /** Eligibility is fresh before and after verified disk bytes; there is intentionally no original port. */
-export async function displayMediaResponse(assetId: string, width: 400 | 800 | 1600 | null, ports: {
+export async function displayMediaResponse(assetId: string, width: DisplayWidth | null, ports: {
   qualify(assetId: string): Promise<ThumbnailProjection | null>;
   store: DisplayStore;
 }): Promise<Response> {
