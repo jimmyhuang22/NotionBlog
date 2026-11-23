@@ -6,7 +6,7 @@ import type { Album } from "../contracts/content.ts";
 import type { TimelineEvent } from "../contracts/website.ts";
 import { defaultContentFeatures } from "../config/features.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../contracts/website-sync.ts";
-import { displayDeliveryMode, readDisplayMedia } from "../src/server/database/display.ts";
+import { displayDeliveryMode, readDisplayMedia, validateDisplayAsset } from "../src/server/database/display.ts";
 import { scopedReader } from "../src/server/database/scoped-reads.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
@@ -15,6 +15,7 @@ import { homeFeedResponse } from "../src/lib/content/home-feed-http.ts";
 import { readTimelineIndexSnapshot } from "../src/lib/content/website.ts";
 import { databaseDisplayProjectionSql, databaseDisplayResponse, hydrateTimelineDisplayCovers } from "../src/server/media/display.ts";
 import { DISPLAY_V2_RECIPE, type DisplayAsset } from "../src/server/self-hosted-media/manifest.ts";
+import { displayWidth } from "../src/server/self-hosted-media/response.ts";
 import { verifyDisplayBytes } from "../src/server/self-hosted-media/files.ts";
 
 const runId = "00000000-0000-0000-0000-000000000001";
@@ -149,4 +150,28 @@ test("the website animation reader accepts both reviewed widths and rejects inva
     const many = Buffer.concat([f.bytes.subarray(0, 12), ...headers, ...Array.from({ length: 301 }, () => first)]); many.writeUInt32LE(many.length - 8, 4);
     assert.throws(() => verifyDisplayBytes(descriptor(many), many, DISPLAY_V2_RECIPE));
   }
+});
+
+
+test("1920 is an optional display variant, with base fallback and unchanged 1600 delivery", async () => {
+  const base = await fixture(false, 1600), larger = await fixture(false, 1920);
+  const request = displayWidth("https://example.test/image?thumbnail=1920");
+  assert.equal(request, 1920);
+  const asset = { ...base.asset, variants: { "1920": larger.file } };
+  validateDisplayAsset(asset);
+  assert.throws(() => validateDisplayAsset({ ...asset, base: larger.file }));
+  assert.throws(() => validateDisplayAsset({ ...asset, variants: { "1920": base.file } }));
+  assert.throws(() => validateDisplayAsset({ ...asset, variants: { "1920": { ...larger.file, width: 1921 } } }));
+  const objects = new Map([[base.file.sha256, base.bytes], [larger.file.sha256, larger.bytes]]);
+  const ports = (mapping: DisplayAsset) => ({ read: async () => ({ ...base.projection, asset: mapping }),
+    storage: () => ({ read: async (file: {sha256: string}) => objects.get(file.sha256)! }) });
+  const get = async (width: 1600 | 1920 | null, mapping: DisplayAsset) => {
+    const response = await databaseDisplayResponse(asset.assetId, width, ports(mapping));
+    assert.equal(response.status, 200);
+    return Buffer.from(await response.arrayBuffer());
+  };
+  assert.deepEqual(await get(1920, asset), larger.bytes);
+  assert.deepEqual(await get(1600, asset), base.bytes);
+  assert.deepEqual(await get(null, asset), base.bytes);
+  assert.deepEqual(await get(1920, { ...base.asset, variants: {} }), base.bytes);
 });

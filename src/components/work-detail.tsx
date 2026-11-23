@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Book, ContentDocument, DateRange, Game, Movie, Rating, TimeAmount } from "../../contracts/content.ts";
-import { imagePreviewSrc } from "../lib/content/image-preview.ts";
+import { gameDetailArtwork, imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
 import { dateStripNotes, gameDateRows, platformDay, stripDate } from "../lib/game-dates.ts";
@@ -337,7 +337,11 @@ export function GamePage({ type, label, item, document, timeZone, neighbours, tr
   const within = full.length === 1 && own ? earnedWithin(full[0]!.trophies!, own.start, own.end ?? own.start) : null;
   const played = cardTimeLabel(item.playedTime);
   const expected = cardTimeLabel(item.estimatedTime);
-  const art = item.cover ? { "--art": `url("${imagePreviewSrc(item.cover, 1600)}")` } as React.CSSProperties : undefined;
+  const artwork = item.cover ? gameDetailArtwork(item.cover) : null;
+  const art = artwork ? {
+    "--art": `url("${artwork.standard}")`,
+    ...(artwork.desktop ? { "--art-desktop": `url("${artwork.desktop}")` } : {}),
+  } as React.CSSProperties : undefined;
   const chips = platformChips(item.platforms);
   return (
     <>

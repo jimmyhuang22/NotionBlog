@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ImageAsset } from "../contracts/content.ts";
-import { imagePreviewSrc } from "../src/lib/content/image-preview.ts";
+import { gameDetailArtwork, imagePreviewSrc } from "../src/lib/content/image-preview.ts";
 
 const assetId = `a1.${"1a".repeat(32)}`;
 function image(src: string): ImageAsset {
@@ -60,4 +60,15 @@ test("course-cover 1600 URLs are constructed only for canonical website v2 asset
   for (const src of [`/media/${assetId}`, `/media/social/s1.${"a".repeat(64)}`, `/media/v2/${assetId}\n`, "/mock-media/photo.svg", "https://images.example.test/photo.png"]) {
     assert.equal(imagePreviewSrc(image(src), 1600), src);
   }
+});
+
+
+test("game detail adds a desktop 1920 request for wide originals on the website display path", () => {
+  const cover = { ...image(`/media/v2/${assetId}`), width: 3840, height: 2160 };
+  const display = { ...cover, delivery: { mode: "display-only" as const, maxWidth: 1600, maxHeight: 900 } };
+  assert.deepEqual(gameDetailArtwork(display), { standard: `${cover.src}?thumbnail=1600`, desktop: `${cover.src}?thumbnail=1920` });
+  assert.equal(gameDetailArtwork({ ...display, width: 1232 }).desktop, null);
+  assert.equal(gameDetailArtwork({ ...display, width: 1600 }).desktop, null);
+  assert.equal(gameDetailArtwork(cover).desktop, null);
+  assert.equal(gameDetailArtwork({ ...display, src: `${cover.src}\n` }).desktop, null);
 });

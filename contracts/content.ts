@@ -170,12 +170,16 @@ export interface GamePlatformPlayTime {
   /** Producers publish hours, including verified zero. */
   time: TimeAmount;
 }
+/** Owner's crop for upright art whose title sits at one edge (Notion 竖图取景: 靠上／居中／靠下). */
+export type GameBoxArtPosition = "top" | "center" | "bottom";
 export interface Game extends ContentBase {
   kind: "game";
   status: GameStatus;
   platforms: string[];
   /** Original artwork for the selected case platform. Legacy snapshots may omit it. */
   boxArt?: ImageAsset | null;
+  /** Which part of boxArt a case keeps when it crops it, set by the owner per cover; missing or null keeps the middle. */
+  boxArtPosition?: GameBoxArtPosition | null;
   /** Verified totals from linked platform records. Unknown platforms are omitted. */
   platformPlayTime?: GamePlatformPlayTime[] | null;
   /** Owner-maintained experience range; never overwritten by account activity. */
