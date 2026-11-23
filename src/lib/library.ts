@@ -2,6 +2,7 @@ import type { Book, DateRange, Game, Movie, Rating, TimeAmount } from "../../con
 import { ratingLabel } from "./format.ts";
 import type { YearChoice } from "./year-filter.ts";
 import { gameBrowsingDate } from "./content/game-date.ts";
+import { gameCaseAspectRatio, gameCasePlatformKey, selectGameCasePlatform } from "./content/game-case.ts";
 import { isMoviePublicRating } from "./content/movie-rating.ts";
 
 export type LibraryItem = Book | Movie | Game;
@@ -94,17 +95,16 @@ export function itemDate(item: LibraryItem): DateRange | null {
 /**
  * What a list card says under its title. A film or show says only its rating, "未评分" when it has none,
  * so every card in a row is two lines high (the owner's choice, 2026-10-17); its kind, when not a film,
- * is a badge on the cover instead (`coverBadge`). Books keep their summary line; games have their own
- * line (`gameCard`).
+ * is a badge on the cover instead (`coverBadge`). Books keep their summary line; games are drawn as their
+ * cases (`gameCaseFace`).
  */
 export function cardParts(item: Book | Movie): string[] {
   if (item.kind === "movie") return [ratingLabel(item.rating, "未评分")];
   return bookParts(item);
 }
 
-/** What is laid on a cover: a film or show's kind when it is not simply a film, a game's platinum. */
+/** What is laid on a cover: a film or show's kind when it is not simply a film. A game's status is on its case's band. */
 export function coverBadge(item: LibraryItem): string | null {
-  if (item.kind === "game") return item.status === "platinumed" ? "白金" : null;
   return item.kind === "movie" && item.mediaType && item.mediaType !== "电影" ? item.mediaType : null;
 }
 
@@ -140,6 +140,34 @@ export function gamePlatformIcon(label: string): GamePlatformIcon | null {
   }
 }
 
+/**
+ * What a game's case shows (the owner's pick 甲, 2026-11-23): one platform, the one played longest, chosen by the
+ * same shared rule the artwork is chosen by, in the shape of that platform's real case; the others are said
+ * beside it. The status goes at the right end of the case's platform band, not over the art.
+ */
+export interface GameCaseFace {
+  platform: PlatformChip | null;
+  icon: GamePlatformIcon | null;
+  /** The maker whose case it is: its shell and band colours. */
+  tone: "nintendo" | "playstation" | "pc";
+  /** Width over height of the whole case. */
+  ratio: number;
+  others: string[];
+  status: string | null;
+}
+export function gameCaseFace(item: Game): GameCaseFace {
+  const chosen = selectGameCasePlatform(item);
+  const platform = chosen === null ? null : platformChip(chosen);
+  const key = chosen === null ? "" : gameCasePlatformKey(chosen);
+  return {
+    platform, icon: platform ? gamePlatformIcon(platform.label) : null,
+    tone: key === "switch" || key === "switch2" || key === "3ds" ? "nintendo" : key === "playstation" ? "playstation" : "pc",
+    ratio: gameCaseAspectRatio(chosen ?? ""),
+    others: platformChips(item.platforms).map(chip => chip.label).filter(label => label !== platform?.label),
+    status: item.status === "platinumed" ? "白金" : item.status === "clear" ? "通关" : null,
+  };
+}
+
 /** A game's platforms as chips, each label once: a PlayStation 4 and 5 game is one "PlayStation", not two. */
 export function platformChips(platforms: string[]): PlatformChip[] {
   const chips = new Map<string, PlatformChip>();
@@ -160,11 +188,6 @@ export function cardTimeLabel(amount: TimeAmount | null): string | null {
   if (!amount) return null;
   const shown = amount.unit !== "hour" || amount.value >= 100 ? Math.round(amount.value) : Math.round(amount.value * 10) / 10;
   return shown > 0 ? `${shown} ${amount.unit === "hour" ? "小时" : "分钟"}` : null;
-}
-
-/** A game card's second line: its platforms, time played and rating; an unknown one is left out, not written as missing. */
-export function gameCard(item: Game): { platforms: PlatformChip[]; time: string | null; rating: string | null } {
-  return { platforms: platformChips(item.platforms), time: cardTimeLabel(item.playedTime), rating: item.rating ? ratingLabel(item.rating) : null };
 }
 
 /** A book's facts for the quiet line under its title, one piece each. Unknown values are omitted here and stated on the detail page. */

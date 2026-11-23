@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ImageAsset, Page } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
-import { dateParts, rangeLabel } from "../lib/format.ts";
+import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { runsBy } from "../lib/runs.ts";
-import { cardParts, coverBadge, gameCard, itemDate, knownStatusLabel, workSentence, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
+import { cardParts, coverBadge, gameCaseFace, itemDate, knownStatusLabel, workSentence, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
+import type { Game } from "../../contracts/content.ts";
 import { LinkPending } from "./link-pending";
 import { ListTail } from "./list-tail";
-import { PlatformChips } from "./platform-chips";
+import { GameCase } from "./game-case";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { useImageFailure } from "./use-image-failure";
 import { useFadeIn } from "./use-fade-in";
@@ -38,20 +39,12 @@ function CoverPicture({ image, title, previewWidth }: CoverProps) {
 }
 
 /**
- * A game card's line under its title (the owner's choice, 2026-10-17): its platforms as boxes in their
- * makers' colours, the time played, and the rating at the far right; on a narrow card the rating takes
- * a line of its own, kept on every card so a row stays level. Nothing unknown is written as missing.
+ * Under a game's case: its title, then its rating and the other platforms it is on; the case itself shows the
+ * platform played longest, the status and the time (the owner's pick 甲, 2026-11-23). Nothing unknown is written.
  */
-function GameLine({ card }: { card: ReturnType<typeof gameCard> }) {
-  return (
-    <span className="library__game">
-      <span className="library__game-facts">
-        <PlatformChips chips={card.platforms} />
-        {card.time ? <span>{card.time}</span> : null}
-      </span>
-      <span className="library__game-rating">{card.rating ?? ""}</span>
-    </span>
-  );
+function CaseLine({ game }: { game: Game }) {
+  const parts = [game.rating ? ratingLabel(game.rating) : null, ...gameCaseFace(game).others.map(label => `也在 ${label}`)].filter(Boolean);
+  return parts.length ? <span className="library__meta">{parts.map((part, index) => <span key={index}>{part}</span>)}</span> : null;
 }
 
 interface Group { key: string; label: string | null; items: LibraryItem[] }
@@ -124,16 +117,15 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
             {group.items.map(item => (
               <WorkLink key={item.id} href={item.href} cover={item.cover}
                 className={appended.has(item.id) ? "library__item is-appended" : arriving && firstRows.has(item.id) ? "library__item is-arriving" : "library__item"}
-                style={arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : undefined}>
-                <span className="library__cover">
-                  <Cover image={item.cover} title={item.title} previewWidth={400} />
-                  {coverBadge(item) ? item.kind === "game"
-                    /* Platinum is a gold dot in the cover's corner: the platform boxes keep the colour, the word is read out and shown on hover. */
-                    ? <span className="library__badge library__badge--gold" title={coverBadge(item)!}><span className="visually-hidden">{coverBadge(item)}</span></span>
-                    : <span className="library__badge">{coverBadge(item)}</span> : null}
-                </span>
+                style={{ ...(arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : {}), ...(item.kind === "game" ? { "--case-ratio": gameCaseFace(item).ratio } : {}) } as CSSProperties}>
+                {item.kind === "game" ? <GameCase game={item} /> : (
+                  <span className="library__cover">
+                    <Cover image={item.cover} title={item.title} previewWidth={400} />
+                    {coverBadge(item) ? <span className="library__badge">{coverBadge(item)}</span> : null}
+                  </span>
+                )}
                 <span className="library__title" title={kind === "book" ? undefined : item.title}>{item.title}</span>
-                {item.kind === "game" ? <GameLine card={gameCard(item)} /> : (
+                {item.kind === "game" ? <CaseLine game={item} /> : (
                   /* One piece per fact, so the line wraps between facts and the dots between them never start or end a line. */
                   <span className="library__meta">{[...(status ? [] : [knownStatusLabel(item)]), ...cardParts(item)].filter(Boolean).map((part, index) => <span key={index}>{part}</span>)}</span>
                 )}

@@ -3,10 +3,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LibraryGrid } from "@/components/library-grid";
 import { LinkPending } from "@/components/link-pending";
+import { RecentGames } from "@/components/recent-games";
 import { ScrollingSegments, Segments } from "@/components/scrolling-segments";
 import { SortToggle } from "@/components/sort-toggle";
 import { readLibraryFirstPage } from "@/lib/content";
 import { libraryHref, libraryOrders, librarySections } from "@/lib/library";
+import { readRecentGames } from "@/lib/recent-games";
 import { getSiteConfig } from "@/lib/site";
 import { readYear, yearTabs } from "@/lib/year-filter";
 import { isEnabledContentKind } from "../../../../config/features.ts";
@@ -29,9 +31,12 @@ export default async function LibraryPage({ params, searchParams }: Props) {
   const status = section.tabs.find(([value]) => value === requested.status)?.[0] ?? section.defaultStatus;
   const order = libraryOrders.find(([value]) => value !== null && value === requested.order)?.[0] ?? null;
   const asked = readYear(requested.year);
+  // 最近在玩 above the game library, read alongside the list; a failure there leaves the library itself as it is.
+  const recentRead = section.kind === "game" ? readRecentGames().catch(() => null) : Promise.resolve(undefined);
   const { page: initial, years, year } = await readLibraryFirstPage(section.kind, {
     limit: PAGE_SIZE, ...(status ? { status } : {}), ...(asked === null ? {} : { year: asked }), ...(order ? { order } : {}),
   });
+  const recent = await recentRead;
   const selected = year === null ? null : String(year);
   const tabs = section.tabs;
   const yearChoices = years ? yearTabs(years) : [];
@@ -45,6 +50,8 @@ export default async function LibraryPage({ params, searchParams }: Props) {
           ))}
         </Segments>
       </header>
+      {recent === null ? <p className="notice" role="status">最近在玩暂时读不到，下面的游戏库不受影响。</p>
+        : recent?.length ? <RecentGames games={recent} timeZone={getSiteConfig().timeZone} /> : null}
       <div className="library__filters">
         {/* With one year and nothing undated there is nothing to switch between. */}
         {yearChoices.length > 2 ? (
