@@ -94,11 +94,58 @@ function WorkLink({ href, className, cover, style, children }: { href: string; c
   return <Link href={href} prefetch={intent ? null : false} className={className} style={style} onPointerEnter={rest} onPointerLeave={leave} onFocus={show} onTouchStart={show} onPointerDown={() => warmCover(cover)}>{children}</Link>;
 }
 
-export function LibraryGrid({ kind, status, year = null, order = null, unit, initial, pageSize, timeZone }: {
+/**
+ * Games as one wall of cases (the owner's pick 丙, 2026-11-24). Each row grows a little so both its edges line up,
+ * the cases keeping their shape; each year opens with a bookend, its year written down it and the year's count
+ * from the server, so a list still loading says the whole year. A bookend is held to the year's first case and
+ * never ends a row alone; on a phone it is a full-width line instead. A wishlist, or a list narrowed to one year,
+ * has no bookends. A pointer on a case lifts it, dims the rest and shows its name and facts below it; without a
+ * pointer the name stays under each case.
+ */
+function GameWall({ groups, yearCounts, unit, itemClass, itemStyle }: {
+  groups: Group[]; yearCounts?: Record<string, number>; unit: string;
+  itemClass: (item: LibraryItem) => string; itemStyle: (item: LibraryItem) => CSSProperties;
+}) {
+  const card = (item: LibraryItem) => {
+    if (item.kind !== "game") return null;
+    const ratio = gameCaseFace(item).ratio;
+    return (
+      <WorkLink key={item.id} href={item.href} cover={item.cover} className={itemClass(item)} style={{ ...itemStyle(item), "--case-ratio": ratio } as CSSProperties}>
+        <GameCase game={item} />
+        <span className="library__name">
+          <span className="library__title">{item.title}</span>
+          <CaseLine game={item} />
+        </span>
+        <LinkPending />
+      </WorkLink>
+    );
+  };
+  return (
+    <div className="library__group library__wall">
+      {groups.map(group => {
+        const [first, ...rest] = group.items;
+        if (!group.label || !first) return group.items.map(card);
+        const key = group.key === "unknown" ? "undated" : group.key;
+        const count = yearCounts?.[key];
+        return [
+          <div key={`${group.key}:${first.id}`} className="library__lead" style={{ "--case-ratio": first.kind === "game" ? gameCaseFace(first).ratio : 0.71 } as CSSProperties}>
+            <h2 className="library__year"><b>{group.key === "unknown" ? "无日期" : group.label}</b>{count ? <small>{count} {unit}</small> : null}</h2>
+            {card(first)}
+          </div>,
+          ...rest.map(card),
+        ];
+      })}
+    </div>
+  );
+}
+
+export function LibraryGrid({ kind, status, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts }: {
   kind: LibraryItem["kind"]; status: string | null;
   /** Year filter as sent to the list endpoint: "2026", "undated" or null for everything. */
   year?: string | null;
   order?: LibraryOrder | null; unit: string; initial: Page<LibraryItem>; pageSize: number; timeZone: string;
+  /** How many records each year holds under this status ("2026", "undated"), for the games' bookends. */
+  yearCounts?: Record<string, number>;
 }) {
   const query: Record<string, string> = { limit: String(pageSize), ...(status ? { status } : {}), ...(year ? { year } : {}), ...(order ? { order } : {}) };
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<LibraryItem>(`/api/content/${kind}`, query, initial);
@@ -110,27 +157,31 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
   return (
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>列表有更新，已从头重新加载。</p> : null}
-      {groupByYear(items, timeZone, year !== null).map(group => (
+      {kind === "game" ? (
+        <GameWall groups={groupByYear(items, timeZone, year !== null)} yearCounts={yearCounts} unit={unit}
+          itemClass={item => appended.has(item.id) ? "library__item is-appended" : arriving && firstRows.has(item.id) ? "library__item is-arriving" : "library__item"}
+          itemStyle={item => (arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : {})} />
+      ) : groupByYear(items, timeZone, year !== null).map(group => (
         <section key={`${group.key}:${group.items[0]?.id}`} className="library__group">
           {group.label ? <h2 className="section-title">{group.label}</h2> : null}
           <div className={`library__grid library__grid--${kind}`}>
             {group.items.map(item => (
               <WorkLink key={item.id} href={item.href} cover={item.cover}
                 className={appended.has(item.id) ? "library__item is-appended" : arriving && firstRows.has(item.id) ? "library__item is-arriving" : "library__item"}
-                style={{ ...(arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : {}), ...(item.kind === "game" ? { "--case-ratio": gameCaseFace(item).ratio } : {}) } as CSSProperties}>
-                {item.kind === "game" ? <GameCase game={item} /> : (
-                  <span className="library__cover">
-                    <Cover image={item.cover} title={item.title} previewWidth={400} />
-                    {coverBadge(item) ? <span className="library__badge">{coverBadge(item)}</span> : null}
-                  </span>
-                )}
+                style={arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : undefined}>
+                <span className="library__cover">
+                  <Cover image={item.cover} title={item.title} previewWidth={400} />
+                  {coverBadge(item) ? <span className="library__badge">{coverBadge(item)}</span> : null}
+                </span>
                 <span className="library__title" title={kind === "book" ? undefined : item.title}>{item.title}</span>
-                {item.kind === "game" ? <CaseLine game={item} /> : (
-                  /* One piece per fact, so the line wraps between facts and the dots between them never start or end a line. */
-                  <span className="library__meta">{[...(status ? [] : [knownStatusLabel(item)]), ...cardParts(item)].filter(Boolean).map((part, index) => <span key={index}>{part}</span>)}</span>
+                {item.kind === "game" ? null : (
+                  <>
+                    {/* One piece per fact, so the line wraps between facts and the dots between them never start or end a line. */}
+                    <span className="library__meta">{[...(status ? [] : [knownStatusLabel(item)]), ...cardParts(item)].filter(Boolean).map((part, index) => <span key={index}>{part}</span>)}</span>
+                    {/* On hover the facts give way to the page's own sentence, "1 月 30 日看过" (X-08, X-09); for the eye only. */}
+                    <span className="library__said" aria-hidden="true">{workSentence(item, withinYear(rangeLabel(itemDate(item), timeZone), headingYear(group.key, year)))}</span>
+                  </>
                 )}
-                {/* On hover the facts give way to the page's own sentence, "1 月 30 日看过" (X-08, X-09); for the eye only. */}
-                {item.kind === "game" ? null : <span className="library__said" aria-hidden="true">{workSentence(item, withinYear(rangeLabel(itemDate(item), timeZone), headingYear(group.key, year)))}</span>}
                 <LinkPending />
               </WorkLink>
             ))}
