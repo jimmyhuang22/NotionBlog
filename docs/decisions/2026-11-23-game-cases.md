@@ -1,5 +1,5 @@
 # 2026-11-23：游戏库改成竖版卡盒（甲，真实比例）
-状态：部分取代——通关／白金不再压在封面右上角，改写在顶部平台条右端，见 [2026-11-23-game-case-status-badge](2026-11-23-game-case-status-badge.md)。
+状态：部分取代——通关／白金不再压在封面右上角，改写在顶部平台条右端，见 [2026-11-23-game-case-status-badge](2026-11-23-game-case-status-badge.md)；没有竖图时的样子与页面上下顺序见 [2026-11-23-game-cases-live-polish](2026-11-23-game-cases-live-polish.md)。
 
 状态：已选定，等数据。用户看过三轮原型后选甲。前端在竖版封面和分平台时长到位前不改正式页面；原型在前端忽略目录 `.local/previews/games-20261122/index-case2.html`。
 

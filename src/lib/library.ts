@@ -155,6 +155,7 @@ export interface GameCaseFace {
   others: string[];
   status: string | null;
 }
+const switchFamily = (label: string) => label === "Switch" || label === "Switch 2";
 export function gameCaseFace(item: Game): GameCaseFace {
   const chosen = selectGameCasePlatform(item);
   const platform = chosen === null ? null : platformChip(chosen);
@@ -163,7 +164,10 @@ export function gameCaseFace(item: Game): GameCaseFace {
     platform, icon: platform ? gamePlatformIcon(platform.label) : null,
     tone: key === "switch" || key === "switch2" || key === "3ds" ? "nintendo" : key === "playstation" ? "playstation" : "pc",
     ratio: gameCaseAspectRatio(chosen ?? ""),
-    others: platformChips(item.platforms).map(chip => chip.label).filter(label => label !== platform?.label),
+    // Switch and Switch 2 are one family (a Switch game with its Switch 2 upgrade): the case names one, and the other
+    // is not said again as "也在 Switch" (owner, 2026-11-23).
+    others: platformChips(item.platforms).map(chip => chip.label)
+      .filter(label => label !== platform?.label && !(switchFamily(label) && platform && switchFamily(platform.label))),
     status: item.status === "platinumed" ? "白金" : item.status === "clear" ? "通关" : null,
   };
 }

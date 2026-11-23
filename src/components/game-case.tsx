@@ -17,19 +17,21 @@ function CaseImage({ image, width, className, onLost }: { image: ImageAsset; wid
   return <img ref={fade} className={className} src={src} alt="" loading="lazy" decoding="async" onError={lost} />;
 }
 
-/** The wide cover whole across the middle of the upright art window, its own blur behind, the title under it. */
+/**
+ * No upright art yet: the wide cover fills the window, cropped around its middle (2026-11-23, after the first live
+ * look: the whole wide cover in the middle of a blur read as a row of placeholders, the name written twice). The name
+ * is under the case already; it is written inside only when there is no cover at all.
+ */
 function WideArt({ game, width }: { game: Game; width: 400 | 800 }) {
+  const [lost, setLost] = useState(false);
   const cover = game.cover;
   return (
     <span className="game-case__art game-case__art--wide">
-      {cover ? <CaseImage key={cover.src} image={cover} width={400} className="game-case__blur" /> : null}
-      {cover ? <CaseImage key={`${cover.src}:front`} image={cover} width={width} className="game-case__wide" /> : null}
-      <span className="game-case__wide-title">{game.title}</span>
+      {cover && !lost ? <CaseImage key={cover.src} image={cover} width={width} onLost={() => setLost(true)} />
+        : <span className="game-case__wide-title">{game.title}</span>}
     </span>
   );
 }
-
-
 function Art({ game, width }: { game: Game; width: 400 | 800 }) {
   const [lost, setLost] = useState(false);
   const box = game.boxArt;
