@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { earnedByMonth, earnedPlatinum, earnedWithin, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, setPlatinum, trophyDay, trophyPlatformIcon, trophyPlatformTone, trophySetsOf, trophySpan, type Trophy } from "../src/lib/game-trophies.ts";
+import { earnedByMonth, earnedPlatinum, earnedWithin, missingTrophies, rarestEarned, rarityTier, readTrophyAnchor, recentEarned, setPercent, setPlatinum, trophyAnchors, trophyDay, trophyPlatformIcon, trophyPlatformTone, trophySetsOf, trophySpan, type Trophy } from "../src/lib/game-trophies.ts";
 
 const counts = (earned: number, total: number) => ({ earned, total });
 const grades = { platinum: counts(0, 1), gold: counts(1, 3), silver: counts(4, 8), bronze: counts(10, 18) };
@@ -121,4 +121,16 @@ test("trophies within the owner's dates: a count only when every dated one falls
   assert.equal(earnedWithin(list, "2026-04-26", "2026-06-09"), null);
   assert.equal(earnedWithin([got("a", "2026-04-26")], "2026-04-26", "2026-04-26"), 1);
   assert.equal(earnedWithin([got("a", null), trophy("b")], "2026-01-01", "2026-12-31"), null);
+});
+
+test("trophy anchors: one per set from the platform's letters, a repeat numbered, and read back from the address", () => {
+  const anchors = trophyAnchors([{ platform: "PS4" }, { platform: "PS5" }, { platform: "Steam" }, { platform: "Steam" }, { platform: "任天堂" }]);
+  assert.deepEqual(anchors, ["trophies-ps4", "trophies-ps5", "trophies-steam", "trophies-steam-2", "trophies-5"]);
+  assert.deepEqual(readTrophyAnchor("#trophies", anchors), { set: null });
+  assert.deepEqual(readTrophyAnchor("#trophies-ps5", anchors), { set: 1 });
+  assert.deepEqual(readTrophyAnchor("#trophies-steam-2", anchors), { set: 3 });
+  assert.equal(readTrophyAnchor("", anchors), null);
+  assert.equal(readTrophyAnchor("#block-abc", anchors), null);
+  assert.equal(readTrophyAnchor("#trophies-xbox", anchors), null);
+  assert.equal(readTrophyAnchor("#%E0%A4%A", anchors), null);
 });

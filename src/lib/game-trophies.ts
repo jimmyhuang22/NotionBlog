@@ -194,6 +194,29 @@ export function trophyPlatformIcon(platform: string): GamePlatformIcon | null {
   return /^ps\d/iu.test(name) ? "playstation" : gamePlatformIcon(platformChip(name).label);
 }
 
+/**
+ * Where each set opens in the page's address (2026-11-24): "#trophies-ps5", from the platform's letters and digits, so
+ * a link to a game's PS5 trophies can be shared; a platform named twice is numbered from its second ("steam-2").
+ */
+export function trophyAnchors(sets: Pick<TrophySet, "platform">[]): string[] {
+  const seen = new Map<string, number>();
+  return sets.map((set, index) => {
+    const slug = set.platform.toLowerCase().replace(/[^a-z0-9]+/gu, "") || String(index + 1);
+    const count = (seen.get(slug) ?? 0) + 1;
+    seen.set(slug, count);
+    return `trophies-${count > 1 ? `${slug}-${count}` : slug}`;
+  });
+}
+
+/** What an address asks of the trophy tab: "#trophies" the tab, "#trophies-ps5" that set too; anything else, nothing. */
+export function readTrophyAnchor(hash: string, anchors: string[]): { set: number | null } | null {
+  let name: string;
+  try { name = decodeURIComponent(hash.replace(/^#/u, "")); } catch { return null; }
+  if (name === "trophies") return { set: null };
+  const at = anchors.indexOf(name);
+  return at >= 0 ? { set: at } : null;
+}
+
 /** Not yet earned: by grade (platinum first), then the most common first, as the nearest to get. */
 export function missingTrophies(trophies: Trophy[]): Trophy[] {
   const rank = (trophy: Trophy) => trophy.grade ? gradeOrder.indexOf(trophy.grade) : gradeOrder.length;
