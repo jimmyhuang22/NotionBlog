@@ -62,9 +62,9 @@ test("study names stay stable across normal and incremental publication and stil
   const digest = configDigest(sources);
   await db.query("SELECT nb_v2_api.configure_policy($1,600,$2::jsonb,'[]')", [digest, JSON.stringify(sources)]);
   const first = course(1, "EX101", "Example Methods");
-  const other = course(2, "EX102", "Example Practice");
+  const other = course(2, null, "EX102 Example Practice");
   const withoutCode = course(3, null, "Course Without Code");
-  const duplicateCode = course(4, "EX101", "A Different Course");
+  const duplicateCode = course(4, "EX101: A Different Course", "A Different Course");
   const week = note(5, first, "Week 1 Why Methods?");
   const secondWeek = note(6, first, "Week 2");
   const workshop = note(7, first, "Workshop", week);
@@ -92,6 +92,11 @@ test("study names stay stable across normal and incremental publication and stil
   await db.query("SELECT nb_v2_api.set_denied($1,true)", [laterRestored.id]);
   const migration = await readFile(new URL("../database/study-url-migrations/001_study_urls.sql", import.meta.url), "utf8");
   await db.transaction(tx => tx.exec(migration));
+  const repair = await readFile(new URL("../database/study-url-migrations/002_normalize_course_codes.sql", import.meta.url), "utf8");
+  const storedNotes = () => db.query("SELECT id, name FROM nb_study_urls.names WHERE scope <> '' ORDER BY id");
+  const beforeRepair = await storedNotes();
+  await db.transaction(tx => tx.exec(repair));
+  assert.deepEqual(await storedNotes(), beforeRepair);
   for (const name of ["anon", "authenticated", "service_role", "nb_writer"]) {
     await assert.rejects(role(name).query("SELECT nb_study_urls_api.read_names('published', ARRAY['/study/ex101'], false)"), /permission denied/);
   }
@@ -148,14 +153,17 @@ test("study names stay stable across normal and incremental publication and stil
   assert.equal(await repository.isStudyNoteAvailable!("ex102", "restored-page"), true);
   const renamed = { ...week, title: "First Module" };
   const fresh = note(15, first, "New Exercise");
+  const newCourse = course(16, null, "EX103 — New Practice");
   const publisher = createIncrementalPublisher(writer);
   await publisher.publish(randomUUID(), preparePublicationDelta({
     expectedRevision: (await publisher.state()).publicationRevision, configDigest: digest,
-    upserts: [row(renamed, 4), row(fresh, items.length)], withdrawals: [], media: [],
+    upserts: [row(renamed, 4), row(fresh, items.length), row(newCourse, items.length + 1)], withdrawals: [], media: [],
   }));
   assert.equal((await repository.readStudyNote!("ex101", "week-01"))?.note?.item.title, "First Module");
   assert.equal(await repository.isStudyNoteAvailable!("ex101", "first-module"), false);
   assert.equal(await repository.isStudyNoteAvailable!("ex101", "new-exercise"), true);
+  assert.equal((await repository.get("course", "ex103"))?.item.id, newCourse.id);
+  assert.equal(await repository.get("course", "ex103-new-practice"), null);
 
   await db.query("SELECT nb_v2_api.set_denied($1,true)", [week.id]);
   assert.equal(await repository.isStudyNoteAvailable!("ex101", "week-01-workshop"), false);
