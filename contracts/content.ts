@@ -164,10 +164,20 @@ export interface GameTrophySetSummary extends TrophyCount {
   /** Complete verified list. Absent when only the summary is available. */
   trophies?: GameTrophy[];
 }
+export interface GamePlatformPlayTime {
+  /** Exact label from Game.platforms. */
+  platform: string;
+  /** Producers publish hours, including verified zero. */
+  time: TimeAmount;
+}
 export interface Game extends ContentBase {
   kind: "game";
   status: GameStatus;
   platforms: string[];
+  /** Original artwork for the selected case platform. Legacy snapshots may omit it. */
+  boxArt?: ImageAsset | null;
+  /** Verified totals from linked platform records. Unknown platforms are omitted. */
+  platformPlayTime?: GamePlatformPlayTime[] | null;
   /** Owner-maintained experience range; never overwritten by account activity. */
   playedDate: DateRange | null;
   /** Latest observed linked-platform play, day only in the site zone. Legacy snapshots may omit it. */
