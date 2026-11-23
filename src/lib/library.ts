@@ -71,7 +71,7 @@ export function workSentence(item: LibraryItem, when: string | null | undefined)
 const factWords: Record<string, (value: string) => string> = {
   类型: value => value, 页数: value => value, 导演: value => `${value} 导演`, 作者: value => `${value} 著`,
   上映: value => `${value}上映`, 发售: value => `${value}发售`, 豆瓣评分: value => `豆瓣 ${value}`,
-  已玩时长: value => `玩了 ${value}`, 预计时长: value => `预计 ${value}`,
+  已玩时长: value => `玩了 ${value}`,
 };
 
 export function workFactText(label: string, value: string, kind?: LibraryKind): string {

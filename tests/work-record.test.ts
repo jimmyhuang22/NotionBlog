@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ContentBlock, ContentDocument, DateRange } from "../contracts/content.ts";
-import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../src/lib/work-record.ts";
+import { bookRecord, excerptsHeld, gameNotes, gameRecord, movieRecord } from "../src/lib/work-record.ts";
 
 const runs = (text: string) => (text ? [{ text }] : []);
 const h = (id: string, text: string, level: 1 | 2 | 3 = 1): ContentBlock => ({ id, type: "heading", level, text: runs(text) });
@@ -119,6 +119,17 @@ test("a game's record keeps its own headings and drops the outline and the empty
   assert.deepEqual(ids(record), ["g", "g1"]);
   assert.equal(heading(record, "g"), "游玩内容目标");
   assert.equal(gameRecord(null), null);
+});
+
+test("a game's write-up under its tab drops a leading 游玩感受 heading, and only that one", () => {
+  const notes = gameNotes(doc([p("blank"), h("f", "游玩感受"), p("f1", "感觉真的在涩谷度过了一段时光"), h("v", "游玩录像"), p("v1", "bilibili")]));
+  assert.deepEqual(ids(notes), ["f1", "v", "v1"]);
+  // Anywhere but the top, or under other words, a heading stays.
+  assert.deepEqual(ids(gameNotes(doc([h("g", "游玩历程"), p("g1", "一"), h("f", "游玩感受"), p("f1", "二")]))), ["g", "g1", "f", "f1"]);
+  assert.deepEqual(ids(gameNotes(doc([h("f", "游玩感受（二周目）"), p("f1", "二")]))), ["f", "f1"]);
+  // The heading alone leaves nothing to show.
+  assert.deepEqual(ids(gameNotes(doc([h("f", "游玩感受")]))), []);
+  assert.equal(gameNotes(null), null);
 });
 
 test("a sub-heading with nothing under it before the next heading goes", () => {
