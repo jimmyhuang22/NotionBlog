@@ -1,4 +1,5 @@
 # 2026-11-23：游戏卡盒线上复看后的调整
+状态：部分取代——“没有竖版封面时，横图填满封面框”一条已被 [2026-11-24-game-case-wide-fallback](2026-11-24-game-case-wide-fallback.md) 取代，其余不变。
 
 用户在 #466 上线后看了游戏页，认为问题很多，让 Claude 改进后给本地预览；看过后让合并。部分取代 [2026-11-23-game-cases](2026-11-23-game-cases.md) 里“没有竖版封面时”一条，并补充页面上下顺序；状态位置仍按 [2026-11-23-game-case-status-badge](2026-11-23-game-case-status-badge.md)。
 

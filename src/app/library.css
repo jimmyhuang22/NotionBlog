@@ -894,6 +894,10 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .game-case__art[data-position="bottom"] img { object-position: 50% 100%; }
 /* No upright art: the wide cover fills the window, cropped around its middle; the name only when there is no cover. */
 .game-case__art--wide { display: flex; align-items: center; justify-content: center; overflow: hidden; background: #15171c; }
+/* The wide cover whole across the window's width, over a blurred, enlarged copy of itself (丙, 2026-11-24). */
+.game-case__art--wide img { position: relative; z-index: 1; height: auto; object-fit: contain; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+.game-case__art--wide .game-case__backdrop { position: absolute; z-index: 0; inset: -8%; width: 116%; height: 116%; object-fit: cover; box-shadow: none;
+  filter: blur(12px) saturate(1.15) brightness(0.72); }
 .game-case__wide-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin: 0 10%;
   color: #fff; font-family: var(--font-hand); font-size: clamp(10px, 8cqw, 18px); line-height: 1.3; text-align: center; }
 .game-case__time { position: absolute; z-index: 2; left: 4cqw; bottom: 4cqw; display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px;
