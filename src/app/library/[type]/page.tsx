@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { LibraryGrid } from "@/components/library-grid";
 import { Suspense } from "react";
 import { LinkPending } from "@/components/link-pending";
-import { RecentGamesSection, RecentGamesWaiting } from "@/components/recent-games-section";
+import { RecentGamesWaiting } from "@/components/recent-games";
+import { RecentGamesSection } from "@/components/recent-games-section";
 import { ScrollingSegments, Segments } from "@/components/scrolling-segments";
 import { SortToggle } from "@/components/sort-toggle";
 import { readLibraryFirstPage } from "@/lib/content";
@@ -45,25 +46,16 @@ export default async function LibraryPage({ params, searchParams }: Props) {
       ))}
     </Segments>
   );
+  const game = section.kind === "game";
   return (
-    <div className="wrap">
-      {section.kind === "game" ? (
-        <>
-          {/* 最近在玩 streams in on its own, so the library never waits for it; the library's own heading and statuses
-              sit with the years and order right above the cases, not on the far side of the stage (2026-11-23). */}
-          <header className="page-head library__head"><h1>{section.label}</h1></header>
-          <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense>
-          <div className="library__head library__shelf-head">
-            <h2 className="section-title">游戏库</h2>
-            {statusTabs}
-          </div>
-        </>
-      ) : (
-        <header className="page-head library__head">
-          <h1>{section.label}</h1>
-          {statusTabs}
-        </header>
-      )}
+    <div className={game ? "wrap wrap--wide" : "wrap"}>
+      <header className="page-head library__head">
+        <h1>{section.label}</h1>
+        {statusTabs}
+      </header>
+      {/* 最近在玩 streams in on its own, so the library never waits for it; the statuses above are the library's,
+          as on the other shelves, and the row below them does not follow them (the owner's pick 丙, 2026-11-24). */}
+      {game ? <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense> : null}
       <div className="library__filters">
         {/* With one year and nothing undated there is nothing to switch between. */}
         {yearChoices.length > 2 ? (
@@ -79,7 +71,8 @@ export default async function LibraryPage({ params, searchParams }: Props) {
           next={order ? { label: "最近", mark: "down" } : { label: "最早", mark: "up" }} />
       </div>
       {/* Keyed by every choice so a change starts a fresh list instead of reusing the old cursor. */}
-      <LibraryGrid key={`${status}:${selected ?? "all"}:${order ?? "default"}`} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone} />
+      <LibraryGrid key={`${status}:${selected ?? "all"}:${order ?? "default"}`} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone}
+        yearCounts={game ? Object.fromEntries(yearChoices.flatMap(choice => choice.value === null ? [] : [[choice.value, choice.count]])) : undefined} />
     </div>
   );
 }
