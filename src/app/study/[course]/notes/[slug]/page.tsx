@@ -11,7 +11,7 @@ import { StudyChildPages } from "@/components/study-child-pages";
 import { StudyLinkContexts } from "@/components/study-reading-context";
 import { studyLinkContexts } from "@/lib/study-link-context";
 import { rangeLabel, semesterLabel } from "@/lib/format";
-import { getCourseMetadata, getNote } from "@/lib/request-cache";
+import { getStudyNote } from "@/lib/request-cache";
 import { mergeNumberedHeadings } from "@/lib/headings";
 import { getSiteConfig } from "@/lib/site";
 import { studyProjectForCourse } from "@/lib/study-projects";
@@ -28,7 +28,7 @@ const noteTypes: Record<StudyNoteType, string | null> = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { course, slug } = await params;
   try {
-    const [owner, note] = await Promise.all([getCourseMetadata(course), getNote(slug)]);
+    const { course: owner, note } = await getStudyNote(course, slug);
     const item = owner && note?.item.courseId === owner.id ? note.item : null;
     return { ...contentMetadata(item), title: item?.title ?? "笔记" };
   } catch {
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function NotePage({ params }: Props) {
   const { course, slug } = await params;
-  const [courseItem, note] = await Promise.all([getCourseMetadata(course), getNote(slug)]);
+  const { course: courseItem, note } = await getStudyNote(course, slug);
   // A note reached through another course's address is treated as not available.
   if (!courseItem || !note || note.item.courseId !== courseItem.id) notFound();
   const { item, document } = note;
