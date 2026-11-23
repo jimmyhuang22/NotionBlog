@@ -17,7 +17,7 @@ const fields: Record<ContentKind, Record<string, PropertyType[]>> = {
   album: { ...common, date, photoCount: number },
   book: { ...common, authors: [...label, "multi_select"], status: label, readingDate: date, pagesRead: number, totalPages: number, personalRating: [...label, "number"], doubanRating: number, externalUrl: ["url"] },
   movie: { ...common, originalTitle: label, mediaType: label, status: label, watchedDate: date, releaseDate: date, director: label, actors: [...label, "multi_select"], rating: [...label, "number"], doubanRating: number, publicRating: number, ratingSource: label },
-  game: { ...common, status: label, platforms: ["multi_select"], playedDate: date, lastPlayedDate: ["date", "rollup"], lastPlayedPlatforms: ["formula"], firstPlayedDate: ["date", "rollup"], releaseDate: date, playedTime: number, estimatedTime: number, platformMinutes: number, steamMinutes: number, rating: [...label, "number"] },
+  game: { ...common, status: label, platforms: ["multi_select"], boxArt: ["files"], boxArtPlatform: ["select"], boxArtPosition: ["select"], platformPlayTime: ["formula"], playedDate: date, lastPlayedDate: ["date", "rollup"], lastPlayedPlatforms: ["formula"], firstPlayedDate: ["date", "rollup"], releaseDate: date, playedTime: number, estimatedTime: number, platformMinutes: number, steamMinutes: number, rating: [...label, "number"] },
   project: { ...common, period: date, role: label, stack: ["multi_select"], repositoryUrl: ["url"], demoUrl: ["url"] },
   page: { title: ["title"] },
 };
@@ -80,6 +80,9 @@ export function parseWebsiteNotionConfig(input: unknown): WebsiteNotionConfig {
     const unit = s.playedTimeUnit ?? null;
     if (unit !== null && unit !== "hour" && unit !== "minute") bad();
     if (kind === "game" && (mapping.playedTime || mapping.estimatedTime) && unit === null) bad();
+    if (kind === "game" && (mapping.boxArt || mapping.boxArtPlatform || mapping.platformPlayTime) && !mapping.platforms) bad();
+    if (kind === "game" && (Boolean(mapping.boxArt) !== Boolean(mapping.boxArtPlatform) ||
+        mapping.boxArt && (mapping.boxArt === cover.property || mapping.boxArt === mapping.cover))) bad();
     if (kind === "game" && mapping.lastPlayedPlatforms && (!mapping.lastPlayedDate || timeZone === undefined)) bad();
     sources.push({ key, kind, enabled: true, dataSourceId, pageId, pageKey, coursePageId: kind === "study-note" && !automaticNotes ? normalizeId(text(s.coursePageId)) : null, fields: mapping, statusMap, playedTimeUnit: unit, cover, publication: { mode: mode as WebsiteNotionSource["publication"]["mode"], allowlistPageIds } });
   }

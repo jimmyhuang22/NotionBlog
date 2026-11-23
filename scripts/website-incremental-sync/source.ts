@@ -4,6 +4,7 @@ import type { StoredMedia } from "../../contracts/sync.ts";
 import type { WebsiteRecord } from "../../contracts/website-sync.ts";
 import { canonicalJson, configDigest, validateMedia, validateWebsiteRecord } from "../../src/server/database/website-validation.ts";
 import type { RegisterBlockImageInput } from "../../src/server/notion/blocks.ts";
+import { gameCaseSourceRevision } from "../../src/server/notion/game-case-fields.ts";
 import { normalizeId } from "../../src/server/notion/config.ts";
 import { createWebsiteNotionRepository } from "../../src/server/notion/website-repository.ts";
 import { assertWebsiteSourceSchema, websiteCollectionTimeZone, type WebsiteNotionConfig } from "../../src/server/notion/website-config.ts";
@@ -19,13 +20,15 @@ export interface PagePreparationOptions {
   client: NotionReadClient; config: WebsiteNotionConfig; expectedConfigDigest: string;
   ticket: QueueTicket; ordinal: number; deniedPageIds?: ReadonlySet<string>; signal: AbortSignal;
   /** Stable descriptors for reused or newly verified independent assets. */
-  prepareImage(input: RegisterBlockImageInput, signal: AbortSignal): Promise<PreparedImage | null>;
+  prepareImage(input: RegisterBlockImageInput, signal: AbortSignal): Promise<PreparedImage | "dimensions-rejected" | null>;
 }
 export type PreparedPage = { outcome: "ready"; record: WebsiteRecord; media: StoredMedia[] } |
   { outcome: "review"; code: string } | { outcome: "pending"; code: string };
 function guard(signal: AbortSignal) { if (signal.aborted) throw new Error("CANCELLED"); }
-function pageVersion(page: PageObjectResponse) {
-  return canonicalJson([normalizeId(page.id), page.last_edited_time, page.parent, page.archived, page.in_trash, page.is_archived ?? false]);
+function pageVersion(page: PageObjectResponse, gameFields?: Readonly<Record<string, string>>) {
+  const current = gameFields ? gameCaseSourceRevision(page, gameFields) : null;
+  return canonicalJson([normalizeId(page.id), page.last_edited_time, page.parent, page.archived, page.in_trash,
+    page.is_archived ?? false, ...(current ? [current] : [])]);
 }
 
 /** Page bodies are fetched here; publication and storage transport remain separate ports. */
@@ -38,12 +41,13 @@ export async function prepareSinglePage(options: PagePreparationOptions): Promis
   try { canonical = normalizeId(options.ticket.pageKey); } catch { return { outcome: "review", code: "SOURCE_PAGE_ID_INVALID" }; }
   const media = new Map<string, StoredMedia>();
   let firstVersion: string | undefined, unavailable = false;
+  const gameFields = source.kind === "game" ? source.fields : undefined;
   async function read<T>(call: () => Promise<T>) { guard(options.signal); const value = await call(); guard(options.signal); return value; }
   const client: NotionReadClient = {
     getPage: id => read(async () => {
       const page = await options.client.getPage(id);
       if (page && normalizeId(page.id) === canonical && firstVersion === undefined) {
-        firstVersion = pageVersion(page);
+        firstVersion = pageVersion(page, gameFields);
       }
       return page;
     }),
@@ -56,6 +60,10 @@ export async function prepareSinglePage(options: PagePreparationOptions): Promis
   const repository = createWebsiteNotionRepository({ client, config: options.config, timeZone,
     registerImage: async input => {
       const asset = await read(() => options.prepareImage(input, options.signal));
+      if (asset === "dimensions-rejected") {
+        if (!input.acceptDimensions) throw new Error("MEDIA_DESCRIPTOR_MISMATCH");
+        return null;
+      }
       if (!asset || asset.verified !== true) { unavailable = true; return null; }
       validateMedia(asset.media);
       if (asset.media.assetId !== asset.image.id || asset.media.ownerPageId !== normalizeId(input.ownerPageId) ||
@@ -73,7 +81,7 @@ export async function prepareSinglePage(options: PagePreparationOptions): Promis
   // Preserve existing supported partial representations, reject traversal/media loss.
   assertCompleteTraversal(record.detail.document.blocks); validateWebsiteRecord(record);
   const latest = await read(() => options.client.getPage(canonical));
-  const version = latest && pageVersion(latest);
+  const version = latest && pageVersion(latest, gameFields);
   if (!firstVersion || version !== firstVersion) return { outcome: "pending", code: "SOURCE_CHANGED_DURING_PREPARATION" };
   return { outcome: "ready", record, media: [...media.values()] };
 }

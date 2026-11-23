@@ -2,6 +2,7 @@ import { diagnosticError, diagnosticRef, logCollectionDiagnostic } from "./failu
 import { createHash } from "node:crypto";
 import { isFullPage, type Client, type DataSourceObjectResponse, type PageObjectResponse } from "@notionhq/client";
 import { normalizeId } from "../../src/server/notion/config.ts";
+import { getProperty, getSelect } from "../../src/server/notion/properties.ts";
 import { canonicalJson, configDigest } from "../../src/server/database/website-validation.ts";
 import { assertWebsiteSourceSchema, type WebsiteNotionConfig } from "../../src/server/notion/website-config.ts";
 import { IncrementalQueueError, type DirectoryMember, type DiscoveryScan, type IncrementalQueue } from "./queue.ts";
@@ -45,10 +46,25 @@ function stableMetadata(value: unknown, depth = 0): unknown {
   }
   return Object.fromEntries(Object.entries(object).map(([key, v]) => [key, stableMetadata(v, depth + 1)]));
 }
-export function directoryPageMember(page: PageObjectResponse, nativeCover: boolean): DirectoryMember {
+function directoryProperties(page: PageObjectResponse, gameFields?: Readonly<Record<string, string>>) {
+  if (!gameFields) return page.properties;
+  const position = getProperty(page, gameFields.boxArtPosition ?? "竖图取景");
+  const inactive: PageObjectResponse["properties"][string][] = position?.type === "select" && position.select === null ? [position] : [];
+  const platform = gameFields.boxArtPlatform ?? "Box Art Platform";
+  // Creating unused case fields must not turn the entire game library into pending work.
+  if (!(gameFields.platformPlayTime && !gameFields.boxArtPlatform) && !getSelect(page, platform)) {
+    for (const field of [platform, gameFields.boxArt ?? "Box Art", gameFields.platformPlayTime ?? "Platform Play Time Sources"]) {
+      const property = getProperty(page, field);
+      if (property) inactive.push(property);
+    }
+  }
+  return inactive.length ? Object.fromEntries(Object.entries(page.properties).filter(([, value]) => !inactive.includes(value))) : page.properties;
+}
+
+export function directoryPageMember(page: PageObjectResponse, nativeCover: boolean, gameFields?: Readonly<Record<string, string>>): DirectoryMember {
   const pageKey = identity(page.id), lastEditedAt = timestamp(page.last_edited_time);
   return { pageKey, lastEditedAt, fingerprint: fingerprint(["page-metadata-v2", pageKey, lastEditedAt, page.parent,
-    page.archived, page.in_trash, page.is_archived ?? false, stableMetadata(page.properties), nativeCover ? stableMetadata(page.cover) : null]) };
+    page.archived, page.in_trash, page.is_archived ?? false, stableMetadata(directoryProperties(page, gameFields)), nativeCover ? stableMetadata(page.cover) : null]) };
 }
 
 /** Metadata only. The caller supplies a budgeted, cancellable SDK transport; no token/env defaults. */
@@ -90,7 +106,7 @@ export function createNotionDirectorySource(client: DirectoryNotionClient, confi
         if (keys.has(pageKey)) fail("DISCOVERY_RESPONSE_INVALID"); keys.add(pageKey);
         if (scan.mode === "changes" && (lastEditedAt < scan.since! || lastEditedAt > scan.startedAt)) fail("DISCOVERY_WINDOW_INVALID");
         if (s.publication.mode === "allowlist" && !s.publication.allowlistPageIds.includes(pageKey)) continue;
-        members.push(directoryPageMember(page, s.cover.strategy === "native-page-cover"));
+        members.push(directoryPageMember(page, s.cover.strategy === "native-page-cover", s.kind === "game" ? s.fields : undefined));
       }
       return { members, nextCursor: result.next_cursor };
     },

@@ -71,7 +71,7 @@ export function workSentence(item: LibraryItem, when: string | null | undefined)
 const factWords: Record<string, (value: string) => string> = {
   类型: value => value, 页数: value => value, 导演: value => `${value} 导演`, 作者: value => `${value} 著`,
   上映: value => `${value}上映`, 发售: value => `${value}发售`, 豆瓣评分: value => `豆瓣 ${value}`,
-  已玩时长: value => `玩了 ${value}`, 预计时长: value => `预计 ${value}`,
+  已玩时长: value => `玩了 ${value}`,
 };
 
 export function workFactText(label: string, value: string, kind?: LibraryKind): string {
@@ -154,6 +154,22 @@ export interface GameCaseFace {
   ratio: number;
   others: string[];
   status: string | null;
+  /**
+   * Which printed case it copies (the owner's request, 2026-11-24, measured from real cases): PS5's white band, PS4's
+   * blue one, plain "ps" when the record does not say which PlayStation (the white band with the PS mark alone, so a
+   * model is never guessed), Switch 2's tall red band, Switch's red corner tile. Steam, PC and 3DS keep the plain band.
+   */
+  look: GameCaseLook | null;
+}
+export type GameCaseLook = "ps5" | "ps4" | "ps" | "switch2" | "switch";
+/** The printed case for the exact platform the case shows: "PlayStation 5" or "PS5" is a PS5 case; "PlayStation" alone is not known. */
+export function gameCaseLook(platform: string | null): GameCaseLook | null {
+  if (platform === null) return null;
+  const name = platform.trim().toLowerCase();
+  if (/^(?:playstation ?5|ps5)$/u.test(name)) return "ps5";
+  if (/^(?:playstation ?4|ps4)$/u.test(name)) return "ps4";
+  const key = gameCasePlatformKey(platform);
+  return key === "playstation" ? "ps" : key === "switch2" ? "switch2" : key === "switch" ? "switch" : null;
 }
 const switchFamily = (label: string) => label === "Switch" || label === "Switch 2";
 export function gameCaseFace(item: Game): GameCaseFace {
@@ -169,6 +185,7 @@ export function gameCaseFace(item: Game): GameCaseFace {
     others: platformChips(item.platforms).map(chip => chip.label)
       .filter(label => label !== platform?.label && !(switchFamily(label) && platform && switchFamily(platform.label))),
     status: item.status === "platinumed" ? "白金" : item.status === "clear" ? "通关" : null,
+    look: gameCaseLook(chosen),
   };
 }
 

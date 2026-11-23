@@ -1,18 +1,18 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { Book, ContentDocument, DateRange, Game, Movie, Rating, TimeAmount } from "../../contracts/content.ts";
+import type { Book, ContentDocument, DateRange, Game, Movie, Rating } from "../../contracts/content.ts";
 import { gameDetailArtwork, imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
 import { dateStripNotes, gameDateRows, platformDay, stripDate } from "../lib/game-dates.ts";
-import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../lib/work-record.ts";
+import { bookRecord, excerptsHeld, gameNotes, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
 import { PlatformChips } from "./platform-chips";
 import { ExcerptFold } from "./excerpt-fold";
-import { GameTrophies } from "./game-trophies";
+import { GamePanel } from "./game-panel";
 import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
-import { earnedWithin, gradeLabel, gradeOrder, setPercent, setPlatinum, type TrophySet } from "../lib/game-trophies.ts";
+import { earnedWithin, gradeLabel, gradeOrder, setPercent, setPlatinum, trophyAnchors, type TrophySet } from "../lib/game-trophies.ts";
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -29,9 +29,9 @@ export function RatingValue({ rating }: { rating: Rating | null }) {
 }
 
 /** The record below the facts, or one quiet line when there is none; shared by every kind. */
-export function WorkRecord({ item, document, quiet = false }: { item: LibraryItem; document: ContentDocument | null; quiet?: boolean }) {
-  // Many works are a record without a write-up: no body means no empty reading card.
-  if (document && (document.blocks.length > 0 || document.completeness === "partial")) return <article className="reading__article card" aria-label="我的记录"><RichDocumentBody document={document} imagePreviewWidth={800} /></article>;
+export function WorkRecord({ item, document, quiet = false, bare = false }: { item: LibraryItem; document: ContentDocument | null; quiet?: boolean; bare?: boolean }) {
+  // Many works are a record without a write-up: no body means no empty reading card. A game's sits in a card of its own (`bare`).
+  if (document && (document.blocks.length > 0 || document.completeness === "partial")) return <article className={bare ? "reading__article" : "reading__article card"} aria-label="我的记录"><RichDocumentBody document={document} imagePreviewWidth={800} /></article>;
   // Where a write-up would be, a quiet slip says there is none yet (W-05, 2026-10-20); a wish has nothing to write.
   // A body that was not loaded (null, unlike an empty one) is not "none yet": the slip says it did not load.
   if (item.status === "wishlist") return null;
@@ -201,23 +201,6 @@ export function BookPage({ type, label, item, document, timeZone, neighbours }: 
   );
 }
 
-const hours = (amount: TimeAmount | null) => amount && amount.value > 0 ? (amount.unit === "hour" ? amount.value : amount.value / 60) : null;
-
-/**
- * Played against expected, as two bars on one scale, only when both are known (23 of the first 50 games have an
- * estimate). The longer of the two fills its bar; a game played past its estimate shows it at a glance.
- */
-function TimeBars({ item }: { item: Game }) {
-  const played = hours(item.playedTime), expected = hours(item.estimatedTime);
-  const playedLabel = cardTimeLabel(item.playedTime), expectedLabel = cardTimeLabel(item.estimatedTime);
-  if (!played || !expected || !playedLabel || !expectedLabel) return null;
-  const scale = Math.max(played, expected);
-  const bar = (label: string, value: number, text: string, className: string) => (
-    <div className={`game-time__bar ${className}`}><span>{label}</span><i style={{ "--share": `${Math.round((value / scale) * 1000) / 10}%` } as React.CSSProperties} aria-hidden="true" /><span>{text}</span></div>
-  );
-  return <div className="game-time__bars">{bar("已玩", played, playedLabel, "game-time__bar--played")}{bar("预计", expected, expectedLabel, "game-time__bar--expected")}</div>;
-}
-
 /**
  * The game's days in the order they happened: its release, then what the platforms report and the date the owner
  * wrote (the rows and their rules are gameDateRows', the owner's of 2026-10-16). The owner's own date has a filled
@@ -234,13 +217,13 @@ function timelineRows(item: Game, timeZone: string) {
 }
 
 /**
- * The days across the top of the main column (the owner's pick 乙 of 2026-11-21): most games have no write-up, and
- * there the column was empty beside a long side column. Between two dates, how long it was; under a range, how many
- * days it ran. Each date leads with its year in large type and the day under it (乙 of 2026-11-22), so the strip reads
- * year to year; a year the date before already showed is quieter. When every date falls in one year the year is
- * written once above the strip and the days take the large type (甲, 2026-11-23). The owner's own dates can carry
- * how many trophies came within them (`ownNote`), said here rather than again in the trophy section. A narrow
- * column stands the strip upright.
+ * The days in a card of their own at the top of the main column (2026-11-21; in a card since 2026-11-24). Between two
+ * dates, how long it was; under a range, how many days it ran. Each date stands centred under its dot on one line from
+ * the first to the last (丙, 2026-11-24: the card has no title of its own, the line is its head), and leads with its
+ * year in large type and the day under it (乙 of 2026-11-22), so the strip reads year to year; a year the date before
+ * already showed is quieter. When every date falls in one year the year is written once above the line and the days
+ * take the large type (甲, 2026-11-23). The owner's own dates can carry how many trophies came within them
+ * (`ownNote`), said here rather than again in the trophy tab. A narrow card stands the strip upright.
  */
 function GameDates({ item, timeZone, ownNote = null }: { item: Game; timeZone: string; ownNote?: string | null }) {
   const rows = timelineRows(item, timeZone);
@@ -250,73 +233,90 @@ function GameDates({ item, timeZone, ownNote = null }: { item: Game; timeZone: s
   const known = dates.filter(date => date !== null);
   const oneYear = known.length > 1 && known.every(date => date.first === known[0]!.first && date.last === known[0]!.first) ? known[0]!.first : null;
   let shownYear: number | null = null;
-  const strip = (
-    <ol className={`game-dates${oneYear ? " game-dates--one-year" : ""}`} aria-label={oneYear ? `${oneYear} 年的日期` : "日期"} style={{ "--steps": rows.length } as React.CSSProperties}>
-      {rows.map((row, index) => {
-        const date = dates[index];
-        const again = !!date && date.first === shownYear;
-        if (date) shownYear = date.last;
-        const small = [notes[index]!.length, row.own ? ownNote : null].filter(Boolean).join(" · ");
-        return (
-          <li key={row.label} className={row.own ? "game-dates__own" : undefined}>
-            <b>{row.label}</b>
-            {date ? (
-              <span className="game-dates__when">
-                {oneYear ? null : <strong className={`game-dates__year${again ? " game-dates__year--again" : ""}${date.first !== date.last ? " game-dates__year--span" : ""}`}>{date.year.replace(" – ", "\u00a0– ")}<span className="visually-hidden"> 年</span></strong>}
-                <span className="game-dates__days">{date.days.map((piece, at) => <span key={at}>{at ? " " : null}<span className="game-dates__piece">{piece}</span></span>)}</span>
-              </span>
-            ) : <span className="game-dates__none">日期未记录</span>}
-            {small ? <small>{small}</small> : null}
-            {notes[index]!.gap ? <em>{notes[index]!.gap}</em> : null}
-          </li>
-        );
-      })}
-    </ol>
+  return (
+    <section className="card game-card game-card--dates" aria-label="时间线">
+      {oneYear ? <p className="game-dates__one-year" aria-hidden="true">{oneYear} 年</p> : null}
+      <ol className={`game-dates${oneYear ? " game-dates--one-year" : ""}`} aria-label={oneYear ? `${oneYear} 年的日期` : "日期"} style={{ "--steps": rows.length } as React.CSSProperties}>
+        {rows.map((row, index) => {
+          const date = dates[index];
+          const again = !!date && date.first === shownYear;
+          if (date) shownYear = date.last;
+          const small = [notes[index]!.length, row.own ? ownNote : null].filter(Boolean).join(" · ");
+          return (
+            <li key={row.label} className={row.own ? "game-dates__own" : undefined}>
+              <b>{row.label}</b>
+              {date ? (
+                <span className="game-dates__when">
+                  {oneYear ? null : <strong className={`game-dates__year${again ? " game-dates__year--again" : ""}${date.first !== date.last ? " game-dates__year--span" : ""}`}>{date.year.replace(" – ", " – ")}<span className="visually-hidden"> 年</span></strong>}
+                  <span className="game-dates__days">{date.days.map((piece, at) => <span key={at}>{at ? " " : null}<span className="game-dates__piece">{piece}</span></span>)}</span>
+                </span>
+              ) : <span className="game-dates__none">日期未记录</span>}
+              {small ? <small>{small}</small> : null}
+              {notes[index]!.gap ? <em>{notes[index]!.gap}</em> : null}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
-  return oneYear ? <div className="game-dates-year"><p className="game-dates__one-year" aria-hidden="true">{oneYear} 年</p>{strip}</div> : strip;
 }
 
 /**
- * Trophies in the side column (2026-11-20, step one): earned of total with a bar and each grade's count for one set;
- * a row per platform when there are several, never added together (甲, 2026-11-22): the platform's outline and name,
- * the bars starting on one line and the counts at one edge; a set with its platinum has a platinum bar and says
- * "白金", one with nothing earned is quiet. No sets, no group: a Nintendo game has none.
+ * The trophies in the record card (2026-11-20; in the card since 2026-11-24). Several platforms keep a row each, never
+ * added together (甲, 2026-11-22): the outline and name, the bars starting on one line and the counts at one edge; a set
+ * with its platinum has a platinum bar and says "白金", one with nothing earned is quiet. One set has a ring with its
+ * share instead (a ring says one platform; with several it could only speak for one), its platform and the count
+ * beside it, and the grades under it when the platform has grades. A set whose list the page has links to it in the
+ * trophy tab ("#trophies-ps5"). No sets, nothing: a Nintendo game has none.
  */
-function TrophySummary({ sets }: { sets: TrophySet[] }) {
+function TrophySummary({ sets, anchors }: { sets: TrophySet[]; anchors: string[] }) {
   if (!sets.length) return null;
-  const bar = (set: TrophySet) => <i style={{ "--share": `${setPercent(set)}%` } as React.CSSProperties} aria-hidden="true" />;
+  const listed = (set: TrophySet) => !!set.trophies?.length;
   if (sets.length > 1) {
     return (
-      <div className="work-game__group game-trophy-sum">
-        <dt className="game-trophy-sum__title">奖杯</dt>
-        <dd>
-          <ul className="game-trophy-sum__sets">
-            {sets.map(set => {
-              const platinum = setPlatinum(set);
-              return (
-                <li key={set.id} className={platinum ? "game-trophy-sum__set--platinum" : set.earned === 0 ? "game-trophy-sum__set--none" : undefined}>
-                  <TrophyPlatform platform={set.platform} />{bar(set)}
-                  <span className="game-trophy-sum__n">
-                    {platinum ? <PlatinumCup className="game-trophy-sum__cup" /> : null}
-                    {platinum && set.earned === set.total ? <>白金<span className="visually-hidden">，{set.earned} / {set.total}</span></> : <><b>{set.earned}</b> / {set.total}</>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </dd>
+      <div className="game-record__trophies">
+        <h3 className="game-record__sub">奖杯</h3>
+        <ul className="game-trophy-sum__sets">
+          {sets.map((set, index) => {
+            const platinum = setPlatinum(set);
+            const row = (
+              <>
+                <TrophyPlatform platform={set.platform} /><i style={{ "--share": `${setPercent(set)}%` } as React.CSSProperties} aria-hidden="true" />
+                <span className="game-trophy-sum__n">
+                  {platinum ? <PlatinumCup className="game-trophy-sum__cup" /> : null}
+                  {platinum && set.earned === set.total ? <>白金<span className="visually-hidden">，{set.earned} / {set.total}</span></> : <><b>{set.earned}</b> / {set.total}</>}
+                </span>
+              </>
+            );
+            return (
+              <li key={set.id} className={platinum ? "game-trophy-sum__set--platinum" : set.earned === 0 ? "game-trophy-sum__set--none" : undefined}>
+                {listed(set) ? <a className="game-trophy-sum__row" href={`#${anchors[index]}`}>{row}</a> : <span className="game-trophy-sum__row">{row}</span>}
+              </li>
+            );
+          })}
+        </ul>
       </div>
     );
   }
   const [set] = sets as [TrophySet];
+  const platinum = setPlatinum(set);
+  const share = setPercent(set);
+  const ring = (
+    <span className={`game-trophy-ring${platinum ? " game-trophy-ring--platinum" : ""}`} style={{ "--share": `${share}%` } as React.CSSProperties}>
+      <span>{platinum ? <><PlatinumCup className="game-trophy-ring__cup" />白金</> : <>{share}%</>}<span className="visually-hidden">，完成 {share}%</span></span>
+    </span>
+  );
   return (
-    <div className="work-game__group game-trophy-sum">
-      <dt className="visually-hidden">奖杯</dt>
-      {/* One set names its platform, as the tabs do when there are several (甲, 2026-11-23). */}
-      <dd className="game-trophy-sum__platform"><TrophyPlatform platform={set.platform} /></dd>
-      <dd className="game-trophy-sum__count">{set.earned}<small> / {set.total} 个奖杯</small></dd>
-      <dd className={`game-trophy-sum__bar${setPlatinum(set) ? " game-trophy-sum__bar--platinum" : ""}`}>{bar(set)}<span>{setPercent(set)}%</span></dd>
-      {set.grades ? <dd className="game-trophy-sum__grades">{gradeOrder.map(grade => <span key={grade} className={`game-trophy__grade game-trophy__grade--${grade}`}><span>{gradeLabel[grade]} {set.grades![grade].earned}<small>/{set.grades![grade].total}</small></span></span>)}</dd> : null}
+    <div className="game-record__trophies">
+      <h3 className="game-record__sub">奖杯</h3>
+      <div className="game-trophy-one">
+        {listed(set) ? <a href="#trophies" className="game-trophy-one__ring" aria-label={`看${set.platform}的奖杯`}>{ring}</a> : <span className="game-trophy-one__ring">{ring}</span>}
+        <div>
+          <p className="game-trophy-one__platform"><TrophyPlatform platform={set.platform} /></p>
+          <p className="game-trophy-one__count"><b>{set.earned}</b> / {set.total} 个</p>
+        </div>
+      </div>
+      {set.grades ? <p className="game-trophy-sum__grades">{gradeOrder.map(grade => <span key={grade} className={`game-trophy__grade game-trophy__grade--${grade}`}><span>{gradeLabel[grade]} {set.grades![grade].earned}<small>/{set.grades![grade].total}</small></span></span>)}</p> : null}
     </div>
   );
 }
@@ -324,19 +324,21 @@ function TrophySummary({ sets }: { sets: TrophySet[] }) {
 /**
  * A game (the owner's pick 乙 of 2026-11-19, "全幅主视觉", after the PlayStation Store and Apple TV): every game's
  * cover is wide key art, so it runs the width of the page unblurred and fades into the paper; the title and the
- * platforms stand on it. Below, as on a film's page, a side column holds the status, the owner's rating, the time
- * played (against the estimate when there is one) and the trophies; the days in order run across the top of the
- * main column, above the write-up (2026-11-21), since most recent games have no write-up.
+ * platforms stand on it. Below it, cards (甲, 2026-11-24): on the left, the owner's record (the status, the rating,
+ * the time played and the trophies) and what the game is (its kinds), staying in view; on the right, the days, then
+ * the write-up and the trophies in one card behind a switch. On a phone one column: the record, the days, the
+ * write-up and trophies, then what the game is. There is no estimate of how long a game takes: the owner does not
+ * keep one (2026-11-23).
  */
 export function GamePage({ type, label, item, document, timeZone, neighbours, trophySets = [] }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode; trophySets?: TrophySet[] }) {
-  const record = gameRecord(document);
+  const notes = gameNotes(document);
   // With one full set whose dated trophies all came within the owner's own dates, the strip says how many under those
-  // dates and the trophy section does not repeat the days (甲, 2026-11-23).
+  // dates and the trophy tab does not repeat the days (甲, 2026-11-23).
   const full = trophySets.filter(set => set.trophies?.length);
   const own = item.playedDate ? platformDay(item.playedDate, timeZone) : null;
   const within = full.length === 1 && own ? earnedWithin(full[0]!.trophies!, own.start, own.end ?? own.start) : null;
+  const anchors = trophyAnchors(trophySets);
   const played = cardTimeLabel(item.playedTime);
-  const expected = cardTimeLabel(item.estimatedTime);
   const artwork = item.cover ? gameDetailArtwork(item.cover) : null;
   const art = artwork ? {
     "--art": `url("${artwork.standard}")`,
@@ -358,28 +360,35 @@ export function GamePage({ type, label, item, document, timeZone, neighbours, tr
       </div>
       <div className="wrap">
         <div className="work-game">
-          <aside className="work-game__side">
-            <dl className="work-game__facts">
-              <div className="work-game__group">
-                <dt className="visually-hidden">状态</dt><dd><span className={`work-game__state work-game__state--${item.status}`}>{statusLabel(item)}</span></dd>
-                {/* Fewer than half the games carry the owner's rating; without one it is a quiet line, not a large empty score. */}
-                <dt className="visually-hidden">我的评分</dt>{item.rating ? <RatingValue rating={item.rating} /> : <dd className="work-game__unrated">未评分</dd>}
-              </div>
-              {/* A game not yet played has no time to tell. */}
-              {item.status === "wishlist" && !played ? null : <div className="work-game__group game-time">
-                <dt className="visually-hidden">已玩时长</dt>
-                <dd className="game-time__played">{played ?? "时长未记录"}</dd>
-                <dd className="game-time__note">{played ? "已玩" : ""}{expected ? `${played ? "，" : ""}预计 ${expected}` : ""}</dd>
-                <dd><TimeBars item={item} /></dd>
-              </div>}
-              <TrophySummary sets={trophySets} />
-            </dl>
-          </aside>
+          <div className="work-game__side">
+            <section className="card game-card game-record" aria-labelledby="game-record-title">
+              <h2 id="game-record-title" className="game-card__title">我的游玩</h2>
+              <dl className="game-record__facts">
+                <div className="game-record__state">
+                  <dt className="visually-hidden">状态</dt><dd><span className={`work-game__state work-game__state--${item.status}`}>{statusLabel(item)}</span></dd>
+                  {/* Fewer than half the games carry the owner's rating; without one it is a quiet word, not a large empty score. */}
+                  <dt className="visually-hidden">我的评分</dt>{item.rating ? <RatingValue rating={item.rating} /> : <dd className="work-game__unrated">未评分</dd>}
+                </div>
+                {/* A game not yet played has no time to tell. */}
+                {item.status === "wishlist" && !played ? null : (
+                  <div className="game-record__time">
+                    <dt className="visually-hidden">已玩时长</dt>
+                    <dd>{played ? <><b>{played}</b><small>已玩</small></> : <span className="game-record__none">时长未记录</span>}</dd>
+                  </div>
+                )}
+              </dl>
+              <TrophySummary sets={trophySets} anchors={anchors} />
+            </section>
+            {item.tags.length ? (
+              <section className="card game-card game-about" aria-labelledby="game-about-title">
+                <h2 id="game-about-title" className="game-card__title">关于</h2>
+                <dl className="game-about__facts"><dt>类型</dt><dd className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</dd></dl>
+              </section>
+            ) : null}
+          </div>
           <div className="work-game__main">
-            {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
             <GameDates item={item} timeZone={timeZone} ownNote={within ? `拿到 ${within} 个奖杯` : null} />
-            <WorkRecord item={item} document={record} quiet={trophySets.some(set => set.trophies?.length)} />
-            <GameTrophies sets={trophySets} spanInStrip={within !== null} />
+            <GamePanel notes={WorkRecord({ item, document: notes, quiet: full.length > 0, bare: true })} sets={trophySets} anchors={anchors} spanInStrip={within !== null} />
             {neighbours}
           </div>
         </div>

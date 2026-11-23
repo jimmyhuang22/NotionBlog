@@ -6,10 +6,10 @@ const KEEP_MS = 5 * 60_000;
 let kept: { at: number; games: Promise<Game[]> } | null = null;
 
 /**
- * The stage's games, kept on this server for five minutes (the owner's call, 2026-11-23): a status, year or order
- * switch re-renders the page, and React holds the switch until the stage is read again, so without the keep every
+ * The row's games, kept on this server for five minutes (the owner's call, 2026-11-23): a status, year or order
+ * switch re-renders the page, and React holds the switch until the row is read again, so without the keep every
  * switch waited about 0.5 s on it (0.7 s against 0.2 s for books, live). A change to the games, a withdrawal
- * included, reaches the stage at most five minutes late. A failed read is not kept.
+ * included, reaches the row at most five minutes late. A failed read is not kept.
  */
 function keptRecentGames(): Promise<Game[]> {
   const now = Date.now();
@@ -31,15 +31,4 @@ export async function RecentGamesSection({ timeZone }: { timeZone: string }) {
   if (!games.length) return null;
   const thisYear = Number(new Intl.DateTimeFormat("en", { timeZone, year: "numeric" }).format(new Date()));
   return <RecentGames games={games} timeZone={timeZone} thisYear={thisYear} />;
-}
-
-/** The stage's place, held while it is read: its heading and its height, nothing drawn that could flash. */
-export function RecentGamesWaiting() {
-  return (
-    <section className="recent-games recent-games--waiting" aria-label="最近在玩" aria-busy="true">
-      <h2 className="recent-games__head">最近在玩</h2>
-      <div className="recent-games__track" />
-      <div className="recent-games__info" />
-    </section>
-  );
 }

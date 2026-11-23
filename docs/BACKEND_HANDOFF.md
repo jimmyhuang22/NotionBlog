@@ -453,6 +453,15 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 - **仍需素材核查**：古墓丽影只能用 Xbox 的 Definitive Edition 图（Steam 那张是 GOTY）；古墓丽影：暗影的图上没有 Definitive Edition 字样；幽灵行者的图来自 Steam 本体，PS5 版次未确认。
 - **交付后告诉前端**：字段同步到两站的时间。前端会在真实数据下复看两种盒形。
 
+### 二十一、PlayStation 游戏写明 PS4 还是 PS5（2026-11-24，Claude）
+
+**用户已确认**（2026-11-24）：卡盒照实物印 PS5 白条或 PS4 蓝条，见[决策](decisions/2026-11-24-game-case-printed-faces.md)。不加新字段，型号写进现有的平台名。
+
+- **Notion**：游戏库的平台多选里，把“PlayStation”按实际玩的版本改成“PlayStation 4”或“PlayStation 5”。来源可以用 Codex 11-23 主机封面清单里已核对的版次。确认不了的保持“PlayStation”，前端不猜。
+- **前端已接入**（`gameCaseLook`，`src/lib/library.ts`）：卡盒显示的那个平台写作“PlayStation 5”或“PS5”时印 PS5，“PlayStation 4”或“PS4”时印 PS4，只写“PlayStation”时是白条加 PS 图标、不写型号。网站其他地方（筛选、平台标签、“也在 …”）照旧统一显示“PlayStation”。
+- **请 Codex 先确认改名不影响**：同步和发布对平台名的校验；`platformPlayTime` 和 `lastPlayedPlatforms` 跟 `platforms` 的匹配（前端按平台类别匹配，“PlayStation”能对上“PlayStation 5”）；奖杯、PSN 时长等按平台名关联的地方；竖图按平台选图的规则。确认后再逐款改。
+- **交付后告诉前端**：改了哪些游戏、两站同步的时间。
+
 ## 可直接给 Codex 的启动指令
 
 ```text

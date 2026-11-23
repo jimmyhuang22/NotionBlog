@@ -222,6 +222,19 @@ export function gameRecord(document: ContentDocument | null): ContentDocument | 
 }
 
 /**
+ * The write-up under the page's "游玩感受" tab (2026-11-24): a heading of those same words at its top would only say
+ * the tab again, so it goes; every other heading, and anything under the first, stays as written.
+ */
+export function gameNotes(document: ContentDocument | null): ContentDocument | null {
+  const record = gameRecord(document);
+  if (!record) return null;
+  const first = record.blocks.findIndex(block => !blank(block));
+  const lead = record.blocks[first];
+  if (lead?.type !== "heading" || plain(lead.text) !== "游玩感受") return record;
+  return { ...record, blocks: record.blocks.filter((_, index) => index !== first) };
+}
+
+/**
  * Whether a book's excerpts open held to about a screen (ExcerptFold). One rule by count, the same on every width:
  * up to 30 are shown in full, more are held (2026-11-19, after the release check found 12 holding back a book of
  * 16 that the owner expects open; of the first 30 books, those over 30 run from 31 to 80 excerpts).

@@ -9,7 +9,11 @@ import type { NotionReadClient } from "./types.ts";
 /** Minimal private owner projection shared by frozen v1 and website v2. */
 export interface NotionMediaSourceOwner {
   page: PageObjectResponse;
-  source: { cover: { strategy: "none" | "native-page-cover" | "files-property"; property?: string } };
+  source: {
+    kind?: string;
+    fields?: Readonly<Record<string, string>>;
+    cover: { strategy: "none" | "native-page-cover" | "files-property"; property?: string };
+  };
 }
 export interface NotionMediaSourceRepository {
   resolveMediaOwner?(id: string): Promise<NotionMediaSourceOwner | null>;
@@ -59,9 +63,10 @@ export async function resolveNotionMediaSource(
     if (parent.type !== "page_id" || idOrNull(parent.page_id) !== ownerId) return null;
     file = block.image;
   } else if (locator.kind === "property") {
-    const mapping = owner.source.cover.property;
-    if (owner.source.cover.strategy !== "files-property" || !mapping || mapping !== locator.name) return null;
-    const property = getProperty(owner.page, mapping);
+    const isCover = owner.source.cover.strategy === "files-property" && owner.source.cover.property === locator.name;
+    const isBoxArt = owner.source.kind === "game" && owner.source.fields?.boxArt === locator.name;
+    if (!isCover && !isBoxArt) return null;
+    const property = getProperty(owner.page, locator.name);
     file = property?.type === "files" ? property.files[0] ?? null : null;
   } else if (locator.kind === "cover") {
     if (owner.source.cover.strategy !== "native-page-cover") return null;

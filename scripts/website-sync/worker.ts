@@ -122,6 +122,7 @@ export async function runWebsiteSync(options: {client: NotionReadClient;config: 
       } else if((automaticStudy||options.mediaSources)&&input.expiryTime&&(!Number.isFinite(Date.parse(input.expiryTime))||Date.parse(input.expiryTime)<=Date.now()))throw new ContentServiceError("CONTENT_UNAVAILABLE","The source image is unavailable.");
       check();const image=await download(url,{ownerPageId:input.ownerPageId,locator:input.blockId?{kind:"block",id:normalizeId(input.blockId)}:input.property?{kind:"property",name:input.property}:{kind:"cover"}});check();
       const dimensions=await imageDimensions(image.bytes);check();
+      if (input.acceptDimensions && !input.acceptDimensions(dimensions)) return null;
       const sha256=createHash("sha256").update(image.bytes).digest("hex"),assetId=mediaIdentity(input.ownerPageId,input.blockId??input.property??"cover",sha256);
       const media:StoredMedia={assetId,ownerPageId:input.ownerPageId,objectKey:`sha256/${sha256}`,sha256,byteSize:image.bytes.length,mime:image.mime,...dimensions};
       validateMedia(media);verifyMediaBytes(media,image.bytes);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { earnedByMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, setPlatinum, trophyDay, trophySpan, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
 import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
 
@@ -60,7 +60,13 @@ function TrophySpan({ trophies }: { trophies: Trophy[] }) {
   );
 }
 
-function SetBody({ set, spanInStrip = false }: { set: TrophySet; spanInStrip?: boolean }) {
+/**
+ * One set's trophies (layout 乙, 2026-11-20): the platinum as a banner when earned, the rarest as cards under "最难拿到的"
+ * (only those a fifth of players or fewer have, 2026-11-23), the six most recent not already shown as cards, and the
+ * rest behind two buttons. When the date strip already says how many came within the owner's dates (`spanInStrip`),
+ * the line of when they came is left out.
+ */
+export function TrophySetBody({ set, spanInStrip = false }: { set: TrophySet; spanInStrip?: boolean }) {
   const trophies = set.trophies ?? [];
   const platinum = earnedPlatinum(trophies);
   // With the platinum as the banner, the cards and the list below do not show it again (round two, 2026-11-20).
@@ -136,59 +142,27 @@ function SetBody({ set, spanInStrip = false }: { set: TrophySet; spanInStrip?: b
 }
 
 /**
- * A platform tab's count (乙, 2026-11-22): a set with its platinum says so with the cup, "白金" when every trophy is
- * earned and the count beside the cup when some (often a later add-on's) are still missing.
+ * The switch between several platforms' sets, in the trophy tab's head (2026-11-24). Only the platform: how many each
+ * set has is in the record card beside it, so the switch no longer repeats it; a set with its platinum keeps the metal
+ * edge (丁, 2026-11-22). The arrow keys move along it, and stay with it (the page's own ← → wait outside a tab list).
  */
-function TabCount({ set }: { set: TrophySet }) {
-  const platinum = setPlatinum(set);
-  return (
-    <small>
-      {platinum ? <PlatinumCup className="game-trophies__tab-cup" /> : null}
-      {platinum && set.earned === set.total ? <>白金<span className="visually-hidden">，{set.earned} / {set.total}</span></> : `${set.earned} / ${set.total}`}
-    </small>
-  );
-}
-
-/**
- * The "奖杯" section under the write-up (layout 乙, 2026-11-20): the platinum as a banner when earned, the rarest
- * as cards under "最难拿到的" (only those a fifth of players or fewer have, 2026-11-23), the six most recent not
- * already shown as cards, and the rest behind two buttons. Several platforms each keep their own set behind a switch
- * beside the heading; one set names its platform there instead of repeating the count the side column gives. When
- * the date strip already says how many came within the owner's dates (`spanInStrip`), the line of when they came is
- * left out. Only sets the backend sent in full are here; the side summary covers the rest.
- */
-export function GameTrophies({ sets, spanInStrip = false }: { sets: TrophySet[]; spanInStrip?: boolean }) {
-  const full = sets.filter(set => set.trophies?.length);
-  const [chosen, setChosen] = useState(0);
-  const base = useId();
-  if (!full.length) return null;
-  const current = full[Math.min(chosen, full.length - 1)]!;
+export function TrophyTabs({ sets, chosen, onChoose, ids }: { sets: TrophySet[]; chosen: number; onChoose: (index: number) => void; ids: { tab: (index: number) => string; panel: string } }) {
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     if (!step) return;
     event.preventDefault();
-    const next = (chosen + step + full.length) % full.length;
-    setChosen(next);
+    const next = (chosen + step + sets.length) % sets.length;
+    onChoose(next);
     (event.currentTarget.children[next] as HTMLElement | undefined)?.focus();
   };
   return (
-    <section className="game-trophies card" aria-labelledby={`${base}-h`}>
-      <div className="game-trophies__head">
-        <h2 id={`${base}-h`} className="game-trophies__title">奖杯{full.length === 1 ? <small><TrophyPlatform platform={current.platform} /></small> : null}</h2>
-        {full.length > 1 ? (
-          <div className="game-trophies__tabs" role="tablist" aria-label="平台" onKeyDown={onKey}>
-            {full.map((set, index) => (
-              <button key={set.id} type="button" role="tab" id={`${base}-t${index}`} aria-controls={`${base}-p`} aria-selected={index === chosen} tabIndex={index === chosen ? 0 : -1} onClick={() => setChosen(index)}
-                className={setPlatinum(set) ? "game-trophies__tab--platinum" : set.earned === 0 ? "game-trophies__tab--none" : undefined}>
-                <TrophyPlatform platform={set.platform} /><TabCount set={set} />
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-      <div id={`${base}-p`} role={full.length > 1 ? "tabpanel" : undefined} aria-labelledby={full.length > 1 ? `${base}-t${chosen}` : undefined}>
-        <SetBody key={current.id} set={current} spanInStrip={spanInStrip && full.length === 1} />
-      </div>
-    </section>
+    <div className="game-trophies__tabs" role="tablist" aria-label="平台" onKeyDown={onKey}>
+      {sets.map((set, index) => (
+        <button key={set.id} type="button" role="tab" id={ids.tab(index)} aria-controls={ids.panel} aria-selected={index === chosen} tabIndex={index === chosen ? 0 : -1} onClick={() => onChoose(index)}
+          className={setPlatinum(set) ? "game-trophies__tab--platinum" : set.earned === 0 ? "game-trophies__tab--none" : undefined}>
+          <TrophyPlatform platform={set.platform} />
+        </button>
+      ))}
+    </div>
   );
 }
