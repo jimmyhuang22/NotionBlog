@@ -245,6 +245,14 @@ test("v2 game cases publish original box art only for the selected edition and p
  assert.equal(artReads, 1);
  assert.equal(good.media.length, 2);
 
+ const selected = edition.select;
+ Object.assign(edition, { select: null });
+ const fallback = await run();
+ assert(!Object.hasOwn(fallback.game, "boxArt") && !Object.hasOwn(fallback.game, "platformPlayTime"));
+ assert.equal(fallback.media.length, 1);
+ assert.equal(artReads, 1);
+ edition.select = selected;
+
  artBytes = low;
  const small = await run();
  assert.equal(small.game.boxArt, null);

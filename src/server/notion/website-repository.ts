@@ -340,14 +340,15 @@ class ReadSession {
       const minutes = getNumber(page, f.platformMinutes) ?? getNumber(page, f.steamMinutes), historical = getNumber(page, f.playedTime), estimated = getNumber(page, f.estimatedTime);
       const zone = statusTimeZone(this.options), lastPlayedDate = getLastPlayedDate(page, f.lastPlayedDate);
       const lastPlayedPlatforms = f.lastPlayedPlatforms ? readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) : null;
+      const caseMarked = Boolean(f.boxArtPlatform && getSelect(page, f.boxArtPlatform));
       const { platforms, platformPlayTime, platform, boxArtProperty } = readGameCaseFields(page, f, lastPlayedPlatforms);
       const boxArt = cover && boxArtProperty && platform
         ? await this.cover(resolved, boxArtProperty, dimensions => isUsableGameBoxArt(dimensions, platform))
         : null;
       return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms, playedDate: getDate(page, f.playedDate), lastPlayedDate, firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
         ...(f.lastPlayedPlatforms ? { lastPlayedPlatforms } : {}),
-        ...(f.platformPlayTime ? { platformPlayTime: platforms.length > 1 ? platformPlayTime : null } : {}),
-        ...(f.boxArt ? { boxArt: boxArt && platform && isUsableGameBoxArt(boxArt, platform) ? boxArt : null } : {}),
+        ...(f.platformPlayTime && (!f.boxArtPlatform || caseMarked) ? { platformPlayTime: platforms.length > 1 ? platformPlayTime : null } : {}),
+        ...(f.boxArt && caseMarked ? { boxArt: boxArt && platform && isUsableGameBoxArt(boxArt, platform) ? boxArt : null } : {}),
         playedTime: minutes !== null ? { value: minutes, unit: "minute" } : historical !== null && source.playedTimeUnit ? { value: historical, unit: source.playedTimeUnit } : null,
         estimatedTime: estimated !== null && source.playedTimeUnit ? { value: estimated, unit: source.playedTimeUnit } : null, progressPercent: null, rating: getRating(page, f.rating) }, zone);
     }

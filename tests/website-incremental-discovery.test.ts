@@ -245,6 +245,23 @@ test("volatile cover URLs are excluded from the directory fingerprint and state"
   assert.deepEqual(before.members, after.members); assert.ok(!JSON.stringify(after).includes("https://"));
 });
 
+test("unused game box art fields keep the existing directory fingerprint", async () => {
+  const f = fixture(), game = f.config.sources[0];
+  game.kind = "game";
+  const scan = { id: "scan", mode: "membership" as const, phase: "query" as const,
+    startedAt: 5000, since: null, cursor: null, afterKey: null, pages: 0 };
+  const read = async () => f.source().read(game.key, scan, new AbortController().signal);
+  const before = await read();
+  Object.assign(f.pages[0].properties, {
+    "Box Art": { id: "image", type: "files", files: [] },
+    "Box Art Platform": { id: "case-platform", type: "select", select: null },
+    "Platform Play Time Sources": { id: "case-time", type: "formula", formula: { type: "string", string: "Steam|PC|60" } },
+  });
+  assert.deepEqual((await read()).members, before.members);
+  Object.assign(f.pages[0].properties, { "Box Art Platform": { id: "case-platform", type: "select", select: { name: "Steam" } } });
+  assert.notEqual((await read()).members[0].fingerprint, before.members[0].fingerprint);
+});
+
 test("property changes sharing a timestamp are detected and object-key order is ignored", async () => {
   const f = fixture(), source = f.source(), scan = { id: "scan", mode: "membership" as const, phase: "query" as const,
     startedAt: 5000, since: null, cursor: null, afterKey: null, pages: 0 };
