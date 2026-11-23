@@ -1,4 +1,4 @@
-# 2026-11-24 游戏墙、盒面和详情上线
+# 2026-11-24：游戏墙、盒面和详情上线
 
 [发布 #486](https://github.com/jimmyhuang22/NotionBlog/pull/486) 以受检 `eaff617` 普通合并，main 为 `2e7b94148397b61b6d272bb6241ce8acdeda27d4`。本机 3,545 项测试与构建通过。[平台的 Node 24 检查](https://github.com/jimmyhuang22/NotionBlog/actions/runs/45204492826/job/137796577170)通过。新加坡通过后上线上海，指定应用回退是 #482。应用发布沿用原数据库和运行权限，取景数据继续由原定时器采集交付。
 
