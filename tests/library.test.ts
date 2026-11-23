@@ -12,7 +12,7 @@ test("every library tab is a status filter the list endpoint accepts", () => {
 
 test("library labels state missing values instead of inventing them", () => {
   for (const item of [...fixtureItems.movie, ...fixtureItems.book, ...fixtureItems.game]) assert.ok(statusLabel(item).length > 0);
-  // Games have their own line (gameCard); films and books say only known facts, each a whole piece.
+  // Games are drawn as their cases (gameCaseFace); films and books say only known facts, each a whole piece.
   for (const item of [...fixtureItems.movie, ...fixtureItems.book]) {
     for (const part of cardParts(item)) assert.ok(part.trim() && !/null|undefined|NaN/u.test(part), part);
   }
@@ -88,8 +88,8 @@ test("the line under a title is made of whole facts, so it can wrap between them
   assert.deepEqual(cardParts({ ...fixtureItems.movie[0]!, rating: null }), ["未评分"]);
 });
 
-test("a game card names its platforms short in their makers' colours, writes time played plainly and marks platinum", async () => {
-  const { cardTimeLabel, coverBadge, gameCard, platformChip, platformChips } = await import("../src/lib/library.ts");
+test("a game card names its platforms short in their makers' colours and writes time played plainly", async () => {
+  const { cardTimeLabel, coverBadge, platformChip, platformChips } = await import("../src/lib/library.ts");
   assert.deepEqual(platformChip("Nintendo Switch"), { label: "Switch", tone: "nintendo" });
   // Platforms that share a short name are one chip, in the order first named.
   assert.deepEqual(platformChips(["PlayStation 4", "Nintendo 3DS", "PlayStation 5", "New Nintendo 3DS", " "]),
@@ -115,12 +115,28 @@ test("a game card names its platforms short in their makers' colours, writes tim
   assert.equal(cardTimeLabel({ value: 0.05, unit: "hour" }), "0.1 小时");
   assert.equal(cardTimeLabel({ value: 0.94, unit: "hour" }), "0.9 小时");
   assert.equal(cardTimeLabel({ value: 0.4, unit: "minute" }), null);
-  const game = fixtureItems.game[0]!;
-  assert.equal(coverBadge({ ...game, status: "platinumed" }), "白金");
-  assert.equal(coverBadge({ ...game, status: "clear" }), null);
-  // A game without a rating leaves the place empty rather than writing it as missing.
-  assert.equal(gameCard({ ...game, rating: null, platforms: [], playedTime: { value: 0, unit: "hour" } }).rating, null);
-  assert.deepEqual(gameCard({ ...game, rating: null, platforms: ["PlayStation", "Personal Computer"], playedTime: null }).platforms.map(chip => chip.label), ["PlayStation", "PC"]);
+  // A game's status is on its case's band, not laid over the art (2026-11-23).
+  assert.equal(coverBadge({ ...fixtureItems.game[0]!, status: "platinumed" }), null);
+});
+
+test("a game's case shows the platform played longest in that maker's case, the others beside it, and its status", async () => {
+  const { gameCaseFace } = await import("../src/lib/library.ts");
+  const game = { ...fixtureItems.game[0]!, platforms: ["Steam", "PlayStation"], lastPlayedPlatforms: ["Steam"], status: "platinumed" as const };
+  const longest = gameCaseFace({ ...game, platformPlayTime: [{ platform: "Steam", time: { value: 2, unit: "hour" } }, { platform: "PlayStation", time: { value: 90, unit: "hour" } }] });
+  assert.equal(longest.platform?.label, "PlayStation");
+  assert.equal(longest.tone, "playstation");
+  assert.equal(longest.ratio, 0.79);
+  assert.deepEqual(longest.others, ["Steam"]);
+  assert.equal(longest.status, "白金");
+  // Without platform times, the platform played last; a Steam case is a DVD case.
+  const recent = gameCaseFace(game);
+  assert.deepEqual([recent.platform?.label, recent.icon, recent.tone, recent.ratio], ["Steam", "steam", "pc", 0.71]);
+  const switch2 = gameCaseFace({ ...game, platforms: ["Nintendo Switch", "Nintendo Switch 2"], lastPlayedPlatforms: ["Switch 2"], status: "clear" });
+  assert.deepEqual([switch2.platform?.label, switch2.icon, switch2.tone, switch2.ratio, switch2.status], ["Switch 2", "switch", "nintendo", 0.62, "通关"]);
+  assert.deepEqual(switch2.others, ["Switch"]);
+  // Nothing recorded: no platform written, a plain case, no status.
+  const bare = gameCaseFace({ ...game, platforms: [], lastPlayedPlatforms: null, status: "playing" });
+  assert.deepEqual([bare.platform, bare.icon, bare.tone, bare.status, bare.others], [null, null, "pc", null, []]);
 });
 
 test("a work's page says when and what in one sentence, and the rest as words of a line", () => {
