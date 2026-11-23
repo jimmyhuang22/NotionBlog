@@ -65,27 +65,7 @@
 /* No shelf line under the covers any more (the owner's pick from a side-by-side, 2026-11-16): on a phone it read as a divider above the title. */
 .library__cover { position: relative; display: block; }
 /* A film's title keeps to one line, so the rating under it lines up across a row (the owner's choice, 2026-10-17); the whole title is in its hover hint and on the detail page. */
-.library__grid--movie .library__title, .library__grid--game .library__title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/*
- * A platinum game: a gold dot in the cover's lower right corner, ringed in white so it reads on any art, and out of
- * the way of the game's logo; the platform boxes stay the card's one coloured signal (owner's pick, 2026-10-20).
- */
-.library__badge.library__badge--gold { left: auto; top: auto; right: 8px; bottom: 8px; width: 12px; height: 12px; padding: 0; border-radius: 50%; background: linear-gradient(135deg, #f3e3a1, #c9a646); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); pointer-events: auto; }
-/*
- * A game card's line: platform boxes and time played, the rating at the far right; on a card too narrow
- * for all three the rating drops to its own line under the platform, flush left like the lines above it
- * (owner's request, 2026-10-20). A card with no rating keeps no empty line for it (2026-11-16): most finished games
- * have none, and the blank lines opened a gap between the rows on a phone. Covers and titles still start level.
- */
-.library__grid--game .library__item { container-type: inline-size; }
-.library__game { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; margin-top: 2px; padding: 0 2px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
-.library__game-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
-.library__game-rating { white-space: nowrap; }
-@container (max-width: 210px) {
-  .library__game { grid-template-columns: minmax(0, 1fr); }
-  .library__game-rating { justify-self: start; min-height: 1.4em; }
-  .library__game-rating:empty { display: none; }
-}
+.library__grid--movie .library__title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A platform in its maker's colour, taken down towards ink (H-07, 2026-10-20) so a fact is quieter than an achievement; white reads at 6 or more on each. */
 .platform-chip { display: inline-block; padding: 1px 6px; border-radius: var(--radius-xs); background: var(--soft); font-size: var(--text-xs); font-weight: 700; line-height: 1.5; color: var(--ink); }
 .platform-chip--nintendo { background: #a8323a; color: #fff; }
@@ -775,4 +755,98 @@
  */
 @media (max-width: 640px) {
   .album-head h1, .course-head h1, .reading__title { font-size: var(--text-3xl); }
+}
+
+/*
+ * Games as their cases (the owner's pick 甲, 2026-11-23). A shelf of cases all one height, each as wide as its maker's
+ * real case: Switch about 0.62, PlayStation 0.79, Steam and PC a DVD case at 0.71. The case is only the container; the
+ * shell inside is drawn in units of the case's own width, so one drawing serves the shelf, the stage and a phone.
+ */
+.library__grid--game { --case-h: 214px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 30px 22px; }
+.library__grid--game .library__item { width: calc(var(--case-h) * var(--case-ratio, 0.71)); }
+.library__grid--game .library__item .game-case { height: var(--case-h); }
+.library__grid--game .library__title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 11px; line-height: 1.35; }
+.library__grid--game .library__meta { margin-top: 2px; font-size: var(--text-xs); }
+@media (max-width: 640px) { .library__grid--game { --case-h: 150px; gap: 22px 12px; } }
+@media (prefers-reduced-motion: no-preference) {
+  .library__grid--game .game-case { transition: transform 0.2s; }
+  .library__grid--game .library__item:hover .game-case { transform: translateY(-4px) rotate(-0.5deg); }
+  .library__grid--game .library__item:active .game-case { transform: scale(0.985); }
+}
+
+.game-case { container-type: inline-size; position: relative; display: block; aspect-ratio: var(--case-ratio, 0.71); height: 100%; width: auto; --band-h: max(12.5cqw, 16px); }
+/* A plastic shell in the maker's colour: a thin, even rim, a hinge down the left, a clear sleeve over it all. */
+.game-case__shell { --rim: 3.4cqw; position: absolute; inset: 0; display: block; isolation: isolate; border-radius: var(--radius-sm);
+  padding: var(--rim) var(--rim) var(--rim) calc(var(--rim) * 1.5);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 40%), var(--case-shell);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), inset 0 -2px 3px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.25), 0 14px 22px -14px rgba(0, 0, 0, 0.6); }
+.game-case__shell::before { content: ""; position: absolute; left: calc(var(--rim) * 0.35); top: 6%; bottom: 6%; width: calc(var(--rim) * 0.55); border-radius: 999px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.18) 55%, rgba(0, 0, 0, 0.18)); }
+.game-case__shell::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 26%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.08)); }
+.game-case__insert { position: relative; display: block; width: 100%; height: 100%; overflow: hidden; border-radius: var(--radius-xs); background: #111; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
+/* The band printed across the insert: the platform at the left, the status at the right end, nothing over the art. */
+.game-case__band { position: absolute; z-index: 2; left: 0; right: 0; top: 0; height: var(--band-h); display: flex; align-items: center; gap: 1.8cqw; padding: 0 4.5cqw;
+  background: var(--case-band); color: var(--case-band-ink); font-family: var(--font-sans); font-size: clamp(8.5px, 6.2cqw, 15px); font-weight: 800; line-height: 1; letter-spacing: 0.03em; white-space: nowrap; }
+.game-case__band .game-platform__icon { flex: none; width: max(7cqw, 9.5px); height: max(7cqw, 9.5px); }
+.game-case__platform { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.game-case__status { flex: none; margin-left: auto; padding: 0 max(2.6cqw, 4px); border-radius: 999px; font-size: clamp(8.5px, 5.4cqw, 13px); font-weight: 700; line-height: 1.5; letter-spacing: 0.02em;
+  color: #fff; background: rgba(20, 22, 27, 0.78); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.game-case__status--platinum { color: #1d2333; background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.7) 44%, transparent 58%), linear-gradient(135deg, #eef1f6, #c4cad6 48%, #e9ecf2 70%, #b5bccb); box-shadow: none; }
+.game-case[data-tone="nintendo"] .game-case__status:not(.game-case__status--platinum) { background: rgba(0, 0, 0, 0.4); }
+.game-case[data-tone="pc"] .game-case__status:not(.game-case__status--platinum) { background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
+.game-case[data-tone="playstation"] .game-case__status:not(.game-case__status--platinum) { background: #10131a; box-shadow: none; }
+.game-case[data-tone="playstation"] .game-case__status--platinum { box-shadow: inset 0 0 0 1px rgba(16, 19, 26, 0.22); }
+/* Phone-size cases: a tighter band, so "Switch 2" and the status both fit whole. */
+@container (max-width: 112px) {
+  .game-case__band { gap: 2px; padding: 0 4px 0 5px; letter-spacing: 0; }
+  .game-case__status { padding: 0 3px; font-size: 0.94em; letter-spacing: 0; }
+}
+.game-case__art { position: absolute; left: 0; right: 0; top: var(--band-h); bottom: 0; display: block; }
+.game-case__art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* No upright art: the wide cover whole across the middle, its own blur behind, the title under it; never cropped upright. */
+.game-case__art--wide { display: flex; flex-direction: column; justify-content: center; overflow: hidden; background: #15171c; }
+.game-case__art--wide img.game-case__blur { position: absolute; inset: -10%; width: 120%; height: 120%; filter: blur(14px) brightness(0.6) saturate(1.2); }
+.game-case__art--wide img.game-case__wide { position: relative; height: auto; aspect-ratio: 16 / 9; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
+.game-case__wide-title { position: relative; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 7% 8% 14%;
+  color: #fff; font-family: var(--font-hand); font-size: clamp(10px, 7.6cqw, 17px); line-height: 1.25; text-align: center; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+.game-case__time { position: absolute; z-index: 2; left: 4cqw; bottom: 4cqw; display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62); color: #fff; font-size: clamp(9.5px, 6.4cqw, 14px); font-weight: 600; font-variant-numeric: tabular-nums; }
+.game-case__time svg { flex: none; width: 1em; height: 1em; }
+.game-case[data-tone="nintendo"] { --case-shell: #c8323c; --case-band: #d03440; --case-band-ink: #fff; }
+.game-case[data-tone="playstation"] { --case-shell: #2f62a6; --case-band: #f6f7f9; --case-band-ink: #10131a; }
+.game-case[data-tone="pc"] { --case-shell: #23262d; --case-band: #1b2838; --case-band-ink: #e9eef5; }
+:root[data-theme="dark"] .game-case[data-tone="pc"] { --case-shell: #3a3f49; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .game-case[data-tone="pc"] { --case-shell: #3a3f49; } }
+
+/*
+ * 最近在玩: the latest games as a turning row of the same cases, on the page's own background. The centre case is the
+ * largest; its neighbours turn away, smaller and dimmer, with a reflection below.
+ */
+.recent-games { position: relative; margin: 6px 0 40px; overflow-x: clip; }
+.recent-games::before { content: ""; position: absolute; inset: 30px 0 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse 48% 7% at 50% 74%, rgba(70, 55, 25, 0.18), transparent 75%); }
+.recent-games__head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; padding: 0 4px; font-family: var(--font-sans); font-size: var(--text-base); font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+.recent-games__head small { font-size: var(--text-xs); font-weight: 400; letter-spacing: 0; }
+.recent-games__track { --stage-h: 300px; position: relative; height: calc(var(--stage-h) + 64px); perspective: 1300px; touch-action: pan-y; }
+.recent-games__card { position: absolute; left: 50%; top: 6px; display: block; height: var(--stage-h); width: calc(var(--stage-h) * var(--case-ratio, 0.71));
+  -webkit-box-reflect: below 4px linear-gradient(transparent 82%, rgba(255, 255, 255, 0.26)); }
+.recent-games__card .game-case { height: 100%; }
+@media (prefers-reduced-motion: no-preference) { .recent-games__card { transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.45s, filter 0.45s; } }
+.recent-games__nav { position: absolute; top: 190px; z-index: 20; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--card); color: var(--ink); font-size: var(--text-xl); line-height: 1; cursor: pointer; box-shadow: var(--shadow); }
+.recent-games__nav--prev { left: 4px; }
+.recent-games__nav--next { right: 4px; }
+.recent-games__info { display: grid; justify-items: center; gap: 4px; min-height: 58px; padding: 0 16px; text-align: center; }
+.recent-games__title { font-family: var(--font-hand); font-size: var(--text-xl); line-height: 1.3; color: var(--ink); }
+.recent-games__line { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 14px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.recent-games__line .game-case__status { margin-left: 0; padding: 0 8px; font-size: var(--text-xs); }
+.recent-games__others { opacity: 0.75; }
+.recent-games__dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+.recent-games__dots i { width: 6px; height: 6px; border-radius: 999px; background: var(--rule); }
+.recent-games__dots i[data-current] { width: 18px; background: var(--ink); }
+@media (prefers-reduced-motion: no-preference) { .recent-games__dots i { transition: width 0.3s; } }
+@media (max-width: 640px) {
+  .recent-games__track { --stage-h: 212px; }
+  .recent-games__nav { display: none; }
+  .recent-games__title { font-size: var(--text-lg); }
 }
