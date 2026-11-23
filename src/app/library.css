@@ -885,6 +885,37 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .game-case[data-tone="pc"] { --case-shell: #3a3f49; } }
 
 /*
+ * Printed like the real cases (the owner's request, 2026-11-24). Rims, bands and marks are measured from the owner's
+ * photos of a PS5, a PS4, a Switch 2 and a Switch case, as shares of the case's width: no rim on the spine side (the
+ * sleeve runs to the left edge on all four), thinner rims elsewhere, tighter corners. Colours are sampled from the
+ * same photos. The marks themselves are drawn in game-case-marks.tsx.
+ */
+.game-case[data-look] .game-case__shell { padding: var(--rim-top) var(--rim-right) var(--rim-bottom) 0; border-radius: max(1.6cqw, 3px); }
+.game-case[data-look] .game-case__shell::before { display: none; }
+.game-case[data-look] .game-case__insert { border-radius: max(1.6cqw, 3px) 1px 1px max(1.6cqw, 3px); }
+.game-case[data-look="ps5"], .game-case[data-look="ps"] { --rim-top: 3.31cqw; --rim-right: 2.28cqw; --rim-bottom: 3.31cqw; --band-h: 13.04cqw; --case-shell: #2d6fe8; --case-band: #fff; --case-band-ink: #10131a; }
+.game-case[data-look="ps4"] { --rim-top: 3.2cqw; --rim-right: 2.74cqw; --rim-bottom: 2.51cqw; --band-h: 13.24cqw; --case-shell: #1a8fe3; --case-band: #0273bc; --case-band-ink: #fff; }
+.game-case[data-look="switch2"] { --rim-top: 4.1cqw; --rim-right: 4.71cqw; --rim-bottom: 4.1cqw; --band-h: 19.88cqw; --case-shell: #d82b2e; --case-band: #e40011; --case-band-ink: #fff; }
+/* Switch: a clear, light grey shell and no band; the art runs up to the top edge under the red tile. */
+.game-case[data-look="switch"] { --rim-top: 4.07cqw; --rim-right: 4.68cqw; --rim-bottom: 4.07cqw; --band-h: 0px; --case-shell: #d9dbdc; }
+.game-case[data-look="switch"] .game-case__shell { background: linear-gradient(160deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 45%), var(--case-shell); }
+/* PS4's band ends on a thin white rule. */
+.game-case[data-look="ps4"] .game-case__band { box-shadow: inset 0 -2px 0 #fff, inset 0 -3px 0 rgba(0, 0, 0, 0.25); }
+.game-case__band--printed { gap: 0; padding: 0; }
+.game-case[data-look="switch2"] .game-case__band--printed { justify-content: center; }
+.case-mark { display: block; flex: none; height: auto; overflow: visible; }
+.case-mark--ps { width: 40.99cqw; margin-left: 3.73cqw; }
+.game-case[data-look="ps4"] .case-mark--ps { width: 40.8cqw; margin-left: 3.65cqw; }
+.case-mark--ps-only { width: 11.8cqw; }
+.case-mark--switch2 { width: 14.55cqw; }
+.case-mark--switch { position: absolute; z-index: 2; left: 0; top: 0; width: 21.18cqw; }
+.game-case__band--printed .game-case__status { position: absolute; right: 4.5cqw; top: 50%; transform: translateY(-50%); }
+.game-case__corner { position: absolute; z-index: 2; right: 3.5cqw; top: 3.5cqw; display: flex; }
+.game-case__corner .game-case__status { margin: 0; }
+.game-case[data-look="switch"] .game-case__status:not(.game-case__status--platinum) { background: rgba(20, 22, 27, 0.78); }
+
+
+/*
  * 最近在玩 (丙, 2026-11-24): the latest games as one flat row of cases, the latest a little taller, each with its name and
  * day under it. The row scrolls sideways; where it runs on, that edge fades, and with a pointer two arrows page it.
  */
