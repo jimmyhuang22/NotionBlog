@@ -31,7 +31,7 @@
 
 时间线是当前公开记录的日期视图，按真实作品／体验日期排序；不会把 `updatedAt` 当作活动时间，也不会伪造过去的状态变更记录。状态类作品只产生对应当前状态的条目，愿望清单不产生体验事件。相同作品同一天合并为一个条目；未知日期保留 null 并排在末尾。完整事件形状见 `contracts/website.ts`。需要累计历史的后续版本须另外采集事件历史。
 
-游戏事件（`game-playing`、`game-cleared`、`game-platinumed`）携带可选字段 `playedTime: TimeAmount | null`，值取当前公开 `Game.playedTime`，例如 `{value:120.25,unit:"hour"}`；未知为 null，真实零仍是 `{value:0,unit:"hour"}`。它表示当前累计时长，不表示事件当天的游玩量；不换算单位、不取整、不使用 `estimatedTime`。其他事件不增加该字段。数据库及演示 provider 共用生成逻辑，原日期、去重和分页规则不变。现有游戏 DTO 已有此值，无需新增来源读取或数据库迁移。
+游戏事件（`game-playing`、`game-cleared`、`game-platinumed`）携带可选字段 `playedTime: TimeAmount | null`，值取当前公开 `Game.playedTime`，例如 `{value:120.25,unit:"hour"}`；未知为 null，真实零仍是 `{value:0,unit:"hour"}`。它表示当前累计时长，不表示事件当天的游玩量；不换算单位、不取整。其他事件不增加该字段。数据库及演示 provider 共用生成逻辑，原日期、去重和分页规则不变。现有游戏 DTO 已有此值，无需新增来源读取或数据库迁移。
 
 游标必须当成不透明字符串。时间线、搜索和 v2 列表绑定当前快照与查询；批次、公开资格、筛选、时区或页大小变化后返回 400，前端从第一页重新开始。搜索使用当前公开 DTO 和可读 AST 的文本，排除不可用内部链接的文字与 URL／图片地址；结果是纯文本摘要，无 HTML。v2 单次读取限制为 20,000 条／16 MiB，超限明确失败，不能截断后伪装成完整列表。
 
