@@ -93,6 +93,8 @@ export function createFeatureGatedRepository(
     },
     ...(repository.isStudyNoteAvailable ? { isStudyNoteAvailable: (courseSlug: string, noteSlug: string) =>
       enabled("course") && enabled("study-note") ? repository.isStudyNoteAvailable!(courseSlug, noteSlug) : Promise.resolve(false) } : {}),
+    ...(repository.readStudyNote ? { readStudyNote: (courseSlug: string, noteSlug: string) =>
+      enabled("course") && enabled("study-note") ? repository.readStudyNote!(courseSlug, noteSlug) : Promise.resolve(null) } : {}),
     async getHome() {
       const home = await repository.getHome();
       return {
