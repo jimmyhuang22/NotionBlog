@@ -15,6 +15,11 @@ const PATHS: Record<GamePlatformIcon, string> = {
   pc: "M3 2.5h18a2.5 2.5 0 0 1 2.5 2.5v10a2.5 2.5 0 0 1-2.5 2.5H3A2.5 2.5 0 0 1 .5 15V5A2.5 2.5 0 0 1 3 2.5zm0 2.2a.3.3 0 0 0-.3.3v10a.3.3 0 0 0 .3.3h18a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3zm7.9 12.8h2.2v2.8h-2.2zM7.6 19.8h8.8a1.1 1.1 0 0 1 0 2.2H7.6a1.1 1.1 0 0 1 0-2.2z",
 };
 
+/** The outline's path in a 24-unit square, for the printed case bands (`game-case-marks.tsx`). */
+export function gamePlatformIconPath(icon: GamePlatformIcon): string {
+  return PATHS[icon];
+}
+
 /** A platform's outline, sized by its stylesheet (`.game-platform__icon`); hidden from screen readers, which hear the name. */
 export function GamePlatformIconMark({ icon }: { icon: GamePlatformIcon }) {
   return <svg className="game-platform__icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><path d={PATHS[icon]} /></svg>;
