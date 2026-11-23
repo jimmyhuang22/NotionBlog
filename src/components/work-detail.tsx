@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { Book, ContentDocument, DateRange, Game, Movie, Rating } from "../../contracts/content.ts";
+import type { Book, ContentDocument, DateRange, Game, GamePlayVideo, Movie, Rating } from "../../contracts/content.ts";
 import { gameDetailArtwork, imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
@@ -11,6 +11,9 @@ import { RichDocumentBody } from "./rich-document";
 import { PlatformChips } from "./platform-chips";
 import { ExcerptFold } from "./excerpt-fold";
 import { GamePanel } from "./game-panel";
+import { GameIntro } from "./game-intro";
+import { WorksCard } from "./works-card";
+import { PlatformMark } from "./platform-signs";
 import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
 import { earnedWithin, gradeLabel, gradeOrder, setPercent, setPlatinum, trophyAnchors, type TrophySet } from "../lib/game-trophies.ts";
 
@@ -322,16 +325,40 @@ function TrophySummary({ sets, anchors }: { sets: TrophySet[]; anchors: string[]
 }
 
 /**
+ * The owner's recording of the game, at the foot of the record column (2026-11-24): its cover is usually the game's own
+ * art, so it sits low rather than echo the art at the top. A recording that is one of the owner's published works is
+ * drawn as on the works page; any other address the owner gave is a plain way out to Bilibili.
+ */
+function GameVideo({ video, timeZone }: { video: GamePlayVideo | null; timeZone: string }) {
+  if (!video) return null;
+  const shown = video.url.replace(/^https?:\/\/(www\.)?/u, "").replace(/\/$/u, "");
+  return (
+    <section className="card game-card game-video" aria-labelledby="game-video-title">
+      <h2 id="game-video-title" className="game-card__title">游玩录像</h2>
+      {video.work ? <WorksCard work={video.work} timeZone={timeZone} withYear /> : (
+        <a className="game-video__link" href={video.url} target="_blank" rel="noopener noreferrer">
+          <PlatformMark platform="bilibili" size={22} square />
+          <span><b>B 站视频</b><small>{shown}</small></span>
+        </a>
+      )}
+    </section>
+  );
+}
+
+/**
  * A game (the owner's pick 乙 of 2026-11-19, "全幅主视觉", after the PlayStation Store and Apple TV): every game's
  * cover is wide key art, so it runs the width of the page unblurred and fades into the paper; the title and the
- * platforms stand on it. Below it, cards (甲, 2026-11-24): on the left, the owner's record (the status, the rating,
- * the time played and the trophies) and what the game is (its kinds), staying in view; on the right, the days, then
- * the write-up and the trophies in one card behind a switch. On a phone one column: the record, the days, the
- * write-up and trophies, then what the game is. There is no estimate of how long a game takes: the owner does not
- * keep one (2026-11-23).
+ * platforms stand on it, and the game's story in two lines when the owner wrote one. Below it, cards (甲,
+ * 2026-11-24): on the left, the owner's record (the status, the rating, the time played and the trophies), what the
+ * game is (who made and published it, its kinds) and the owner's recording, staying in view; on the right, the days,
+ * then the write-up and the trophies in one card behind a switch. On a phone one column: the record, the days, the
+ * write-up and trophies, what the game is, the recording. There is no estimate of how long a game takes: the owner
+ * does not keep one (2026-11-23).
  */
 export function GamePage({ type, label, item, document, timeZone, neighbours, trophySets = [] }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode; trophySets?: TrophySet[] }) {
-  const notes = gameNotes(document);
+  const notes = gameNotes(document, { video: !!item.playVideo });
+  const about = item.about ?? null;
+  const developers = about?.developers ?? [], publishers = about?.publishers ?? [];
   // With one full set whose dated trophies all came within the owner's own dates, the strip says how many under those
   // dates and the trophy tab does not repeat the days (甲, 2026-11-23).
   const full = trophySets.filter(set => set.trophies?.length);
@@ -355,6 +382,7 @@ export function GamePage({ type, label, item, document, timeZone, neighbours, tr
           <div className="game-band__text">
             <h1 className="game-band__title">{item.title}</h1>
             {chips.length ? <p className="game-band__platforms"><span className="visually-hidden">平台：</span><PlatformChips chips={chips} /></p> : null}
+            {about?.summary ? <GameIntro text={about.summary} /> : null}
           </div>
         </div>
       </div>
@@ -379,12 +407,18 @@ export function GamePage({ type, label, item, document, timeZone, neighbours, tr
               </dl>
               <TrophySummary sets={trophySets} anchors={anchors} />
             </section>
-            {item.tags.length ? (
+            {/* What the game is: who made and published it (as the owner verified them) and its kinds; a row only for what is known. */}
+            {developers.length || publishers.length || item.tags.length ? (
               <section className="card game-card game-about" aria-labelledby="game-about-title">
                 <h2 id="game-about-title" className="game-card__title">关于</h2>
-                <dl className="game-about__facts"><dt>类型</dt><dd className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</dd></dl>
+                <dl className="game-about__facts">
+                  {developers.length ? <><dt>开发</dt><dd>{developers.join("、")}</dd></> : null}
+                  {publishers.length ? <><dt>发行</dt><dd>{publishers.join("、")}</dd></> : null}
+                  {item.tags.length ? <><dt>类型</dt><dd className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</dd></> : null}
+                </dl>
               </section>
             ) : null}
+            <GameVideo video={item.playVideo ?? null} timeZone={timeZone} />
           </div>
           <div className="work-game__main">
             <GameDates item={item} timeZone={timeZone} ownNote={within ? `拿到 ${within} 个奖杯` : null} />
