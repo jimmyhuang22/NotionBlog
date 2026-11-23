@@ -5,7 +5,9 @@ const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40_000_000;
 const MAX_WEBP_DIMENSION = 16_383;
 const WIDTH_CAPS = [400, 800, 1600] as const;
-const SUPPORTED_WIDTH_CAPS = [400, 800, 1600] as const;
+// Explicitly opt in to the wider derivative. Existing bundles retain their base and defaults.
+const SUPPORTED_WIDTH_CAPS = [400, 800, 1600, 1920] as const;
+type DisplayEncodeWidth = (typeof SUPPORTED_WIDTH_CAPS)[number];
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const RASTER_FORMATS = new Set(["jpeg", "png", "webp", "gif", "tiff", "heif"]);
 
@@ -16,7 +18,7 @@ export function displayEncodingRecipe(): string {
 }
 
 export interface GeneratedDisplayVariant {
-  widthCap: 400 | 800 | 1600;
+  widthCap: DisplayEncodeWidth;
   bytes: Uint8Array;
   mime: "image/webp";
   sha256: string;
@@ -28,7 +30,7 @@ export interface GeneratedDisplayVariant {
 
 export interface DisplayEncodeOptions {
   /** Encode only these caps; omitted generates 400/800 and the mandatory 1600 base. */
-  widthCaps?: readonly (400 | 800 | 1600)[];
+  widthCaps?: readonly DisplayEncodeWidth[];
   /** These bounds may be reduced, but never raised above the hard limits. */
   maxBytes?: number;
   maxPixels?: number;
@@ -97,8 +99,8 @@ export async function generateDisplayVariants(
   const maxPixels = bound(options.maxPixels, MAX_INPUT_PIXELS, MAX_INPUT_PIXELS, "pixel");
   const timeoutSeconds = bound(options.timeoutSeconds, 30, 60, "processing time");
   const selected = options.widthCaps ?? WIDTH_CAPS;
-  if (!Array.isArray(selected) || selected.length < 1 || selected.length > 3 ||
-      Array.from(selected).some(width => width !== 400 && width !== 800 && width !== 1600) || new Set(selected).size !== selected.length) {
+  if (!Array.isArray(selected) || selected.length < 1 || selected.length > SUPPORTED_WIDTH_CAPS.length ||
+      Array.from(selected).some(width => !SUPPORTED_WIDTH_CAPS.includes(width)) || new Set(selected).size !== selected.length) {
     throw new Error("Invalid thumbnail width caps");
   }
   const widthCaps = SUPPORTED_WIDTH_CAPS.filter(width => selected.includes(width));
@@ -129,6 +131,7 @@ export async function generateDisplayVariants(
   const results: GeneratedDisplayVariant[] = [];
   const completed = new Map<string, { encoded: Buffer; width: number; height: number }>();
   for (const widthCap of widthCaps) {
+    if (widthCap === 1920 && canonical.info.width <= 1600) continue;
     const reference = await sharp(canonical.data, { raw, limitInputPixels: maxPixels })
       .resize({ width: widthCap, withoutEnlargement: true, kernel: "lanczos3" })
       .raw({ depth: "uchar" }).timeout({ seconds: timeoutSeconds })

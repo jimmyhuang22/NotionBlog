@@ -6,7 +6,7 @@ import type {SqlExecutor} from "../database/sql.ts";
 import type {PublicationMode} from "../database/publication.ts";
 import {mediaIdentity} from "../database/website-validation.ts";
 import {readDisplayAssets,DisplayError,type DisplayProjection} from "../database/display.ts";
-import {selectDisplayFile,displayAssetId,displayRunId,type DisplayAsset,type DisplayFile} from "../self-hosted-media/manifest.ts";
+import {selectDisplayFile,displayAssetId,displayRunId,type DisplayAsset,type DisplayFile,type DisplayWidth} from "../self-hosted-media/manifest.ts";
 import {verifyDisplayBytes} from "../self-hosted-media/files.ts";
 import {DISPLAY_V2_RECIPE} from "../self-hosted-media/manifest.ts";
 import type {ObjectStorage} from "../database/storage.ts";
@@ -20,7 +20,7 @@ export function displayStoredMedia(asset:DisplayAsset,file:DisplayFile):StoredMe
  return {assetId:mediaIdentity(asset.ownerPageId,"display:"+asset.assetId,file.sha256),ownerPageId:asset.ownerPageId,
   objectKey:"sha256/"+file.sha256,...file};
 }
-export async function databaseDisplayResponse(assetId:string,width:400|800|1600|null,ports:{
+export async function databaseDisplayResponse(assetId:string,width:DisplayWidth|null,ports:{
  read(assetId:string):Promise<DisplayProjection|null>;storage():Pick<ObjectStorage,"read">;
 }):Promise<Response>{
  const headers={"Cache-Control":"private, no-store","Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff"};

@@ -291,7 +291,9 @@
  * Below, the side column and the write-up, as on a film's page.
  */
 .game-band { position: relative; color: #f4f1ea; }
-.game-band::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 14, 0.72), rgba(8, 10, 14, 0.38) 16%, rgba(8, 10, 14, 0) 34%, rgba(8, 10, 14, 0.5) 72%), var(--art) center 8% / cover, #15171c; -webkit-mask: linear-gradient(#000 70%, transparent); mask: linear-gradient(#000 70%, transparent); }
+.game-band::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 14, 0.72), rgba(8, 10, 14, 0.38) 16%, rgba(8, 10, 14, 0) 34%, rgba(8, 10, 14, 0.5) 72%), var(--game-band-art, var(--art)) center 8% / cover, #15171c; -webkit-mask: linear-gradient(#000 70%, transparent); mask: linear-gradient(#000 70%, transparent); }
+/* Matches the responsive preload on the game detail route. */
+@media (min-width: 1024px) { .game-band { --game-band-art: var(--art-desktop, var(--art)); } }
 .game-band--plain { color: var(--ink); }
 .game-band--plain::before { content: none; }
 .game-band--plain .game-band__in { min-height: 0; padding-bottom: 36px; }

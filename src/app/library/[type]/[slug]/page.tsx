@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { preload } from "react-dom";
-import { imagePreviewSrc } from "@/lib/content/image-preview";
+import { gameDetailArtwork, gameDetailDesktopMedia, imagePreviewSrc } from "@/lib/content/image-preview";
 import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import { contentMetadata } from "@/lib/seo/metadata";
@@ -117,7 +117,13 @@ export default async function LibraryDetailPage(props: Props) {
   const { type, section, item, document, trophySets } = loaded;
   const timeZone = getSiteConfig().timeZone;
   // The large cover's address is known here: ask for it with the page, not after it. A game's art runs the width of the page.
-  if (item.cover) preload(imagePreviewSrc(item.cover, item.kind === "game" ? 1600 : 800), { as: "image" });
+  if (item.cover && item.kind === "game") {
+    const artwork = gameDetailArtwork(item.cover);
+    if (artwork.desktop) {
+      preload(artwork.desktop, { as: "image", media: gameDetailDesktopMedia });
+      preload(artwork.standard, { as: "image", media: `not all and ${gameDetailDesktopMedia}` });
+    } else preload(artwork.standard, { as: "image" });
+  } else if (item.cover) preload(imagePreviewSrc(item.cover, 800), { as: "image" });
   const neighbours = (
     <Suspense fallback={<div className="work__neighbours-pending" aria-hidden="true" />}>
       <Neighbours item={item} timeZone={timeZone} />

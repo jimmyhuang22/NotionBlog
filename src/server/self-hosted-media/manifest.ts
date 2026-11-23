@@ -1,5 +1,7 @@
 import { ContentServiceError } from "../../../contracts/repository.ts";
 
+export type DisplayWidth = 400 | 800 | 1600 | 1920;
+
 export interface DisplayFile {
   sha256: string;
   byteSize: number;
@@ -13,7 +15,7 @@ export interface DisplayAsset {
   sourceSha256: string;
   sourceFingerprint: string;
   base: DisplayFile;
-  variants: Partial<Record<"400" | "800" | "1600", DisplayFile>>;
+  variants: Partial<Record<`${DisplayWidth}`, DisplayFile>>;
 }
 export interface DisplayManifest {
   format: "notionblog-display-v1";
@@ -41,7 +43,7 @@ function integer(value: unknown, max: number): value is number { return Number.i
 export function validateDisplayFile(value: unknown): asserts value is DisplayFile {
   if (!exact(value, ["sha256", "byteSize", "mime", "width", "height"]) || !displayHash(value.sha256) ||
       value.mime !== "image/webp" || !integer(value.byteSize, MAX_DISPLAY_FILE_BYTES) ||
-      !integer(value.width, 1600) || !integer(value.height, 16383)) displayUnavailable();
+      !integer(value.width, 1920) || !integer(value.height, 16383)) displayUnavailable();
 }
 export function validateDisplayManifest(value: unknown, expectedRecipe?: string): asserts value is DisplayManifest {
   if (!exact(value, ["format", "runId", "recipe", "assets"]) || value.format !== "notionblog-display-v1" ||
@@ -55,12 +57,15 @@ export function validateDisplayManifest(value: unknown, expectedRecipe?: string)
         !displayAssetId(asset.assetId) || assets.has(asset.assetId) || !displayHash(asset.sourceSha256) || !displayHash(asset.sourceFingerprint) ||
         typeof asset.ownerPageId !== "string" || !asset.ownerPageId.length || asset.ownerPageId.length > 512 || /[\u0000-\u001f\u007f]/.test(asset.ownerPageId) ||
         !asset.variants || typeof asset.variants !== "object" || Array.isArray(asset.variants) ||
-        Object.keys(asset.variants).some(key => !["400", "800", "1600"].includes(key))) displayUnavailable();
+        Object.keys(asset.variants).some(key => !["400", "800", "1600", "1920"].includes(key))) displayUnavailable();
     assets.add(asset.assetId); validateDisplayFile(asset.base);
+    if (asset.base.width > 1600) displayUnavailable();
     for (const [cap, file] of Object.entries(asset.variants)) {
       validateDisplayFile(file);
-      if (file.width > Math.min(Number(cap), asset.base.width) || file.height > asset.base.height ||
-          Math.abs(file.width * asset.base.height - file.height * asset.base.width) > asset.base.width + asset.base.height) displayUnavailable();
+      if (cap === "1920") {
+        if (asset.base.width !== 1600 || file.width <= asset.base.width) displayUnavailable();
+      } else if (file.width > Number(cap) || file.width > asset.base.width || file.height > asset.base.height) displayUnavailable();
+      if (Math.abs(file.width * asset.base.height - file.height * asset.base.width) > asset.base.width + asset.base.height) displayUnavailable();
     }
     for (const file of [asset.base, ...Object.values(asset.variants)] as DisplayFile[]) {
       const identity = JSON.stringify([file.byteSize, file.mime, file.width, file.height]), previous = objects.get(file.sha256);
@@ -70,9 +75,9 @@ export function validateDisplayManifest(value: unknown, expectedRecipe?: string)
     }
   }
 }
-export function selectDisplayFile(asset: DisplayAsset, width: 400 | 800 | 1600 | null): DisplayFile {
+export function selectDisplayFile(asset: DisplayAsset, width: DisplayWidth | null): DisplayFile {
   if (width === null) return asset.base;
-  const explicit = asset.variants[String(width) as "400" | "800" | "1600"];
+  const explicit = asset.variants[`${width}`];
   if (explicit) return explicit;
   const target = Math.min(width, asset.base.width);
   const candidates = [asset.base, ...Object.values(asset.variants)] as DisplayFile[];
