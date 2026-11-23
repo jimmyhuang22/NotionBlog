@@ -303,6 +303,18 @@
 .game-band--plain .game-band__title { text-shadow: none; }
 .game-band__platforms { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
 .game-band__platforms .platform-chip { padding: 2px 9px; font-size: var(--text-sm); }
+/* The story on the art (2026-11-24): two lines on a dark frosted ground, so it reads on bright art too; opens in place. */
+.game-intro { max-width: 600px; margin-top: 12px; }
+.game-intro__text { padding: 10px 14px; border-radius: var(--radius-md); background: rgba(10, 12, 16, 0.42); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-size: var(--text-sm); line-height: 1.75; color: #f4f1ea; white-space: pre-line; }
+.game-intro__body p { margin: 0; }
+.game-intro__body p + p { margin-top: 6px; }
+.game-intro__body--clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.game-intro__body--clamp p { display: inline; }
+.game-intro__body--clamp p + p { margin-top: 0; }
+.game-intro__body--clamp p + p::before { content: " "; }
+.game-intro__more { margin: 6px 0 0 14px; padding: 0; border: 0; background: none; font: inherit; font-size: var(--text-sm); color: inherit; text-decoration: underline; text-underline-offset: 3px; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); cursor: pointer; }
+.game-band--plain .game-intro__text { background: var(--soft); color: var(--ink); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.game-band--plain .game-intro__more { text-shadow: none; }
 /*
  * Below the art, cards (甲, 2026-11-24): the record column on the left, the days and the write-up beside it. Every card
  * has the same head, a quiet title over a hairline, so the page reads as one set of things.
@@ -331,6 +343,13 @@
 .game-about__facts dt { color: var(--muted); }
 .game-about__facts dd { margin: 0; color: var(--ink); }
 .game-about__facts .reading__tags { display: flex; flex-wrap: wrap; gap: 4px; }
+/* The recording: as on the works page when it is one of the owner's works, else a plain way out to Bilibili. */
+.game-video .works-card { width: 100%; }
+.game-video__link { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--rule); border-radius: var(--radius-sm); color: var(--ink); text-decoration: none; }
+.game-video__link:hover { border-color: var(--muted); }
+.game-video__link span { display: flex; flex-direction: column; min-width: 0; }
+.game-video__link b { font-weight: 600; font-size: var(--text-sm); }
+.game-video__link small { overflow: hidden; font-size: var(--text-xs); color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 /*
  * The days in a strip across the main column (2026-11-21): a dot for each, the owner's own filled, a line to the next
  * with how long it was standing on the line. Each date leads with its year in large type, the day under it (乙,
@@ -416,7 +435,9 @@
   .game-card--dates { order: 2; }
   .game-panel { order: 3; }
   .game-about { order: 4; }
-  .work-game__main .work__neighbours, .work-game__main .work__neighbours-pending { order: 5; margin-top: 4px; }
+  .game-video { order: 5; }
+  .work-game__main .work__neighbours, .work-game__main .work__neighbours-pending { order: 6; margin-top: 4px; }
+  .game-intro__body--clamp { -webkit-line-clamp: 3; }
   .game-card { padding: 20px; }
 }
 

@@ -132,6 +132,14 @@ test("a game's write-up under its tab drops a leading 游玩感受 heading, and 
   assert.equal(gameNotes(null), null);
 });
 
+test("with the video in a field of its own, the body's 游玩录像 section goes, heading and all, and nothing else", () => {
+  const body = () => doc([h("f", "游玩感受"), p("f1", "一句"), h("v", "游玩录像"), p("v1", "bilibili.com/video/BV1"), h("v2", "第二部分", 2), p("v3", "还有"), h("o", "其他"), p("o1", "留下")]);
+  assert.deepEqual(ids(gameNotes(body(), { video: true })), ["f1", "o", "o1"]);
+  assert.deepEqual(ids(gameNotes(body())), ["f1", "v", "v1", "v2", "v3", "o", "o1"]);
+  // Only a section of that exact title.
+  assert.deepEqual(ids(gameNotes(doc([h("v", "游玩录像（旧）"), p("v1", "x")]), { video: true })), ["v", "v1"]);
+});
+
 test("a sub-heading with nothing under it before the next heading goes", () => {
   const record = gameRecord(doc([h("a", "游戏相关"), p("a1", "官网"), h("g", "图片收集", 2), h("b", "游玩历程"), h("w", "等待快递中", 2), p("w1", "快到了"), h("e", "收尾", 2)]));
   assert.deepEqual(ids(record), ["a", "a1", "b", "w", "w1"]);

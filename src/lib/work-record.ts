@@ -223,15 +223,25 @@ export function gameRecord(document: ContentDocument | null): ContentDocument | 
 
 /**
  * The write-up under the page's "游玩感受" tab (2026-11-24): a heading of those same words at its top would only say
- * the tab again, so it goes; every other heading, and anything under the first, stays as written.
+ * the tab again, so it goes; every other heading, and anything under the first, stays as written. When the game has
+ * its play video in a field of its own (`video`), a "游玩录像" section in the body is that same video and goes with
+ * its heading, until the owner clears it from the page.
  */
-export function gameNotes(document: ContentDocument | null): ContentDocument | null {
+export function gameNotes(document: ContentDocument | null, { video = false }: { video?: boolean } = {}): ContentDocument | null {
   const record = gameRecord(document);
   if (!record) return null;
-  const first = record.blocks.findIndex(block => !blank(block));
-  const lead = record.blocks[first];
-  if (lead?.type !== "heading" || plain(lead.text) !== "游玩感受") return record;
-  return { ...record, blocks: record.blocks.filter((_, index) => index !== first) };
+  let blocks = record.blocks;
+  if (video) {
+    const at = blocks.findIndex(block => block.type === "heading" && block.level === 1 && plain(block.text) === "游玩录像");
+    if (at >= 0) {
+      const next = blocks.findIndex((block, index) => index > at && block.type === "heading" && block.level === 1);
+      blocks = [...blocks.slice(0, at), ...(next >= 0 ? blocks.slice(next) : [])];
+    }
+  }
+  const first = blocks.findIndex(block => !blank(block));
+  const lead = blocks[first];
+  if (lead?.type === "heading" && plain(lead.text) === "游玩感受") blocks = blocks.filter((_, index) => index !== first);
+  return blocks === record.blocks ? record : { ...record, blocks };
 }
 
 /**
