@@ -1,4 +1,4 @@
-import { readRecentGames } from "@/lib/recent-games";
+import { readRecentGames } from "@/lib/content";
 import { RecentGames } from "./recent-games";
 
 /**

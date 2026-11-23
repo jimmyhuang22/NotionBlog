@@ -8,6 +8,7 @@ import type { WebsiteRecord } from "../contracts/website-sync.ts";
 import { fixtureItems } from "../fixtures/content.ts";
 import { createContentService } from "../src/lib/content/factory.ts";
 import { libraryDetailHref } from "../src/lib/content/library-url.ts";
+import { readRecentGamesFrom } from "../src/lib/content/recent-games.ts";
 import { routeAnswer, routeVerdict } from "../src/lib/route-verdict.ts";
 import { sitemapXml } from "../src/lib/seo/discovery.ts";
 import { createLibraryUrlProjection } from "../src/server/database/library-urls.ts";
@@ -50,6 +51,7 @@ test("title-based addresses replace stored work paths across publication, route 
   const book = work("book", 1, "远山笔记");
   const movie = work("movie", 2, "银幕");
   const game = work("game", 3, "Fall of the Stars");
+  if (game.detail.item.kind === "game") game.detail.item.lastPlayedDate = { start: "2026-11-23", end: null, precision: "date" };
   const gameAgain = work("game", 4, "Fall of the Stars");
   const restored = work("book", 5, "Restored Work");
   const thai = work("movie", 7, "Fictional Thai Film");
@@ -103,6 +105,7 @@ test("title-based addresses replace stored work paths across publication, route 
     assert.equal(detail?.item.href, href);
     assert.equal((await repository.list(kind)).items.find(item => item.id === old.id)?.href, href);
   }
+  assert.equal((await readRecentGamesFrom(repository, "UTC"))[0]?.href, "/library/games/fall-of-the-stars");
   assert.equal((await repository.get("book", encodeURIComponent("远山笔记")))?.item.id, book.detail.item.id);
   assert.equal((await repository.get("movie", encodeURIComponent("ยินดี")))?.item.id, thai.detail.item.id);
   assert.equal(await repository.get("book", encodeURIComponent(encodeURIComponent("远山笔记"))), null);
@@ -131,6 +134,7 @@ test("title-based addresses replace stored work paths across publication, route 
   assert.equal((await repository.get("game", "a-new-entry"))?.item.id, additional.detail.item.id);
   await db.query("SELECT nb_v2_api.set_denied($1,true)", [game.detail.item.id]);
   assert.equal(await repository.get("game", "fall-of-the-stars"), null);
+  assert.equal((await readRecentGamesFrom(repository, "UTC")).some(item => item.id === game.detail.item.id), false);
   const scrubbed = (await repository.get("book", "远山笔记"))?.document?.blocks[0];
   assert(scrubbed?.type === "paragraph");
   assert.deepEqual(scrubbed.text[1].link, { kind: "unavailable" });
