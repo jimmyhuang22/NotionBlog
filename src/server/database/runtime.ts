@@ -70,10 +70,16 @@ function createRuntime() {
     });
   }
   const storage=()=>storageFor(objectProvider), thumbnailStorage=()=>storageFor(variantProvider);
-  const baseRepository=(process.env.DATABASE_CONTENT_VERSION==="2"?createWebsiteDatabaseRepository:createDatabaseRepository)(projection==="scoped"?scopedReader(project(rawDb),mode):contentDb,{timeZone:()=>getSiteConfig().timeZone,searchContext,...(projection==="scoped"?{scoped:true}:{})});
+  const scopedDb = projection === "scoped" ? scopedReader(rawDb, mode) : undefined;
+  const prepareDelivery = displayStore || cloudDisplay ? createLibraryDisplayPreparation(project) : undefined;
+  const baseRepository = process.env.DATABASE_CONTENT_VERSION === "2"
+    ? createWebsiteDatabaseRepository(scopedDb ? project(scopedDb) : contentDb, {
+      timeZone: () => getSiteConfig().timeZone, searchContext, scoped: !!scopedDb,
+      ...(scopedDb && mode === "published" ? { library: { db: scopedDb, prepareDelivery } } : {}),
+    })
+    : createDatabaseRepository(contentDb, { timeZone: () => getSiteConfig().timeZone });
   const repository=libraryPage?{...baseRepository,readLibraryPage:createLibraryPageReader(rawDb,{
-    mode,timeZone:()=>getSiteConfig().timeZone,
-    ...((displayStore||cloudDisplay)?{prepareDelivery:createLibraryDisplayPreparation(project)}:{}),
+    mode,timeZone:()=>getSiteConfig().timeZone,prepareDelivery,
   })}:baseRepository;
   // The mixed homepage reads the same live scoped index before resolving cover sizes.
   const homeTimeline = cloudDisplay && projection === "scoped" ? {

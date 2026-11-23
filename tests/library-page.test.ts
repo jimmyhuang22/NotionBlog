@@ -9,6 +9,7 @@ import { WEBSITE_SCHEMA_DIGEST, type WebsiteRecord } from "../contracts/website-
 import type { StoredMedia } from "../contracts/sync.ts";
 import type { ContentRepository } from "../contracts/repository.ts";
 import { createContentService, createFeatureGatedRepository } from "../src/lib/content/factory.ts";
+import { contentListResponse, libraryYearsResponse } from "../src/lib/content/http.ts";
 import { readLibraryFirstPageFrom } from "../src/lib/content/library-page.ts";
 import { createLibraryPageReader, readLibraryPageMode, LIBRARY_SELECTED_SQL, LIBRARY_SELECTORS_SQL } from "../src/server/database/library-page.ts";
 import { createLibraryDisplayPreparation } from "../src/server/database/library-display.ts";
@@ -181,4 +182,82 @@ test("library opt-in and SSR entry stay independent of completed DTO caching", a
   assert.ok(page.includes("await readLibraryFirstPage(section.kind"));
   const noRead = { list: async () => assert.fail("invalid query must be rejected first") } as unknown as ContentRepository;
   await assert.rejects(readLibraryFirstPageFrom(noRead, noRead, "movie", { limit: 0 }), { code: "INVALID_QUERY" });
+});
+
+test("published library HTTP and SSR pages prepare only selected covers and reject concurrent withdrawal", async t => {
+  const h = await setup();
+  t.after(() => h.db.close());
+  const id = (label: string) => mediaIdentity("game-0", label, "c".repeat(64));
+  const addCover = async (owner: string, field: "cover" | "boxArt", assetId: string, width: number, height: number) => {
+    await h.db.query("INSERT INTO nb_v2.media VALUES($1,$2,$3,'{}')", [h.lease.runId, assetId, owner]);
+    await h.db.query("UPDATE nb_v2.records SET item=item || $1::jsonb WHERE run_id=$2 AND id=$3", [
+      JSON.stringify({ [field]: { id: assetId, src: "/media/v2/" + assetId, alt: "", width, height } }), h.lease.runId, owner,
+    ]);
+  };
+  await addCover("game-0", "cover", id("wide"), 800, 450);
+  await addCover("game-0", "boxArt", id("upright"), 400, 550);
+  await addCover("game-3", "cover", id("off-page"), 800, 450);
+  await h.db.query(`UPDATE nb_v2.records SET item=item || '{"playedDate":{"start":"2024-12-31","end":"2025-01-01","precision":"date"}, "status":"platinumed"}'::jsonb
+    WHERE run_id=$1 AND id='game-0'`, [h.lease.runId]);
+
+  const lookups: string[][] = [];
+  let withdraw = false;
+  const mapping: SqlExecutor = { async query<T>(sql: string, values?: unknown[]) {
+    assert.match(sql, /nb_display_api\.read_assets/);
+    const ids = values![1] as string[];
+    lookups.push(ids);
+    const { revision } = (await h.db.query<{ revision: string }>("SELECT revision::text FROM nb_v2.state")).rows[0];
+    if (withdraw) {
+      withdraw = false;
+      await h.db.query("SELECT nb_v2_api.set_denied($1,true)", ["game-0"]);
+    }
+    const assets = ids.map(assetId => ({ assetId, ownerPageId: "game-0", sourceSha256: "c".repeat(64), sourceFingerprint: "d".repeat(64),
+      base: { sha256: "e".repeat(64), byteSize: 42, mime: "image/webp", width: 800, height: 450 }, variants: {} }));
+    return { rows: [{ result: { runId: h.lease.runId, revision, assets } }] as T[] };
+  } };
+  const decorate = (sql: SqlExecutor) => databaseDisplayProjectionSql(sql, mapping, "published");
+  const raw = scopedReader(h.reader, "published");
+  let catalogueReads = 0;
+  const measured: SqlExecutor = { query(sql, values) {
+    if (sql.includes("nb_v2_api.read_content(")) catalogueReads++;
+    return raw.query(sql, values);
+  } };
+  const legacy = createWebsiteDatabaseRepository(decorate(raw), { scoped: true });
+  const optimized = createWebsiteDatabaseRepository(decorate(raw), { scoped: true,
+    library: { db: measured, prepareDelivery: createLibraryDisplayPreparation(decorate) } });
+
+  const req = (path: string) => new Request("https://example.test" + path);
+  const query = { limit: 1, order: "title-asc" as const };
+  const reference = await legacy.list("game", query);
+  assert.deepEqual(new Set(lookups.pop()), new Set([id("wide"), id("upright"), id("off-page")]));
+  assert.ok(reference.nextCursor);
+  const actual = await contentListResponse(req("/api/content/game?limit=1&order=title-asc"), "game", optimized, all);
+  assert.equal(actual.status, 200);
+  assert.deepEqual((await actual.json()).data, reference);
+  assert.deepEqual(new Set(lookups.pop()), new Set([id("wide"), id("upright")]));
+
+  const expectedYears = await legacy.getLibraryYears!("game", { status: "completed" });
+  lookups.length = 0;
+  const years = await libraryYearsResponse(req("/api/library/game/years?status=completed"), "game", optimized, all);
+  assert.equal(years.status, 200);
+  assert.deepEqual((await years.json()).data, expectedYears);
+  assert.ok(expectedYears.years.some(year => year.year === 2025));
+  assert.deepEqual(lookups, []);
+
+  catalogueReads = 0;
+  assert.equal((await readLibraryFirstPageFrom(optimized, optimized, "game", query)).page.total, reference.total);
+  assert.equal(catalogueReads, 1);
+  for (const kind of ["game", "book", "movie"] as const) {
+    for (const year of [undefined, 2025, 9999, "undated"] as const) {
+      const filters = { ...query, ...(year === undefined ? {} : { year }) };
+      assert.deepEqual(await readLibraryFirstPageFrom(optimized, optimized, kind, filters),
+        await readLibraryFirstPageFrom(legacy, legacy, kind, filters));
+    }
+  }
+  const next = { ...query, cursor: reference.nextCursor! };
+  assert.deepEqual(await optimized.list("game", next), await legacy.list("game", next));
+  withdraw = true;
+  await assert.rejects(optimized.list("game", query), { code: "INVALID_QUERY" });
+  await assert.rejects(optimized.list("game", next), { code: "INVALID_QUERY" });
+  assert.ok((await optimized.list("game", query)).items.every(item => item.id !== "game-0"));
 });
