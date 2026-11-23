@@ -4,6 +4,7 @@ import { isLibraryTitleSlug, libraryDetailHref, readLibraryTitleSlug } from "../
 import { isLibraryKind } from "../../lib/content/years.ts";
 import type { PublicationMode } from "./publication.ts";
 import { callSql, type SqlExecutor } from "./sql.ts";
+import { publicPathProjector, sitePathReader } from "./public-paths.ts";
 
 interface Name {
   oldHref: string;
@@ -18,28 +19,15 @@ function unavailable(): never {
   throw new ContentServiceError("CONTENT_UNAVAILABLE", "A public work address is unavailable.");
 }
 
-function siteHosts(origin: string | undefined) {
-  if (!origin) return new Set<string>();
-  const { hostname } = new URL(origin);
-  return new Set([hostname, hostname.startsWith("www.") ? hostname.slice(4) : `www.${hostname}`]);
-}
-
-/** Translate only website addresses taken from qualified projections. The source DTOs
- * and their stored links retain their original identity for sync and withdrawal. */
+/** Translate only website addresses taken from qualified projections. */
 export function createLibraryUrlProjection(db: SqlExecutor, mode: PublicationMode, siteUrl?: string) {
-  const hosts = siteHosts(siteUrl);
-  function parse(value: unknown) {
-    if (typeof value !== "string" || !value.includes("/library/") || /[\u0000-\u0020\u007f\\]/u.test(value)) return null;
-    try {
-      const relative = value.startsWith("/") && !value.startsWith("//");
-      const url = new URL(value, "https://relative.invalid");
-      if (!relative && (!["http:", "https:"].includes(url.protocol) || url.username || url.password
-        || url.port || !hosts.has(url.hostname))) return null;
-      const path = decodeURIComponent(url.pathname);
-      const match = legacyPath.exec(path);
-      return match ? { path, kind: pathKind[match[1] as keyof typeof pathKind], suffix: url.search + url.hash } : null;
-    } catch { return null; }
-  }
+  const readSitePath = sitePathReader(siteUrl, "/library/");
+  const project = publicPathProjector(value => {
+    const url = readSitePath(value);
+    return url && legacyPath.test(url.path) ? url : null;
+  }, async paths => (await read(paths)).map(({ oldHref, slug }) => ({
+    oldHref, slug, href: libraryDetailHref(pathKind[oldHref.split("/")[2] as keyof typeof pathKind], slug),
+  })), isLibraryKind, unavailable);
 
   async function read(keys: string[], kind?: LibraryKind) {
     if (!keys.length) return [];
@@ -47,53 +35,6 @@ export function createLibraryUrlProjection(db: SqlExecutor, mode: PublicationMod
     if (!Array.isArray(names) || names.some(name => !name || !legacyPath.test(name.oldHref)
       || !isLibraryTitleSlug(name.slug) || !/^[a-f0-9]{32}$/u.test(name.storageSlug))) unavailable();
     return names;
-  }
-
-  async function project<T>(pending: T | Promise<T>): Promise<T> {
-    const value = await pending;
-    const paths = new Set<string>();
-    const keys = ["href", "url", "externalUrl"] as const;
-    function collect(node: unknown) {
-      if (!node || typeof node !== "object") return;
-      const object = node as Record<string, unknown>;
-      for (const key of keys) {
-        const match = parse(object[key]);
-        if (match) paths.add(match.path);
-      }
-      Object.values(object).forEach(collect);
-    }
-    collect(value);
-    if (!paths.size) return value;
-
-    const names = new Map((await read([...paths])).map(name => [name.oldHref, name.slug]));
-    function visit(node: unknown): unknown {
-      if (Array.isArray(node)) return node.map(visit).filter(item => item !== null);
-      if (!node || typeof node !== "object") return node;
-      const object = node as Record<string, unknown>;
-      const result = Object.fromEntries(Object.entries(object).map(([key, child]) => [key, visit(child)]));
-      for (const key of keys) {
-        const match = parse(object[key]);
-        if (!match) continue;
-        const name = names.get(match.path);
-        if (name) {
-          const href = libraryDetailHref(match.kind, name) + match.suffix;
-          if (key === "url" && object.kind === "external") return { kind: "internal", href };
-          result[key] = href;
-          if (key === "href" && typeof object.slug === "string") result.slug = name;
-        } else {
-          if (object.kind === "internal" || object.kind === "external") return { kind: "unavailable" };
-          if (key === "href" && typeof object.kind === "string" && isLibraryKind(object.kind)) unavailable();
-          if (key !== "externalUrl") return null;
-          result[key] = null;
-        }
-      }
-      if (object.type === "child-page" && result.target === null) result.title = "Unavailable page";
-      if (object.pageMention && (result.link as { kind?: string } | undefined)?.kind === "unavailable") {
-        result.text = "Unavailable page";
-      }
-      return result;
-    }
-    return visit(value) as T;
   }
 
   function repository(base: ContentRepository): ContentRepository {

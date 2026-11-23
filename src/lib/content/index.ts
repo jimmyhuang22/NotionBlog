@@ -1,4 +1,4 @@
-import type { LibraryKind, ListQuery } from "../../../contracts/content.ts";
+import type { ContentKind, LibraryKind, ListQuery } from "../../../contracts/content.ts";
 import { readLibraryFirstPageFrom } from "./library-page.ts";
 import { getContentProvider } from "./provider.ts";
 export { getContentProvider } from "./provider.ts";
@@ -11,6 +11,7 @@ import { ContentServiceError, type ContentRepository } from "../../../contracts/
 import { getNotionRuntime } from "../../server/notion/runtime.ts";
 import { getDatabaseRuntime } from "../../server/database/runtime.ts";
 import { createLibraryUrlProjection } from "../../server/database/library-urls.ts";
+import { createStudyUrlProjection } from "../../server/database/study-urls.ts";
 import { createCombinedGameTrophyReader } from "../../server/database/game-trophies.ts";
 import { publicationMode } from "../../server/database/publication.ts";
 import { getSiteConfig } from "../site/index.ts";
@@ -32,12 +33,22 @@ function databaseLibraryUrls(runtime: ReturnType<typeof getDatabaseRuntime>) {
   return createLibraryUrlProjection(runtime.cacheStateDb, publicationMode(process.env.DATABASE_PUBLICATION_MODE), process.env.SITE_URL);
 }
 
+function databaseStudyUrls(runtime: ReturnType<typeof getDatabaseRuntime>) {
+  const mode = process.env.DATABASE_STUDY_URLS ?? "legacy";
+  if (mode === "legacy") return undefined;
+  if (mode !== "title" || process.env.DATABASE_CONTENT_VERSION !== "2") {
+    throw new ContentServiceError("MISCONFIGURED", "Title-based study URLs require database v2.");
+  }
+  return createStudyUrlProjection(runtime.cacheStateDb, publicationMode(process.env.DATABASE_PUBLICATION_MODE), process.env.SITE_URL);
+}
+
 const requestContentService = cache((_generation: string | undefined) => {
   const provider = getContentProvider();
   const database = provider === "database" ? getDatabaseRuntime() : undefined;
   const repository = database ? databaseLibraryUrls(database)?.repository(database.repository) ?? database.repository
     : provider === "notion" ? getNotionRuntime().repository : undefined;
-  const studyRepository=repository?requestStudyRepository(repository):undefined;
+  const studyUrls = database && databaseStudyUrls(database);
+  const studyRepository = repository && (studyUrls ? studyUrls.repository(repository) : requestStudyRepository(repository));
   const requestRepository = studyRepository ? { ...studyRepository, getCourseMetadata: (slug: string) => requestCourseMetadata(studyRepository,slug) } : undefined;
   return createContentService({ provider, timeZone: getSiteConfig().timeZone,
     notionRepository: provider === "notion" ? requestRepository : undefined,
@@ -47,7 +58,7 @@ const requestContentService = cache((_generation: string | undefined) => {
 const getContentService = () => requestContentService(publicProjectionGeneration());
 
 /** Server components and route handlers use this entry point instead of individual adapters. */
-const uncachedRepository: ContentRepository & Required<Pick<ContentRepository, "getContentMetadata" | "getCourseMetadata" | "getStatusYears" | "getLibraryYears" | "getPage" | "getTimeline" | "search">> = {
+const uncachedRepository: ContentRepository & Required<Pick<ContentRepository, "getContentMetadata" | "getCourseMetadata" | "getStatusYears" | "getLibraryYears" | "getPage" | "getTimeline" | "search" | "readStudyNote">> = {
   getContentMetadata: (kind, slug) => traceContentRead("metadata", kind, () => measureContentRead("service", getContentService).repository.getContentMetadata!(kind, slug)),
   list: (kind, query) => getContentService().repository.list(kind, query),
   get: (kind, slug) => traceContentRead("detail", kind, () => measureContentRead("service", getContentService).repository.get(kind, slug)),
@@ -65,6 +76,10 @@ const uncachedRepository: ContentRepository & Required<Pick<ContentRepository, "
     const note = course ? await repository.getContentMetadata!("study-note",noteSlug) : null;
     return !!course && !!note && note.courseId === course.id;
   }),
+  readStudyNote: (courseSlug, noteSlug) => traceContentRead("detail", "study-note", async () => {
+    const repository = measureContentRead("service", getContentService).repository;
+    return repository.readStudyNote?.(courseSlug, noteSlug) ?? null;
+  }),
   getCourseTree: (courseSlug, parentId) => getContentService().repository.getCourseTree(courseSlug, parentId),
 };
 
@@ -77,8 +92,13 @@ export function readHomeTimelineSnapshot() {
   const database = service.provider === "database" ? getDatabaseRuntime() : undefined;
   const display = database?.homeTimeline;
   const libraryUrls = database && display ? databaseLibraryUrls(database) : undefined;
-  return readTimelineIndexSnapshot(service.repository, contentFeatures, getSiteConfig().timeZone,
-    display && libraryUrls ? { ...display, readIndex: kinds => libraryUrls.project(display.readIndex(kinds)) } : display);
+  const studyUrls = database && display ? databaseStudyUrls(database) : undefined;
+  const index = display && (libraryUrls || studyUrls) ? { ...display, readIndex: (kinds: ContentKind[]) => {
+    const snapshot = display.readIndex(kinds);
+    const works = libraryUrls ? libraryUrls.project(snapshot) : snapshot;
+    return studyUrls ? studyUrls.project(works) : works;
+  } } : display;
+  return readTimelineIndexSnapshot(service.repository, contentFeatures, getSiteConfig().timeZone, index);
 }
 export function hydrateContentTimelinePage(events: TimelineEvent[], version: string) {
   return hydrateTimelinePage(getContentService().repository, contentFeatures, events, version, getSiteConfig().timeZone);
