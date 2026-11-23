@@ -4,7 +4,7 @@ import type { Book, ContentDocument, DateRange, Game, Movie, Rating, TimeAmount 
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { cardTimeLabel, knownStatusLabel, libraryHref, movieRatingFact, platformChips, progressWidth, ratingDots, statusLabel, workFactText, workSentence, type LibraryItem } from "../lib/library.ts";
-import { dateStripNotes, gameDateRows, stripDate } from "../lib/game-dates.ts";
+import { dateStripNotes, gameDateRows, platformDay, stripDate } from "../lib/game-dates.ts";
 import { bookRecord, excerptsHeld, gameRecord, movieRecord } from "../lib/work-record.ts";
 import { Cover } from "./library-grid";
 import { RichDocumentBody } from "./rich-document";
@@ -12,7 +12,7 @@ import { PlatformChips } from "./platform-chips";
 import { ExcerptFold } from "./excerpt-fold";
 import { GameTrophies } from "./game-trophies";
 import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
-import { gradeLabel, gradeOrder, setPercent, setPlatinum, type TrophySet } from "../lib/game-trophies.ts";
+import { earnedWithin, gradeLabel, gradeOrder, setPercent, setPlatinum, type TrophySet } from "../lib/game-trophies.ts";
 
 /** What the owner calls the write-up for each kind, in the line that says there is none. */
 const recordWords: Record<LibraryItem["kind"], string> = { movie: "观后感", book: "读后感", game: "游玩记录" };
@@ -237,35 +237,43 @@ function timelineRows(item: Game, timeZone: string) {
  * The days across the top of the main column (the owner's pick 乙 of 2026-11-21): most games have no write-up, and
  * there the column was empty beside a long side column. Between two dates, how long it was; under a range, how many
  * days it ran. Each date leads with its year in large type and the day under it (乙 of 2026-11-22), so the strip reads
- * year to year; a year the date before already showed is quieter. A narrow column stands the strip upright.
+ * year to year; a year the date before already showed is quieter. When every date falls in one year the year is
+ * written once above the strip and the days take the large type (甲, 2026-11-23). The owner's own dates can carry
+ * how many trophies came within them (`ownNote`), said here rather than again in the trophy section. A narrow
+ * column stands the strip upright.
  */
-function GameDates({ item, timeZone }: { item: Game; timeZone: string }) {
+function GameDates({ item, timeZone, ownNote = null }: { item: Game; timeZone: string; ownNote?: string | null }) {
   const rows = timelineRows(item, timeZone);
   if (!rows.length) return null;
   const notes = dateStripNotes(rows.map(row => row.range), timeZone);
+  const dates = rows.map(row => row.range ? stripDate(row.range, timeZone) : null);
+  const known = dates.filter(date => date !== null);
+  const oneYear = known.length > 1 && known.every(date => date.first === known[0]!.first && date.last === known[0]!.first) ? known[0]!.first : null;
   let shownYear: number | null = null;
-  return (
-    <ol className="game-dates" aria-label="日期" style={{ "--steps": rows.length } as React.CSSProperties}>
+  const strip = (
+    <ol className={`game-dates${oneYear ? " game-dates--one-year" : ""}`} aria-label={oneYear ? `${oneYear} 年的日期` : "日期"} style={{ "--steps": rows.length } as React.CSSProperties}>
       {rows.map((row, index) => {
-        const date = row.range ? stripDate(row.range, timeZone) : null;
+        const date = dates[index];
         const again = !!date && date.first === shownYear;
         if (date) shownYear = date.last;
+        const small = [notes[index]!.length, row.own ? ownNote : null].filter(Boolean).join(" · ");
         return (
           <li key={row.label} className={row.own ? "game-dates__own" : undefined}>
             <b>{row.label}</b>
             {date ? (
               <span className="game-dates__when">
-                <strong className={`game-dates__year${again ? " game-dates__year--again" : ""}${date.first !== date.last ? " game-dates__year--span" : ""}`}>{date.year.replace(" – ", "\u00a0– ")}<span className="visually-hidden"> 年</span></strong>
+                {oneYear ? null : <strong className={`game-dates__year${again ? " game-dates__year--again" : ""}${date.first !== date.last ? " game-dates__year--span" : ""}`}>{date.year.replace(" – ", "\u00a0– ")}<span className="visually-hidden"> 年</span></strong>}
                 <span className="game-dates__days">{date.days.map((piece, at) => <span key={at}>{at ? " " : null}<span className="game-dates__piece">{piece}</span></span>)}</span>
               </span>
             ) : <span className="game-dates__none">日期未记录</span>}
-            {notes[index]!.length ? <small>{notes[index]!.length}</small> : null}
+            {small ? <small>{small}</small> : null}
             {notes[index]!.gap ? <em>{notes[index]!.gap}</em> : null}
           </li>
         );
       })}
     </ol>
   );
+  return oneYear ? <div className="game-dates-year"><p className="game-dates__one-year" aria-hidden="true">{oneYear} 年</p>{strip}</div> : strip;
 }
 
 /**
@@ -304,6 +312,8 @@ function TrophySummary({ sets }: { sets: TrophySet[] }) {
   return (
     <div className="work-game__group game-trophy-sum">
       <dt className="visually-hidden">奖杯</dt>
+      {/* One set names its platform, as the tabs do when there are several (甲, 2026-11-23). */}
+      <dd className="game-trophy-sum__platform"><TrophyPlatform platform={set.platform} /></dd>
       <dd className="game-trophy-sum__count">{set.earned}<small> / {set.total} 个奖杯</small></dd>
       <dd className={`game-trophy-sum__bar${setPlatinum(set) ? " game-trophy-sum__bar--platinum" : ""}`}>{bar(set)}<span>{setPercent(set)}%</span></dd>
       {set.grades ? <dd className="game-trophy-sum__grades">{gradeOrder.map(grade => <span key={grade} className={`game-trophy__grade game-trophy__grade--${grade}`}><span>{gradeLabel[grade]} {set.grades![grade].earned}<small>/{set.grades![grade].total}</small></span></span>)}</dd> : null}
@@ -320,6 +330,11 @@ function TrophySummary({ sets }: { sets: TrophySet[] }) {
  */
 export function GamePage({ type, label, item, document, timeZone, neighbours, trophySets = [] }: { type: string; label: string; item: Game; document: ContentDocument | null; timeZone: string; neighbours: ReactNode; trophySets?: TrophySet[] }) {
   const record = gameRecord(document);
+  // With one full set whose dated trophies all came within the owner's own dates, the strip says how many under those
+  // dates and the trophy section does not repeat the days (甲, 2026-11-23).
+  const full = trophySets.filter(set => set.trophies?.length);
+  const own = item.playedDate ? platformDay(item.playedDate, timeZone) : null;
+  const within = full.length === 1 && own ? earnedWithin(full[0]!.trophies!, own.start, own.end ?? own.start) : null;
   const played = cardTimeLabel(item.playedTime);
   const expected = cardTimeLabel(item.estimatedTime);
   const art = item.cover ? { "--art": `url("${imagePreviewSrc(item.cover, 1600)}")` } as React.CSSProperties : undefined;
@@ -358,9 +373,9 @@ export function GamePage({ type, label, item, document, timeZone, neighbours, tr
           </aside>
           <div className="work-game__main">
             {item.tags.length ? <p className="reading__tags">{item.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}</p> : null}
-            <GameDates item={item} timeZone={timeZone} />
+            <GameDates item={item} timeZone={timeZone} ownNote={within ? `拿到 ${within} 个奖杯` : null} />
             <WorkRecord item={item} document={record} quiet={trophySets.some(set => set.trophies?.length)} />
-            <GameTrophies sets={trophySets} />
+            <GameTrophies sets={trophySets} spanInStrip={within !== null} />
             {neighbours}
           </div>
         </div>

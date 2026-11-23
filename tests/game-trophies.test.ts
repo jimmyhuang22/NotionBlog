@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { earnedByMonth, earnedPlatinum, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, setPlatinum, trophyDay, trophyPlatformIcon, trophyPlatformTone, trophySetsOf, trophySpan, type Trophy } from "../src/lib/game-trophies.ts";
+import { earnedByMonth, earnedPlatinum, earnedWithin, missingTrophies, rarestEarned, rarityTier, recentEarned, setPercent, setPlatinum, trophyDay, trophyPlatformIcon, trophyPlatformTone, trophySetsOf, trophySpan, type Trophy } from "../src/lib/game-trophies.ts";
 
 const counts = (earned: number, total: number) => ({ earned, total });
 const grades = { platinum: counts(0, 1), gold: counts(1, 3), silver: counts(4, 8), bronze: counts(10, 18) };
@@ -70,7 +70,9 @@ test("ordering: rarest earned, recent first, months, missing by grade", () => {
     trophy("f", { rarityPercent: 10, grade: "platinum" }),
     trophy("g", { rarityPercent: 70, grade: "silver" }),
   ];
-  assert.deepEqual(rarestEarned(list).map(t => t.id), ["c", "a", "b"]);
+  // Only a fifth of players or fewer make a card (2026-11-23); the ranking itself is unchanged.
+  assert.deepEqual(rarestEarned(list).map(t => t.id), ["c"]);
+  assert.deepEqual(rarestEarned(list, 3, 100).map(t => t.id), ["c", "a", "b"]);
   assert.deepEqual(recentEarned(list).map(t => t.id), ["b", "a", "c", "d"]);
   assert.deepEqual(earnedByMonth(list).map(group => [group.label, group.trophies.length]), [["2025 年 11 月", 1], ["2022 年 4 月", 2], ["日期未记录", 1]]);
   assert.deepEqual(missingTrophies(list).map(t => t.id), ["f", "g", "e"]);
@@ -109,4 +111,14 @@ test("platinum sets and platform outlines", () => {
   assert.equal(setPlatinum({ id: "a", platform: "PS5", earned: 2, total: 2, progressPercent: null, trophies: [trophy("p", { grade: "platinum", earned: true })] }), true);
   assert.equal(setPlatinum({ id: "s", platform: "Steam", earned: 53, total: 53, progressPercent: 100 }), false);
   assert.deepEqual(["PS4", "PS5", "PS3", "PlayStation", "Steam", "steam", "Xbox"].map(trophyPlatformIcon), ["playstation", "playstation", "playstation", "playstation", "steam", "steam", null]);
+});
+
+test("trophies within the owner's dates: a count only when every dated one falls inside", () => {
+  const got = (id: string, earnedDate: string | null) => trophy(id, { earned: true, earnedDate });
+  const list = [got("a", "2026-04-26"), got("b", "2026-05-31"), got("c", "2026-06-10"), got("d", null), trophy("e")];
+  assert.equal(earnedWithin(list, "2026-04-26", "2026-06-10"), 3);
+  assert.equal(earnedWithin(list, "2026-04-27", "2026-06-10"), null);
+  assert.equal(earnedWithin(list, "2026-04-26", "2026-06-09"), null);
+  assert.equal(earnedWithin([got("a", "2026-04-26")], "2026-04-26", "2026-04-26"), 1);
+  assert.equal(earnedWithin([got("a", null), trophy("b")], "2026-01-01", "2026-12-31"), null);
 });

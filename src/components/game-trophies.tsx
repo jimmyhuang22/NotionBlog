@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type KeyboardEvent } from "react";
-import { earnedByMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, setPlatinum, trophyDay, trophyPlatformTone, trophySpan, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
+import { earnedByMonth, earnedPlatinum, gradeLabel, missingTrophies, rarestEarned, rarityTier, recentEarned, setPlatinum, trophyDay, trophySpan, type Trophy, type TrophySet } from "../lib/game-trophies.ts";
 import { PlatinumCup, TrophyPlatform } from "./trophy-marks";
 
 const RECENT = 6;
@@ -60,7 +60,7 @@ function TrophySpan({ trophies }: { trophies: Trophy[] }) {
   );
 }
 
-function SetBody({ set }: { set: TrophySet }) {
+function SetBody({ set, spanInStrip = false }: { set: TrophySet; spanInStrip?: boolean }) {
   const trophies = set.trophies ?? [];
   const platinum = earnedPlatinum(trophies);
   // With the platinum as the banner, the cards and the list below do not show it again (round two, 2026-11-20).
@@ -68,11 +68,13 @@ function SetBody({ set }: { set: TrophySet }) {
   const rare = rarestEarned(rest);
   const earned = recentEarned(rest);
   const missing = missingTrophies(rest);
+  // The cards are not repeated in the recent list just under them; the full list still has every one (甲, 2026-11-23).
+  const recent = earned.filter(trophy => !rare.includes(trophy)).slice(0, RECENT);
   const [open, setOpen] = useState<"none" | "all" | "missing">("none");
   const toggle = (which: "all" | "missing") => setOpen(current => current === which ? "none" : which);
   return (
     <>
-      <TrophySpan trophies={trophies} />
+      {spanInStrip ? null : <TrophySpan trophies={trophies} />}
       {platinum ? (
         <div className="game-trophies__platinum">
           <TrophyIcon trophy={platinum} large />
@@ -84,7 +86,9 @@ function SetBody({ set }: { set: TrophySet }) {
         </div>
       ) : null}
       {rare.length ? (
-        <ol className="game-trophies__rare" aria-label="最难拿到的">
+        <>
+        <h3 className="game-trophies__sub">最难拿到的</h3>
+        <ol className={`game-trophies__rare${rare.length === 1 ? " game-trophies__rare--one" : ""}`}>
           {rare.map(trophy => (
             <li key={trophy.id} className={`game-trophies__medal game-trophies__medal--${trophy.grade ?? "none"}`}>
               <TrophyIcon trophy={trophy} large />
@@ -97,6 +101,7 @@ function SetBody({ set }: { set: TrophySet }) {
             </li>
           ))}
         </ol>
+        </>
       ) : null}
       {open === "all" ? (
         <>
@@ -108,21 +113,21 @@ function SetBody({ set }: { set: TrophySet }) {
             </section>
           ))}
         </>
-      ) : earned.length ? (
+      ) : recent.length ? (
         <>
           <h3 className="game-trophies__sub">最近拿到</h3>
-          <ul className="game-trophies__list">{earned.slice(0, RECENT).map(trophy => <Row key={trophy.id} trophy={trophy} />)}</ul>
+          <ul className="game-trophies__list">{recent.map(trophy => <Row key={trophy.id} trophy={trophy} />)}</ul>
         </>
-      ) : <p className="game-trophies__none">还没有拿到奖杯。</p>}
+      ) : earned.length ? null : <p className="game-trophies__none">还没有拿到奖杯。</p>}
       {open === "missing" ? (
         <>
           <h3 className="game-trophies__sub">还没拿到的 {missing.length} 个</h3>
           <ul className="game-trophies__list">{missing.map(trophy => <Row key={trophy.id} trophy={trophy} />)}</ul>
         </>
       ) : null}
-      {earned.length > RECENT || missing.length ? (
+      {earned.length > recent.length + rare.length || missing.length ? (
         <p className="game-trophies__more">
-          {earned.length > RECENT ? <button type="button" aria-expanded={open === "all"} onClick={() => toggle("all")}>{open === "all" ? "收起" : `全部 ${earned.length} 个`}</button> : null}
+          {earned.length > recent.length + rare.length ? <button type="button" aria-expanded={open === "all"} onClick={() => toggle("all")}>{open === "all" ? "收起" : `全部 ${earned.length} 个`}</button> : null}
           {missing.length ? <button type="button" className="game-trophies__more-quiet" aria-expanded={open === "missing"} onClick={() => toggle("missing")}>{open === "missing" ? "收起未拿到" : `未拿到 ${missing.length} 个`}</button> : null}
         </p>
       ) : null}
@@ -145,17 +150,19 @@ function TabCount({ set }: { set: TrophySet }) {
 }
 
 /**
- * The "奖杯" section under the write-up (layout 乙, 2026-11-20): the platinum as a banner when earned, the three
- * rarest as cards, the six most recent, and the rest behind two buttons. Several platforms each keep their own set
- * behind a switch beside the heading. Only sets the backend sent in full are here; the side summary covers the rest.
+ * The "奖杯" section under the write-up (layout 乙, 2026-11-20): the platinum as a banner when earned, the rarest
+ * as cards under "最难拿到的" (only those a fifth of players or fewer have, 2026-11-23), the six most recent not
+ * already shown as cards, and the rest behind two buttons. Several platforms each keep their own set behind a switch
+ * beside the heading; one set names its platform there instead of repeating the count the side column gives. When
+ * the date strip already says how many came within the owner's dates (`spanInStrip`), the line of when they came is
+ * left out. Only sets the backend sent in full are here; the side summary covers the rest.
  */
-export function GameTrophies({ sets }: { sets: TrophySet[] }) {
+export function GameTrophies({ sets, spanInStrip = false }: { sets: TrophySet[]; spanInStrip?: boolean }) {
   const full = sets.filter(set => set.trophies?.length);
   const [chosen, setChosen] = useState(0);
   const base = useId();
   if (!full.length) return null;
   const current = full[Math.min(chosen, full.length - 1)]!;
-  const label = (set: TrophySet) => `${set.earned} / ${set.total}`;
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     if (!step) return;
@@ -167,7 +174,7 @@ export function GameTrophies({ sets }: { sets: TrophySet[] }) {
   return (
     <section className="game-trophies card" aria-labelledby={`${base}-h`}>
       <div className="game-trophies__head">
-        <h2 id={`${base}-h`} className="game-trophies__title">奖杯{full.length === 1 ? <small>{sets.length > 1 ? <span className={`platform-chip platform-chip--${trophyPlatformTone(current.platform)}`}>{current.platform}</span> : null}{label(current)}</small> : null}</h2>
+        <h2 id={`${base}-h`} className="game-trophies__title">奖杯{full.length === 1 ? <small><TrophyPlatform platform={current.platform} /></small> : null}</h2>
         {full.length > 1 ? (
           <div className="game-trophies__tabs" role="tablist" aria-label="平台" onKeyDown={onKey}>
             {full.map((set, index) => (
@@ -180,7 +187,7 @@ export function GameTrophies({ sets }: { sets: TrophySet[] }) {
         ) : null}
       </div>
       <div id={`${base}-p`} role={full.length > 1 ? "tabpanel" : undefined} aria-labelledby={full.length > 1 ? `${base}-t${chosen}` : undefined}>
-        <SetBody key={current.id} set={current} />
+        <SetBody key={current.id} set={current} spanInStrip={spanInStrip && full.length === 1} />
       </div>
     </section>
   );
