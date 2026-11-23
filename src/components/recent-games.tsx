@@ -45,7 +45,7 @@ function placement(index: number, current: number, ratios: number[]) {
  * reflection under them; the line below names the centre game. Arrows, the cases beside it, the arrow keys and a
  * swipe turn the row; with reduced motion the cases move without animating. The centre case opens the game.
  */
-export function RecentGames({ games, timeZone }: { games: Game[]; timeZone: string }) {
+export function RecentGames({ games, timeZone, thisYear }: { games: Game[]; timeZone: string; thisYear: number }) {
   const [current, setCurrent] = useState(0);
   const touch = useRef<number | null>(null);
   const n = games.length;
@@ -54,14 +54,16 @@ export function RecentGames({ games, timeZone }: { games: Game[]; timeZone: stri
   const game = games[current]!;
   const face = gameCaseFace(game);
   const time = cardTimeLabel(game.playedTime);
-  const last = rangeLabel(game.lastPlayedDate ?? null, timeZone);
+  // This year's day without its year, as the stage's line is long enough: "最近 11 月 22 日".
+  const lastLabel = rangeLabel(game.lastPlayedDate ?? null, timeZone);
+  const last = lastLabel?.startsWith(`${thisYear} 年 `) ? lastLabel.slice(`${thisYear} 年 `.length) : lastLabel;
   const keys = (event: KeyboardEvent) => {
     if (event.key === "ArrowLeft") { event.preventDefault(); go(current - 1); }
     if (event.key === "ArrowRight") { event.preventDefault(); go(current + 1); }
   };
   return (
     <section className="recent-games" aria-roledescription="轮播" aria-label="最近在玩" onKeyDown={keys}>
-      <h2 className="recent-games__head">最近在玩<small>{n} 款 · 按最近一次游玩</small></h2>
+      <h2 className="recent-games__head">最近在玩</h2>
       <div className="recent-games__track"
         onTouchStart={event => { touch.current = event.touches[0]?.clientX ?? null; }}
         onTouchEnd={event => {

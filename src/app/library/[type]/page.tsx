@@ -2,13 +2,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LibraryGrid } from "@/components/library-grid";
+import { Suspense } from "react";
 import { LinkPending } from "@/components/link-pending";
-import { RecentGames } from "@/components/recent-games";
+import { RecentGamesSection, RecentGamesWaiting } from "@/components/recent-games-section";
 import { ScrollingSegments, Segments } from "@/components/scrolling-segments";
 import { SortToggle } from "@/components/sort-toggle";
 import { readLibraryFirstPage } from "@/lib/content";
 import { libraryHref, libraryOrders, librarySections } from "@/lib/library";
-import { readRecentGames } from "@/lib/recent-games";
 import { getSiteConfig } from "@/lib/site";
 import { readYear, yearTabs } from "@/lib/year-filter";
 import { isEnabledContentKind } from "../../../../config/features.ts";
@@ -31,27 +31,39 @@ export default async function LibraryPage({ params, searchParams }: Props) {
   const status = section.tabs.find(([value]) => value === requested.status)?.[0] ?? section.defaultStatus;
   const order = libraryOrders.find(([value]) => value !== null && value === requested.order)?.[0] ?? null;
   const asked = readYear(requested.year);
-  // 最近在玩 above the game library, read alongside the list; a failure there leaves the library itself as it is.
-  const recentRead = section.kind === "game" ? readRecentGames().catch(() => null) : Promise.resolve(undefined);
   const { page: initial, years, year } = await readLibraryFirstPage(section.kind, {
     limit: PAGE_SIZE, ...(status ? { status } : {}), ...(asked === null ? {} : { year: asked }), ...(order ? { order } : {}),
   });
-  const recent = await recentRead;
   const selected = year === null ? null : String(year);
   const tabs = section.tabs;
   const yearChoices = years ? yearTabs(years) : [];
+  const timeZone = getSiteConfig().timeZone;
+  const statusTabs = (
+    <Segments label="按状态筛选" current={status}>
+      {tabs.map(([value, label]) => (
+        <Link key={value} href={libraryHref(type, value, order, year)} aria-current={value === status ? "true" : undefined}>{label}<LinkPending /></Link>
+      ))}
+    </Segments>
+  );
   return (
     <div className="wrap">
-      <header className="page-head library__head">
-        <h1>{section.label}</h1>
-        <Segments label="按状态筛选" current={status}>
-          {tabs.map(([value, label]) => (
-            <Link key={value} href={libraryHref(type, value, order, year)} aria-current={value === status ? "true" : undefined}>{label}<LinkPending /></Link>
-          ))}
-        </Segments>
-      </header>
-      {recent === null ? <p className="notice" role="status">最近在玩暂时读不到，下面的游戏库不受影响。</p>
-        : recent?.length ? <RecentGames games={recent} timeZone={getSiteConfig().timeZone} /> : null}
+      {section.kind === "game" ? (
+        <>
+          {/* 最近在玩 streams in on its own, so the library never waits for it; the library's own heading and statuses
+              sit with the years and order right above the cases, not on the far side of the stage (2026-11-23). */}
+          <header className="page-head library__head"><h1>{section.label}</h1></header>
+          <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense>
+          <div className="library__head library__shelf-head">
+            <h2 className="section-title">游戏库</h2>
+            {statusTabs}
+          </div>
+        </>
+      ) : (
+        <header className="page-head library__head">
+          <h1>{section.label}</h1>
+          {statusTabs}
+        </header>
+      )}
       <div className="library__filters">
         {/* With one year and nothing undated there is nothing to switch between. */}
         {yearChoices.length > 2 ? (
@@ -67,7 +79,7 @@ export default async function LibraryPage({ params, searchParams }: Props) {
           next={order ? { label: "最近", mark: "down" } : { label: "最早", mark: "up" }} />
       </div>
       {/* Keyed by every choice so a change starts a fresh list instead of reusing the old cursor. */}
-      <LibraryGrid key={`${status}:${selected ?? "all"}:${order ?? "default"}`} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={getSiteConfig().timeZone} />
+      <LibraryGrid key={`${status}:${selected ?? "all"}:${order ?? "default"}`} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone} />
     </div>
   );
 }

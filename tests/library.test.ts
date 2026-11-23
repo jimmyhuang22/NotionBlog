@@ -133,7 +133,9 @@ test("a game's case shows the platform played longest in that maker's case, the 
   assert.deepEqual([recent.platform?.label, recent.icon, recent.tone, recent.ratio], ["Steam", "steam", "pc", 0.71]);
   const switch2 = gameCaseFace({ ...game, platforms: ["Nintendo Switch", "Nintendo Switch 2"], lastPlayedPlatforms: ["Switch 2"], status: "clear" });
   assert.deepEqual([switch2.platform?.label, switch2.icon, switch2.tone, switch2.ratio, switch2.status], ["Switch 2", "switch", "nintendo", 0.62, "通关"]);
-  assert.deepEqual(switch2.others, ["Switch"]);
+  // A Switch game with its Switch 2 upgrade names Switch 2 alone, not "也在 Switch".
+  assert.deepEqual(switch2.others, []);
+  assert.deepEqual(gameCaseFace({ ...game, platforms: ["Nintendo Switch", "Nintendo Switch 2", "Steam"], lastPlayedPlatforms: ["Switch 2"] }).others, ["Steam"]);
   // Nothing recorded: no platform written, a plain case, no status.
   const bare = gameCaseFace({ ...game, platforms: [], lastPlayedPlatforms: null, status: "playing" });
   assert.deepEqual([bare.platform, bare.icon, bare.tone, bare.status, bare.others], [null, null, "pc", null, []]);
