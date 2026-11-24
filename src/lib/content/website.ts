@@ -7,6 +7,7 @@ import { CONTENT_KINDS, type ContentFeatures } from "../../../config/features.ts
 import { statusTimeZone, statusPreview } from "./status.ts";
 import { contentYear, supportsYear } from "./years.ts";
 import { gameActivityDate, gameBrowsingDate, platformPlayDay } from "./game-date.ts";
+import { matchesGamePlatform } from "./game-case.ts";
 import { validateLibraryYearsQuery } from "./query.ts";
 import type { FeedSnapshot } from "../../../contracts/home-feed.ts";
 import { searchExcerpt, searchHitDetails, searchKey } from "./search-result.ts";
@@ -83,7 +84,7 @@ export function matchesContent(item: AnyContent, query: ListQuery, zone: string)
     else if (item.status !== query.status) return false;
   }
   if (query.type && (item.kind !== "movie" || item.mediaType !== query.type)) return false;
-  if (query.platform && (item.kind !== "game" || !item.platforms.includes(query.platform))) return false;
+  if (query.platform && (item.kind !== "game" || !matchesGamePlatform(item.platforms, query.platform))) return false;
   if (query.semester && (item.kind !== "course" || item.semester !== query.semester)) return false;
   return query.year === undefined || (supportsYear(item.kind) && contentYear(item, zone) === (query.year === "undated" ? null : query.year));
 }

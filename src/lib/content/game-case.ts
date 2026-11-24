@@ -9,6 +9,13 @@ export function gameCasePlatformKey(platform: string): string {
   return name;
 }
 
+/** The existing PlayStation filter includes both console editions. */
+export function matchesGamePlatform(platforms: readonly string[], filter: string): boolean {
+  return filter === "PlayStation"
+    ? platforms.some(platform => gameCasePlatformKey(platform) === "playstation")
+    : platforms.includes(filter);
+}
+
 export function gameCaseAspectRatio(platform: string): number {
   const key = gameCasePlatformKey(platform);
   if (key === "switch" || key === "switch2" || key === "3ds") return 0.62;

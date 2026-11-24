@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { GamePlatformPlayTime } from "../contracts/content.ts";
-import { gameBoxArtEffectiveHeight, gameCaseAspectRatio, isGameBoxArtLayout, isGamePlatformPlayTime, isUsableGameBoxArt, selectGameCasePlatform } from "../src/lib/content/game-case.ts";
+import { gameBoxArtEffectiveHeight, gameCaseAspectRatio, isGameBoxArtLayout, isGamePlatformPlayTime, isUsableGameBoxArt, matchesGamePlatform, selectGameCasePlatform } from "../src/lib/content/game-case.ts";
+
+test("the existing PlayStation filter includes edition labels without broadening exact edition filters", () => {
+  for (const label of ["PlayStation", "PlayStation 4", "PlayStation 5", "PS4", "PS5"]) {
+    assert(matchesGamePlatform(["Steam", label], "PlayStation"));
+  }
+  assert(!matchesGamePlatform(["Steam", "Nintendo Switch"], "PlayStation"));
+  assert(!matchesGamePlatform(["PlayStation 4"], "PlayStation 5"));
+  assert(!matchesGamePlatform(["PlayStation"], "PlayStation 5"));
+  assert(matchesGamePlatform(["PlayStation 5"], "PlayStation 5"));
+});
 
 test("case platform ranks known positive hours, then recent and explicit labels", () => {
   const platforms = ["Nintendo Switch", "Nintendo Switch 2", "Steam"];
