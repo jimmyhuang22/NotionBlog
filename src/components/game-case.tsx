@@ -100,7 +100,7 @@ function CaseTop({ face, status }: { face: GameCaseFace; status: ReactNode }) {
  * platform's name. The status sits at the right end of the band (top right corner on Switch); the upright original
  * art below, the time played in its lower left corner. Decorative inside its link, which carries the title.
  */
-export function GameCase({ game }: { game: Game }) {
+export function GameCase({ game, overlay }: { game: Game; overlay?: ReactNode }) {
   const caseFace = gameCaseFace(game);
   const model = game.boxArtLayout?.playStationModel;
   const face = caseFace.look === "ps" && game.boxArt && model
@@ -116,6 +116,8 @@ export function GameCase({ game }: { game: Game }) {
           {/* The 400 preview everywhere: the recent row's cases are no taller than the wall's since the rail (2026-11-24). */}
           <Art game={game} width={400} />
           {time ? <span className="game-case__time"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.2" /><path d="M8 4.6V8l2.3 1.5" /></svg>{time}</span> : null}
+          {/* Drawn over the window itself, edge to edge whatever the case's rims (the games wall's hover name). */}
+          {overlay}
         </span>
       </span>
     </span>
