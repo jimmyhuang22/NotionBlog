@@ -320,7 +320,8 @@
  * has the same head, a quiet title over a hairline, so the page reads as one set of things.
  */
 .work-game { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; max-width: 980px; margin: -48px auto 0; position: relative; z-index: 1; align-items: start; }
-.work-game__side, .work-game__main { display: grid; gap: 20px; align-content: start; min-width: 0; }
+/* One track no wider than the column, so a long unbreakable line inside a card (the recording's title) cannot widen it. */
+.work-game__side, .work-game__main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-content: start; min-width: 0; }
 .game-card { padding: 22px 24px; border-radius: var(--radius-lg); }
 .game-card__title, .game-panel__title { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); font-family: var(--font-hand); font-size: var(--text-lg); font-weight: 400; line-height: 1.3; color: var(--ink); }
 .game-record__facts { margin: 0; font-size: var(--text-sm); }
@@ -345,6 +346,7 @@
 .game-about__facts .reading__tags { display: flex; flex-wrap: wrap; gap: 4px; }
 /* The recording: as on the works page when it is one of the owner's works, else a plain way out to Bilibili. */
 .game-video .works-card { width: 100%; }
+.game-video .works-card--wide .works-card__title { display: -webkit-box; white-space: normal; }
 .game-video__link { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--rule); border-radius: var(--radius-sm); color: var(--ink); text-decoration: none; }
 .game-video__link:hover { border-color: var(--muted); }
 .game-video__link span { display: flex; flex-direction: column; min-width: 0; }
