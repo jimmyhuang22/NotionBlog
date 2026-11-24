@@ -225,12 +225,14 @@ test("v2 game cases publish original box art only for the selected edition and p
  const edition = { id: "ap", type: "select" as const, select: { id: "ps5", name: "PS5", color: "default" as const } };
  const choice = (name: string) => ({ id: name, name, color: "default" as const });
  const position = { id: "crop", type: "select" as const, select: choice("靠上") as ReturnType<typeof choice> | null };
+ const layout = { id: "layout", type: "rich_text" as const, rich_text: [] as ReturnType<typeof rich>[] };
  const props = {
    Platforms: { id: "p", type: "multi_select", multi_select: [
      { id: "ps", name: "PlayStation", color: "default" }, { id: "steam", name: "Steam", color: "default" }] },
    PlayTime: formula,
    ArtPlatform: edition,
    Position: position,
+   Layout: layout,
    BoxArt: { id: "art", type: "files", files: [{ name: "original", type: "external", external: { url: artUrl } }] },
  };
  Object.assign(page.properties, props);
@@ -243,7 +245,7 @@ test("v2 game cases publish original box art only for the selected edition and p
  };
  const primary = s.config.sources[0];
  const config = { ...s.config, sources: [{ ...primary, cover: { strategy: "native-page-cover" }, fields: {
-   ...primary.fields, platforms: "Platforms", platformPlayTime: "PlayTime", boxArt: "BoxArt", boxArtPlatform: "ArtPlatform", boxArtPosition: "Position",
+   ...primary.fields, platforms: "Platforms", platformPlayTime: "PlayTime", boxArt: "BoxArt", boxArtPlatform: "ArtPlatform", boxArtPosition: "Position", boxArtLayout: "Layout",
  } }, ...s.config.sources.slice(1)] };
  const original = await sharp({ create: { width: 620, height: 820, channels: 3, background: "#557799" } }).png().toBuffer();
  const low = await sharp({ create: { width: 300, height: 500, channels: 3, background: "#446699" } }).png().toBuffer();
@@ -275,6 +277,7 @@ test("v2 game cases publish original box art only for the selected edition and p
  assert.deepEqual([good.game.cover?.width, good.game.cover?.height], [300, 500]);
  assert.deepEqual([good.game.boxArt?.width, good.game.boxArt?.height], [620, 820]);
  assert.equal(good.game.boxArtPosition, "top");
+ assert.equal(good.game.boxArtLayout, undefined);
  assert.deepEqual(good.stored.get(good.game.boxArt!.id), original);
  assert.equal(artReads, 1);
  assert.equal(good.media.length, 2);
@@ -316,6 +319,24 @@ test("v2 game cases publish original box art only for the selected edition and p
  formula.formula.string = "PSN|PS5|120\nSteam|PC|200";
  assert.equal((await run()).game.boxArt, null);
  assert.equal(artReads, 2);
+
+ formula.formula.string = "PSN|PS5|120\nSteam|PC|0";
+ const squareBytes = await sharp({ create: { width: 640, height: 640, channels: 3, background: "#557799" } }).png().toBuffer();
+ artBytes = squareBytes;
+ layout.rich_text = [rich('{"mode":"contain"}')];
+ const square = await run();
+ assert.deepEqual(square.game.boxArtLayout, { mode: "contain", playStationModel: "PS5" });
+ assert.deepEqual(square.stored.get(square.game.boxArt!.id), squareBytes);
+ assert.doesNotThrow(() => validateWebsiteRecord(square.record));
+ const wrong = structuredClone(square.record);
+ Object.assign(wrong.detail.item, { boxArtLayout: { mode: "contain", playStationModel: "PS4" }, platforms: ["PS5", "Steam"], platformPlayTime: null });
+ assert.throws(() => validateWebsiteRecord(wrong));
+ layout.rich_text = [rich('{"mode":"retail","window":[0,0,640,720]}')];
+ const outside = await run();
+ assert.equal(outside.game.boxArt, null);
+ assert.equal(outside.game.boxArtLayout, undefined);
+ layout.rich_text = [];
+
 
  page.cover = null;
  formula.formula.string = "PSN|PS5|120\nSteam|PC|0";

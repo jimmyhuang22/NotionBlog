@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { GamePlatformPlayTime } from "../contracts/content.ts";
-import { gameBoxArtEffectiveHeight, gameCaseAspectRatio, isGamePlatformPlayTime, selectGameCasePlatform } from "../src/lib/content/game-case.ts";
+import { gameBoxArtEffectiveHeight, gameCaseAspectRatio, isGameBoxArtLayout, isGamePlatformPlayTime, isUsableGameBoxArt, selectGameCasePlatform } from "../src/lib/content/game-case.ts";
 
 test("case platform ranks known positive hours, then recent and explicit labels", () => {
   const platforms = ["Nintendo Switch", "Nintendo Switch 2", "Steam"];
@@ -23,6 +23,25 @@ test("case dimensions require enough original pixels after a centered cover fit"
   assert.equal(gameBoxArtEffectiveHeight({ width: 500, height: 718 }, "Switch 2"), 718);
   assert.equal(gameBoxArtEffectiveHeight({ width: 800, height: 450 }, "Switch"), null);
   assert.equal(gameBoxArtEffectiveHeight({ width: null, height: null }, "Steam"), null);
+});
+
+test("explicit layouts admit square art and an in-bounds retail insert without changing the default", () => {
+  const square = { width: 1024, height: 1024 };
+  assert(!isUsableGameBoxArt(square, "Steam"));
+  assert(isUsableGameBoxArt(square, "Steam", { mode: "contain" }));
+  assert(!isUsableGameBoxArt({ width: 341, height: 450 }, "Steam", { mode: "contain" }));
+  assert(!isUsableGameBoxArt({ width: 1920, height: 1080 }, "Steam", { mode: "contain" }));
+  const print = { mode: "retail", window: [50, 220, 800, 1000], playStationModel: "PS5" };
+  assert(isGameBoxArtLayout(print));
+  assert(isUsableGameBoxArt({ width: 900, height: 1300 }, "PlayStation", print));
+  assert(!isUsableGameBoxArt({ width: 900, height: 1200 }, "PlayStation", print));
+  assert(!isUsableGameBoxArt({ width: 900, height: 1300 }, "PS4", print));
+  assert(!isUsableGameBoxArt({ width: 900, height: 1300 }, "Nintendo Switch", print));
+  assert(!isGameBoxArtLayout({ ...print, window: [0, 0, 1000, -1] }));
+  assert(!isGameBoxArtLayout({ ...print, markup: "<img>" }));
+  assert(!isUsableGameBoxArt({ width: 800, height: 1300 }, "Nintendo Switch 2", {
+    mode: "retail", window: [0, 0, 800, 1300], printedSwitchMark: true,
+  }));
 });
 
 test("public case time validation rejects foreign labels, duplicate entries and minute payloads", () => {

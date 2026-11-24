@@ -5,7 +5,7 @@ import type { WebsiteRecord } from "../../../contracts/website-sync.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { isNotionPageHost, isTemporaryMediaUrl } from "../notion/public-text.ts";
 import { isMoviePublicRating, isMovieRatingSource } from "../../lib/content/movie-rating.ts";
-import { isGamePlatformPlayTime, isUsableGameBoxArt, selectGameCasePlatform } from "../../lib/content/game-case.ts";
+import { isGameBoxArtLayout, isGamePlatformPlayTime, isUsableGameBoxArt, selectGameCasePlatform } from "../../lib/content/game-case.ts";
 import type { Game, ImageAsset } from "../../../contracts/content.ts";
 import { isObservedGamePlatformList } from "../../lib/content/game-date.ts";
 
@@ -114,7 +114,7 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
     status:["recordedAt","text"],course:["code","semester","ratings"],"study-note":["courseId","parentId","noteType","date","breadcrumbs"],
     post:["publishedAt"],album:["date","photoCount"],book:["authors","status","readingDate","pagesRead","totalPages","progressPercent","personalRating","doubanRating","externalUrl"],
     movie:["originalTitle","mediaType","status","watchedDate","releaseDate","director","actors","rating","doubanRating","publicRating","ratingSource"],
-    game:["status","platforms","boxArt","boxArtPosition","platformPlayTime","playedDate","lastPlayedDate","lastPlayedPlatforms","firstPlayedDate","archiveDate","releaseDate","playedTime","estimatedTime","about","playVideo","progressPercent","rating"],
+    game:["status","platforms","boxArt","boxArtPosition","boxArtLayout","platformPlayTime","playedDate","lastPlayedDate","lastPlayedPlatforms","firstPlayedDate","archiveDate","releaseDate","playedTime","estimatedTime","about","playVideo","progressPercent","rating"],
     project:["period","role","stack","links"],page:["pageKey"]
   };
   const extra=fields[String(i.kind)];if(!extra)bad();
@@ -142,10 +142,12 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
       if(i.lastPlayedPlatforms!=null&&(!i.lastPlayedDate||!isObservedGamePlatformList(i.lastPlayedPlatforms)))bad();
       if (i.platformPlayTime !== undefined && !isGamePlatformPlayTime(i.platformPlayTime, i.platforms as string[])) bad();
       if (i.boxArtPosition != null && i.boxArtPosition !== "top" && i.boxArtPosition !== "center" && i.boxArtPosition !== "bottom") bad();
+      const layout = i.boxArtLayout;
+      if (layout !== undefined && (!i.boxArt || !isGameBoxArtLayout(layout))) bad();
       if (i.boxArt != null) {
         image(i.boxArt);
         const platform = selectGameCasePlatform(i as unknown as Game);
-        if (!platform || !isUsableGameBoxArt(i.boxArt as ImageAsset, platform)) bad();
+        if (!platform || !isUsableGameBoxArt(i.boxArt as ImageAsset, platform, layout)) bad();
       }
       for(const k of ["firstPlayedDate","archiveDate"])if(i[k]!==undefined)playDay(i[k]);
       date(i.releaseDate);
