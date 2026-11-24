@@ -8,9 +8,10 @@ import { gameCaseFace } from "../lib/library.ts";
 import { GameCase } from "./game-case";
 
 /**
- * The games played most recently, as one flat row of their cases above the library (the owner's pick 丙,
- * 2026-11-24): the latest a little larger, each with its name and the day it was last played under it. The row
- * scrolls sideways; where it runs on, its edge fades, and on a pointer device two arrows page it.
+ * The games played most recently, as one flat row of their cases (the owner's pick 丙, 2026-11-24): the latest a
+ * little larger, each with its name and the day it was last played under it. It is the first part of the games
+ * page's rail (乙, 2026-11-24), its name and count in the label column like each year below it. The row scrolls
+ * sideways; where it runs on, its edge fades, and on a pointer device two arrows under its name page it.
  */
 export function RecentGames({ games, timeZone, thisYear }: { games: Game[]; timeZone: string; thisYear: number }) {
   const track = useRef<HTMLDivElement>(null);
@@ -36,9 +37,9 @@ export function RecentGames({ games, timeZone, thisYear }: { games: Game[]; time
     return label?.startsWith(`${thisYear} 年 `) ? label.slice(`${thisYear} 年 `.length) : label;
   };
   return (
-    <section className="recent-games" aria-label="最近在玩">
-      <div className="recent-games__head">
-        <h2>最近在玩</h2>
+    <section className="game-year recent-games" aria-label="最近在玩">
+      <div className="game-year__side">
+        <h2 className="game-year__label"><b>最近在玩</b><small>{games.length} 款</small></h2>
         <div className="recent-games__arrows" hidden={edge.start && edge.end}>
           <button type="button" aria-label="往前" disabled={edge.start} onClick={() => page(-1)}>‹</button>
           <button type="button" aria-label="往后" disabled={edge.end} onClick={() => page(1)}>›</button>
@@ -62,13 +63,13 @@ export function RecentGames({ games, timeZone, thisYear }: { games: Game[]; time
 }
 
 /**
- * The row's place, held while it is read (and in the section's loading shape, section-waiting.tsx): its heading
- * and its height, nothing drawn that could flash.
+ * The row's place, held while it is read (and in the section's loading shape, section-waiting.tsx): its name and
+ * its height, nothing drawn that could flash.
  */
 export function RecentGamesWaiting() {
   return (
-    <section className="recent-games recent-games--waiting" aria-label="最近在玩" aria-busy="true">
-      <div className="recent-games__head"><h2>最近在玩</h2></div>
+    <section className="game-year recent-games recent-games--waiting" aria-label="最近在玩" aria-busy="true">
+      <div className="game-year__side"><h2 className="game-year__label"><b>最近在玩</b></h2></div>
       <div className="recent-games__track" />
     </section>
   );

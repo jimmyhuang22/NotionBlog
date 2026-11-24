@@ -25,40 +25,56 @@ export function SectionWaiting({ path, heading }: { path: string; heading?: Reac
   const label = `正在加载${title}`;
   const library = path.startsWith("/library/") ? librarySections[path.slice("/library/".length)] : undefined;
 
+  // Games (乙, 2026-11-24): the order beside the statuses, then the rail, 最近在玩's place and one year of empty cases.
+  if (library?.kind === "game") return (
+    <div className="wrap wrap--wide page-loading" role="status" aria-label={label}>
+      <header className="page-head library__head">
+        {head}
+        <div className="library__head-tools" aria-hidden="true">
+          <SortShell label="最近" />
+          <div className="segmented">
+            {library.tabs.map(([value, name]) => <a key={value} aria-current={value === library.defaultStatus ? "true" : undefined}>{name}</a>)}
+          </div>
+        </div>
+      </header>
+      <div className="game-rail" aria-hidden="true">
+        <RecentGamesWaiting />
+        <section className="game-year">
+          <div className="game-year__side"><span className="skeleton skeleton--text" style={{ width: 64 }} /></div>
+          <div className="library__wall">
+            {Array.from({ length: 12 }, (_, index) => (
+              <div key={index} className="library__item"><span className="game-case game-case--waiting" /></div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+
   if (library) return (
-    <div className={library.kind === "game" ? "wrap wrap--wide page-loading" : "wrap page-loading"} role="status" aria-label={label}>
+    <div className="wrap page-loading" role="status" aria-label={label}>
       <header className="page-head library__head">
         {head}
         <div className="segmented" aria-hidden="true">
           {library.tabs.map(([value, name]) => <a key={value} aria-current={value === library.defaultStatus ? "true" : undefined}>{name}</a>)}
         </div>
       </header>
-      {/* Games: the recent row's place, then a wall of empty cases in the shelf's own shape. */}
-      {library.kind === "game" ? <RecentGamesWaiting /> : null}
       <div className="library__filters" aria-hidden="true">
         <span className="skeleton waiting__years" />
         <SortShell label="最近" />
       </div>
-      {library.kind === "game" ? (
-        <div className="library__group library__wall" aria-hidden="true">
+      <section className="library__group" aria-hidden="true">
+        <div className="section-title"><span className="skeleton skeleton--text" style={{ width: 64 }} /></div>
+        <div className={`library__grid library__grid--${library.kind}`}>
           {Array.from({ length: 12 }, (_, index) => (
-            <div key={index} className="library__item"><span className="game-case game-case--waiting" /></div>
+            <div key={index} className="library__item">
+              <span className="library__cover"><span className="cover-slot"><span className="cover cover--empty cover--waiting" /></span></span>
+              <span className="library__title"><span className="skeleton skeleton--text" style={{ width: "72%" }} /></span>
+              <span className="library__meta"><span className="skeleton skeleton--text" style={{ width: "48%" }} /></span>
+            </div>
           ))}
         </div>
-      ) : (
-        <section className="library__group" aria-hidden="true">
-          <div className="section-title"><span className="skeleton skeleton--text" style={{ width: 64 }} /></div>
-          <div className={`library__grid library__grid--${library.kind}`}>
-            {Array.from({ length: 12 }, (_, index) => (
-              <div key={index} className="library__item">
-                <span className="library__cover"><span className="cover-slot"><span className="cover cover--empty cover--waiting" /></span></span>
-                <span className="library__title"><span className="skeleton skeleton--text" style={{ width: "72%" }} /></span>
-                <span className="library__meta"><span className="skeleton skeleton--text" style={{ width: "48%" }} /></span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      </section>
     </div>
   );
 
