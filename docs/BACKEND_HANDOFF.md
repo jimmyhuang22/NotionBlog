@@ -495,7 +495,7 @@ src/components（API 与媒体路由除外）；需要前端配合的地方写�
 
 ## F14：动态收起预览正文
 
-`StatusEntry`新增可选`previewBody: ContentBlock[]`与`previewBodyTruncated: boolean`，只在读取列表／首页时按授权后的AST生成，字段与截断规则见[动态接口](STATUS_API.md)。400码点／12节点／3层／40文字片段／8KiB上限，保留文字结构与格式，图片和详情专属块不进入。text及hasMoreBody保持；九行／渐隐／展开由前端接入，长纯文字需同时看previewBodyTruncated。无生产迁移或重新同步要求；尚未发布时不要把本地分支接口写成线上已支持。
+`StatusEntry` 的可选 `previewBody` 与 `previewBodyTruncated` 只在动态列表和首页按授权后的 AST 生成。F63 让文字和照片保留原文顺序，图片块与 `images` 共用相同的图片 ID 和地址。短段落加照片也提供预览。前端用原顺序做九行文字裁切和展开，照片张数放在按钮上。字段、预算与旧数据回退见 [动态接口](STATUS_API.md)。详情和存储输入沿用原有正文结构，无需迁移或重新同步。
 
 ## S12：作品与首页读取期限
 
