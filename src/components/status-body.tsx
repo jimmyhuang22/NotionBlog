@@ -14,6 +14,7 @@ import { RichText } from "./rich-text";
 import { useTypesetInline } from "./typeset-inline";
 import { prefersReducedMotion } from "../lib/dom.ts";
 import { readApi, readProblem } from "../lib/read-api.ts";
+import { statusPreviewWithoutImages } from "../lib/content/status.ts";
 
 type Problem = "busy" | "failed" | null;
 
@@ -51,7 +52,11 @@ export function StatusBody({ entry, titleLevel = 4 }: {
   // Only an explicit false means text and images already are the whole body; an adapter that
   // does not report the field keeps the expand control.
   // The opening of the body, typeset. Kept as one object so its formulas are typeset once.
-  const preview = useMemo<ContentDocument | null>(() => entry.previewBody?.length ? { blocks: entry.previewBody, toc: [], completeness: "complete" } : null, [entry.previewBody]);
+  const preview = useMemo<ContentDocument | null>(() => {
+    // The current collapsed card renders images in its own strip until it adopts ordered previews.
+    const blocks = statusPreviewWithoutImages(entry.previewBody ?? []);
+    return blocks.length ? { blocks, toc: [], completeness: "complete" } : null;
+  }, [entry.previewBody]);
   const clip = useRef<HTMLDivElement>(null);
   // Opening and closing ease the card from its old size to its new one, on a press only (2026-10-28, replacing
   // M-02's roll-up): measured before the change, played once React has drawn the new content (size-motion.ts).

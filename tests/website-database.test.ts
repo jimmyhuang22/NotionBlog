@@ -62,10 +62,19 @@ test("v2 database supports all DTOs and preserves the frozen v1 worker and roles
   });
   await t.test("rich Status previews use current reader projection without persisting list fields",async()=>{
    const record=batch.find(r=>r.detail.item.kind==="status")!, original=structuredClone(record.detail.document);
-   record.detail.document={blocks:[{id:"quote",type:"quote",text:[{text:"x".repeat(450),bold:true}]}],toc:[],completeness:"complete"};
-   await publish();
+   const owner=record.detail.item.id,sha=createHash("sha256").update("status-preview-photo").digest("hex");
+   const assetId=mediaIdentity(owner,"photo",sha),image={id:assetId,src:`/media/v2/${assetId}`,alt:"Sample",width:1,height:1};
+   const photo={id:"photo",type:"image" as const,image,caption:[]};
+   record.detail.document={blocks:[photo,{id:"quote",type:"quote",text:[{text:"x".repeat(450),bold:true}]}],toc:[],completeness:"complete"};
+   const storedPreview=structuredClone(record);
+   Object.assign(storedPreview.detail.item,{previewBody:[photo]});
+   assert.throws(()=>validateWebsiteRecord(storedPreview),controlled("CONTENT_UNAVAILABLE"));
+   const lease=await writer.begin(randomUUID(),digest);
+   await writer.stage(lease,batch,[{assetId,ownerPageId:owner,objectKey:`sha256/${sha}`,sha256:sha,byteSize:20,mime:"image/png",width:1,height:1}]);
+   await writer.promote(lease,{records:batch.length,media:1,complete:true});
    const status=(await repo.list("status",{limit:1})).items[0];
-   assert.deepEqual(status.previewBody,[{id:"quote",type:"quote",text:[{text:"x".repeat(400),bold:true}]}]);
+   assert.deepEqual(status.previewBody,[photo,{id:"quote",type:"quote",text:[{text:"x".repeat(400),bold:true}]}]);
+   assert.deepEqual(status.images,[image]);
    assert.equal(status.previewBodyTruncated,true);
    assert.ok(!Object.hasOwn((await repo.get("status",status.slug))!.item,"previewBody"));
    await db.query("SELECT nb_v2_api.set_denied($1,true)",[status.id]);
