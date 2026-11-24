@@ -22,6 +22,7 @@ function readObservations(page: PageObjectResponse, field: string | undefined, p
   const lines = value.split("\n");
   if (lines.length > 24) return [];
 
+  const playStation = platforms.filter(name => gameCasePlatformKey(name) === "playstation");
   const observed = new Map<string, PlayObservation | null>();
   for (const line of lines) {
     const match = /^([^|\r\n]{1,16})\|([^|\r\n]{1,32})\|(\d{1,12}(?:\.\d{1,18})?)$/u.exec(line);
@@ -29,8 +30,12 @@ function readObservations(page: PageObjectResponse, field: string | undefined, p
     const [, provider, hardware, amount] = match;
     const label = recordPlatform(provider, hardware);
     if (!label) continue;
-    const platform = (provider === "PSN" ? platforms.find(name => playStationHardware(name) === playStationHardware(hardware)) : undefined) ??
-      platforms.find(name => gameCasePlatformKey(name) === gameCasePlatformKey(label) && !playStationHardware(name));
+    // A single console label chooses the artwork but still represents all confirmed family play time.
+    const platform = provider === "PSN"
+      ? playStation.find(name => playStationHardware(name) === playStationHardware(hardware)) ??
+        playStation.find(name => !playStationHardware(name)) ??
+        (playStation.length === 1 ? playStation[0] : undefined)
+      : platforms.find(name => gameCasePlatformKey(name) === gameCasePlatformKey(label));
     if (!platform) continue;
     const key = provider + "|" + hardware;
     observed.set(key, observed.has(key) ? null : { platform, hardware, minutes: Number(amount) });

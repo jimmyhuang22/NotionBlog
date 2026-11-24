@@ -281,6 +281,17 @@ test("v2 game cases publish original box art only for the selected edition and p
  assert.deepEqual(good.stored.get(good.game.boxArt!.id), original);
  assert.equal(artReads, 1);
  assert.equal(good.media.length, 2);
+ const legacyChoice = props.Platforms.multi_select[0];
+ props.Platforms.multi_select[0] = choice("PlayStation 5");
+ const editionLabel = await run();
+ assert.deepEqual(editionLabel.game.platformPlayTime, [
+   { platform: "PlayStation 5", time: { value: 2.3, unit: "hour" } },
+   { platform: "Steam", time: { value: 0, unit: "hour" } },
+ ]);
+ assert.deepEqual(editionLabel.game.boxArt, good.game.boxArt);
+ assert.equal(editionLabel.game.boxArtPosition, good.game.boxArtPosition);
+ assert.doesNotThrow(() => validateWebsiteRecord(editionLabel.record));
+ props.Platforms.multi_select[0] = legacyChoice;
 
  for (const [name, expected] of [["靠下", "bottom"], ["居中", "center"], ["未知", undefined], [null, undefined]] as const) {
    position.select = name === null ? null : choice(name);
@@ -302,23 +313,23 @@ test("v2 game cases publish original box art only for the selected edition and p
  assert(!Object.hasOwn(fallback.game, "boxArt") && !Object.hasOwn(fallback.game, "platformPlayTime"));
  assert.equal(fallback.game.boxArtPosition, "top");
  assert.equal(fallback.media.length, 1);
- assert.equal(artReads, 1);
+ assert.equal(artReads, 2);
  edition.select = selected;
 
  artBytes = low;
  const small = await run();
  assert.equal(small.game.boxArt, null);
  assert.equal(small.media.length, 1);
- assert.equal(artReads, 2);
+ assert.equal(artReads, 3);
 
  artBytes = original;
  edition.select.name = "PS4";
  assert.equal((await run()).game.boxArt, null);
- assert.equal(artReads, 2);
+ assert.equal(artReads, 3);
  edition.select.name = "PS5";
  formula.formula.string = "PSN|PS5|120\nSteam|PC|200";
  assert.equal((await run()).game.boxArt, null);
- assert.equal(artReads, 2);
+ assert.equal(artReads, 3);
 
  formula.formula.string = "PSN|PS5|120\nSteam|PC|0";
  const squareBytes = await sharp({ create: { width: 640, height: 640, channels: 3, background: "#557799" } }).png().toBuffer();
