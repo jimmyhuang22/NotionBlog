@@ -2,6 +2,8 @@ import type { ContentBlock, ContentDocument, ImageAsset, StatusEntry, StatusYear
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { dateParts } from "../format.ts";
 
+const STATUS_LIST_IMAGES = 9;
+
 export interface StatusReadOptions { timeZone?: string | (() => string) }
 export function statusTimeZone(options: StatusReadOptions = {}): string {
   const zone = typeof options.timeZone === "function" ? options.timeZone() : options.timeZone ?? "UTC";
@@ -33,7 +35,7 @@ export function statusPreview(item: StatusEntry, document: ContentDocument | nul
     for (const block of blocks) {
       if (block.type === "paragraph") paragraphs.push(block.text.map(run => run.text).join(""));
       else if (block.type === "image") {
-        if (images.length < 9) images.push(block.image);
+        if (images.length < STATUS_LIST_IMAGES) images.push(block.image);
         else hasMoreBody = true;
         if (block.caption.some(run => run.text.trim())) hasMoreBody = true;
       } else hasMoreBody = true;
@@ -57,10 +59,33 @@ const PREVIEW_NODES = 12;
 const PREVIEW_DEPTH = 3;
 const PREVIEW_RUNS = 40;
 const PREVIEW_BYTES = 8192;
+const PREVIEW_IMAGE_BYTES = 8192;
 
-/** Text-only prefix of an already authorized/redacted AST. Never loads content. */
+/** Omit inline images when rendering the legacy photo strip or measuring the text budget. */
+export function statusPreviewWithoutImages(blocks: ContentBlock[]): ContentBlock[] {
+  return blocks.flatMap((block): ContentBlock[] => {
+    switch (block.type) {
+      case "image": return [];
+      case "callout": case "toggle":
+        return [{ ...block, children: statusPreviewWithoutImages(block.children) }];
+      case "list":
+        return [{ ...block, items: block.items.map(row => ({
+          ...row, children: statusPreviewWithoutImages(row.children),
+        })) }];
+      case "columns":
+        return [{ ...block, columns: block.columns.map(column => ({
+          ...column, blocks: statusPreviewWithoutImages(column.blocks),
+        })) }];
+      default: return [block];
+    }
+  });
+}
+
+/** Ordered preview of an already authorized/redacted AST. Never loads content. */
 export function statusBodyPreview(blocks: ContentBlock[]): { blocks: ContentBlock[]; truncated: boolean } | undefined {
   let characters = 0, nodes = 0, runs = 0, structured = false, truncated = false, stopped = false, paragraphs = 0;
+  let images = 0, imageBytes = 0;
+  const encoder = new TextEncoder();
   function text(input: TextRun[]): TextRun[] {
     const result: TextRun[] = [];
     for (const run of input) {
@@ -73,7 +98,7 @@ export function statusBodyPreview(blocks: ContentBlock[]): { blocks: ContentBloc
       const clipped = selected.length < run.text.length;
       if (run.equation && clipped) { truncated = true; stopped = true; break; }
       const copy = { ...run, ...(run.link ? { link: { ...run.link } } : {}), text: selected };
-      if (new TextEncoder().encode(JSON.stringify(copy)).byteLength > PREVIEW_BYTES) { truncated = true; stopped = true; break; }
+      if (encoder.encode(JSON.stringify(copy)).byteLength > PREVIEW_BYTES) { truncated = true; stopped = true; break; }
       result.push(copy); characters += count; runs++;
       if (Object.entries(run).some(([key, value]) => key !== "text" && value !== false && value !== undefined && value !== "default")) structured = true;
       if (clipped) { truncated = true; stopped = true; break; }
@@ -84,7 +109,19 @@ export function statusBodyPreview(blocks: ContentBlock[]): { blocks: ContentBloc
     const output: ContentBlock[] = [];
     for (const block of input) {
       if (stopped) { truncated = true; break; }
-      // Media, code, display formulae, tables and link cards keep their detail-only representation.
+      if (block.type === "image") {
+        if (depth > PREVIEW_DEPTH || characters >= PREVIEW_CHARACTERS ||
+            nodes >= PREVIEW_NODES || runs >= PREVIEW_RUNS) { truncated = true; stopped = true; break; }
+        images++;
+        if (images > STATUS_LIST_IMAGES) { truncated = true; continue; }
+        const size = encoder.encode(JSON.stringify(block)).byteLength + 1;
+        if (imageBytes + size > PREVIEW_IMAGE_BYTES) { truncated = true; continue; }
+        imageBytes += size;
+        structured = true;
+        output.push({ ...block });
+        continue;
+      }
+      // Code, display formulae, tables and link cards keep their detail-only representation.
       if (!["paragraph", "heading", "quote", "callout", "toggle", "list", "divider", "columns"].includes(block.type)) continue;
       if (depth > PREVIEW_DEPTH || nodes >= PREVIEW_NODES) { truncated = true; stopped = true; break; }
       nodes++;
@@ -131,14 +168,15 @@ export function statusBodyPreview(blocks: ContentBlock[]): { blocks: ContentBloc
         }
       }
       if (selected) {
-        if (new TextEncoder().encode(JSON.stringify([...output, selected])).byteLength > PREVIEW_BYTES) { truncated = true; stopped = true; break; }
+        const textBlocks = statusPreviewWithoutImages([...output, selected]);
+        if (encoder.encode(JSON.stringify(textBlocks)).byteLength > PREVIEW_BYTES) { truncated = true; stopped = true; break; }
         output.push(selected);
       }
     }
     return output;
   }
   const result = visit(blocks, 1);
-  // A short plain paragraph already has the same representation in text.
+  // A short plain paragraph without images already has the same representation in text.
   return result.length && (structured || paragraphs > 1 || truncated)
     ? { blocks: result, truncated } : undefined;
 }

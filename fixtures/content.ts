@@ -597,6 +597,29 @@ export const fixtureGameTrophySets: Record<string, GameTrophySetSummary[]> = {
 };
 
 export const fixtureDocuments: Record<string, ContentDocument> = {
+  "mock-status-1": {
+    blocks: [
+      {
+        id: "mock-status-photo",
+        type: "image",
+        image: {
+          id: "mock-status-photo-1",
+          src: "/mock-media/landscape.svg",
+          alt: "演示风景",
+          width: 1200,
+          height: 800,
+        },
+        caption: [],
+      },
+      {
+        id: "mock-status-text",
+        type: "paragraph",
+        text: [{ text: "给网站留出一点空间，慢慢记录学习和生活。" }],
+      },
+    ],
+    toc: [],
+    completeness: "complete",
+  },
   "mock-post-1": {
     "blocks": [
       {

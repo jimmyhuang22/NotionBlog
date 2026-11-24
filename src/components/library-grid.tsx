@@ -39,12 +39,11 @@ function CoverPicture({ image, title, previewWidth }: CoverProps) {
 }
 
 /**
- * Under a game's case: its title, then its rating and the other platforms it is on; the case itself shows the
- * platform played longest, the status and the time (the owner's pick 甲, 2026-11-23). Nothing unknown is written.
+ * With a game's name: its rating, when it has one. The case itself shows the platform played longest, the status
+ * and the time (the owner's pick 甲, 2026-11-23); the other platforms are not listed (owner, 2026-11-24).
  */
 function CaseLine({ game }: { game: Game }) {
-  const parts = [game.rating ? ratingLabel(game.rating) : null, ...gameCaseFace(game).others.map(label => `也在 ${label}`)].filter(Boolean);
-  return parts.length ? <span className="library__meta">{parts.map((part, index) => <span key={index}>{part}</span>)}</span> : null;
+  return game.rating ? <span className="library__meta"><span>{ratingLabel(game.rating)}</span></span> : null;
 }
 
 interface Group { key: string; label: string | null; items: LibraryItem[] }
@@ -95,15 +94,17 @@ function WorkLink({ href, className, cover, style, children }: { href: string; c
 }
 
 /**
- * Games as one wall of cases (the owner's pick 丙, 2026-11-24). Each row grows a little so both its edges line up,
- * the cases keeping their shape; each year opens with a bookend, its year written down it and the year's count
- * from the server, so a list still loading says the whole year. A bookend is held to the year's first case and
- * never ends a row alone; on a phone it is a full-width line instead. A wishlist, or a list narrowed to one year,
- * has no bookends. A pointer on a case lifts it, dims the rest and shows its name and facts below it; without a
- * pointer the name stays under each case.
+ * Games as parts of the page's rail (乙, 2026-11-24): each year one part, its year and the year's count from the
+ * server in the label column on the left, so a list still loading says the whole year, and its cases as a wall on
+ * the right (丙, 2026-11-24). Each row of a wall grows a little so both its edges line up, the cases keeping their
+ * shape. A list in one run (a wishlist, or an address narrowed to one year) is one part under its own name. A
+ * pointer on a case lifts it and brings its name up from the bottom of the case, the rest of the wall untouched
+ * (丙, 2026-11-24); without a pointer the name stays under each case.
  */
-function GameWall({ groups, yearCounts, unit, itemClass, itemStyle }: {
+function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
   groups: Group[]; yearCounts?: Record<string, number>; unit: string;
+  /** The name and count of a list in one run, which has no years to write. */
+  run: { label: string; count: number | null };
   itemClass: (item: LibraryItem) => string; itemStyle: (item: LibraryItem) => CSSProperties;
 }) {
   const card = (item: LibraryItem) => {
@@ -120,32 +121,27 @@ function GameWall({ groups, yearCounts, unit, itemClass, itemStyle }: {
       </WorkLink>
     );
   };
-  return (
-    <div className="library__group library__wall">
-      {groups.map(group => {
-        const [first, ...rest] = group.items;
-        if (!group.label || !first) return group.items.map(card);
-        const key = group.key === "unknown" ? "undated" : group.key;
-        const count = yearCounts?.[key];
-        return [
-          <div key={`${group.key}:${first.id}`} className="library__lead" style={{ "--case-ratio": first.kind === "game" ? gameCaseFace(first).ratio : 0.71 } as CSSProperties}>
-            <h2 className="library__year"><b>{group.key === "unknown" ? "无日期" : group.label}</b>{count ? <small>{count} {unit}</small> : null}</h2>
-            {card(first)}
-          </div>,
-          ...rest.map(card),
-        ];
-      })}
-    </div>
-  );
+  return groups.map(group => {
+    const label = group.label === null ? run.label : group.key === "unknown" ? "无日期" : group.label;
+    const count = group.label === null ? run.count : yearCounts?.[group.key === "unknown" ? "undated" : group.key];
+    return (
+      <section key={`${group.key}:${group.items[0]?.id}`} className="game-year">
+        <h2 className="game-year__side game-year__label"><b>{label}</b>{count ? <small>{count} {unit}</small> : null}</h2>
+        <div className="library__wall">{group.items.map(card)}</div>
+      </section>
+    );
+  });
 }
 
-export function LibraryGrid({ kind, status, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts }: {
+export function LibraryGrid({ kind, status, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts, runLabel }: {
   kind: LibraryItem["kind"]; status: string | null;
   /** Year filter as sent to the list endpoint: "2026", "undated" or null for everything. */
   year?: string | null;
   order?: LibraryOrder | null; unit: string; initial: Page<LibraryItem>; pageSize: number; timeZone: string;
-  /** How many records each year holds under this status ("2026", "undated"), for the games' bookends. */
+  /** How many records each year holds under this status ("2026", "undated"), for the games' year labels. */
   yearCounts?: Record<string, number>;
+  /** Games: the name of a list with no years to write (the status, as "想玩"). */
+  runLabel?: string;
 }) {
   const query: Record<string, string> = { limit: String(pageSize), ...(status ? { status } : {}), ...(year ? { year } : {}), ...(order ? { order } : {}) };
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<LibraryItem>(`/api/content/${kind}`, query, initial);
@@ -159,6 +155,7 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>列表有更新，已从头重新加载。</p> : null}
       {kind === "game" ? (
         <GameWall groups={groupByYear(items, timeZone, year !== null)} yearCounts={yearCounts} unit={unit}
+          run={year ? { label: year === "undated" ? "无日期" : year, count: yearCounts?.[year] ?? total } : { label: runLabel ?? "全部", count: total }}
           itemClass={item => appended.has(item.id) ? "library__item is-appended" : arriving && firstRows.has(item.id) ? "library__item is-arriving" : "library__item"}
           itemStyle={item => (arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : {})} />
       ) : groupByYear(items, timeZone, year !== null).map(group => (

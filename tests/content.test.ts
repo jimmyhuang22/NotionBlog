@@ -71,6 +71,9 @@ test("mock pagination preserves undated records and makes an opaque continuation
   const repository = createContentService().repository;
   const first = await repository.list("status", { limit: 1 });
   assert.equal(first.items[0]?.slug, "a-small-progress");
+  assert.deepEqual(first.items[0]?.previewBody?.map(block => block.type), ["image", "paragraph"]);
+  assert.equal(first.items[0]?.hasMoreBody, false);
+  assert.ok(!Object.hasOwn((await repository.get("status", "a-small-progress"))!.item, "previewBody"));
   assert.equal(first.hasMore, true);
   assert.ok(first.nextCursor);
   const items = [...first.items];

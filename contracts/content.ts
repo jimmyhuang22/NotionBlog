@@ -86,9 +86,9 @@ export interface StatusEntry extends ContentBase {
   images?: ImageAsset[];
   /** False only when list text and images represent the complete body. */
   hasMoreBody?: boolean;
-  /** List-only authorized text blocks, bounded to 400 Unicode code points / 12 nodes. */
+  /** List-only authorized text and image blocks in document order, with separate preview budgets. */
   previewBody?: ContentBlock[];
-  /** Preview budgets omitted eligible text; independent of the full text/images hasMoreBody flag. */
+  /** Preview budgets omitted eligible blocks; independent of the full text/images hasMoreBody flag. */
   previewBodyTruncated?: boolean;
 }
 export interface StatusYears {

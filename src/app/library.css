@@ -809,41 +809,55 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 }
 
 /*
- * Games as their cases (the owner's pick 甲, 2026-11-23), set as one wall (丙, 2026-11-24). Each case is as wide as its
- * maker's real case: Switch about 0.62, PlayStation 0.79, Steam and PC a DVD case at 0.71. A row starts from cases
- * 200 high (136 on a phone) and grows until both its edges line up: each case grows in step with its width, so all
- * keep their shape, by at most 30%; the filler after the last case takes the slack of the last row. A year's bookend
- * and its first case are one piece (`library__lead`), so a bookend never ends a row alone. The case is only the
- * container; the shell inside is drawn in units of the case's own width, so one drawing serves every size.
+ * The games page as one rail (乙, 2026-11-24): 最近在玩 first, then each year, every part with its name and count in a
+ * column on the left that stays in view while the part scrolls by, and its cases on the right. On a phone the name is
+ * a line above its part instead.
  */
-.library__wall { --wall-h: 200px; --lead-w: 58px; display: flex; flex-wrap: wrap; align-items: stretch; gap: 18px 12px; padding: 6px 0 40px; }
+.library__head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.library__head-tools .library__sort { margin-left: 0; }
+.game-rail { padding-bottom: 40px; }
+.game-year { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 20px; padding: 22px 0; border-top: 1px solid var(--rule); }
+.game-rail > section.game-year:first-of-type { padding-top: 6px; border-top: 0; }
+.game-year > * { min-width: 0; }
+.game-year__side { position: sticky; top: calc(var(--header-h, 0px) + 18px); align-self: start; display: grid; gap: 12px; justify-items: start; }
+.game-year__label { display: grid; gap: 6px; margin: 0; font-weight: 400; }
+.game-year__label b { font-family: var(--font-hand); font-weight: 400; font-size: var(--text-3xl); line-height: 1; letter-spacing: 0.04em; color: var(--ink); }
+.game-year__label small { font-family: var(--font-sans); font-size: var(--text-sm); color: var(--muted); }
+.recent-games .game-year__label b { font-size: var(--text-xl); line-height: 1.25; letter-spacing: 0.02em; }
+
+/*
+ * A year's cases as a wall (丙, 2026-11-24), each case as wide as its maker's real case (甲, 2026-11-23): Switch about
+ * 0.62, PlayStation 0.79, Steam and PC a DVD case at 0.71. A row starts from cases 200 high (136 on a phone) and grows
+ * until both its edges line up: each case grows in step with its width, so all keep their shape, by at most 30%; the
+ * filler after the last case takes the slack of the last row. The case is only the container; the shell inside is
+ * drawn in units of the case's own width, so one drawing serves every size.
+ */
+.library__wall { --wall-h: 200px; display: flex; flex-wrap: wrap; align-items: stretch; gap: 18px 12px; }
 .library__wall::after { content: ""; flex: 1000 1 0; }
 .library__wall .library__item { position: relative; display: block; flex: var(--case-ratio, 0.71) 1 calc(var(--case-ratio, 0.71) * var(--wall-h)); max-width: calc(var(--case-ratio, 0.71) * var(--wall-h) * 1.3); }
 .library__wall .game-case { width: 100%; height: auto; }
-.library__lead { display: flex; gap: 12px; flex: var(--case-ratio, 0.71) 1 calc(var(--case-ratio, 0.71) * var(--wall-h) + var(--lead-w) + 12px); max-width: calc(var(--case-ratio, 0.71) * var(--wall-h) * 1.3 + var(--lead-w) + 12px); }
-.library__lead .library__item { flex: 1 1 0; max-width: none; }
-.library__year { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: var(--lead-w); margin: 0; padding: 14px 0 12px; border-radius: var(--radius-sm); background: var(--soft); box-shadow: inset 0 0 0 1px var(--rule); }
-.library__year b { font-family: var(--font-hand); font-weight: 400; font-size: var(--text-3xl); line-height: 1; letter-spacing: 0.06em; writing-mode: vertical-rl; color: var(--ink); }
-.library__year small { font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; color: var(--muted); }
 .library__name { display: grid; gap: 1px; }
 /* The loading shape's cases: the case's outline only, breathing like a cover still on its way. */
 .game-case--waiting { border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ink) 7%, var(--bg)); }
 @media (prefers-reduced-motion: no-preference) { .game-case--waiting { animation: breathe 2.4s ease-in-out infinite; } }
 .library__wall .library__title { font-family: var(--font-hand); line-height: 1.35; }
 .library__wall .library__meta { font-size: var(--text-xs); }
-/* With a pointer: names are a card that appears under the case pointed at, which rises while the rest dim. */
+/* With a pointer (丙, 2026-11-24): the case pointed at rises and its name comes up from the bottom of its window over a
+ * darkening, in place of the time; the rest of the wall stays as it is and nothing covers the row below. The case is
+ * the item's container, so the name is placed in the case's own units, over the window inside the rim. */
 @media (hover: hover) {
-  .library__name { position: absolute; z-index: 5; left: 50%; top: calc(100% + 6px); width: max-content; max-width: min(240px, calc(100% + 48px)); padding: 7px 12px 8px; border-radius: var(--radius-xs);
-    background: var(--ink); color: var(--bg); text-align: center; box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.5); opacity: 0; pointer-events: none; transform: translate(-50%, -4px); }
-  .library__name .library__title { font-size: var(--text-md); color: inherit; }
-  .library__name .library__meta { justify-content: center; color: color-mix(in srgb, var(--bg) 72%, transparent); }
-  .library__wall .library__item:is(:hover, :focus-visible) .library__name { opacity: 1; transform: translate(-50%, 0); }
+  .library__wall .library__item { container-type: inline-size; }
+  .library__name { position: absolute; z-index: 5; left: 5.1cqw; right: 3.4cqw; bottom: 3.4cqw; gap: 2px; padding: 34cqw 7cqw 6cqw; border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+    background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, 0.55) 35%, rgba(8, 9, 12, 0.88)); color: #fff; opacity: 0; pointer-events: none; transform: translateY(2px); }
+  .library__name .library__title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: clamp(12px, 9cqw, 20px); color: inherit; }
+  .library__name .library__meta { padding: 0; font-size: clamp(9.5px, 6cqw, 13px); color: rgba(255, 255, 255, 0.8); }
+  .library__wall .library__item:is(:hover, :focus-visible) .library__name { opacity: 1; transform: translateY(-6px); }
   .library__wall .library__item:is(:hover, :focus-visible) .game-case { transform: translateY(-6px); }
-  .library__wall:has(.library__item:hover) .library__item:not(:hover) { opacity: 0.5; }
+  .library__wall .library__item:is(:hover, :focus-visible) .game-case__time { opacity: 0; }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .library__wall .library__item { transition: opacity 0.2s; }
   .library__wall .game-case, .library__name { transition: opacity 0.15s, transform 0.2s; }
+  .library__wall .game-case__time { transition: opacity 0.15s; }
 }
 /* Without one: the name under each case, on one line. */
 @media (hover: none) {
@@ -851,14 +865,13 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
   .library__name .library__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
   .library__name .library__meta { display: none; }
 }
-/* A phone: the bookend becomes a full-width line, "2026  5 款", so it does not take a column of a narrow row. */
+/* A phone: each part's name is a line above it, "2026  5 款", so the cases have the whole width. */
 @media (max-width: 640px) {
+  .game-year { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px 0; }
+  .game-year__side { position: static; display: flex; align-items: center; justify-content: space-between; }
+  .game-year__label { display: flex; align-items: baseline; gap: 10px; }
+  .game-year__label b { font-size: var(--text-2xl); }
   .library__wall { --wall-h: 136px; gap: 16px 10px; }
-  .library__lead { display: contents; }
-  .library__lead .library__item { flex: var(--case-ratio, 0.71) 1 calc(var(--case-ratio, 0.71) * var(--wall-h)); max-width: calc(var(--case-ratio, 0.71) * var(--wall-h) * 1.3); }
-  .library__year { flex: 0 0 100%; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 10px; width: auto; padding: 12px 0 0; border-top: 1px solid var(--rule); border-radius: 0; background: none; box-shadow: none; }
-  .library__lead:first-child .library__year { padding-top: 0; border-top: 0; }
-  .library__year b { font-size: var(--text-2xl); writing-mode: horizontal-tb; }
 }
 
 .game-case { container-type: inline-size; position: relative; display: block; aspect-ratio: var(--case-ratio, 0.71); height: 100%; width: auto; --band-h: max(12.5cqw, 16px); }
@@ -944,18 +957,16 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 
 /*
  * 最近在玩 (丙, 2026-11-24): the latest games as one flat row of cases, the latest a little taller, each with its name and
- * day under it. The row scrolls sideways; where it runs on, that edge fades, and with a pointer two arrows page it.
+ * day under it, as the rail's first part (乙, 2026-11-24): cases as high as the walls below, the latest a little taller.
+ * The row scrolls sideways; where it runs on, that edge fades, and with a pointer two arrows under its name page it.
  */
-.recent-games { margin: 0 0 30px; }
-.recent-games__head { display: flex; align-items: center; justify-content: space-between; min-height: 32px; margin-bottom: 4px; }
-.recent-games__head h2 { margin: 0; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
 .recent-games__arrows { display: flex; gap: 6px; }
 .recent-games__arrows[hidden] { display: none; }
 .recent-games__arrows button { width: 32px; height: 32px; padding: 0 0 2px; border: 1px solid var(--rule); border-radius: 999px; background: none; color: var(--ink); font-size: var(--text-xl); line-height: 1; cursor: pointer; }
 .recent-games__arrows button:hover:not(:disabled) { background: var(--soft); }
 .recent-games__arrows button:disabled { opacity: 0.3; cursor: default; }
 @media (hover: none) { .recent-games__arrows { display: none; } }
-.recent-games__track { --row-h: 270px; --first-h: 320px; --fade: 56px; display: flex; align-items: flex-end; gap: 20px; overflow-x: auto; padding: 10px 2px 4px; scroll-snap-type: x mandatory; scroll-padding-inline: 2px; scrollbar-width: none;
+.recent-games__track { --row-h: 200px; --first-h: 236px; --fade: 56px; display: flex; align-items: flex-end; gap: 20px; overflow-x: auto; padding: 4px 2px 4px; scroll-snap-type: x mandatory; scroll-padding-inline: 2px; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); }
 .recent-games__track::-webkit-scrollbar { display: none; }
 .recent-games__track[data-start] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - var(--fade)), transparent); }
@@ -968,13 +979,13 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
   .recent-games__item .game-case { transition: transform 0.2s; }
   .recent-games__item:hover .game-case { transform: translateY(-5px); }
 }
-.recent-games__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-hand); font-size: var(--text-md); }
-.recent-games__item--first .recent-games__title { font-size: var(--text-lg); }
+.recent-games__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-hand); font-size: var(--text-sm); }
+.recent-games__item--first .recent-games__title { font-size: var(--text-md); }
 .recent-games__day { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .recent-games__day b { font-weight: 600; color: var(--ink); }
-/* While the row is read: its heading and its height only, so the library below does not move when it arrives. */
-.recent-games--waiting .recent-games__track { height: calc(var(--first-h) + 77px); }
-.recent-games__notice { margin: 0 0 32px; }
+/* While the row is read: its name and its height only, so the library below does not move when it arrives. */
+.recent-games--waiting .recent-games__track { height: calc(var(--first-h) + 66px); }
+.recent-games__notice { margin: 0 0 22px; }
 @media (max-width: 640px) {
-  .recent-games__track { --row-h: 200px; --first-h: 230px; --fade: 28px; gap: 14px; }
+  .recent-games__track { --row-h: 150px; --first-h: 172px; --fade: 28px; gap: 14px; }
 }

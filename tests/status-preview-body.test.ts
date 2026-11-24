@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ContentBlock, StatusEntry } from "../contracts/content.ts";
-import { statusBodyPreview, statusPreview } from "../src/lib/content/status.ts";
+import { statusBodyPreview, statusPreview, statusPreviewWithoutImages } from "../src/lib/content/status.ts";
 const paragraph = (text: string, id = "p"): ContentBlock => ({ id, type: "paragraph", text: [{ text }] });
+const photo = (id: string): Extract<ContentBlock, { type: "image" }> => ({
+  id, type: "image", image: { id, src: "/mock-media/sample.svg", alt: "Sample", width: 1, height: 1 }, caption: [],
+});
 const item: StatusEntry = { id: "status", kind: "status", slug: "status", href: "/status#status", title: "Sample", cover: null, summary: null, tags: [], updatedAt: null, recordedAt: null, text: [{ text: "a".repeat(401) }] };
 test("rich preview clips a Unicode prefix without changing full text or hasMoreBody semantics", () => {
   const blocks = [paragraph("🙂".repeat(401))], before = structuredClone(blocks);
@@ -17,17 +20,47 @@ test("rich preview clips a Unicode prefix without changing full text or hasMoreB
 test("preview retains annotations, nesting and redacted links, but excludes detail-only blocks", () => {
   const blocks: ContentBlock[] = [
     { id: "q", type: "quote", text: [{ text: "Quote", bold: true, link: { kind: "unavailable" } }] },
-    { id: "img", type: "image", image: { id: "img", src: "/mock-media/sample.svg", alt: "Sample", width: 1, height: 1 }, caption: [] },
+    photo("img"),
     { id: "code", type: "code", code: "PRIVATE_DETAIL_ONLY", language: "text", caption: [] },
     { id: "eq", type: "equation", expression: "DETAIL_EQUATION" },
     { id: "list", type: "list", ordered: true, items: [{ id: "row", checked: true, text: [{ text: "Item" }], children: [paragraph("Nested")] }] },
     { id: "d", type: "divider" },
   ];
   const result = statusBodyPreview(blocks)!;
-  assert.deepEqual(result.blocks.map(x => x.id), ["q", "list", "d"]);
+  assert.deepEqual(result.blocks.map(x => x.id), ["q", "img", "list", "d"]);
   assert.deepEqual(result.blocks[0], blocks[0]); assert.notEqual(result.blocks[0], blocks[0]);
   assert.ok(!JSON.stringify(result).includes("PRIVATE_DETAIL_ONLY")); assert.ok(!JSON.stringify(result).includes("DETAIL_EQUATION"));
   assert.equal(result.truncated, false);
+});
+test("mixed previews retain photo position and the same public assets as the image list", () => {
+  const first = photo("first"), middle = photo("middle"), last = photo("last");
+  const nested: ContentBlock = { id: "toggle", type: "toggle", title: [{ text: "Nested" }], children: [middle] };
+  const blocks = [first, paragraph("Short"), nested, last];
+  const entry = statusPreview({ ...item, text: [{ text: "Short" }] }, { blocks, toc: [], completeness: "complete" });
+  assert.deepEqual(entry.previewBody, blocks);
+  assert.equal(entry.previewBody?.[0].type === "image" && entry.previewBody[0].image, entry.images?.[0]);
+  assert.deepEqual(entry.images, [first.image, middle.image, last.image]);
+  assert.equal(entry.previewBodyTruncated, false);
+  assert.deepEqual(statusPreviewWithoutImages(entry.previewBody!), [paragraph("Short"), { ...nested, children: [] }]);
+  assert.deepEqual(statusBodyPreview([paragraph("Short"), last])?.blocks.map(block => block.id), ["p", "last"]);
+});
+test("photos before the text boundary use separate node and byte budgets", () => {
+  const photos = Array.from({ length: 10 }, (_, n) => photo(`image-${n}`));
+  const text = Array.from({ length: 11 }, (_, n) => paragraph("short", `p${n}`));
+  const preview = statusBodyPreview([...photos, ...text, paragraph("final", "final"), photo("after-text")])!;
+  assert.deepEqual(preview.blocks, [...photos.slice(0, 9), ...text, paragraph("final", "final")]);
+  assert.equal(preview.truncated, true);
+
+  const atLimit = statusBodyPreview([photos[0], paragraph("🙂".repeat(400)), photos[1]])!;
+  assert.deepEqual(atLimit.blocks.map(block => block.id), [photos[0].id, "p"]);
+  assert.equal(atLimit.truncated, true);
+
+  const large = { ...photos[0], caption: [{ text: "x".repeat(7500) }] };
+  const callout: ContentBlock = { id: "box", type: "callout", icon: null, tone: "info", text: [], children: [large] };
+  const link: ContentBlock = { id: "link", type: "paragraph", text: [{ text: "Later text", link: { kind: "external", url: "https://example.test/" + "a".repeat(1000) } }] };
+  assert.deepEqual(statusBodyPreview([callout, link]), { blocks: [callout, link], truncated: false });
+  const oversized = { ...large, caption: [{ text: "x".repeat(9000) }] };
+  assert.deepEqual(statusBodyPreview([oversized, link]), { blocks: [link], truncated: true });
 });
 test("preview bounds node count, nesting, serialized bytes and text-run fragmentation", () => {
   const many = statusBodyPreview(Array.from({ length: 50 }, (_, n) => paragraph("short", `p${n}`)))!;
