@@ -1,27 +1,30 @@
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 import { readPrivateFile } from "../notion-sync/state.ts";
-import { GameSyncError, object, required, observations } from "./model.ts";
+import { GameSyncError, object, required, observations, type Observation } from "./model.ts";
 import { readEnv, readJson, writeJson, writeText } from "./private.ts";
 import { collectNintendo, finishLogin, loginRequest } from "./nintendo.ts";
-import { collectPsn, collectPsnTrophyDetails, collectPsnWebsiteTrophies } from "./psn.ts";
+import { collectPsnData, collectPsnTrophyDetails, collectPsnWebsiteTrophies } from "./psn.ts";
 import { collectSteam, fixedSteamPolicy, steamPolicy } from "./steam.ts";
 import { syncNotion } from "./notion.ts";
 import type { SyncConfig } from "./notion.ts";
 import { PLAN_VERSION } from "./plan.ts";
 import type { SyncPlan, SyncProgress } from "./plan.ts";
 import { runDaily, safeCode } from "./daily.ts";
-import { planPsnWebsiteTrophies, writePsnWebsiteTrophies } from "./website-trophies.ts";
+import { planPsnWebsiteTrophies, psnWebsiteTrophySnapshot, writePsnWebsiteTrophies } from "./website-trophies.ts";
 import { maxTrophySnapshotBytes, planPsnTrophyDetails, writePsnTrophyDetails } from "./psn-trophy-details.ts";
-import { collectSteamAchievements, maxSteamAchievementSnapshotBytes, planSteamAchievements, writeSteamAchievements } from "./steam-achievements.ts";
+import { collectSteamAchievementProgress, collectSteamAchievements, maxSteamAchievementSnapshotBytes, planSteamAchievements, writeSteamAchievements } from "./steam-achievements.ts";
 import { collectSteamAchievementBatch, planSteamAchievementBatch, planSteamAchievementWithdrawals,
   readActiveSteamAchievementSets, writeSteamAchievementBatch } from "./steam-achievement-batch.ts";
+import { runEveningTrophies, selectEveningSteamApps } from "./evening-trophies.ts";
 
 
 export async function runGameCommand(args: string[], runId: string) {
   if (!process.send || !process.connected) throw new GameSyncError("SUPERVISOR_REQUIRED");
   const [command, rootArg, flag] = args;
   const root = resolve(rootArg);
+  const evening = command === "daily-evening";
+  const started = performance.now();
     if (command === "nintendo-login") {
       const pending = loginRequest(); await writeJson(join(root, "nintendo-pending.json"), pending);
       await writeJson(join(root, "nintendo-login.json"), { url: pending.url });
@@ -108,13 +111,22 @@ export async function runGameCommand(args: string[], runId: string) {
       if (policy.mode === "fixed-allowlist" && policy.steamId !== env.STEAM_ID) throw new GameSyncError("STEAM_ACCOUNT_MISMATCH");
       return policy;
     }
+    let psnForEvening: Awaited<ReturnType<typeof collectPsnData>> | undefined;
+    let steamForEvening: Observation[] | undefined;
     async function collect(provider: string) {
       const policy = provider === "steam" ? await currentSteamPolicy() : null;
-      const rows = provider === "steam"
-        ? await collectSteam(env.STEAM_WEB_API_KEY ?? "", env.STEAM_ID ?? "", policy, "steam-main")
-        : provider === "psn"
-        ? await collectPsn(env.PSN_NPSSO ?? "", env.PSN_ONLINE_ID ?? "", join(root, "psn-auth.json"), "psn-main")
-        : await collectNintendo(join(root, "nintendo-auth.json"), join(root, "nintendo-identity.json"), "nintendo-main", "global");
+      let rows: Observation[];
+      if (provider === "psn") {
+        const data = await collectPsnData(env.PSN_NPSSO ?? "", env.PSN_ONLINE_ID ?? "",
+          join(root, "psn-auth.json"), "psn-main");
+        rows = data.rows;
+        if (evening) psnForEvening = data;
+      } else if (provider === "steam") {
+        rows = await collectSteam(env.STEAM_WEB_API_KEY ?? "", env.STEAM_ID ?? "", policy, "steam-main");
+        if (evening) steamForEvening = rows;
+      } else {
+        rows = await collectNintendo(join(root, "nintendo-auth.json"), join(root, "nintendo-identity.json"), "nintendo-main", "global");
+      }
       await writeJson(join(root, `${provider}-snapshot.json`), rows);
       if (policy) await writeJson(join(root, "steam-policy-proof.json"), { digest: createHash("sha256").update(JSON.stringify(policy)).digest("hex") });
       return { collected: rows.length, allowed: rows.filter(r => r.visibility === "allowed").length,
@@ -170,9 +182,51 @@ export async function runGameCommand(args: string[], runId: string) {
         throw e;
       }
     }
-    const includeSteam = command === "daily" && await fixedSteamPolicy(root) !== null;
+    if (command !== "daily" && !evening) {
+      console.log(JSON.stringify(await sync(flag, command === "apply")));
+      return;
+    }
+    const includeSteam = await fixedSteamPolicy(root) !== null;
     if (includeSteam) await currentSteamPolicy();
-    console.log(JSON.stringify(command === "daily" ? await runDaily(root, runId, { collect, sync }, includeSteam) : await sync(flag, command === "apply")));
+    const daily = await runDaily(root, runId, { collect, sync }, includeSteam);
+    if (!evening) {
+      console.log(JSON.stringify(daily));
+      return;
+    }
+    // Reserve time for the supervisor and durable receipts within the shared 15-minute deadline.
+    const remaining = Math.min(120_000, Math.floor(870_000 - (performance.now() - started)));
+    const deadline = remaining > 0 ? AbortSignal.timeout(remaining) : AbortSignal.abort();
+    try {
+      const trophies = await runEveningTrophies(root, runId, {
+        psn: async () => {
+          if (!psnForEvening) throw new GameSyncError("SCOPE_INCOMPLETE");
+          const { observedAt, rows, trophies } = psnForEvening;
+          const onlineId = env.PSN_ONLINE_ID ?? "";
+          return planPsnWebsiteTrophies(psnWebsiteTrophySnapshot(onlineId, observedAt, rows, trophies),
+            onlineId, await readJson(join(root, "config.json")));
+        },
+        steam: async signal => {
+          const scope = await readJson(join(root, "evening-steam-apps.json"));
+          if (scope === null) return null;
+          if (!steamForEvening) throw new GameSyncError("STEAM_ALLOWLIST_REQUIRED");
+          const policy = await fixedSteamPolicy(root), config = object(await readJson(join(root, "config.json")));
+          const steamId = env.STEAM_ID ?? "", apiKey = env.STEAM_WEB_API_KEY ?? "";
+          const targets = selectEveningSteamApps(scope, steamId, policy, config, steamForEvening);
+          if (!targets.length) return null;
+          const observedAt = new Date().toISOString();
+          const sets = [];
+          for (const { appId, gameId } of targets) {
+            if (signal.aborted) throw new GameSyncError("TIME_LIMIT");
+            sets.push(await collectSteamAchievementProgress(apiKey, steamId, policy,
+              { ...config, bindings: { [`Steam:PC:${appId}`]: gameId }, steamAchievementAppId: appId }, signal));
+          }
+          return { observedAt, sets };
+        },
+      }, deadline);
+      console.log(JSON.stringify({ ...daily, trophies }));
+    } catch (error) {
+      console.log(JSON.stringify({ ...daily, trophies: { status: "failed", code: safeCode(error) } }));
+    }
 
 }
 

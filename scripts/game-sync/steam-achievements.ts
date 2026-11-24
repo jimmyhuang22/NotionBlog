@@ -72,12 +72,12 @@ function rarityPercent(value: unknown) {
   return Math.round(percent * 10) / 10;
 }
 
-async function readStats(method: string, params: Record<string, string>, apiKey: string | null, request: typeof fetch) {
+async function readStats(method: string, params: Record<string, string>, apiKey: string | null, request: typeof fetch, signal?: AbortSignal) {
   const url = new URL("/ISteamUserStats/" + method, "https://api.steampowered.com");
   url.search = new URLSearchParams(params).toString();
   try {
     const response = await request(url, { ...(apiKey ? { headers: { "x-webapi-key": apiKey } } : {}),
-      redirect: "error", signal: AbortSignal.timeout(20_000) });
+      redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000) });
     if (!response.ok || !response.body) throw new GameSyncError("STEAM_UNAVAILABLE");
     const reader = response.body.getReader(), chunks: Uint8Array[] = [];
     let size = 0;
@@ -99,6 +99,43 @@ async function readStats(method: string, params: Record<string, string>, apiKey:
   }
 }
 
+async function readSteamAchievementStates(apiKey: string, steamId: string, appId: number, request: typeof fetch,
+  signal?: AbortSignal) {
+  const { playerstats } = await readStats("GetPlayerAchievements/v1/", { appid: String(appId), steamid: steamId },
+    apiKey, request, signal);
+  const stats = object(playerstats);
+  if (stats.success !== true || (stats.steamID !== undefined && stats.steamID !== steamId)) {
+    throw new GameSyncError("STEAM_ACHIEVEMENTS_INCOMPLETE");
+  }
+  return achievementRows(stats.achievements, "apiname");
+}
+
+function achievementProgress(state: Record<string, unknown>, observedAt: string) {
+  const earned = state.achieved === 1, time = state.unlocktime ?? 0;
+  if ((state.achieved !== 0 && !earned) || typeof time !== "number" || !Number.isSafeInteger(time) || time < 0 ||
+      time * 1000 > Date.parse(observedAt) + 60000 || (!earned && time !== 0)) {
+    throw new GameSyncError("STEAM_ACHIEVEMENTS_INCOMPLETE");
+  }
+  return { earned, time };
+}
+
+export async function collectSteamAchievementProgress(apiKey: string, steamId: string, policy: unknown, config: unknown,
+  signal: AbortSignal, request = fetch) {
+  if (!/^[a-f0-9]{32}$/i.test(apiKey)) throw new GameSyncError("STEAM_CONFIG_REQUIRED");
+  const { appId, gameId, setId } = steamAchievementScope(steamId, policy, config);
+  const observedAt = new Date().toISOString();
+  const states = await readSteamAchievementStates(apiKey, steamId, appId, request, signal);
+  if (!states.size) throw new GameSyncError("STEAM_ACHIEVEMENTS_INCOMPLETE");
+  let earned = 0, latestUnlock = 0;
+  for (const state of states.values()) {
+    const progress = achievementProgress(state, observedAt);
+    if (progress.earned) earned++;
+    latestUnlock = Math.max(latestUnlock, progress.time);
+  }
+  return { id: setId, gameId, observedAt, earned, total: states.size,
+    latestUnlockAt: latestUnlock ? new Date(latestUnlock * 1000).toISOString() : null };
+}
+
 export async function collectSteamAchievements(apiKey: string, steamId: string, policy: unknown, config: unknown,
   timeZone: string, request = fetch) {
   if (!/^[a-f0-9]{32}$/i.test(apiKey)) throw new GameSyncError("STEAM_CONFIG_REQUIRED");
@@ -109,16 +146,11 @@ export async function collectSteamAchievements(apiKey: string, steamId: string, 
 
   const appid = String(appId);
   const observedAt = new Date().toISOString();
-  const [player, schema, population] = await Promise.all([
-    readStats("GetPlayerAchievements/v1/", { appid, steamid: steamId }, apiKey, request),
+  const [states, schema, population] = await Promise.all([
+    readSteamAchievementStates(apiKey, steamId, appId, request),
     readStats("GetSchemaForGame/v2/", { appid, l: "schinese" }, apiKey, request),
     readStats("GetGlobalAchievementPercentagesForApp/v2/", { gameid: appid }, null, request),
   ]);
-  const stats = object(player.playerstats);
-  if (stats.success !== true || (stats.steamID !== undefined && stats.steamID !== steamId)) {
-    throw new GameSyncError("STEAM_ACHIEVEMENTS_INCOMPLETE");
-  }
-  const states = achievementRows(stats.achievements, "apiname");
   const definitions = achievementRows(object(object(schema.game).availableGameStats).achievements, "name");
   const rates = achievementRows(object(population.achievementpercentages).achievements, "name");
   if (!definitions.size || states.size !== definitions.size || [...rates.keys()].some(id => !definitions.has(id))) {
@@ -130,14 +162,11 @@ export async function collectSteamAchievements(apiKey: string, steamId: string, 
 
   const rows = [...definitions].map(([sourceId, definition]) => {
     const state = states.get(sourceId);
-    if (!state || (state.achieved !== 0 && state.achieved !== 1) ||
-        (definition.hidden !== 0 && definition.hidden !== 1)) throw new GameSyncError("STEAM_ACHIEVEMENTS_INCOMPLETE");
-    const earned = state.achieved === 1, hidden = definition.hidden === 1, redact = hidden && !earned;
-    const time = state.unlocktime ?? 0;
-    if (typeof time !== "number" || !Number.isSafeInteger(time) || time < 0 ||
-        time * 1000 > Date.parse(observedAt) + 60000 || (!earned && time !== 0)) {
+    if (!state || (definition.hidden !== 0 && definition.hidden !== 1)) {
       throw new GameSyncError("STEAM_ACHIEVEMENTS_INCOMPLETE");
     }
+    const { earned, time } = achievementProgress(state, observedAt);
+    const hidden = definition.hidden === 1, redact = hidden && !earned;
     const earnedDate = time > 0 ? platformPlayDay({ start: new Date(time * 1000).toISOString(), end: null,
       precision: "datetime" }, timeZone)?.start ?? null : null;
     const name = redact ? null : publicText(definition.displayName, 500);
