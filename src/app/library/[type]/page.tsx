@@ -46,16 +46,39 @@ export default async function LibraryPage({ params, searchParams }: Props) {
       ))}
     </Segments>
   );
-  const game = section.kind === "game";
+  const sort = (
+    <SortToggle href={libraryHref(type, status, order ? null : "date-asc", year)}
+      now={order ? { label: "最早", mark: "up" } : { label: "最近", mark: "down" }}
+      next={order ? { label: "最近", mark: "down" } : { label: "最早", mark: "up" }} />
+  );
+  const yearCounts = Object.fromEntries(yearChoices.flatMap(choice => choice.value === null ? [] : [[choice.value, choice.count]]));
+  // Keyed by every choice so a change starts a fresh list instead of reusing the old cursor.
+  const listKey = `${status}:${selected ?? "all"}:${order ?? "default"}`;
+
+  // Games (乙, 2026-11-24): one rail from top to bottom. 最近在玩 is its first part and each year one more, the part's
+  // name in a column on the left; the years are written there, so there is no year row, and the order sits beside
+  // the statuses. 最近在玩 streams in on its own, so the library never waits for it, and it does not follow the
+  // statuses (丙, 2026-11-24). An address with ?year= still lists that year alone.
+  if (section.kind === "game") return (
+    <div className="wrap wrap--wide">
+      <header className="page-head library__head">
+        <h1>{section.label}</h1>
+        <div className="library__head-tools">{sort}{statusTabs}</div>
+      </header>
+      <div className="game-rail">
+        <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense>
+        <LibraryGrid key={listKey} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone}
+          yearCounts={yearCounts} runLabel={tabs.find(([value]) => value === status)?.[1] ?? section.label} />
+      </div>
+    </div>
+  );
+
   return (
-    <div className={game ? "wrap wrap--wide" : "wrap"}>
+    <div className="wrap">
       <header className="page-head library__head">
         <h1>{section.label}</h1>
         {statusTabs}
       </header>
-      {/* 最近在玩 streams in on its own, so the library never waits for it; the statuses above are the library's,
-          as on the other shelves, and the row below them does not follow them (the owner's pick 丙, 2026-11-24). */}
-      {game ? <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense> : null}
       <div className="library__filters">
         {/* With one year and nothing undated there is nothing to switch between. */}
         {yearChoices.length > 2 ? (
@@ -66,13 +89,9 @@ export default async function LibraryPage({ params, searchParams }: Props) {
           </ScrollingSegments>
         ) : null}
         {/* Always at the end of the year row, also where there is none, so every status puts it in the same place. */}
-        <SortToggle href={libraryHref(type, status, order ? null : "date-asc", year)}
-          now={order ? { label: "最早", mark: "up" } : { label: "最近", mark: "down" }}
-          next={order ? { label: "最近", mark: "down" } : { label: "最早", mark: "up" }} />
+        {sort}
       </div>
-      {/* Keyed by every choice so a change starts a fresh list instead of reusing the old cursor. */}
-      <LibraryGrid key={`${status}:${selected ?? "all"}:${order ?? "default"}`} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone}
-        yearCounts={game ? Object.fromEntries(yearChoices.flatMap(choice => choice.value === null ? [] : [[choice.value, choice.count]])) : undefined} />
+      <LibraryGrid key={listKey} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone} />
     </div>
   );
 }
