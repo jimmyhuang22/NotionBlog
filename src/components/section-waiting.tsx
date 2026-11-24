@@ -25,22 +25,19 @@ export function SectionWaiting({ path, heading }: { path: string; heading?: Reac
   const label = `正在加载${title}`;
   const library = path.startsWith("/library/") ? librarySections[path.slice("/library/".length)] : undefined;
 
-  // Games (乙, 2026-11-24): the order beside the statuses, then the rail, 最近在玩's place and one year of empty cases.
+  // Games (乙, 2026-11-24): the stage's place, the statuses as tabs, then one year of empty cases on the line.
   if (library?.kind === "game") return (
-    <div className="wrap wrap--wide page-loading" role="status" aria-label={label}>
-      <header className="page-head library__head">
-        {head}
-        <div className="library__head-tools" aria-hidden="true">
-          <SortShell label="最近" />
-          <div className="segmented">
-            {library.tabs.map(([value, name]) => <a key={value} aria-current={value === library.defaultStatus ? "true" : undefined}>{name}</a>)}
-          </div>
+    <div className="wrap wrap--wide game-page page-loading" role="status" aria-label={label}>
+      <header className="page-head library__head">{head}</header>
+      <RecentGamesWaiting />
+      <div className="game-tools" aria-hidden="true">
+        <div className="segmented segmented--tabs">
+          {library.tabs.map(([value, name]) => <a key={value} aria-current={value === library.defaultStatus ? "true" : undefined}>{name}</a>)}
         </div>
-      </header>
-      <div className="game-rail" aria-hidden="true">
-        <RecentGamesWaiting />
+      </div>
+      <div className="game-line" aria-hidden="true">
         <section className="game-year">
-          <div className="game-year__side"><span className="skeleton skeleton--text" style={{ width: 64 }} /></div>
+          <div className="game-year__mark"><span className="skeleton skeleton--text" style={{ width: 96, height: 40 }} /></div>
           <div className="library__wall">
             {Array.from({ length: 12 }, (_, index) => (
               <div key={index} className="library__item"><span className="game-case game-case--waiting" /></div>

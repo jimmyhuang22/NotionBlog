@@ -6,11 +6,12 @@ import type { ImageAsset, Page } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { runsBy } from "../lib/runs.ts";
-import { cardParts, coverBadge, gameCaseFace, itemDate, knownStatusLabel, workSentence, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
+import { cardParts, cardTimeLabel, coverBadge, gameCaseFace, gameYearFacts, itemDate, knownStatusLabel, platformChips, workSentence, type GamePlatformIcon, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
 import type { Game } from "../../contracts/content.ts";
 import { LinkPending } from "./link-pending";
 import { ListTail } from "./list-tail";
 import { GameCase } from "./game-case";
+import { GamePlatformIconMark } from "./game-tag";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { useImageFailure } from "./use-image-failure";
 import { useFadeIn } from "./use-fade-in";
@@ -94,12 +95,47 @@ function WorkLink({ href, className, cover, style, children }: { href: string; c
 }
 
 /**
- * Games as parts of the page's rail (乙, 2026-11-24): each year one part, its year and the year's count from the
- * server in the label column on the left, so a list still loading says the whole year, and its cases as a wall on
- * the right (丙, 2026-11-24). Each row of a wall grows a little so both its edges line up, the cases keeping their
- * shape. A list in one run (a wishlist, or an address narrowed to one year) is one part under its own name. A
- * pointer on a case lifts it and brings its name up from the bottom of the case, the rest of the wall untouched
- * (丙, 2026-11-24); without a pointer the name stays under each case.
+ * The years as rings on a line (乙, 2026-11-24): the year written large and outlined in a column that stays in view
+ * while its games scroll by, filling from the bottom as the year is read; the line beside fills as far as the reader
+ * has come. Measured from the page on scroll, nothing moving by itself.
+ */
+function useYearRings(line: { current: HTMLDivElement | null }) {
+  useEffect(() => {
+    const element = line.current;
+    if (!element) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const anchor = window.innerHeight * 0.42;
+      const box = element.getBoundingClientRect();
+      element.style.setProperty("--progress", `${Math.max(0, Math.min(box.height, anchor - box.top))}px`);
+      let now: Element | null = null;
+      for (const year of element.querySelectorAll<HTMLElement>(".game-year")) {
+        const part = year.getBoundingClientRect();
+        const read = Math.max(0, Math.min(1, (anchor - part.top) / Math.max(1, part.height)));
+        year.style.setProperty("--fill", read.toFixed(3));
+        year.toggleAttribute("data-read", read >= 1);
+        if (read > 0 && read < 1) now = year;
+      }
+      for (const year of element.querySelectorAll(".game-year")) year.toggleAttribute("data-now", year === now);
+    };
+    const soon = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener("scroll", soon, { passive: true });
+    window.addEventListener("resize", soon);
+    const grown = new ResizeObserver(soon);
+    grown.observe(element);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", soon); window.removeEventListener("resize", soon); grown.disconnect(); };
+  }, [line]);
+}
+
+/**
+ * Games as years on a line (乙, 2026-11-24): each year one part, its ring in the column on the left with the year's
+ * count from the server, so a list still loading says the whole year; once all of a year's games are in, the hours
+ * and the platforms are added under it. Its cases stand on the right as a wall (丙), each row growing a little so
+ * both its edges line up. A year of one or two games lays them out with their facts instead of leaving its row
+ * empty. A list in one run (a wishlist, or an address narrowed to one year) is one part under its own name. A
+ * pointer on a case lifts it and brings its name up inside it, the rest of the wall untouched (丙).
  */
 function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
   groups: Group[]; yearCounts?: Record<string, number>; unit: string;
@@ -107,6 +143,8 @@ function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
   run: { label: string; count: number | null };
   itemClass: (item: LibraryItem) => string; itemStyle: (item: LibraryItem) => CSSProperties;
 }) {
+  const line = useRef<HTMLDivElement>(null);
+  useYearRings(line);
   const card = (item: LibraryItem) => {
     if (item.kind !== "game") return null;
     const ratio = gameCaseFace(item).ratio;
@@ -121,17 +159,57 @@ function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
       </WorkLink>
     );
   };
-  return groups.map(group => {
-    const label = group.label === null ? run.label : group.key === "unknown" ? "无日期" : group.label;
-    const count = group.label === null ? run.count : yearCounts?.[group.key === "unknown" ? "undated" : group.key];
+  const feature = (item: LibraryItem) => {
+    if (item.kind !== "game") return null;
+    const face = gameCaseFace(item);
+    const time = cardTimeLabel(item.playedTime);
     return (
-      <section key={`${group.key}:${group.items[0]?.id}`} className="game-year">
-        <h2 className="game-year__side game-year__label"><b>{label}</b>{count ? <small>{count} {unit}</small> : null}</h2>
-        <div className="library__wall">{group.items.map(card)}</div>
-      </section>
+      <WorkLink key={item.id} href={item.href} cover={item.cover} className={`${itemClass(item)} game-feature`} style={{ ...itemStyle(item), "--case-ratio": face.ratio } as CSSProperties}>
+        <GameCase game={item} />
+        <span className="game-feature__text">
+          {face.status ? <span className={item.status === "platinumed" ? "game-feature__badge game-feature__badge--platinum" : "game-feature__badge"}>{face.status}</span> : null}
+          <span className="game-feature__title">{item.title}</span>
+          <span className="game-feature__facts">
+            {time ? <span>已玩 <b>{time}</b></span> : null}
+            {item.platforms.length ? <span>{platformChips(item.platforms).map(chip => chip.label).join(" / ")}</span> : null}
+            {item.rating ? <span>{ratingLabel(item.rating)}</span> : null}
+          </span>
+        </span>
+        <LinkPending />
+      </WorkLink>
     );
-  });
+  };
+  return (
+    <div ref={line} className="game-line">
+      <div className="game-line__spine" aria-hidden="true"><i /></div>
+      {groups.map(group => {
+        const label = group.label === null ? run.label : group.key === "unknown" ? "无日期" : group.label;
+        const count = group.label === null ? run.count : yearCounts?.[group.key === "unknown" ? "undated" : group.key] ?? null;
+        const games = group.items.filter((item): item is Game => item.kind === "game");
+        const whole = count !== null && games.length >= count;
+        const facts = whole ? gameYearFacts(games) : null;
+        return (
+          <section key={`${group.key}:${group.items[0]?.id}`} className="game-year">
+            <div className="game-year__mark">
+              <h2 className={/^\d{4}$/u.test(label) ? "game-year__num" : "game-year__num game-year__num--word"}>{label}</h2>
+              <p className="game-year__facts">
+                {count ? <b>{count} {unit}</b> : null}{facts?.hours ? <span>{"\u00a0· "}{facts.hours} 小时</span> : null}
+              </p>
+              {facts?.platforms.length ? (
+                <p className="game-year__platforms">
+                  {facts.platforms.map(entry => <span key={entry.icon} title={gamePlatformName(entry.icon)}><GamePlatformIconMark icon={entry.icon} /><span className="visually-hidden">{gamePlatformName(entry.icon)}</span>{entry.count}</span>)}
+                </p>
+              ) : null}
+            </div>
+            {whole && games.length <= 2 ? <div className="game-year__few">{group.items.map(feature)}</div> : <div className="library__wall">{group.items.map(card)}</div>}
+          </section>
+        );
+      })}
+    </div>
+  );
 }
+
+const gamePlatformName = (icon: GamePlatformIcon) => ({ switch: "Switch", playstation: "PlayStation", steam: "Steam", pc: "PC", "3ds": "3DS" })[icon];
 
 export function LibraryGrid({ kind, status, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts, runLabel }: {
   kind: LibraryItem["kind"]; status: string | null;

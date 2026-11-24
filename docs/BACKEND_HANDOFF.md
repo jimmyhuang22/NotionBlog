@@ -466,6 +466,18 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
   - **两个版本都有记录的游戏**（奖杯合并显示为“PS4 / PS5”的那类）：按竖图对应的版本改名，对应不上就保持“PlayStation”。
   - 如果改名的影响面太大，可以改为给所有 PS 游戏发布型号字段。但现在的 `playStationModel` 挂在必须带 `mode` 的 `boxArtLayout` 上，这样做要改契约，要先找用户确认。
 
+### 二十二、游戏库按平台筛选（2026-11-24，Claude）
+
+**用户已确认**（2026-11-24）：游戏页改成“年轮”（[决策](decisions/2026-11-24-games-rings.md)），去掉排序按钮，在“在玩／通关／想玩”旁边加平台筛选：全部、Switch、PlayStation、Steam、PC，每个带款数。前端已上了不依赖这一节的部分，平台那一排等这一节交付后再接。
+
+现在的接口做不到：游戏的 `platform=` 只按平台名精确匹配（`matchesGamePlatform` 只给“PlayStation”开了合并 PS4／PS5 的例外），年份统计也只跟状态走。需要：
+
+- **按平台类别筛选**：游戏的 `ListQuery.platform` 接受四个类别值，`switch`（Nintendo Switch、Nintendo Switch 2、3DS）、`playstation`（所有 PlayStation 版次）、`steam`、`pc`。一款游戏有几个平台就出现在几个类别里（用户没另说时按这个；卡盒仍只印时长最长的那个平台）。旧的平台名写法照旧能用。
+- **年份统计跟着平台走**：`readLibraryFirstPage` 和 `/api/library/game/years` 带了 `platform` 时，`years` 和 `undatedCount` 只算这个平台在当前状态下的游戏。年轮左边每年的款数和“已显示 N／M”都靠它。
+- **各平台的款数**：同一个回应里加一个可选字段，例如 `platforms: { key: "switch" | "playstation" | "steam" | "pc"; count: number }[]`，只算当前状态、不受年份和平台筛选影响，没有游戏的类别可以省掉。前端只在有这个字段时显示平台那一排，所以先发布后端也不会出空按钮。
+- 这是契约变更，字段名和形状由 Codex 定，定了写进 `contracts/content.ts` 和 fixtures，告诉前端。
+- **交付后告诉前端**：两站上线时间。前端接上 `?platform=` 的地址、平台那一排和底部浮动坞里的平台，并复验各状态、各平台的款数与年份。
+
 ## 可直接给 Codex 的启动指令
 
 ```text
