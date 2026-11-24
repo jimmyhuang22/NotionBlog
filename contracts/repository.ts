@@ -33,7 +33,7 @@ export interface ContentRepository {
   getHome(): Promise<HomeSummary>;
   /** Optional adapter capability; counts current public Status without loading bodies. */
   getStatusYears?(): Promise<StatusYears>;
-  /** Public library experience years, optionally restricted to a status; no bodies. */
+  /** Public library experience years, scoped by status and game platform when supplied. No bodies. */
   getLibraryYears?(kind: LibraryKind, query?: LibraryYearsQuery): Promise<LibraryYears>;
   /** Optional adapter capability: validated course metadata without reading its body. */
   getCourseMetadata?(courseSlug: string): Promise<Course | null>;

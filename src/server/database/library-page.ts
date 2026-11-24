@@ -8,7 +8,7 @@ import { GAME_DATE_POLICY } from "../../lib/content/game-date.ts";
 import { validateListQuery } from "../../lib/content/query.ts";
 import { statusTimeZone, type StatusReadOptions } from "../../lib/content/status.ts";
 import { isLibraryKind, libraryYears } from "../../lib/content/years.ts";
-import { compareContent, matchesContent, pageOf } from "../../lib/content/website.ts";
+import { compareContent, matchesContent, pageOf, summarizeLibraryYears } from "../../lib/content/website.ts";
 import { checkContentReadBudget } from "../content-read-budget.ts";
 import { applyDeliveryHints, validateDeliveryHints, type DeliveryHints, type PrepareLibraryDelivery } from "./library-display.ts";
 import { projectWebsiteContent as project, type Projection } from "./website-repository.ts";
@@ -63,13 +63,15 @@ export function createLibraryPageReader(db: SqlExecutor, options: LibraryReadOpt
     const zone = statusTimeZone(options), mode = options.mode;
     const pin = validateProjection(await callSql<LibraryProjection>(db, LIBRARY_SELECTORS_SQL, [mode, kind, protocol.migration.sha256]), kind, 20000);
     const selectors = project(pin.records, pin, zone);
-    const yearItems = selectors.map(d => d.item).filter(item => matchesContent(item, query.status ? { status: query.status } : {}, zone));
     let years: LibraryYears | null = null;
     try {
-      years = (options.computeYears ?? libraryYears)(yearItems, zone);
-      if (!years || years.timeZone !== zone || !Array.isArray(years.years) || !Number.isSafeInteger(years.undatedCount) || years.undatedCount < 0 ||
-        years.years.some((x, i) => !Number.isSafeInteger(x.year) || x.year < 1 || x.year > 9999 || !Number.isSafeInteger(x.count) || x.count <= 0 || i > 0 && years!.years[i - 1].year <= x.year) ||
-        years.undatedCount + years.years.reduce((n, x) => n + x.count, 0) !== yearItems.length) throw Error("Invalid optional years");
+      years = summarizeLibraryYears(kind, selectors.map(({ item }) => item), query, zone, (items, timeZone) => {
+        const summary = (options.computeYears ?? libraryYears)(items, timeZone);
+        if (!summary || summary.timeZone !== timeZone || !Array.isArray(summary.years) || !Number.isSafeInteger(summary.undatedCount) || summary.undatedCount < 0 ||
+          summary.years.some((x, i) => !Number.isSafeInteger(x.year) || x.year < 1 || x.year > 9999 || !Number.isSafeInteger(x.count) || x.count <= 0 || i > 0 && summary.years[i - 1].year <= x.year) ||
+          summary.undatedCount + summary.years.reduce((n, x) => n + x.count, 0) !== items.length) throw Error("Invalid optional years");
+        return summary;
+      });
     } catch { checkContentReadBudget(); years = null; }
     const select = (q: ListQuery) => {
       const { cursor, limit, ...filters } = q;

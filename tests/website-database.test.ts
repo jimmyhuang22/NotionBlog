@@ -132,7 +132,7 @@ test("v2 database supports all DTOs and preserves the frozen v1 worker and roles
     const status="status" in item?item.status:undefined;
     assert.deepEqual(await repo.getLibraryYears!(kind,{status}),years);
     await db.query("SELECT nb_v2_api.set_denied($1,true)",[item.id]);
-    assert.deepEqual(await repo.getLibraryYears!(kind),{years:[],undatedCount:0,timeZone:"UTC"});
+    assert.deepEqual(await repo.getLibraryYears!(kind),{years:[],undatedCount:0,timeZone:"UTC",...(kind==="game"?{platforms:[],platformTotal:0}:{})});
     assert.equal((await repo.list(kind,{year:selection})).total,0);
     await db.query("SELECT nb_v2_api.set_denied($1,false)",[item.id]);
    }

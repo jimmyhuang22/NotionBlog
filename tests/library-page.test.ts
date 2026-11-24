@@ -197,7 +197,7 @@ test("published library HTTP and SSR pages prepare only selected covers and reje
   await addCover("game-0", "cover", id("wide"), 800, 450);
   await addCover("game-0", "boxArt", id("upright"), 400, 550);
   await addCover("game-3", "cover", id("off-page"), 800, 450);
-  await h.db.query(`UPDATE nb_v2.records SET item=item || '{"playedDate":{"start":"2024-12-31","end":"2025-01-01","precision":"date"}, "status":"platinumed"}'::jsonb
+  await h.db.query(`UPDATE nb_v2.records SET item=item || '{"playedDate":{"start":"2024-12-31","end":"2025-01-01","precision":"date"}, "status":"platinumed", "platforms":["PlayStation 4","PlayStation 5","Steam"]}'::jsonb
     WHERE run_id=$1 AND id='game-0'`, [h.lease.runId]);
 
   const lookups: string[][] = [];
@@ -243,6 +243,24 @@ test("published library HTTP and SSR pages prepare only selected covers and reje
   assert.deepEqual((await years.json()).data, expectedYears);
   assert.ok(expectedYears.years.some(year => year.year === 2025));
   assert.deepEqual(lookups, []);
+  const filtered = { status: "completed", platform: "steam" };
+  const steamYears = {
+    years: [{ year: 2025, count: 1 }], undatedCount: 0, timeZone: "UTC", platformTotal: 9,
+    platforms: [{ key: "playstation", count: 9 }, { key: "steam", count: 1 }],
+  };
+  const steam = await libraryYearsResponse(req("/api/library/game/years?status=completed&platform=steam"), "game", optimized, all);
+  assert.equal(steam.status, 200);
+  assert.deepEqual((await steam.json()).data, steamYears);
+  assert.deepEqual(lookups, []);
+  const compact = createLibraryPageReader(h.reader, { mode: "published" });
+  const compactGame = await compact("game", { ...filtered, year: 2026 });
+  assert.equal(compactGame.year, null);
+  assert.deepEqual(compactGame.years, steamYears);
+  assert.deepEqual(compactGame.page.items.map(item => item.id), ["game-0"]);
+  const optimizedGame = await readLibraryFirstPageFrom(optimized, optimized, "game", { ...filtered, year: 2026 });
+  assert.equal(optimizedGame.year, null);
+  assert.deepEqual(optimizedGame.years, steamYears);
+  assert.deepEqual(optimizedGame.page.items.map(item => item.id), ["game-0"]);
 
   catalogueReads = 0;
   assert.equal((await readLibraryFirstPageFrom(optimized, optimized, "game", query)).page.total, reference.total);
@@ -260,4 +278,7 @@ test("published library HTTP and SSR pages prepare only selected covers and reje
   await assert.rejects(optimized.list("game", query), { code: "INVALID_QUERY" });
   await assert.rejects(optimized.list("game", next), { code: "INVALID_QUERY" });
   assert.ok((await optimized.list("game", query)).items.every(item => item.id !== "game-0"));
+  assert.deepEqual(await optimized.getLibraryYears!("game", filtered), {
+    years: [], undatedCount: 0, timeZone: "UTC", platformTotal: 8, platforms: [{ key: "playstation", count: 8 }],
+  });
 });

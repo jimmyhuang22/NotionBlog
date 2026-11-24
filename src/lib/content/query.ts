@@ -77,7 +77,9 @@ export function parseListQuery(kind: ContentKind, params: URLSearchParams): List
 export function validateLibraryYearsQuery(kind: LibraryKind, query: LibraryYearsQuery): void {
   if (!isLibraryKind(kind)) invalid("Library years are not supported for this content kind.");
   validateListQuery(kind, query);
-  if (Object.keys(query).some(key => key !== "status")) invalid("Library year summaries only support status.");
+  if (Object.keys(query).some(key => key !== "status" && key !== "platform")) {
+    invalid("Library year summaries support status and, for games, platform.");
+  }
 }
 export function parseLibraryYearsQuery(kind: LibraryKind, params: URLSearchParams): LibraryYearsQuery {
   const query = parseListQuery(kind, params);

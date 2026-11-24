@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
-import type { AnyContent, ContentDetail, ContentDocument, ContentKind, ContentLink, DateRange, ListQuery, Page } from "../../../contracts/content.ts";
+import type { AnyContent, ContentDetail, ContentDocument, ContentKind, ContentLink, DateRange, GamePlatformCategory, LibraryKind, LibraryYears, LibraryYearsQuery, ListQuery, Page } from "../../../contracts/content.ts";
 import type { ContentRepository } from "../../../contracts/repository.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import type { CursorQuery, PublicContentSnapshot, SearchPage, SearchQuery, SearchSnapshot, TimelineEvent } from "../../../contracts/website.ts";
 import { CONTENT_KINDS, type ContentFeatures } from "../../../config/features.ts";
 import { statusTimeZone, statusPreview } from "./status.ts";
-import { contentYear, supportsYear } from "./years.ts";
+import { contentYear, libraryYears, supportsYear } from "./years.ts";
 import { gameActivityDate, gameBrowsingDate, platformPlayDay } from "./game-date.ts";
-import { matchesGamePlatform } from "./game-case.ts";
+import { gamePlatformCategories, gamePlatformCategory, matchesGamePlatform } from "./game-case.ts";
 import { validateLibraryYearsQuery } from "./query.ts";
 import type { FeedSnapshot } from "../../../contracts/home-feed.ts";
 import { searchExcerpt, searchHitDetails, searchKey } from "./search-result.ts";
@@ -84,9 +84,32 @@ export function matchesContent(item: AnyContent, query: ListQuery, zone: string)
     else if (item.status !== query.status) return false;
   }
   if (query.type && (item.kind !== "movie" || item.mediaType !== query.type)) return false;
-  if (query.platform && (item.kind !== "game" || !matchesGamePlatform(item.platforms, query.platform))) return false;
+  if (query.platform && (item.kind !== "game" || !matchesGamePlatform(item.platforms ?? [], query.platform))) return false;
   if (query.semester && (item.kind !== "course" || item.semester !== query.semester)) return false;
   return query.year === undefined || (supportsYear(item.kind) && contentYear(item, zone) === (query.year === "undated" ? null : query.year));
+}
+
+export function summarizeLibraryYears(
+  kind: LibraryKind, items: AnyContent[], { status, platform }: LibraryYearsQuery, zone: string,
+  computeYears = libraryYears,
+): LibraryYears {
+  const inStatus = status ? items.filter(item => matchesContent(item, { status }, zone)) : items;
+  const inPlatform = platform ? inStatus.filter(item => matchesContent(item, { platform }, zone)) : inStatus;
+  const years = computeYears(inPlatform, zone);
+  if (kind !== "game") return years;
+
+  const counts = new Map<GamePlatformCategory, number>();
+  for (const item of inStatus) {
+    if (item.kind !== "game") continue;
+    for (const category of new Set((item.platforms ?? []).map(gamePlatformCategory))) {
+      if (category) counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+  }
+  const platforms = gamePlatformCategories.flatMap(key => {
+    const count = counts.get(key);
+    return count === undefined ? [] : [{ key, count }];
+  });
+  return { ...years, platforms, platformTotal: inStatus.length };
 }
 /** Search readable AST text only; href/src and unavailable link labels are excluded. */
 export function documentPlainText(document: ContentDocument | null): string {

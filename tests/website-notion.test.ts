@@ -193,16 +193,25 @@ test("Game play platform formula is checked against the last-play rollup and the
 test("Notion library years respect allowlists, trash and combined filters without reading bodies or media", async () => {
  const s=setup();
  const source=s.config.sources[0];
- const config={...s.config,sources:[{...source,statusMap:{Clear:"clear",Platinum:"platinumed",Wishlist:"wishlist"},publication:{mode:"allowlist",allowlistPageIds:[id(10),id(11),id(12)]}},s.config.sources[1]]};
- for(const [n,status,start] of [[10,"Clear","2025-12-31T14:30:00Z"],[11,"Platinum","2025-12-31T14:30:00Z"],[12,"Wishlist",null],[13,"Clear","2024-01-01"]] as const) {
+ const config={...s.config,sources:[{...source,fields:{...source.fields,platforms:"Platforms"},statusMap:{Clear:"clear",Platinum:"platinumed",Wishlist:"wishlist"},publication:{mode:"allowlist",allowlistPageIds:[id(10),id(11),id(12)]}},s.config.sources[1]]};
+ const getDataSource = s.client.getDataSource!;
+ s.client.getDataSource = async key => {
+  const schema = await getDataSource(key);
+  if (schema && key === id(1)) Object.assign(schema.properties, { Platforms: { id: "p", type: "multi_select", multi_select: { options: [] } } });
+  return schema;
+ };
+ for(const [n,status,start,platforms] of [[10,"Clear","2025-12-31T14:30:00Z",["Steam", "Personal Computer"]],[11,"Platinum","2025-12-31T14:30:00Z",["PlayStation 4", "PlayStation 5"]],[12,"Wishlist",null,["Nintendo 3DS"]],[13,"Clear","2024-01-01",["Nintendo Switch 2"]]] as const) {
   const page=structuredClone(s.pages.get(id(10))!);page.id=id(n);
-  Object.assign(page.properties,{Status:{id:"s",type:"select",select:{name:status}},Date:{id:"d",type:"date",date:start?{start,end:null,time_zone:null}:null}});
+  Object.assign(page.properties,{Status:{id:"s",type:"select",select:{name:status}},Date:{id:"d",type:"date",date:start?{start,end:null,time_zone:null}:null},Platforms:{id:"p",type:"multi_select",multi_select:platforms.map(name=>({name}))}});
   s.pages.set(id(n),page);
  }
  s.client.listBlocks=async()=>{throw Error("Years must not read bodies");};
  let zone="Australia/Melbourne";
  const repo=createWebsiteNotionRepository({client:s.client,config:parseWebsiteNotionConfig(config),timeZone:()=>zone,registerImage:async()=>{throw Error("Years must not register media");}});
- assert.deepEqual(await repo.getLibraryYears!("game",{status:"completed"}),{years:[{year:2026,count:2}],undatedCount:0,timeZone:zone});
+ const completedPlatforms = [{ key:"playstation",count:1 },{ key:"steam",count:1 },{ key:"pc",count:1 }];
+ assert.deepEqual(await repo.getLibraryYears!("game",{status:"completed"}),{years:[{year:2026,count:2}],undatedCount:0,timeZone:zone,platforms:completedPlatforms,platformTotal:2});
+ assert.deepEqual(await repo.getLibraryYears!("game",{status:"completed",platform:"steam"}),{years:[{year:2026,count:1}],undatedCount:0,timeZone:zone,platforms:completedPlatforms,platformTotal:2});
+ assert.equal((await repo.list("game",{status:"completed",platform:"steam"})).total,1);
  assert.equal((await repo.getLibraryYears!("game",{status:"wishlist"})).undatedCount,1);
  const first=await repo.list("game",{status:"completed",year:2026,order:"title-asc",limit:1});assert.equal(first.total,2);
  const second=await repo.list("game",{status:"completed",year:2026,order:"title-asc",limit:1,cursor:first.nextCursor!});assert.equal(second.hasMore,false);assert.notEqual(first.items[0].id,second.items[0].id);
@@ -213,6 +222,7 @@ test("Notion library years respect allowlists, trash and combined filters withou
  assert.equal((await repo.getLibraryYears!("game",{status:"completed"})).years[0].year,2025);
  s.pages.get(id(11))!.in_trash=true;
  assert.equal((await repo.getLibraryYears!("game",{status:"completed"})).years[0].count,1);
+ assert.deepEqual((await repo.getLibraryYears!("game",{status:"completed"})).platforms,completedPlatforms.slice(1));
  s.client.listPages=async()=>{throw Error("Upstream failed");};
  await assert.rejects(repo.getLibraryYears!("game"));
 });
