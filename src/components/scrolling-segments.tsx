@@ -15,9 +15,9 @@ const GIVE_BACK_AFTER = 8000;
  * the new page is in, the block is placed on whatever that says.
  *
  * `scroll` keeps the row on one line that scrolls sideways when it does not fit, with the chosen one brought
- * into view (the year row).
+ * into view (the year row). `variant` adds a look of its own (`segmented--tabs`, the games page's statuses).
  */
-export function Segments({ label, current, scroll = false, children }: { label: string; current: string | null; scroll?: boolean; children: ReactNode }) {
+export function Segments({ label, current, scroll = false, variant, children }: { label: string; current: string | null; scroll?: boolean; variant?: string; children: ReactNode }) {
   const nav = useRef<HTMLElement>(null);
   const pill = useRef<HTMLSpanElement>(null);
   const giveBack = useRef<number | undefined>(undefined);
@@ -70,7 +70,7 @@ export function Segments({ label, current, scroll = false, children }: { label: 
   }
 
   return (
-    <nav ref={nav} className={scroll ? "segmented segmented--slide segmented--scroll" : "segmented segmented--slide"} aria-label={label} onClick={onClick}>
+    <nav ref={nav} className={["segmented", "segmented--slide", scroll ? "segmented--scroll" : null, variant ? `segmented--${variant}` : null].filter(Boolean).join(" ")} aria-label={label} onClick={onClick}>
       <span ref={pill} className="segmented__pill" aria-hidden="true" />
       {children}
     </nav>
