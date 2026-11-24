@@ -107,7 +107,7 @@ test("capacity/fresh verification transition pins every reviewed runtime byte an
       // outside this frozen sync transition; the newer digest must still reject.
       const expected=pair.path==="src/server/notion/website-repository.ts"
         ? "e59c6fa465f5a91d52773477dc25d8b5e8089b70f7edd06a2b018fc54b77e8e9"
-        : "7239bd5d42ff50d39d5a56f6c209e8e7d09aca6a7cec8900cf16d7f53fe9ee6f";
+        : "631b5754f4b50a275a7ea00d96648ced24f7673304d55d583c30cacfd7f1a7a0";
       assert.equal(current,expected);
       const newMapper=structuredClone(consumer);newMapper.files.find(f=>f.path===pair.path)!.sha256=current;
       assert.throws(()=>checkCaptureReleaseCompatibility(producer,newMapper),{code:"RELEASE_INVALID"});
@@ -158,7 +158,7 @@ for (const path of ["database/capture-proof-compatibility.json", "database/captu
       : pair.path === "src/app/media/v2/[assetId]/route.ts"
         ? "bd5c755850f3c3e4122cc93df4b5b224d9aeec7c13ef81f095a3c26a37961d8c"
       : pair.path === "src/server/database/runtime.ts"
-        ? "fa3409e04f9a030d520230e3b4b312176b125858f36b00a0f9a20029e11a6895"
+        ? "60e8f88bcaeb15df6aa26990f9fea90e3e52707b77300980e7ce91b6ad860beb"
       : pair.path === "src/server/media/thumbnail.ts"
         ? "cf5aea5e9c4ebfc20a8474ea72a92e39704cb4c5ba854dedbbfc62ee6701d995"
         : null;

@@ -1,25 +1,27 @@
-import type { AnyContent, ContentDetail, ContentKind, ContentByKind, Course, Game, ListQuery, StudyNote, StudyNode } from "../../../contracts/content.ts";
+import type { AnyContent, ContentDetail, ContentKind, ContentByKind, Course, Game, LibraryKind, LibraryYears, LibraryYearsQuery, ListQuery, Page, StudyNote, StudyNode } from "../../../contracts/content.ts";
 import type { ContentRepository } from "../../../contracts/repository.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../../../contracts/website-sync.ts";
 import { callSql, type SqlExecutor } from "./sql.ts";
 import { sanitizePublicText } from "../notion/public-text.ts";
 import { validateListQuery, validateLibraryYearsQuery } from "../../lib/content/query.ts";
-import { libraryYears } from "../../lib/content/years.ts";
+import { isLibraryKind, libraryYears } from "../../lib/content/years.ts";
+import { hasYear } from "../../lib/year-filter.ts";
 import { studyTree } from "../notion/study-order.ts";
 import { compareContent, matchesContent, pageOf, documentPlainText, searchContentSnapshot, validateSearchQuery } from "../../lib/content/website.ts";
 import { CONTENT_KINDS } from "../../../config/features.ts";
 import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../../lib/content/status.ts";
-import { WEBSITE_CONTENT_SQL, WEBSITE_SEARCH_DETAILS_SQL, WEBSITE_SNAPSHOT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "./website-projection.ts";
+import { WEBSITE_CONTENT_SQL, WEBSITE_LIBRARY_YEARS_SQL, WEBSITE_SEARCH_DETAILS_SQL, WEBSITE_SNAPSHOT_SQL, WEBSITE_STATUS_INDEX_SQL, WEBSITE_STATUS_PAGE_SQL } from "./website-projection.ts";
 import { measureContentRead, measureContentReadAsync } from "../content-read-timing.ts";
 import { SCOPED_INDEX_SQL, SCOPED_SEARCH_SQL, SCOPED_FILTERED_SEARCH_SQL, SCOPED_FILTERED_SCOPE_SEARCH_SQL, SCOPED_SELECTED_SQL, SCOPED_VERSION_SQL, SCOPED_STATUS_INDEX_SQL } from "./scoped-reads.ts";
-import { contentReadBudgetIdentity } from "../content-read-budget.ts";
+import { checkContentReadBudget, contentReadBudgetIdentity } from "../content-read-budget.ts";
 import { STUDY_DIRECTORY_SQL, STUDY_NOTE_ELIGIBILITY_SQL, STUDY_NOTE_DETAIL_SQL } from "./study-reads.ts";
 import { readSearchContexts } from "./search-context.ts";
 import { SEARCH_CONTEXT_VERSION } from "../../lib/content/search-context.ts";
 import { SEARCH_DETAIL_KINDS, searchHitDetails } from "../../lib/content/search-result.ts";
 import type { SearchHit, SearchPage } from "../../../contracts/website.ts";
+import { applyDeliveryHints, type PrepareLibraryDelivery } from "./library-display.ts";
 export interface Projection { runId: string; revision: string; schemaDigest: string; records: ContentDetail<AnyContent>[]; links: string[]; mediaIds: string[]; hasMore?: boolean }
 /** Scrub references against CURRENT eligibility even when stored AST predates a withdrawal. */
 function project<T>(value: T, snapshot: Pick<Projection, "links" | "mediaIds">, timeZone: string): T {
@@ -49,6 +51,8 @@ export interface WebsiteReadOptions extends StatusReadOptions {
   /** Explicit opt-in after the independent context reader is installed and verified. */
   searchContext?: boolean;
   scoped?: boolean;
+  /** Qualified catalogue metadata before delivery hints are added. */
+  library?: { db: SqlExecutor; prepareDelivery?: PrepareLibraryDelivery };
   filteredSearch?: boolean;
   /** Opt in only with the independent filtered-scope SQL capability. */
   filteredScopeSearch?: boolean;
@@ -59,6 +63,8 @@ export interface WebsiteReadOptions extends StatusReadOptions {
 
 /** Qualified SQL projections without a persistent publication cache or Notion calls. */
 export function createWebsiteDatabaseRepository(db: SqlExecutor, options: WebsiteReadOptions = {}): ContentRepository {
+  const library = options.library;
+  if (library && !options.scoped) throw new ContentServiceError("MISCONFIGURED", "Deferred library delivery requires scoped reads.");
   // Resolve the same existing option as scopedReader, once per repository. The
   // shared runtime factory and its frozen producer compatibility pins stay intact.
   const filteredScopeSearch = options.filteredScopeSearch ?? (options.scoped === true && options.filteredSearch !== false && process.env.DATABASE_SEARCH_PROJECTION === "filtered-scope");
@@ -114,7 +120,7 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     return { ...page, items: page.items.map(hit => ({ ...hit, ...byId.get(hit.id) })) };
   };
   const readContent = async (kind: ContentKind, slug: string | null, documents: boolean,
-    pin?: Projection, offset = 0, limit = 1, index = false) => validate(await callSql<Projection>(db,index ? options.scoped ? SCOPED_STATUS_INDEX_SQL : WEBSITE_STATUS_INDEX_SQL : WEBSITE_CONTENT_SQL,
+    pin?: Projection, offset = 0, limit = 1, sql = WEBSITE_CONTENT_SQL, executor = db) => validate(await callSql<Projection>(executor, sql,
       [kind,documents,slug,pin?.runId??null,pin?.revision??null,offset,limit]));
   const readStudy = async (slug: string, noteSlug?: string, documents = false) => {
     const pair = await callSql<{ course: Projection; notes: Projection | null }>(db,
@@ -131,18 +137,20 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     return { course, owner, notes };
   };
   const metadataPending = new WeakMap<object, Map<ContentKind, Promise<Projection>>>();
-  const loadMetadata = async (kind: ContentKind) => {
-    let p = await readContent(kind,null,false,undefined,0,5000,kind==="status");
+  const loadMetadata = async (kind: ContentKind, executor = db,
+    sql = kind === "status" ? options.scoped ? SCOPED_STATUS_INDEX_SQL : WEBSITE_STATUS_INDEX_SQL : WEBSITE_CONTENT_SQL) => {
+    const p = await readContent(kind,null,false,undefined,0,5000,sql,executor);
     const records = project(p.records,p,zone());
+    const mediaIds = new Set(p.mediaIds);
     let more = p.hasMore;
     while(more) {
       if(records.length>=20000)throw new ContentServiceError("CONTENT_UNAVAILABLE","The public content snapshot exceeds the supported size.");
-      const next = await readContent(kind,null,false,p,records.length,5000,kind==="status");
+      const next = await readContent(kind,null,false,p,records.length,5000,sql,executor);
       if(version(next)!==version(p) || !next.records.length)throw new ContentServiceError("CONTENT_UNAVAILABLE","Content changed during metadata reading.");
       records.push(...project(next.records,next,zone()));more=next.hasMore;
+      for (const id of next.mediaIds) mediaIds.add(id);
     }
-    p = {...p,records};
-    return p;
+    return { ...p, records, mediaIds: [...mediaIds] };
   };
   // Only overlapping callers (for example list + year counts) share the read.
   // Other request scopes cannot replace that registration. Settled results and
@@ -163,8 +171,29 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     void pending.then(clear, clear);
     return pending.then(value => structuredClone(value));
   };
-  const readVersion = () => callSql<Projection>(db, options.scoped ? SCOPED_VERSION_SQL : WEBSITE_SNAPSHOT_SQL,
+  const readVersion = (executor = db) => callSql<Projection>(executor, options.scoped ? SCOPED_VERSION_SQL : WEBSITE_SNAPSHOT_SQL,
     options.scoped ? [] : [[], false]).then(validate);
+  const selectPage = <K extends ContentKind>(snapshot: Projection, kind: K, query: ListQuery, timeZone: string) => {
+    const { cursor, limit, ...filters } = query;
+    const records = snapshot.records.filter(d => matchesContent(d.item, filters, timeZone))
+      .sort((a, b) => compareContent(a.item, b.item, query.order ?? (kind === "course" ? "title-asc" : "date-desc"), timeZone));
+    return pageOf(records.map(d => d.item) as ContentByKind[K][], { cursor, limit },
+      ["list", kind, version(snapshot), filters, limit ?? 12, timeZone, ...(kind === "game" ? [GAME_DATE_POLICY] : [])]);
+  };
+  const countLibraryYears = (snapshot: Projection, query: LibraryYearsQuery, timeZone: string) =>
+    libraryYears(snapshot.records.map(record => record.item).filter(item => matchesContent(item, query, timeZone)), timeZone);
+  async function hydrateLibraryPage<K extends ContentKind>(snapshot: Projection, page: Page<ContentByKind[K]>) {
+    if (!library?.prepareDelivery || !snapshot.mediaIds.length || !page.items.length) return page;
+    const delivery = await library.prepareDelivery({
+      ...snapshot, records: page.items.map(item => ({ item, document: null })),
+    });
+    if (!delivery.size) return page;
+    // Delivery can await a separate media lookup. Recheck the live publication
+    // and deny revision before returning any objects from the original read.
+    if (version(await readVersion(library.db)) !== version(snapshot))
+      throw new ContentServiceError("INVALID_QUERY", "Content changed during pagination. Restart from the first page.");
+    return { ...page, items: applyDeliveryHints(page.items, delivery) };
+  }
   const readSnapshot: NonNullable<ContentRepository["readSnapshot"]> = async (kinds,documents=false) => {
     if(pageSize===undefined){
       const p=validate(await callSql<Projection>(db,WEBSITE_SNAPSHOT_SQL,[[...new Set(kinds)],documents]));
@@ -283,10 +312,28 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
       const p = await readContent(kind,slug,false);
       return (project(p.records,p,zone())[0]?.item ?? null) as ContentByKind[K] | null;
     },
+    ...(library && { async readLibraryPage<K extends LibraryKind>(kind: K, query: ListQuery = {}) {
+      if (!isLibraryKind(kind)) throw new ContentServiceError("INVALID_QUERY", "Unsupported library kind.");
+      validateListQuery(kind, query);
+      const timeZone = zone(), snapshot = await loadMetadata(kind, library.db);
+      let years: LibraryYears | null = null;
+      try { years = countLibraryYears(snapshot, query.status ? { status: query.status } : {}, timeZone); }
+      catch { checkContentReadBudget(); }
+      const asked = query.year ?? null, year = years && !hasYear(years, asked) ? null : asked;
+      let page = selectPage(snapshot, kind, query, timeZone);
+      if (year !== asked) {
+        const fallback = { ...query };
+        delete fallback.year;
+        page = selectPage(snapshot, kind, fallback, timeZone);
+      }
+      return { page: await hydrateLibraryPage(snapshot, page), years, year };
+    } }),
     async list<K extends ContentKind>(kind: K,query: ListQuery={}) {
-      validateListQuery(kind,query);const {cursor,limit,...filters}=query, timeZone=zone(), snapshot=await metadata(kind);
-      const records=snapshot.records.filter(d=>matchesContent(d.item,filters,timeZone)).sort((a,b)=>compareContent(a.item,b.item,query.order??(kind==="course"?"title-asc":"date-desc"),timeZone));
-      const page=pageOf(records.map(d=>d.item) as ContentByKind[K][],{cursor,limit},["list",kind,version(snapshot),filters,limit??12,timeZone,...(kind==="game"?[GAME_DATE_POLICY]:[])]);
+      validateListQuery(kind,query);
+      const timeZone = zone(), libraryRead = library && isLibraryKind(kind);
+      const snapshot = libraryRead ? await loadMetadata(kind, library.db) : await metadata(kind);
+      const page = selectPage(snapshot, kind, query, timeZone);
+      if (libraryRead) return hydrateLibraryPage(snapshot, page);
       if(kind!=="status" || !page.items.length)return page;
       const p=validate(await callSql<Projection>(db,options.scoped ? SCOPED_SELECTED_SQL : WEBSITE_STATUS_PAGE_SQL,
         options.scoped ? [kind,page.items.map(item=>item.slug),snapshot.runId,snapshot.revision] : [[kind],true,page.items.map(item=>item.slug)]));
@@ -320,8 +367,8 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     async getStatusYears() {const s=await metadata("status");return statusYears(s.records.map(d=>d.item as ContentByKind["status"]),zone());},
     async getLibraryYears(kind, query = {}) {
       validateLibraryYearsQuery(kind, query);
-      const timeZone = zone(), snapshot = await metadata(kind);
-      return libraryYears(snapshot.records.map(record => record.item).filter(item => matchesContent(item, query, timeZone)), timeZone);
+      const timeZone = zone(), snapshot = library ? await loadMetadata(kind, library.db, WEBSITE_LIBRARY_YEARS_SQL) : await metadata(kind);
+      return countLibraryYears(snapshot, query, timeZone);
     },
     async getHome() {
       const [posts,statuses,albums,books,games,courses]=await Promise.all([repository.list("post",{limit:3}),repository.list("status",{limit:12}),repository.list("album",{limit:3}),repository.list("book",{status:"reading",limit:3}),repository.list("game",{status:"playing",limit:3}),repository.list("course",{limit:6})]);

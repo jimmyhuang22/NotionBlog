@@ -23,6 +23,23 @@ export const WEBSITE_SNAPSHOT_SQL = compactWebsiteProjection(
 export const WEBSITE_CONTENT_SQL = compactWebsiteProjection(
   "SELECT nb_v2_api.read_content($1,$3,NULL,'{}'::jsonb,$6,$7,$4::uuid,$5::bigint,$2) AS value");
 
+// Keep current row qualification inside the installed reader. The year endpoint
+// needs only the displayed date and status, with no media or links on the wire.
+export const WEBSITE_LIBRARY_YEARS_SQL = `WITH projection AS MATERIALIZED (
+  SELECT nb_v2_api.read_content($1,$3,NULL,'{}'::jsonb,$6,$7,$4::uuid,$5::bigint,$2) AS value
+) SELECT value - 'records' - 'links' - 'mediaIds' || jsonb_build_object(
+  'records', (SELECT COALESCE(jsonb_agg(jsonb_build_object('document', NULL::jsonb,
+    'item', jsonb_build_object('kind', item->'kind', 'status', item->'status') ||
+      CASE $1::text
+        WHEN 'game' THEN jsonb_build_object('playedDate', item->'playedDate')
+        WHEN 'book' THEN jsonb_build_object('readingDate', item->'readingDate')
+        WHEN 'movie' THEN jsonb_build_object('watchedDate', item->'watchedDate')
+      END)), '[]'::jsonb)
+    FROM jsonb_array_elements(value->'records') AS record
+    CROSS JOIN LATERAL (SELECT record->'item' AS item) AS selected),
+  'links', '[]'::jsonb, 'mediaIds', '[]'::jsonb
+) AS result FROM projection`;
+
 // The caller supplies at most the current result page. Each exact slug uses
 // the existing qualified, pinned metadata read and its current media scope.
 export const WEBSITE_SEARCH_DETAILS_SQL = `SELECT COALESCE(jsonb_agg(jsonb_build_object(
