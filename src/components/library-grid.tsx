@@ -137,8 +137,10 @@ function useYearRings(line: { current: HTMLDivElement | null }) {
  * empty. A list in one run (a wishlist, or an address narrowed to one year) is one part under its own name. A
  * pointer on a case lifts it and brings its name up inside it, the rest of the wall untouched (丙).
  */
-function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
+function GameWall({ groups, yearCounts, unit, oneFamily, run, itemClass, itemStyle }: {
   groups: Group[]; yearCounts?: Record<string, number>; unit: string;
+  /** The list is one platform family already, so a year does not count its platforms. */
+  oneFamily: boolean;
   /** The name and count of a list in one run, which has no years to write. */
   run: { label: string; count: number | null };
   itemClass: (item: LibraryItem) => string; itemStyle: (item: LibraryItem) => CSSProperties;
@@ -195,7 +197,7 @@ function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
               <p className="game-year__facts">
                 {count ? <b>{count} {unit}</b> : null}{facts?.hours ? <span>{"\u00a0· "}{facts.hours} 小时</span> : null}
               </p>
-              {facts?.platforms.length ? (
+              {!oneFamily && facts?.platforms.length ? (
                 <p className="game-year__platforms">
                   {facts.platforms.map(entry => <span key={entry.icon} title={gamePlatformName(entry.icon)}><GamePlatformIconMark icon={entry.icon} /><span className="visually-hidden">{gamePlatformName(entry.icon)}</span>{entry.count}</span>)}
                 </p>
@@ -211,8 +213,10 @@ function GameWall({ groups, yearCounts, unit, run, itemClass, itemStyle }: {
 
 const gamePlatformName = (icon: GamePlatformIcon) => ({ switch: "Switch", playstation: "PlayStation", steam: "Steam", pc: "PC", "3ds": "3DS" })[icon];
 
-export function LibraryGrid({ kind, status, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts, runLabel }: {
+export function LibraryGrid({ kind, status, platform = null, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts, runLabel }: {
   kind: LibraryItem["kind"]; status: string | null;
+  /** Games: one platform family ("switch", "playstation", "steam", "pc") or null for every platform. */
+  platform?: string | null;
   /** Year filter as sent to the list endpoint: "2026", "undated" or null for everything. */
   year?: string | null;
   order?: LibraryOrder | null; unit: string; initial: Page<LibraryItem>; pageSize: number; timeZone: string;
@@ -221,7 +225,7 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
   /** Games: the name of a list with no years to write (the status, as "想玩"). */
   runLabel?: string;
 }) {
-  const query: Record<string, string> = { limit: String(pageSize), ...(status ? { status } : {}), ...(year ? { year } : {}), ...(order ? { order } : {}) };
+  const query: Record<string, string> = { limit: String(pageSize), ...(status ? { status } : {}), ...(platform ? { platform } : {}), ...(year ? { year } : {}), ...(order ? { order } : {}) };
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<LibraryItem>(`/api/content/${kind}`, query, initial);
   const appended = new Set(appendedFrom === null ? [] : items.slice(appendedFrom).map(item => item.id));
   // After a filter, the first rows come in one after another (motion.css); first visits draw at once.
@@ -232,7 +236,7 @@ export function LibraryGrid({ kind, status, year = null, order = null, unit, ini
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>列表有更新，已从头重新加载。</p> : null}
       {kind === "game" ? (
-        <GameWall groups={groupByYear(items, timeZone, year !== null)} yearCounts={yearCounts} unit={unit}
+        <GameWall groups={groupByYear(items, timeZone, year !== null)} yearCounts={yearCounts} unit={unit} oneFamily={platform !== null}
           run={year ? { label: year === "undated" ? "无日期" : year, count: yearCounts?.[year] ?? total } : { label: runLabel ?? "全部", count: total }}
           itemClass={item => appended.has(item.id) ? "library__item is-appended" : arriving && firstRows.has(item.id) ? "library__item is-arriving" : "library__item"}
           itemStyle={item => (arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : {})} />

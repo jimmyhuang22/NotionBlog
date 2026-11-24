@@ -25,7 +25,7 @@ export function SectionWaiting({ path, heading }: { path: string; heading?: Reac
   const label = `正在加载${title}`;
   const library = path.startsWith("/library/") ? librarySections[path.slice("/library/".length)] : undefined;
 
-  // Games (乙, 2026-11-24): the stage's place, the statuses as tabs, then one year of empty cases on the line.
+  // Games (乙, 2026-11-24): the stage's place, the statuses as tabs and the platforms' strip, then one year of empty cases.
   if (library?.kind === "game") return (
     <div className="wrap wrap--wide game-page page-loading" role="status" aria-label={label}>
       <header className="page-head library__head">{head}</header>
@@ -33,6 +33,9 @@ export function SectionWaiting({ path, heading }: { path: string; heading?: Reac
       <div className="game-tools" aria-hidden="true">
         <div className="segmented segmented--tabs">
           {library.tabs.map(([value, name]) => <a key={value} aria-current={value === library.defaultStatus ? "true" : undefined}>{name}</a>)}
+        </div>
+        <div className="segmented segmented--lift">
+          {["全部", "Switch", "PlayStation", "Steam", "PC"].map((name, index) => <a key={name} aria-current={index === 0 ? "true" : undefined}>{name}</a>)}
         </div>
       </div>
       <div className="game-line" aria-hidden="true">
