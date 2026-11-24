@@ -73,6 +73,14 @@ export function RecentGames({ games, timeZone, thisYear }: { games: Game[]; time
     return parts ? relativeDay(parts, today) : null;
   };
 
+  // The page takes the stage's colour too, for whatever around the stage draws with it.
+  const stage = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const page = stage.current?.closest<HTMLElement>(".game-page");
+    if (!page) return;
+    if (tint) page.style.setProperty("--stage-tint", tint); else page.style.removeProperty("--stage-tint");
+  }, [tint]);
+
   useEffect(() => {
     const src = artOf(game);
     let live = true;
@@ -124,7 +132,7 @@ export function RecentGames({ games, timeZone, thisYear }: { games: Game[]; time
   const icon = chips[0] ? gamePlatformIcon(chips[0].label) : null;
   const status = gameCaseFace(game).status;
   return (
-    <section className="stage" aria-label="最近在玩" style={tint ? { "--tint": tint } as CSSProperties : undefined}>
+    <section ref={stage} className="stage" aria-label="最近在玩" style={tint ? { "--tint": tint } as CSSProperties : undefined}>
       {ground.layers.map((src, index) => (
         <div key={index} className="stage__ground" data-on={ground.on === index ? "" : undefined} style={src ? { backgroundImage: `url("${src}")` } : undefined} aria-hidden="true" />
       ))}

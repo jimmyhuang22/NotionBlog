@@ -152,7 +152,7 @@ function GameWall({ groups, yearCounts, unit, oneFamily, run, itemClass, itemSty
     const ratio = gameCaseFace(item).ratio;
     return (
       <WorkLink key={item.id} href={item.href} cover={item.cover} className={itemClass(item)} style={{ ...itemStyle(item), "--case-ratio": ratio } as CSSProperties}>
-        <GameCase game={item} />
+        <GameCase game={item} overlay={<span className="game-case__name" aria-hidden="true">{item.title}</span>} />
         <span className="library__name">
           <span className="library__title">{item.title}</span>
           <CaseLine game={item} />

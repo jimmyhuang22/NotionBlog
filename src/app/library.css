@@ -326,7 +326,7 @@
 .game-card__title, .game-panel__title { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); font-family: var(--font-hand); font-size: var(--text-lg); font-weight: 400; line-height: 1.3; color: var(--ink); }
 .game-record__facts { margin: 0; font-size: var(--text-sm); }
 .game-record__facts dd { margin: 0; }
-.game-record__state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.game-record__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
 .game-record__state .work__rating { font-size: var(--text-md); color: var(--ink); }
 .work-game__unrated { color: var(--muted); }
 .work-game__state { display: inline-block; padding: 1px 12px; border-radius: 999px; background: var(--ink); font-size: var(--text-xs); color: var(--bg); white-space: nowrap; }
@@ -813,10 +813,14 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
  * line. Motion follows only what the reader does and how far they have read; none plays by itself, and none at all
  * when the reader asks for less.
  */
-.game-page { --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --mark-w: 172px; --mark-gap: 28px; padding-bottom: 96px; }
+.game-page { --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --mark-w: 172px; --mark-gap: 28px; position: relative; isolation: isolate; padding-bottom: 96px; }
+/* The stage's colour washes onto the page round it and fades downward, so the stage and the years below are one
+ * colour carried on (甲, 2026-11-25); it follows the game chosen. Inside the page's own width, so it never widens it. */
+.game-page::before { content: ""; position: absolute; z-index: -1; inset: 60px 0 auto; height: 1100px; pointer-events: none;
+  background: radial-gradient(70% 55% at 50% 22%, rgb(var(--stage-tint, 32 34 44) / 0.32), transparent 72%); transition: background 0.6s; }
 
 /* The stage: the chosen game large on a ground blurred from its cover and tinted by it. */
-.stage { --tint: 32 34 44; position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 40px; margin-top: 24px; padding: 30px 40px 28px; overflow: hidden; border-radius: var(--radius-lg); color: #f6f2e9; background: rgb(var(--tint)); transition: background-color 0.6s var(--ease); }
+.stage { --tint: 32 34 44; position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 40px; margin-top: 24px; padding: 30px 40px 28px; overflow: hidden; border-radius: var(--radius-lg); color: #f6f2e9; background: rgb(var(--tint)); box-shadow: 0 40px 80px -40px rgb(var(--tint) / 0.9); transition: background-color 0.6s var(--ease), box-shadow 0.6s var(--ease); }
 .stage__ground { position: absolute; inset: -60px; z-index: -2; background-position: center; background-size: cover; opacity: 0; filter: blur(44px) saturate(1.35) brightness(0.62); transform: scale(1.12); transition: opacity 0.7s var(--ease); }
 .stage__ground[data-on] { opacity: 1; }
 .stage::after { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120% 140% at 0% 100%, rgb(var(--tint) / 0.85), transparent 60%), linear-gradient(0deg, rgb(10 11 14 / 0.35), transparent 55%); }
@@ -839,9 +843,11 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .stage__rail::-webkit-scrollbar { display: none; }
 .stage__thumb { position: relative; flex: none; padding: 0; border: 0; border-radius: var(--radius-xs); background: none; cursor: pointer; opacity: 0.55; transition: opacity 0.25s var(--ease), transform 0.25s var(--ease); }
 .stage__thumb:is(:hover, :focus-visible) { opacity: 0.95; transform: translateY(-4px); }
-.stage__thumb:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+/* With the keyboard the chosen case is the focused one: its bar, wider, is the focus mark (one line, not two). */
+.stage__thumb:focus-visible { outline: none; }
+.stage__thumb:focus-visible[aria-selected="true"]::after { left: 6%; right: 6%; }
 .stage__thumb[aria-selected="true"] { opacity: 1; }
-.stage__thumb[aria-selected="true"]::after { content: ""; position: absolute; left: 20%; right: 20%; bottom: -8px; height: 3px; border-radius: 999px; background: #fff; }
+.stage__thumb[aria-selected="true"]::after { content: ""; position: absolute; left: 20%; right: 20%; bottom: -8px; height: 3px; border-radius: 999px; background: #fff; transition: left 0.2s var(--ease), right 0.2s var(--ease); }
 .stage__thumb .game-case { width: 68px; height: auto; }
 .stage__thumb :is(.game-case__status, .game-case__time, .game-case__platform) { display: none; }
 /* While it is read: the stage's ground and height; when it cannot be read: a quiet box in its place. */
@@ -923,24 +929,24 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .library__wall .library__title { font-family: var(--font-hand); line-height: 1.35; }
 .library__wall .library__meta { font-size: var(--text-xs); }
 /* With a pointer (丙, 2026-11-24): the case pointed at rises and its name comes up from the bottom of its window over a
- * darkening, in place of the time; the rest of the wall stays as it is and nothing covers the row below. The case is
- * the item's container, so the name is placed in the case's own units, over the window inside the rim. */
+ * darkening, in place of the time; the rest of the wall stays as it is and nothing covers the row below. The name is
+ * drawn inside the case's window, so it reaches its edges whatever the case's rims; the rating is not shown there
+ * (the owner, 2026-11-25). The name under the case stays for screen readers. */
 @media (hover: hover) {
-  .library__wall .library__item { container-type: inline-size; }
-  .library__name { position: absolute; z-index: 5; left: 5.1cqw; right: 3.4cqw; bottom: 3.4cqw; gap: 2px; padding: 34cqw 7cqw 6cqw; border-radius: 0 0 var(--radius-xs) var(--radius-xs);
-    background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, 0.55) 35%, rgba(8, 9, 12, 0.88)); color: #fff; opacity: 0; pointer-events: none; transform: translateY(2px); }
-  .library__name .library__title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: clamp(12px, 9cqw, 20px); color: inherit; }
-  .library__name .library__meta { padding: 0; font-size: clamp(9.5px, 6cqw, 13px); color: rgba(255, 255, 255, 0.8); }
-  .library__wall .library__item:is(:hover, :focus-visible) .library__name { opacity: 1; transform: translateY(-6px); }
+  .library__wall .library__name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .game-case__name { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding: 38cqw 8cqw 8cqw;
+    background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, 0.55) 38%, rgba(8, 9, 12, 0.9)); color: #fff; font-family: var(--font-hand); font-size: clamp(12px, 9cqw, 20px); line-height: 1.3; opacity: 0; pointer-events: none; transform: translateY(4px); }
+  .library__wall .library__item:is(:hover, :focus-visible) .game-case__name { opacity: 1; transform: none; }
   .library__wall .library__item:is(:hover, :focus-visible) .game-case { transform: translateY(-6px); }
   .library__wall .library__item:is(:hover, :focus-visible) .game-case__time { opacity: 0; }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .library__wall .game-case, .library__name { transition: opacity 0.15s, transform 0.2s; }
+  .library__wall .game-case, .game-case__name { transition: opacity 0.15s, transform 0.2s; }
   .library__wall .game-case__time { transition: opacity 0.15s; }
 }
 /* Without one: the name under each case, on one line. */
 @media (hover: none) {
+  .game-case__name { display: none; }
   .library__name { margin-top: 6px; }
   .library__name .library__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
   .library__name .library__meta { display: none; }
