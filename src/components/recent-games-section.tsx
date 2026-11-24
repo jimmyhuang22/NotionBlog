@@ -1,6 +1,6 @@
 import type { Game } from "../../contracts/content.ts";
 import { readRecentGames } from "@/lib/content";
-import { RecentGames } from "./recent-games";
+import { RecentGames, RecentGamesFailed } from "./recent-games";
 
 const KEEP_MS = 5 * 60_000;
 let kept: { at: number; games: Promise<Game[]> } | null = null;
@@ -23,11 +23,12 @@ function keptRecentGames(): Promise<Game[]> {
 /**
  * 最近在玩 as its own streamed part of the games page: it reads the whole game list, so the page sends the library
  * first and this fills in when ready, instead of the whole page waiting on it (measured on the live site,
- * 2026-11-23: 1.4 s for the page against 0.2 s for books). A failure here says so and leaves the library alone.
+ * 2026-11-23: 1.4 s for the page against 0.2 s for books). A failure here says so, with a way to try again, and
+ * leaves the library alone.
  */
 export async function RecentGamesSection({ timeZone }: { timeZone: string }) {
   const games = await keptRecentGames().catch(() => null);
-  if (games === null) return <p className="notice recent-games__notice" role="status">最近在玩暂时读不到，下面的游戏库不受影响。</p>;
+  if (games === null) return <RecentGamesFailed />;
   if (!games.length) return null;
   const thisYear = Number(new Intl.DateTimeFormat("en", { timeZone, year: "numeric" }).format(new Date()));
   return <RecentGames games={games} timeZone={timeZone} thisYear={thisYear} />;
