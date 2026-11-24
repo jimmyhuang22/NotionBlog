@@ -63,6 +63,35 @@ test("v2 sync persists original cover dimensions in both its record and media de
  assert.deepEqual([cover.width,cover.height],[3,5]);assert.equal(cover.id,media[0].assetId);
 });
 
+test("v2 Notion collects the new game fields after the old estimate column is removed", async () => {
+  const { client, config, pages } = setup();
+  const game = pages.get(id(10))!;
+  const companies = (name: string) => ({ id: name, name, color: "default" as const });
+  Object.assign(game.properties, {
+    Summary: { id: "summary", type: "rich_text", rich_text: [rich("Explore a synthetic world.")] },
+    Developers: { id: "developers", type: "multi_select", multi_select: [companies("Example Studio")] },
+    Publishers: { id: "publishers", type: "multi_select", multi_select: [companies("Example Publishing")] },
+    Recording: { id: "recording", type: "url", url: "https://www.bilibili.com/video/BV1xx411c7AB/?p=1" },
+  });
+  const getDataSource = client.getDataSource;
+  client.getDataSource = async key => {
+    const schema = (await getDataSource(key))!;
+    if (key === id(1)) Object.assign(schema.properties, game.properties);
+    return schema;
+  };
+  Object.assign(config.sources[0]!.fields, {
+    estimatedTime: "Removed Estimate", gameSummary: "Summary", developers: "Developers",
+    publishers: "Publishers", playVideoUrl: "Recording",
+  });
+  const repository = createWebsiteNotionRepository({ client, config: parseWebsiteNotionConfig(config) });
+  const item = (await repository.get("game", id(10)))!.item;
+  assert.equal(Object.hasOwn(item, "estimatedTime"), false);
+  assert.deepEqual(item.about, {
+    summary: "Explore a synthetic world.", developers: ["Example Studio"], publishers: ["Example Publishing"],
+  });
+  assert.deepEqual(item.playVideo, { url: "https://www.bilibili.com/video/BV1xx411c7AB/", work: null });
+});
+
 test("route metadata checks preserve exact About authorization and never load blocks or images", async () => {
  const s=setup();s.client.listBlocks=async()=>{throw Error("Metadata must not load bodies");};
  const repo=createWebsiteNotionRepository({client:s.client,config:parseWebsiteNotionConfig(s.config),registerImage:async()=>{throw Error("Metadata must not register images");}});

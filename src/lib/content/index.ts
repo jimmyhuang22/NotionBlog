@@ -1,4 +1,4 @@
-import type { ContentKind, LibraryKind, ListQuery } from "../../../contracts/content.ts";
+import type { AnyContent, ContentKind, LibraryKind, ListQuery } from "../../../contracts/content.ts";
 import { readLibraryFirstPageFrom } from "./library-page.ts";
 import { getContentProvider } from "./provider.ts";
 export { getContentProvider } from "./provider.ts";
@@ -23,6 +23,7 @@ import { measureContentRead, traceContentRead } from "../../server/content-read-
 import { requestCourseMetadata } from "./request-course.ts";
 import { requestStudyRepository } from "./request-study.ts";
 import { readRecentGamesFrom } from "./recent-games.ts";
+import { findPublishedGameVideo } from "../../server/social/runtime.ts";
 
 function databaseLibraryUrls(runtime: ReturnType<typeof getDatabaseRuntime>) {
   const mode = process.env.DATABASE_LIBRARY_URLS ?? "legacy";
@@ -110,14 +111,24 @@ export const contentRepository: typeof cachedContentRepository = {
   ...cachedContentRepository,
   async get(kind, slug) {
     const detail = await cachedContentRepository.get(kind, slug);
-    if (kind !== "game" || !detail || getContentProvider() !== "database" || process.env.DATABASE_CONTENT_VERSION !== "2") return detail;
+    if (!detail) return detail;
+    // Social publication eligibility and game-account privacy can change independently of game content.
+    const game: AnyContent = detail.item;
+    if (game.kind !== "game") return detail;
+    const work = game.playVideo ? findPublishedGameVideo(game.playVideo.url).catch(() => null) : null;
+    if (getContentProvider() !== "database" || process.env.DATABASE_CONTENT_VERSION !== "2") {
+      return game.playVideo ? { ...detail, item: { ...detail.item, playVideo: { ...game.playVideo, work: await work } } } : detail;
+    }
     const runtime = getDatabaseRuntime();
     const readSets = gameTrophyReader ??= createCombinedGameTrophyReader(
       runtime.cacheStateDb, publicationMode(process.env.DATABASE_PUBLICATION_MODE));
-    // Game-account privacy can change independently of a website content publication.
-    const storageSlug = process.env.DATABASE_LIBRARY_URLS === "title" ? detail.item.id : slug;
-    const trophySets = await readSets(detail.item.id, storageSlug);
-    return trophySets.length ? { ...detail, trophySets } : detail;
+    const storageSlug = process.env.DATABASE_LIBRARY_URLS === "title" ? game.id : slug;
+    const [trophySets, currentWork] = await Promise.all([readSets(game.id, storageSlug), work]);
+    return {
+      ...detail,
+      ...(game.playVideo ? { item: { ...detail.item, playVideo: { ...game.playVideo, work: currentWork } } } : {}),
+      ...(trophySets.length ? { trophySets } : {}),
+    };
   },
 };
 

@@ -1,4 +1,6 @@
 /** Public DTOs. No Notion SDK, property objects, signed URLs, or credentials. */
+import type { SocialTimelineWork } from "./social-timeline.ts";
+
 export type ContentKind =
   | "post" | "status" | "album" | "book" | "movie"
   | "game" | "course" | "study-note" | "project" | "page";
@@ -172,6 +174,16 @@ export interface GamePlatformPlayTime {
 }
 /** Owner's crop for upright art whose title sits at one edge (Notion 竖图取景: 靠上／居中／靠下). */
 export type GameBoxArtPosition = "top" | "center" | "bottom";
+export interface GameAbout {
+  summary: string | null;
+  developers: string[];
+  publishers: string[];
+}
+export interface GamePlayVideo {
+  url: string;
+  /** Only hydrated from a currently published work. Collected records store the URL alone. */
+  work: SocialTimelineWork | null;
+}
 export interface Game extends ContentBase {
   kind: "game";
   status: GameStatus;
@@ -194,7 +206,9 @@ export interface Game extends ContentBase {
   archiveDate?: DateRange | null;
   releaseDate: DateRange | null;
   playedTime: TimeAmount | null;
-  estimatedTime: TimeAmount | null;
+  /** Owner-written synopsis and independently verified company names. */
+  about?: GameAbout | null;
+  playVideo?: GamePlayVideo | null;
   progressPercent: number | null;
   rating: Rating | null;
 }

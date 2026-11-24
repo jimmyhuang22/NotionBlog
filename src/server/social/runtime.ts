@@ -4,8 +4,8 @@ import { socialReaderRuntimePoolConfig, verifySocialReader } from "./reader.ts";
 import { readSocialSnapshot } from "./repository.ts";
 import { Pool } from "pg";
 import { readerSqlExecutor } from "../database/connection.ts";
-import { readSocialTimelineSnapshot, verifyCollectionReader } from "./timeline-repository.ts";
-import { readRetainedSocialSnapshot, socialDisplayMode } from "./retained-repository.ts";
+import { mapSocialTimelineRows, readSocialTimelineSnapshot, socialPlayVideoSql, verifyCollectionReader } from "./timeline-repository.ts";
+import { readRetainedSocialSnapshot, retainedSql, socialDisplayMode } from "./retained-repository.ts";
 import { attachSocialReaderPool, monitoredSocialReaderSql } from "./pool.ts";
 import { createPagedSocialRepository } from "./repository.ts";
 import { socialMediaEnabled, withSocialCovers, type CoverMode } from "./covers.ts";
@@ -92,6 +92,25 @@ export function withLiveSocialCovers(rows:FeedSnapshot<SocialTimelineWork>):Soci
   if(!socialMediaEnabled(process.env.SOCIAL_MEDIA_ENABLED))return rows;
   const settings=timelineSettings();
   return {...rows,hydrateCovers:async selected=>hydrateTimelineCovers(rows.version,selected,await collectionReaderSql(),settings)};
+}
+/** Match the exact video, or its single currently published collection. */
+export async function findPublishedGameVideo(url: string): Promise<SocialTimelineWork | null> {
+  if (socialProvider() !== "database" || url.startsWith("https://b23.tv/")) return null;
+  const sql = await collectionReaderSql(), settings = timelineSettings();
+  const videoSql = socialPlayVideoSql(settings.playback);
+  if (settings.mode === "retained") {
+    const meta = (await sql.query<{ version: number }>("SELECT version FROM social_sync.retained_meta WHERE singleton")).rows;
+    if (meta.length !== 1 || meta[0]?.version !== 1) return null;
+  }
+  const rows = (await sql.query<{work:unknown}>(settings.mode === "retained" ? retainedSql(videoSql) : videoSql, [url])).rows;
+  const snapshot = mapSocialTimelineRows(rows, "game-play-video");
+  const exact = snapshot.items.filter(item => item.collection?.originalUrl === url || item.publications.some(p => p.originalUrl === url));
+  const matches = exact.length ? exact : snapshot.items;
+  if (matches.length !== 1) return null;
+  const work = matches[0]!;
+  if (!socialMediaEnabled(process.env.SOCIAL_MEDIA_ENABLED)) return work;
+  try { return (await hydrateTimelineCovers(snapshot.version, [work], sql, settings))[0] ?? work; }
+  catch { return work; }
 }
 let mediaStorage: ObjectStorage | undefined;
 let mediaSql: ReturnType<typeof createSocialMediaSql> | undefined;

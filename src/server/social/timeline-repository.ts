@@ -69,20 +69,27 @@ function mapWork(value:unknown,timeZone:string):SocialTimelineWork {
   return {id:w.id,type:"social-work",title:w.title,occurredAt:time(w.occurredAt),cover:null,publications,collection:c};
 }
 /** One invoker/RLS statement: only currently eligible collections suppress their currently known members. */
-function timelineSql(playback: boolean) { return `WITH collections AS MATERIALIZED (
+function timelineSql(playback: boolean, byVideo = false) { return `WITH ${byVideo ? `matched_publications AS MATERIALIZED (
+    SELECT work_id, publication->>'id' AS publication_key FROM social_sync.website_publications
+    WHERE publication->>'platform'='bilibili' AND publication->>'originalUrl'=$1
+  ), ` : ""}collections AS MATERIALIZED (
     SELECT c.collection_key,c.account_id,c.kind,c.collection_id,c.collection||jsonb_build_object(
       'latestMemberPublishedAt',CASE WHEN c.kind='multi-part' THEN c.collection->>'latestMemberPublishedAt' ELSE ${playback ? "playback.published_at" : "c.collection->>'latestMemberPublishedAt'"} END,
       'latestMemberUrl',CASE WHEN c.kind='multi-part' THEN c.collection->>'originalUrl' ELSE ${playback ? "playback.outbound_url" : "NULL"} END,
       'latestMemberLinkVerifiedAt',CASE WHEN c.kind='multi-part' THEN c.collection->>'linkVerifiedAt' ELSE ${playback ? "playback.link_verified_at" : "NULL"} END
     ) AS collection
-    FROM social_sync.website_collections c ${playback ? "LEFT JOIN social_sync.website_collection_playbacks playback USING(collection_key)" : ""}
+    FROM social_sync.website_collections c ${playback ? "LEFT JOIN social_sync.website_collection_playbacks playback USING(collection_key)" : ""}${byVideo ? `
+    WHERE c.collection->>'originalUrl'=$1 OR EXISTS (
+      SELECT 1 FROM social_sync.website_collection_members m JOIN matched_publications p USING(publication_key)
+      WHERE m.collection_key=c.collection_key
+    )` : ""}
   ),
   -- Candidates and the grouped aggregate reuse the same RLS-filtered publications.
   publications AS MATERIALIZED (
     SELECT * FROM social_sync.website_publications p WHERE NOT EXISTS (
       SELECT 1 FROM social_sync.website_collection_members m WHERE m.publication_key=p.publication->>'id'
         AND NOT EXISTS(SELECT 1 FROM social_sync.collection_standalone_overrides o WHERE o.publication_key=m.publication_key AND o.keep_standalone)
-    )
+    )${byVideo ? " AND p.work_id IN (SELECT work_id FROM matched_publications)" : ""}
   ), candidates AS (
     SELECT coalesce(p.work_id,c.collection->>'id') AS id,CASE WHEN c.collection_key IS NULL THEN p.title ELSE c.collection->>'title' END AS title,
       CASE WHEN p.work_id IS NOT NULL THEN p.occurred_at ELSE c.collection->>'firstPublishedAt' END AS occurred_at,
@@ -90,7 +97,7 @@ function timelineSql(playback: boolean) { return `WITH collections AS MATERIALIZ
       coalesce(c.collection->'activity'->>'at',CASE WHEN p.work_id IS NOT NULL THEN p.occurred_at ELSE c.collection->>'firstPublishedAt' END) AS timeline_at
     FROM (SELECT work_id,title,occurred_at FROM publications GROUP BY work_id,title,occurred_at) p
       FULL JOIN collections c ON c.collection->>'id'=p.work_id
-  ), selected AS MATERIALIZED (SELECT * FROM candidates ORDER BY timeline_at DESC NULLS LAST,id LIMIT ${MAX_SOCIAL_WORKS+1}),
+  ), selected AS MATERIALIZED (SELECT * FROM candidates ORDER BY ${byVideo ? "(collection->>'originalUrl'=$1) DESC NULLS LAST," : ""}timeline_at DESC NULLS LAST,id LIMIT ${byVideo ? 3 : MAX_SOCIAL_WORKS+1}),
   -- Scan the materialized publications once; a per-work LATERAL scan cannot use
   -- the underlying work_id index. Keep one extra row so oversized works fail.
   ranked_publications AS (
@@ -106,6 +113,7 @@ function timelineSql(playback: boolean) { return `WITH collections AS MATERIALIZ
     LEFT JOIN grouped_publications p ON p.work_id=s.id ORDER BY s.timeline_at DESC NULLS LAST,s.id`; }
 export const socialTimelineSql = timelineSql(false);
 export const socialPlaybackTimelineSql = timelineSql(true);
+export const socialPlayVideoSql = (playback: boolean) => timelineSql(playback, true);
 export async function verifyCollectionReader(sql:SqlExecutor) {
   try {const rows=(await sql.query<{version:number}>("SELECT version FROM social_sync.collection_meta WHERE singleton")).rows;
     if(rows.length!==1 || rows[0].version!==1)throw unavailable();}

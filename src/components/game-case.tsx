@@ -9,26 +9,31 @@ import { GamePlatformIconMark } from "./game-tag";
 import { useFadeIn } from "./use-fade-in";
 import { useImageFailure } from "./use-image-failure";
 
-/** One picture in the case, with the shared retry and fade; a lost picture tells its case to fall back. */
-function CaseImage({ image, width, className, onLost }: { image: ImageAsset; width: 400 | 800; className?: string; onLost?: () => void }) {
+/**
+ * One picture in the case, with the shared retry and fade; a lost picture tells its case to fall back. With `backdrop`
+ * the same address is drawn a second time behind it, enlarged and blurred (one download: the browser reuses it).
+ */
+function CaseImage({ image, width, className, backdrop = false, onLost }: { image: ImageAsset; width: 400 | 800; className?: string; backdrop?: boolean; onLost?: () => void }) {
   const fade = useFadeIn();
   const { src, failed, lost } = useImageFailure(imagePreviewSrc(image, width), image.src, fade);
   useEffect(() => { if (failed) onLost?.(); }, [failed, onLost]);
   if (failed) return null;
-  return <img ref={fade} className={className} src={src} alt="" loading="lazy" decoding="async" onError={lost} />;
+  const picture = <img ref={fade} className={className} src={src} alt="" loading="lazy" decoding="async" onError={lost} />;
+  return backdrop ? <><img className="game-case__backdrop" src={src} alt="" aria-hidden="true" loading="lazy" decoding="async" />{picture}</> : picture;
 }
 
 /**
- * No upright art yet: the wide cover fills the window, cropped around its middle (2026-11-23, after the first live
- * look: the whole wide cover in the middle of a blur read as a row of placeholders, the name written twice). The name
- * is under the case already; it is written inside only when there is no cover at all.
+ * No upright art yet: the whole wide cover in the middle of the window, the rest filled by the same picture enlarged
+ * and blurred (the owner's pick 丙, 2026-11-24, as a stopgap while upright art is found). Cropping it to fill the window,
+ * the 11-23 way, cut 45 to 65 per cent of its width, so most titles lost both ends. The name is under the case
+ * already; it is written inside only when there is no cover at all.
  */
 function WideArt({ game, width }: { game: Game; width: 400 | 800 }) {
   const [lost, setLost] = useState(false);
   const cover = game.cover;
   return (
     <span className="game-case__art game-case__art--wide">
-      {cover && !lost ? <CaseImage key={cover.src} image={cover} width={width} onLost={() => setLost(true)} />
+      {cover && !lost ? <CaseImage key={cover.src} image={cover} width={width} backdrop onLost={() => setLost(true)} />
         : <span className="game-case__wide-title">{game.title}</span>}
     </span>
   );

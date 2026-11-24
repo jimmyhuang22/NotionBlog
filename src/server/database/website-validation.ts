@@ -1,3 +1,4 @@
+import { gamePlayVideoUrl } from "../../lib/content/game-detail-data.ts";
 import { createHash } from "node:crypto";
 import type { StoredMedia } from "../../../contracts/sync.ts";
 import type { WebsiteRecord } from "../../../contracts/website-sync.ts";
@@ -113,7 +114,7 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
     status:["recordedAt","text"],course:["code","semester","ratings"],"study-note":["courseId","parentId","noteType","date","breadcrumbs"],
     post:["publishedAt"],album:["date","photoCount"],book:["authors","status","readingDate","pagesRead","totalPages","progressPercent","personalRating","doubanRating","externalUrl"],
     movie:["originalTitle","mediaType","status","watchedDate","releaseDate","director","actors","rating","doubanRating","publicRating","ratingSource"],
-    game:["status","platforms","boxArt","boxArtPosition","platformPlayTime","playedDate","lastPlayedDate","lastPlayedPlatforms","firstPlayedDate","archiveDate","releaseDate","playedTime","estimatedTime","progressPercent","rating"],
+    game:["status","platforms","boxArt","boxArtPosition","platformPlayTime","playedDate","lastPlayedDate","lastPlayedPlatforms","firstPlayedDate","archiveDate","releaseDate","playedTime","estimatedTime","about","playVideo","progressPercent","rating"],
     project:["period","role","stack","links"],page:["pageKey"]
   };
   const extra=fields[String(i.kind)];if(!extra)bad();
@@ -147,7 +148,24 @@ export function validateWebsiteRecord(record: WebsiteRecord): void {
         if (!platform || !isUsableGameBoxArt(i.boxArt as ImageAsset, platform)) bad();
       }
       for(const k of ["firstPlayedDate","archiveDate"])if(i[k]!==undefined)playDay(i[k]);
-      date(i.releaseDate);time(i.playedTime);time(i.estimatedTime);percentage(i.progressPercent);rating(i.rating);break;
+      date(i.releaseDate);
+      time(i.playedTime);
+      if (i.estimatedTime !== undefined) time(i.estimatedTime);
+      if (i.about != null) {
+        const about = object(i.about);
+        keys(about, ["summary", "developers", "publishers"]);
+        if (about.summary !== null && (!text(about.summary) || about.summary.length > 6000)) bad();
+        for (const companies of [about.developers, about.publishers]) {
+          if (!Array.isArray(companies) || companies.length > 32 || companies.some(name => !text(name) || name.length > 160)) bad();
+        }
+      }
+      if (i.playVideo != null) {
+        const video = object(i.playVideo);
+        keys(video, ["url", "work"]);
+        const canonical = gamePlayVideoUrl(video.url);
+        if (video.work !== null || canonical === null || canonical !== video.url) bad();
+      }
+      percentage(i.progressPercent);rating(i.rating);break;
     case "project":date(i.period);nullable(i.role);strings(i.stack);if(!Array.isArray(i.links))bad();for(const v of i.links){const l=object(v);keys(l,["label","url"]);if(!text(l.label))bad();url(l.url);}break;
     case "page":if(i.slug!=="about"||i.pageKey!=="about"||i.cover!==null)bad();break;
     default:bad();
