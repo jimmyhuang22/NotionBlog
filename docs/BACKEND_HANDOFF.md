@@ -461,6 +461,10 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 - **前端已接入**（`gameCaseLook`，`src/lib/library.ts`）：卡盒显示的那个平台写作“PlayStation 5”或“PS5”时印 PS5，“PlayStation 4”或“PS4”时印 PS4，只写“PlayStation”时是白条加 PS 图标、不写型号。网站其他地方（筛选、平台标签、“也在 …”）照旧统一显示“PlayStation”。
 - **请 Codex 先确认改名不影响**：同步和发布对平台名的校验；`platformPlayTime` 和 `lastPlayedPlatforms` 跟 `platforms` 的匹配（前端按平台类别匹配，“PlayStation”能对上“PlayStation 5”）；奖杯、PSN 时长等按平台名关联的地方；竖图按平台选图的规则。确认后再逐款改。
 - **交付后告诉前端**：改了哪些游戏、两站同步的时间。
+- **补充（2026-11-24 晚，Claude）**：用户在线上看到《女神异闻录5 皇家版》《破晓传说》等 PS 卡盒只有白条加 PS 图标，要求和实体盘一样印出型号。#508 的 `boxArtLayout.playStationModel` 只覆盖那 12 款选了实体正封或方图的游戏，其余 PS 游戏仍在等这一节的改名。
+  - **版次的第二个来源**：PSN 同步已经按游戏分类区分版次（`scripts/game-sync/model.ts`：`ps5_native_game` 记为 PS5，`ps4_game` 记为 PS4）。这就是实际玩的版本，可以和封面清单互相核对。在 PS5 上玩的 PS4 游戏，分类仍是 `ps4_game`，卡盒应印 PS4。
+  - **两个版本都有记录的游戏**（奖杯合并显示为“PS4 / PS5”的那类）：按竖图对应的版本改名，对应不上就保持“PlayStation”。
+  - 如果改名的影响面太大，可以改为给所有 PS 游戏发布型号字段。但现在的 `playStationModel` 挂在必须带 `mode` 的 `boxArtLayout` 上，这样做要改契约，要先找用户确认。
 
 ## 可直接给 Codex 的启动指令
 
