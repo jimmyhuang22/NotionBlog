@@ -12,9 +12,10 @@ export async function readLibraryFirstPageFrom<K extends LibraryKind>(
   if (!isLibraryKind(kind)) throw new ContentServiceError("INVALID_QUERY", "Unsupported library kind.");
   validateListQuery(kind, query);
   if (live.readLibraryPage) return live.readLibraryPage(kind, query);
+  const { status, platform } = query;
   const [first, years] = await Promise.all([
     legacy.list(kind, query),
-    legacy.getLibraryYears?.(kind, query.status ? { status: query.status } : {}).catch(() => null) ?? null,
+    legacy.getLibraryYears?.(kind, { ...(status && { status }), ...(platform && { platform }) }).catch(() => null) ?? null,
   ]);
   const asked = query.year ?? null, year = years && !hasYear(years, asked) ? null : asked;
   const fallback = { ...query }; delete fallback.year;

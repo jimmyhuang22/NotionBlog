@@ -1,4 +1,6 @@
-import type { Game, GameBoxArtLayout, GamePlatformPlayTime, ImageAsset } from "../../../contracts/content.ts";
+import type { Game, GameBoxArtLayout, GamePlatformCategory, GamePlatformPlayTime, ImageAsset } from "../../../contracts/content.ts";
+
+export const gamePlatformCategories = ["switch", "playstation", "steam", "pc"] as const satisfies readonly GamePlatformCategory[];
 
 export function gameCasePlatformKey(platform: string): string {
   const name = platform.trim().toLowerCase();
@@ -9,8 +11,19 @@ export function gameCasePlatformKey(platform: string): string {
   return name;
 }
 
-/** The existing PlayStation filter includes both console editions. */
+export function gamePlatformCategory(platform: string): GamePlatformCategory | undefined {
+  const key = gameCasePlatformKey(platform);
+  if (key === "switch" || key === "switch2" || key === "3ds") return "switch";
+  if (/^(?:playstation(?:\b|[1-5])|ps(?:[1-5x]|p| ?vita| ?vr2?)(?:$|[ -]))/u.test(key)) return "playstation";
+  if (key === "pc" || key === "personal computer") return "pc";
+  if (key === "steam") return "steam";
+}
+
 export function matchesGamePlatform(platforms: readonly string[], filter: string): boolean {
+  if (gamePlatformCategories.some(category => category === filter)) {
+    return platforms.some(platform => gamePlatformCategory(platform) === filter);
+  }
+  // Keep the legacy broad PlayStation label and exact matching for edition names.
   return filter === "PlayStation"
     ? platforms.some(platform => gameCasePlatformKey(platform) === "playstation")
     : platforms.includes(filter);

@@ -20,11 +20,15 @@ export function expandFixtures(items: { [K in ContentKind]: ContentByKind[K][] }
     items.post.push({ ...base(id, `/blog/${id}`, i), kind: "post", publishedAt: i === 15 ? null : date(i) });
     if (i % 3) documents[id] = { blocks: [{ id: `${id}-p`, type: "paragraph", text: [{ text: `虚构文章 ${i}：搜索和相邻文章演练。` }] }], toc: [], completeness: "complete" };
   }
+  const gamePlatforms = [
+    ["Demo Console"], ["Nintendo Switch 2", "Steam"], ["Steam", "Personal Computer"],
+    ["Nintendo 3DS"], ["PlayStation 3", "PS Vita"],
+  ];
   for (let i = 1; i <= 26; i++) {
     const book = `mock-book-extra-${i}`, movie = `mock-movie-extra-${i}`, game = `mock-game-extra-${i}`;
     items.book.push({ ...base(book, `/library/books/${book}`, i), kind: "book", authors: ["虚构作者"], status: (["read", "reading", "wishlist", "given-up"] as const)[i % 4]!, readingDate: i % 5 ? date(i) : null, pagesRead: null, totalPages: null, progressPercent: null, personalRating: null, doubanRating: null, externalUrl: null });
     items.movie.push({ ...base(movie, `/library/movies/${movie}`, i), kind: "movie", originalTitle: null, mediaType: "动画", status: i % 3 ? "watched" : "wishlist", watchedDate: i % 5 ? date(i) : null, releaseDate: null, director: null, actors: [], rating: null, doubanRating: null });
-    items.game.push({ ...base(game, `/library/games/${game}`, i), kind: "game", status: (["clear", "playing", "wishlist", "platinumed"] as const)[i % 4]!, platforms: ["Demo Console"], playedDate: i % 5 ? date(i) : null, releaseDate: null, playedTime: i % 4 ? { value: i * 15, unit: "minute" } : null, progressPercent: null, rating: null });
+    items.game.push({ ...base(game, `/library/games/${game}`, i), kind: "game", status: (["clear", "playing", "wishlist", "platinumed"] as const)[i % 4]!, platforms: [...gamePlatforms[i % gamePlatforms.length]], playedDate: i % 5 ? date(i) : null, releaseDate: null, playedTime: i % 4 ? { value: i * 15, unit: "minute" } : null, progressPercent: null, rating: null });
     if (i < 15) { const id = `mock-album-extra-${i}`; items.album.push({ ...base(id, `/photos/${id}`, i), kind: "album", date: i % 5 ? date(i) : null, photoCount: null }); }
   }
   const gallery = items.album.find(x => x.id === "mock-album-extra-1")!;

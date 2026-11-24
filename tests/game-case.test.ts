@@ -13,6 +13,21 @@ test("the existing PlayStation filter includes edition labels without broadening
   assert(matchesGamePlatform(["PlayStation 5"], "PlayStation 5"));
 });
 
+test("game platform categories include console families and keep Steam and PC distinct", () => {
+  for (const label of ["Nintendo Switch", "Nintendo Switch 2", "Nintendo 3DS", "3DS"]) {
+    assert(matchesGamePlatform([label], "switch"));
+  }
+  assert(!matchesGamePlatform(["Wii U"], "switch"));
+  for (const label of ["PlayStation", "PlayStation 2", "PS3", "PlayStation 4 Pro", "PS5", "PSP", "PS Vita", "PlayStation VR2"]) {
+    assert(matchesGamePlatform([label], "playstation"));
+  }
+  assert(matchesGamePlatform(["Personal Computer"], "pc"));
+  assert(matchesGamePlatform(["Steam"], "steam"));
+  assert(!matchesGamePlatform(["Steam"], "pc"));
+  assert(!matchesGamePlatform(["PC"], "steam"));
+  assert(!matchesGamePlatform(["Nintendo Switch 2"], "Nintendo Switch"));
+});
+
 test("case platform ranks known positive hours, then recent and explicit labels", () => {
   const platforms = ["Nintendo Switch", "Nintendo Switch 2", "Steam"];
   const recent = ["Switch", "Steam"];

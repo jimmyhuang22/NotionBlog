@@ -98,9 +98,19 @@ export interface StatusYears {
   timeZone: string;
 }
 export type LibraryKind = "movie" | "book" | "game";
-/** Counts use the library browsing date, after the optional status filter. */
-export type LibraryYears = StatusYears;
-export interface LibraryYearsQuery { status?: string }
+export type GamePlatformCategory = "switch" | "playstation" | "steam" | "pc";
+/** Counts use the library browsing date, scoped by status and, for games, platform. */
+export interface LibraryYears extends StatusYears {
+  /** Game-only counts across all years and platforms within the selected status. */
+  platforms?: { key: GamePlatformCategory; count: number }[];
+  /** All games within the selected status, counted once even across categories. */
+  platformTotal?: number;
+}
+export interface LibraryYearsQuery {
+  status?: string;
+  /** Games only. Accepts category keys and legacy platform names. */
+  platform?: string;
+}
 export interface Album extends ContentBase {
   kind: "album";
   date: DateRange | null;
@@ -304,6 +314,7 @@ export interface ListQuery {
   status?: string;
   tag?: string;
   type?: string;
+  /** Games only. Accepts category keys and legacy platform names. */
   platform?: string;
   semester?: string;
   /** Status and library experience dates, in the site zone; "undated" selects unknown dates. */
