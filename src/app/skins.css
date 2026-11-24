@@ -412,10 +412,10 @@
  * years take the same words since 2026-11-19 (the owner's pick). In a course directory only assignments keep their mark; the other marks keep
  * their place, so the titles stay in one column.
  */
-:root:not([data-skin]) .library__filters .segmented--scroll { gap: 0; padding: 4px 0; background: none; }
-:root:not([data-skin]) .library__filters .segmented--scroll > a { padding: 0 14px; }
-:root:not([data-skin]) .library__filters .segmented--scroll > a[aria-current] { background: none; box-shadow: none; }
-:root:not([data-skin]) .library__filters .segmented--scroll .segmented__pill { border-radius: 0; background: linear-gradient(var(--accent), var(--accent)) center bottom 6px / calc(100% - 28px) 2px no-repeat; box-shadow: none; }
+:root:not([data-skin]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) { gap: 0; padding: 4px 0; background: none; }
+:root:not([data-skin]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) > a { padding: 0 14px; }
+:root:not([data-skin]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) > a[aria-current] { background: none; box-shadow: none; }
+:root:not([data-skin]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) .segmented__pill { border-radius: 0; background: linear-gradient(var(--accent), var(--accent)) center bottom 6px / calc(100% - 28px) 2px no-repeat; box-shadow: none; }
 :root:not([data-skin]) .library__filters .library__sort a { background: none; }
 :root:not([data-skin]) .tree__icon:not(.study-type--assignment, .study-type--efolio) { visibility: hidden; }
 /* While a shelf loads, its years wait as a row of short word-sized bars, not one grey pill (2026-11-18). */
@@ -424,19 +424,20 @@
  * Island and Y2K take the same order on the shelves (the owner's pick 甲, 2026-11-19): the status keeps the skin's
  * pill, the years under it are plain words over a short round bar in the skin's own colour, the island's yellow of
  * the header and Y2K's glossy blue. The bar rides on the sliding block, so it still moves at the press. The sort keeps
- * its ground in both; the feed's years follow suit (2026-11-19).
+ * its ground in both; the feed's years follow suit (2026-11-19), and so do the games page's statuses under its stage
+ * (丙, 2026-11-24), written larger.
  */
-:is([data-skin="island"], [data-skin="y2k"]) .library__filters .segmented--scroll { gap: 0; padding: 4px 0; background: none; box-shadow: none; }
-:is([data-skin="island"], [data-skin="y2k"]) .library__filters .segmented--scroll > a { padding: 0 14px; }
-:is([data-skin="island"], [data-skin="y2k"]) .library__filters .segmented--scroll > a[aria-current] { background: none; box-shadow: none; }
-:is([data-skin="island"], [data-skin="y2k"]) .library__filters .segmented--scroll > a[aria-current]:active { transform: none; background-color: var(--bloom); box-shadow: none; }
-:is([data-skin="island"], [data-skin="y2k"]) .library__filters .segmented--scroll .segmented__pill { background: none; box-shadow: none; }
-:is([data-skin="island"], [data-skin="y2k"]) .library__filters .segmented--scroll .segmented__pill::after { content: ""; position: absolute; right: 14px; bottom: 5px; left: 14px; height: 4px; border-radius: 999px; }
-[data-skin="island"] .library__filters .segmented--scroll .segmented__pill::after { background: var(--island-pick); box-shadow: 0 1px 0 var(--island-pick-edge); }
-[data-skin="y2k"] .library__filters .segmented--scroll .segmented__pill::after { background: var(--y2k-button) #1a6ace; box-shadow: 0 2px 5px -2px rgba(22, 103, 199, 0.7); }
+:is([data-skin="island"], [data-skin="y2k"]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) { gap: 0; padding: 4px 0; background: none; box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) > a { padding: 0 14px; }
+:is([data-skin="island"], [data-skin="y2k"]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) > a[aria-current] { background: none; box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) > a[aria-current]:active { transform: none; background-color: var(--bloom); box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) .segmented__pill { background: none; box-shadow: none; }
+:is([data-skin="island"], [data-skin="y2k"]) :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) .segmented__pill::after { content: ""; position: absolute; right: 14px; bottom: 5px; left: 14px; height: 4px; border-radius: 999px; }
+[data-skin="island"] :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) .segmented__pill::after { background: var(--island-pick); box-shadow: 0 1px 0 var(--island-pick-edge); }
+[data-skin="y2k"] :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) .segmented__pill::after { background: var(--y2k-button) #1a6ace; box-shadow: 0 2px 5px -2px rgba(22, 103, 199, 0.7); }
 /* Y2K's chosen word is white on its blue button elsewhere; over the bar it is the blue itself. */
-[data-skin="y2k"] .library__filters .segmented--scroll > :is(a[aria-current], a[data-picked]) { color: var(--accent); }
-[data-skin="y2k"] .library__filters .segmented--slide[data-moving] > a[aria-current]:not([data-picked]) { color: var(--muted); }
+[data-skin="y2k"] :is(.library__filters .segmented--scroll, .game-tools .segmented--tabs) > :is(a[aria-current], a[data-picked]) { color: var(--accent); }
+[data-skin="y2k"] :is(.library__filters, .game-tools) .segmented--slide[data-moving] > a[aria-current]:not([data-picked]) { color: var(--muted); }
 :is([data-skin="island"], [data-skin="y2k"]) .library__filters .waiting__years { height: 14px; margin-block: 17px; border-radius: 0; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 7%, var(--bg)) 0 36px, transparent 36px 62px) 14px 0 / calc(100% - 14px) 100% no-repeat; }
 /*
  * Names in lists (shelves, works, the home timeline, a status card's title) in the body face, a little heavier;

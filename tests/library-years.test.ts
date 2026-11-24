@@ -8,6 +8,7 @@ import { createMockRepository } from "../adapters/mock-repository.ts";
 import { createContentService } from "../src/lib/content/factory.ts";
 import { contentYear } from "../src/lib/content/years.ts";
 import { parseListQuery, parseLibraryYearsQuery } from "../src/lib/content/query.ts";
+import { readLibraryFirstPageFrom } from "../src/lib/content/library-page.ts";
 import { libraryYearsResponse, contentListResponse } from "../src/lib/content/http.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../contracts/website-sync.ts";
@@ -45,6 +46,11 @@ test("library queries allow combined year/status/order, restrict summaries and r
     for (const query of ["year=2026", "limit=12", "order=date-desc", "status=wishlist&status=wishlist", "cursor=abc", "tag=x"]) {
       assert.throws(() => parseLibraryYearsQuery(kind, new URLSearchParams(query)), invalid);
     }
+  }
+  assert.deepEqual(parseLibraryYearsQuery("game", new URLSearchParams("status=completed&platform=steam")), { status: "completed", platform: "steam" });
+  assert.throws(() => parseLibraryYearsQuery("game", new URLSearchParams("platform=steam&platform=pc")), invalid);
+  for (const kind of ["book", "movie"] as const) {
+    assert.throws(() => parseLibraryYearsQuery(kind, new URLSearchParams("platform=pc")), invalid);
   }
   for (const kind of ["post", "course", "album", "project"] as const) assert.throws(() => parseListQuery(kind, new URLSearchParams("year=2026")), invalid);
 });
@@ -118,7 +124,9 @@ test("database summaries use one metadata SQL read, current projection and statu
     const result = { runId: "test-run", revision: version, schemaDigest: WEBSITE_SCHEMA_DIGEST, records: current.map(item => ({ item, document: null })), links: [], mediaIds: [] };
     return { rows: [{ result }] as T[] };
   } }, { timeZone: "Australia/Melbourne" });
-  assert.deepEqual(await repo.getLibraryYears!("game", { status: "completed" }), { years: [{ year: 2026, count: 2 }], undatedCount: 0, timeZone: "Australia/Melbourne" });
+  assert.deepEqual(await repo.getLibraryYears!("game", { status: "completed" }), {
+    years: [{ year: 2026, count: 2 }], undatedCount: 0, timeZone: "Australia/Melbourne", platforms: [{ key: "playstation", count: 2 }], platformTotal: 2,
+  });
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].slice(0, 2), ["game", false]);
   const first = await repo.list("game", { status: "completed", year: 2026, limit: 1 });
@@ -129,6 +137,33 @@ test("database summaries use one metadata SQL read, current projection and statu
   current = items.slice(1); version = "2";
   assert.equal((await repo.getLibraryYears!("game", { status: "completed" })).years[0].count, 1);
   await assert.rejects(repo.list("game", { status: "completed", year: 2026, limit: 1, cursor: first.nextCursor! }), invalid);
+});
+
+test("game platform counts follow status while years, undated items and cursors follow the selected platform", async () => {
+  const repo = createMockRepository();
+  for (const status of ["playing", "completed", "wishlist"]) {
+    const { platforms, platformTotal } = await repo.getLibraryYears!("game", { status });
+    assert.equal(platformTotal, (await repo.list("game", { status })).total);
+    assert.equal(platforms?.length, 4);
+    for (const { key, count } of platforms!) {
+      const query = { status, platform: key };
+      const summary = await repo.getLibraryYears!("game", query);
+      assert.deepEqual(summary.platforms, platforms);
+      assert.equal(summary.platformTotal, platformTotal);
+      assert.equal(summary.years.reduce((sum, year) => sum + year.count, summary.undatedCount), count);
+      const page = await readLibraryFirstPageFrom(repo, repo, "game", { ...query, year: 9999, limit: 1 });
+      assert.equal(page.year, null);
+      assert.equal(page.page.total, count);
+      assert.deepEqual(page.years, summary);
+      if (page.page.nextCursor) await assert.rejects(repo.list("game", { status, platform: "Demo Console", limit: 1, cursor: page.page.nextCursor }), invalid);
+    }
+  }
+  const request = new Request("https://example.test/api/library/game/years?status=playing&platform=pc");
+  const response = await libraryYearsResponse(request, "game", repo, all);
+  const summary = await repo.getLibraryYears!("game", { status: "playing", platform: "pc" });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).data, summary);
+  assert.equal(summary.undatedCount, 1);
 });
 
 test("library summary HTTP validates status, uses no-store, gates kinds and scrubs failed providers", async () => {

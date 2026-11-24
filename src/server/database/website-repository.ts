@@ -1,14 +1,14 @@
-import type { AnyContent, ContentDetail, ContentKind, ContentByKind, Course, Game, LibraryKind, LibraryYears, LibraryYearsQuery, ListQuery, Page, StudyNote, StudyNode } from "../../../contracts/content.ts";
+import type { AnyContent, ContentDetail, ContentKind, ContentByKind, Course, Game, LibraryKind, LibraryYears, ListQuery, Page, StudyNote, StudyNode } from "../../../contracts/content.ts";
 import type { ContentRepository } from "../../../contracts/repository.ts";
 import { ContentServiceError } from "../../../contracts/repository.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../../../contracts/website-sync.ts";
 import { callSql, type SqlExecutor } from "./sql.ts";
 import { sanitizePublicText } from "../notion/public-text.ts";
 import { validateListQuery, validateLibraryYearsQuery } from "../../lib/content/query.ts";
-import { isLibraryKind, libraryYears } from "../../lib/content/years.ts";
+import { isLibraryKind } from "../../lib/content/years.ts";
 import { hasYear } from "../../lib/year-filter.ts";
 import { studyTree } from "../notion/study-order.ts";
-import { compareContent, matchesContent, pageOf, documentPlainText, searchContentSnapshot, validateSearchQuery } from "../../lib/content/website.ts";
+import { compareContent, matchesContent, pageOf, documentPlainText, searchContentSnapshot, summarizeLibraryYears, validateSearchQuery } from "../../lib/content/website.ts";
 import { CONTENT_KINDS } from "../../../config/features.ts";
 import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../../lib/content/status.ts";
@@ -180,8 +180,6 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     return pageOf(records.map(d => d.item) as ContentByKind[K][], { cursor, limit },
       ["list", kind, version(snapshot), filters, limit ?? 12, timeZone, ...(kind === "game" ? [GAME_DATE_POLICY] : [])]);
   };
-  const countLibraryYears = (snapshot: Projection, query: LibraryYearsQuery, timeZone: string) =>
-    libraryYears(snapshot.records.map(record => record.item).filter(item => matchesContent(item, query, timeZone)), timeZone);
   async function hydrateLibraryPage<K extends ContentKind>(snapshot: Projection, page: Page<ContentByKind[K]>) {
     if (!library?.prepareDelivery || !snapshot.mediaIds.length || !page.items.length) return page;
     const delivery = await library.prepareDelivery({
@@ -317,7 +315,7 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
       validateListQuery(kind, query);
       const timeZone = zone(), snapshot = await loadMetadata(kind, library.db);
       let years: LibraryYears | null = null;
-      try { years = countLibraryYears(snapshot, query.status ? { status: query.status } : {}, timeZone); }
+      try { years = summarizeLibraryYears(kind, snapshot.records.map(record => record.item), query, timeZone); }
       catch { checkContentReadBudget(); }
       const asked = query.year ?? null, year = years && !hasYear(years, asked) ? null : asked;
       let page = selectPage(snapshot, kind, query, timeZone);
@@ -368,7 +366,7 @@ export function createWebsiteDatabaseRepository(db: SqlExecutor, options: Websit
     async getLibraryYears(kind, query = {}) {
       validateLibraryYearsQuery(kind, query);
       const timeZone = zone(), snapshot = library ? await loadMetadata(kind, library.db, WEBSITE_LIBRARY_YEARS_SQL) : await metadata(kind);
-      return countLibraryYears(snapshot, query, timeZone);
+      return summarizeLibraryYears(kind, snapshot.records.map(record => record.item), query, timeZone);
     },
     async getHome() {
       const [posts,statuses,albums,books,games,courses]=await Promise.all([repository.list("post",{limit:3}),repository.list("status",{limit:12}),repository.list("album",{limit:3}),repository.list("book",{status:"reading",limit:3}),repository.list("game",{status:"playing",limit:3}),repository.list("course",{limit:6})]);

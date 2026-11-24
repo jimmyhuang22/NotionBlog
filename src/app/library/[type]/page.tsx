@@ -3,20 +3,21 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LibraryGrid } from "@/components/library-grid";
 import { Suspense } from "react";
+import { GameTools } from "@/components/game-tools";
 import { LinkPending } from "@/components/link-pending";
 import { RecentGamesWaiting } from "@/components/recent-games";
 import { RecentGamesSection } from "@/components/recent-games-section";
 import { ScrollingSegments, Segments } from "@/components/scrolling-segments";
 import { SortToggle } from "@/components/sort-toggle";
 import { readLibraryFirstPage } from "@/lib/content";
-import { libraryHref, libraryOrders, librarySections } from "@/lib/library";
+import { gamePlatformCategories, libraryHref, libraryOrders, librarySections, readGamePlatform } from "@/lib/library";
 import { getSiteConfig } from "@/lib/site";
 import { readYear, yearTabs } from "@/lib/year-filter";
 import { isEnabledContentKind } from "../../../../config/features.ts";
 
 const PAGE_SIZE = 24;
 
-type Props = { params: Promise<{ type: string }>; searchParams: Promise<{ status?: string | string[]; order?: string | string[]; year?: string | string[] }> };
+type Props = { params: Promise<{ type: string }>; searchParams: Promise<{ status?: string | string[]; order?: string | string[]; year?: string | string[]; platform?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: librarySections[(await params).type]?.label ?? "作品" };
@@ -32,8 +33,10 @@ export default async function LibraryPage({ params, searchParams }: Props) {
   const status = section.tabs.find(([value]) => value === requested.status)?.[0] ?? section.defaultStatus;
   const order = libraryOrders.find(([value]) => value !== null && value === requested.order)?.[0] ?? null;
   const asked = readYear(requested.year);
+  // Games only: one platform family, or every platform.
+  const platform = section.kind === "game" ? readGamePlatform(requested.platform) : null;
   const { page: initial, years, year } = await readLibraryFirstPage(section.kind, {
-    limit: PAGE_SIZE, ...(status ? { status } : {}), ...(asked === null ? {} : { year: asked }), ...(order ? { order } : {}),
+    limit: PAGE_SIZE, ...(status ? { status } : {}), ...(platform ? { platform } : {}), ...(asked === null ? {} : { year: asked }), ...(order ? { order } : {}),
   });
   const selected = year === null ? null : String(year);
   const tabs = section.tabs;
@@ -55,21 +58,26 @@ export default async function LibraryPage({ params, searchParams }: Props) {
   // Keyed by every choice so a change starts a fresh list instead of reusing the old cursor.
   const listKey = `${status}:${selected ?? "all"}:${order ?? "default"}`;
 
-  // Games (乙, 2026-11-24): one rail from top to bottom. 最近在玩 is its first part and each year one more, the part's
-  // name in a column on the left; the years are written there, so there is no year row, and the order sits beside
-  // the statuses. 最近在玩 streams in on its own, so the library never waits for it, and it does not follow the
-  // statuses (丙, 2026-11-24). An address with ?year= still lists that year alone.
+  // Games (乙, 2026-11-24): the stage of what is played now, then what the list holds (the statuses, 丙), then the years
+  // as rings on a line. The order switch is gone (an address with ?order= still works); so is the year row, the years
+  // being written on the line, and ?year= still narrows the list. The stage streams in on its own, so the library never
+  // waits for it, and it does not follow the statuses.
   if (section.kind === "game") return (
-    <div className="wrap wrap--wide">
+    <div className="wrap wrap--wide game-page">
       <header className="page-head library__head">
         <h1>{section.label}</h1>
-        <div className="library__head-tools">{sort}{statusTabs}</div>
       </header>
-      <div className="game-rail">
-        <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense>
-        <LibraryGrid key={listKey} kind={section.kind} status={status} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone}
-          yearCounts={yearCounts} runLabel={tabs.find(([value]) => value === status)?.[1] ?? section.label} />
-      </div>
+      <Suspense fallback={<RecentGamesWaiting />}><RecentGamesSection timeZone={timeZone} /></Suspense>
+      <GameTools current={status} statuses={tabs.map(([value, label]) => ({ value, label, href: libraryHref(type, value, order, year, platform) }))}
+        platform={platform} platforms={years?.platforms && years.platformTotal !== undefined ? [
+          { value: null, label: "全部", count: years.platformTotal, href: libraryHref(type, status, order, null, null) },
+          ...gamePlatformCategories.flatMap(entry => {
+            const count = years.platforms!.find(counted => counted.key === entry.key)?.count;
+            return count || entry.key === platform ? [{ value: entry.key, label: entry.label, count: count ?? 0, href: libraryHref(type, status, order, null, entry.key) }] : [];
+          }),
+        ] : null} />
+      <LibraryGrid key={`${listKey}:${platform ?? "all"}`} kind={section.kind} status={status} platform={platform} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone}
+        yearCounts={yearCounts} runLabel={tabs.find(([value]) => value === status)?.[1] ?? section.label} />
     </div>
   );
 

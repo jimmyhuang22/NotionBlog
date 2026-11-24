@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { checkCaptureReleaseCompatibility } from "../../scripts/website-sync/capture-release-compatibility.ts";
 
-// Game artwork, playtime and detail fields change the producer bytes. Historical captures
+// Game artwork, playtime, detail fields and platform queries change shared runtime bytes. Historical captures
 // must still reject the current mapper and worker; these are test pins only.
 export const gameCaseRuntime: Readonly<Record<string, string>> = {
   "scripts/website-sync/worker.ts": "eaba75fa41d6799ca627ffcc58c47336209963bb7a362dc51c975da95bafbfbf",
   "src/server/notion/blocks.ts": "8e8547c2223c6112fdec2190680e39e2bfae1a30249a26da1b615eabf6c9b91e",
-  "src/server/notion/website-repository.ts": "2ddb7597f29c8c3a5e9682983dbebd120e2a8345dedeec27dcb6374b30ac184f",
+  "src/server/notion/website-repository.ts": "6475972a0290daac27073e011824dc7305dbaa0e4aa42e128e4e4dffe5bde147",
 };
 export function laterGameCaseRuntime(path: string, current: string, prior: string,
   producer: Parameters<typeof checkCaptureReleaseCompatibility>[0], consumer: Parameters<typeof checkCaptureReleaseCompatibility>[1]): boolean {

@@ -6,10 +6,10 @@ import { fixtureItems, fixtureDocuments, fixtureGameTrophySets, fixtureTrees } f
 import { createHash } from "node:crypto";
 import { validateListQuery, validateLibraryYearsQuery } from "../src/lib/content/query.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../src/lib/content/status.ts";
-import { contentYear, libraryYears, supportsYear } from "../src/lib/content/years.ts";
+import { supportsYear } from "../src/lib/content/years.ts";
 import { GAME_DATE_POLICY, gameBrowsingDate, projectGameDates } from "../src/lib/content/game-date.ts";
-import { matchesGamePlatform } from "../src/lib/content/game-case.ts";
 import { contextFromItems } from "../src/lib/content/search-context.ts";
+import { matchesContent, summarizeLibraryYears } from "../src/lib/content/website.ts";
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const invalid = (message: string): never => {
@@ -28,19 +28,6 @@ function dateOf(item: AnyContent): string | null {
     case "project": return item.period?.start ?? null;
     case "page": return null;
   }
-}
-function matches(item: AnyContent, query: ListQuery): boolean {
-  if (query.tag && !item.tags.includes(query.tag)) return false;
-  if (query.status) {
-    if (!("status" in item)) return false;
-    if (query.status === "completed" && item.kind === "game") {
-      if (!["clear", "platinumed"].includes(item.status)) return false;
-    } else if (item.status !== query.status) return false;
-  }
-  if (query.type && (item.kind !== "movie" || item.mediaType !== query.type)) return false;
-  if (query.platform && (item.kind !== "game" || !matchesGamePlatform(item.platforms, query.platform))) return false;
-  if (query.semester && (item.kind !== "course" || item.semester !== query.semester)) return false;
-  return true;
 }
 function findNode(nodes: StudyNode[], id: string): StudyNode | null {
   for (const node of nodes) {
@@ -88,8 +75,7 @@ export function createMockRepository(options: StatusReadOptions = {}): ContentRe
         offset = Number(parts[2]);
         if (!Number.isSafeInteger(offset)) invalid("Invalid mock cursor");
       }
-      const all = fixtureItems[kind].map(publicItem).filter(item => matches(item, query) && (query.year === undefined ||
-        (supportsYear(item.kind) && contentYear(item, timeZone) === (query.year === "undated" ? null : query.year))));
+      const all = fixtureItems[kind].map(publicItem).filter(item => matchesContent(item, query, timeZone));
       all.sort((a, b) => {
         if (order !== "title-asc") {
           const da = dateOf(a), db = dateOf(b);
@@ -129,7 +115,7 @@ export function createMockRepository(options: StatusReadOptions = {}): ContentRe
     async getStatusYears() { return statusYears(fixtureItems.status, statusTimeZone(options)); },
     async getLibraryYears(kind, query = {}) {
       validateLibraryYearsQuery(kind, query);
-      return libraryYears(fixtureItems[kind].map(publicItem).filter(item => matches(item, query)), statusTimeZone(options));
+      return summarizeLibraryYears(kind, fixtureItems[kind].map(publicItem), query, statusTimeZone(options));
     },
     async getCourseTree(courseSlug: string, parentId?: string) {
       const course = fixtureItems.course.find(x => x.slug === courseSlug);

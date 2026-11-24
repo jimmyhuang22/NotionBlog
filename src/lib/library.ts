@@ -1,4 +1,4 @@
-import type { Book, DateRange, Game, Movie, Rating, TimeAmount } from "../../contracts/content.ts";
+import type { Book, DateRange, Game, GamePlatformCategory, Movie, Rating, TimeAmount } from "../../contracts/content.ts";
 import { ratingLabel } from "./format.ts";
 import type { YearChoice } from "./year-filter.ts";
 import { gameBrowsingDate } from "./content/game-date.ts";
@@ -35,9 +35,9 @@ export const libraryOrders: [LibraryOrder | null, string][] = [[null, "最近"],
  * A list address that keeps every choice, so changing one does not reset the others. The section's
  * default status is left out, so each status has one address and the plain section address opens on it.
  */
-export function libraryHref(type: string, status: string | null, order: LibraryOrder | null, year: YearChoice = null): string {
+export function libraryHref(type: string, status: string | null, order: LibraryOrder | null, year: YearChoice = null, platform: GamePlatformCategory | null = null): string {
   const shown = status === librarySections[type]?.defaultStatus ? null : status;
-  const params = new URLSearchParams({ ...(shown ? { status: shown } : {}), ...(year === null ? {} : { year: String(year) }), ...(order ? { order } : {}) });
+  const params = new URLSearchParams({ ...(shown ? { status: shown } : {}), ...(platform ? { platform } : {}), ...(year === null ? {} : { year: String(year) }), ...(order ? { order } : {}) });
   return params.size ? `/library/${type}?${params}` : `/library/${type}`;
 }
 
@@ -232,4 +232,34 @@ export function ratingDots(rating: Rating | null): { filled: number; total: numb
 /** A progress figure as a bar width; null, non-numbers and out-of-range values draw no bar. */
 export function progressWidth(percent: number | null): string | null {
   return percent !== null && Number.isFinite(percent) && percent >= 0 && percent <= 100 ? `${percent}%` : null;
+}
+
+/**
+ * What a year on the games page says beside its count (乙, 2026-11-24): the hours played and how many games each
+ * platform family holds. Worked out from the games shown, so the page asks for it only once every game of the year
+ * is in; a year still paging in says its count alone. Switch and Switch 2 are one family, as on the cases.
+ */
+export interface GameYearFacts { hours: number | null; platforms: { icon: GamePlatformIcon; count: number }[] }
+const FAMILY_ORDER: GamePlatformIcon[] = ["switch", "playstation", "steam", "pc", "3ds"];
+export function gameYearFacts(games: Game[]): GameYearFacts {
+  let minutes = 0, timed = 0;
+  const counts = new Map<GamePlatformIcon, number>();
+  for (const game of games) {
+    const time = game.playedTime;
+    if (time && time.value > 0) { minutes += time.unit === "hour" ? time.value * 60 : time.value; timed++; }
+    const families = new Set(platformChips(game.platforms).flatMap(chip => { const icon = gamePlatformIcon(chip.label); return icon ? [icon] : []; }));
+    for (const family of families) counts.set(family, (counts.get(family) ?? 0) + 1);
+  }
+  return {
+    hours: timed ? Math.round(minutes / 60) : null,
+    platforms: FAMILY_ORDER.flatMap(icon => counts.get(icon) ? [{ icon, count: counts.get(icon)! }] : []),
+  };
+}
+
+/** The games page's platform choices (乙, 2026-11-24), in the order the server counts them; anything else is every platform. */
+export const gamePlatformCategories: { key: GamePlatformCategory; label: string }[] = [
+  { key: "switch", label: "Switch" }, { key: "playstation", label: "PlayStation" }, { key: "steam", label: "Steam" }, { key: "pc", label: "PC" },
+];
+export function readGamePlatform(value: string | string[] | undefined): GamePlatformCategory | null {
+  return gamePlatformCategories.find(entry => entry.key === value)?.key ?? null;
 }

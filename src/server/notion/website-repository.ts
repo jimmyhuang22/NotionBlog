@@ -9,12 +9,12 @@ import type { AnyContent, ContentByKind, ContentDetail, ContentDocument, Content
 import { ContentServiceError, type ContentRepository } from "../../../contracts/repository.ts";
 import { validateListQuery, validateLibraryYearsQuery } from "../../lib/content/query.ts";
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../../lib/content/status.ts";
-import { libraryYears, supportsYear } from "../../lib/content/years.ts";
+import { supportsYear } from "../../lib/content/years.ts";
 import { buildNotionDocument, type RegisterBlockImageInput } from "./blocks.ts";
 import { normalizeId } from "./config.ts";
 import { assertWebsiteSourceSchema as assertSourceSchema } from "./website-config.ts";
 import type { WebsiteNotionSource as NotionSource, WebsiteNotionConfig as NotionSourcesConfig } from "./website-config.ts";
-import { compareContent, contentDate, matchesContent } from "../../lib/content/website.ts";
+import { compareContent, contentDate, matchesContent, summarizeLibraryYears } from "../../lib/content/website.ts";
 import { GAME_DATE_POLICY, projectGameDates } from "../../lib/content/game-date.ts";
 import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/content/movie-rating.ts";
 import { configDigest } from "../database/validation.ts";
@@ -698,7 +698,7 @@ function createWebsiteRepository(options: NotionRepositoryOptions, captureStudy?
         const resolved = await reader.resolve(id, kind);
         return resolved ? await reader.item(resolved, false) : null;
       });
-      return libraryYears(items.filter((item): item is AnyContent => item !== null && matchesContent(item, query, timeZone)), timeZone);
+      return summarizeLibraryYears(kind, items.filter(item => item !== null), query, timeZone);
     },
     async getStatusYears() {
       const reader = session();
