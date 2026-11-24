@@ -174,6 +174,10 @@ export interface GamePlatformPlayTime {
 }
 /** Owner's crop for upright art whose title sits at one edge (Notion 竖图取景: 靠上／居中／靠下). */
 export type GameBoxArtPosition = "top" | "center" | "bottom";
+export type GameBoxArtLayout = (
+  | { mode: "contain" }
+  | { mode: "retail"; window: [left: number, top: number, width: number, height: number]; printedSwitchMark?: true }
+) & { playStationModel?: "PS4" | "PS5" };
 export interface GameAbout {
   summary: string | null;
   developers: string[];
@@ -192,6 +196,8 @@ export interface Game extends ContentBase {
   boxArt?: ImageAsset | null;
   /** Which part of boxArt a case keeps when it crops it, set by the owner per cover; missing or null keeps the middle. */
   boxArtPosition?: GameBoxArtPosition | null;
+  /** Owner-approved box art presentation. The optional window is measured in original image pixels. */
+  boxArtLayout?: GameBoxArtLayout;
   /** Verified totals from linked platform records. Unknown platforms are omitted. */
   platformPlayTime?: GamePlatformPlayTime[] | null;
   /** Owner-maintained experience range; never overwritten by account activity. */

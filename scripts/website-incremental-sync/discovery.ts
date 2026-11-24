@@ -50,6 +50,8 @@ function directoryProperties(page: PageObjectResponse, gameFields?: Readonly<Rec
   if (!gameFields) return page.properties;
   const position = getProperty(page, gameFields.boxArtPosition ?? "竖图取景");
   const inactive: PageObjectResponse["properties"][string][] = position?.type === "select" && position.select === null ? [position] : [];
+  const layout = getProperty(page, gameFields.boxArtLayout ?? "封面展示");
+  if (layout?.type === "rich_text" && layout.rich_text.length === 0) inactive.push(layout);
   const platform = gameFields.boxArtPlatform ?? "Box Art Platform";
   // Creating unused case fields must not turn the entire game library into pending work.
   if (!(gameFields.platformPlayTime && !gameFields.boxArtPlatform) && !getSelect(page, platform)) {

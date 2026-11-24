@@ -1,7 +1,7 @@
 import type { PageObjectResponse } from "@notionhq/client";
-import type { GameBoxArtPosition, GamePlatformPlayTime } from "../../../contracts/content.ts";
-import { gameCasePlatformKey, selectGameCasePlatform } from "../../lib/content/game-case.ts";
-import { getProperty, getSelect, getValues } from "./properties.ts";
+import type { GameBoxArtLayout, GameBoxArtPosition, GamePlatformPlayTime } from "../../../contracts/content.ts";
+import { gameCasePlatformKey, isGameBoxArtLayout, selectGameCasePlatform } from "../../lib/content/game-case.ts";
+import { getProperty, getSelect, getValues, plainText } from "./properties.ts";
 
 const switchDevices = new Set(["Nintendo Switch", "Nintendo Switch 2", "Nintendo 3DS", "Wii U"]);
 const playStationHardware = (value: string): string | null => /^(?:PS|PlayStation )([45])$/iu.exec(value.trim())?.[1] ?? null;
@@ -73,10 +73,24 @@ export function readGameBoxArtPosition(page: PageObjectResponse, field?: string)
   }
 }
 
+export function readGameBoxArtLayout(page: PageObjectResponse, fields: Readonly<Record<string, string>>): GameBoxArtLayout | undefined {
+  const property = getProperty(page, fields.boxArtLayout);
+  if (property?.type !== "rich_text") return undefined;
+  const text = plainText(property.rich_text).trim();
+  if (!text || text.length > 256) return undefined;
+  let input: unknown;
+  try { input = JSON.parse(text); } catch { return undefined; }
+  if (!isGameBoxArtLayout(input) || input.playStationModel !== undefined) return undefined;
+  const hardware = playStationHardware(getSelect(page, fields.boxArtPlatform) ?? "");
+  return hardware ? { ...input, playStationModel: hardware === "4" ? "PS4" : "PS5" } : input;
+}
+
 /** Capture source fields that can change independently of the captured edit timestamp. */
 export function gameCaseSourceRevision(page: PageObjectResponse, fields: Readonly<Record<string, string>>) {
   if (!fields.boxArt && !fields.platformPlayTime && !fields.boxArtPosition) return null;
+  const layout = getProperty(page, fields.boxArtLayout);
   return [fields.platforms, fields.platformPlayTime, fields.lastPlayedDate, fields.lastPlayedPlatforms, fields.boxArtPlatform,
     ...(fields.boxArtPosition ? [fields.boxArtPosition] : [])]
-    .map(field => getProperty(page, field));
+    .map(field => getProperty(page, field))
+    .concat(layout?.type === "rich_text" && layout.rich_text.length ? [layout] : []);
 }

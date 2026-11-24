@@ -20,7 +20,7 @@ import { isMoviePublicRating, normalizeMovieRatingSource } from "../../lib/conte
 import { configDigest } from "../database/validation.ts";
 import { getDate, getLastPlayedDate, getFirstPlayedDate, getProperty, getRating, getSelect, getTags, getTitle, normalizeDateTime, getNumber, getValues, getPublicUrl } from "./properties.ts";
 import { isUsableGameBoxArt } from "../../lib/content/game-case.ts";
-import { readGameBoxArtPosition, readGameCaseFields } from "./game-case-fields.ts";
+import { readGameBoxArtLayout, readGameBoxArtPosition, readGameCaseFields } from "./game-case-fields.ts";
 import { readLastPlayedPlatforms } from "./game-play-platforms.ts";
 import { mapBounded } from "./bounded-work.ts";
 import type { NotionReadClient } from "./types.ts";
@@ -347,14 +347,17 @@ class ReadSession {
       const lastPlayedPlatforms = f.lastPlayedPlatforms ? readLastPlayedPlatforms(page, f.lastPlayedPlatforms, lastPlayedDate, zone) : null;
       const caseMarked = Boolean(f.boxArtPlatform && getSelect(page, f.boxArtPlatform));
       const boxArtPosition = readGameBoxArtPosition(page, f.boxArtPosition);
+      const boxArtLayout = readGameBoxArtLayout(page, f);
       const { platforms, platformPlayTime, platform, boxArtProperty } = readGameCaseFields(page, f, lastPlayedPlatforms);
       const boxArt = cover && boxArtProperty && platform
-        ? await this.cover(resolved, boxArtProperty, dimensions => isUsableGameBoxArt(dimensions, platform))
+        ? await this.cover(resolved, boxArtProperty, dimensions => isUsableGameBoxArt(dimensions, platform, boxArtLayout))
         : null;
+      const qualifiedArt = boxArt && platform && isUsableGameBoxArt(boxArt, platform, boxArtLayout) ? boxArt : null;
       return projectGameDates({ ...base, kind: "game", status: state(["clear", "platinumed", "playing", "wishlist"]) as ContentByKind["game"]["status"], platforms, playedDate: getDate(page, f.playedDate), lastPlayedDate, firstPlayedDate: getFirstPlayedDate(page, f.firstPlayedDate), releaseDate: getDate(page, f.releaseDate),
         ...(f.lastPlayedPlatforms ? { lastPlayedPlatforms } : {}),
         ...(f.platformPlayTime && (!f.boxArtPlatform || caseMarked) ? { platformPlayTime: platforms.length > 1 ? platformPlayTime : null } : {}),
-        ...(f.boxArt && caseMarked ? { boxArt: boxArt && platform && isUsableGameBoxArt(boxArt, platform) ? boxArt : null } : {}),
+        ...(f.boxArt && caseMarked ? { boxArt: qualifiedArt } : {}),
+        ...(qualifiedArt && boxArtLayout ? { boxArtLayout } : {}),
         ...(boxArtPosition !== null ? { boxArtPosition } : {}),
         playedTime: minutes !== null ? { value: minutes, unit: "minute" } : historical !== null && source.playedTimeUnit ? { value: historical, unit: source.playedTimeUnit } : null,
         ...(intro || developers.length || publishers.length ? { about: { summary: intro, developers, publishers } } : {}),

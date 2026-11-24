@@ -1,4 +1,4 @@
-import type { Game, GamePlatformPlayTime, ImageAsset } from "../../../contracts/content.ts";
+import type { Game, GameBoxArtLayout, GamePlatformPlayTime, ImageAsset } from "../../../contracts/content.ts";
 
 export function gameCasePlatformKey(platform: string): string {
   const name = platform.trim().toLowerCase();
@@ -28,8 +28,30 @@ export function gameBoxArtEffectiveHeight(image: Pick<ImageAsset, "width" | "hei
   return Math.min(height, Math.floor(width / slotRatio));
 }
 
-export function isUsableGameBoxArt(image: Pick<ImageAsset, "width" | "height">, platform: string): boolean {
-  return (gameBoxArtEffectiveHeight(image, platform) ?? 0) >= 560;
+export function isGameBoxArtLayout(value: unknown): value is GameBoxArtLayout {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const { mode, window, printedSwitchMark, playStationModel } = value as Record<string, unknown>;
+  if (playStationModel !== undefined && playStationModel !== "PS4" && playStationModel !== "PS5") return false;
+  const keys = Object.keys(value);
+  if (mode === "contain") return keys.every(key => key === "mode" || key === "playStationModel");
+  return mode === "retail" && keys.every(key => ["mode", "window", "printedSwitchMark", "playStationModel"].includes(key)) &&
+    (printedSwitchMark === undefined || printedSwitchMark === true) &&
+    Array.isArray(window) && window.length === 4 && window.every(n => Number.isSafeInteger(n) && n >= 0) &&
+    window[2] > 0 && window[3] > 0;
+}
+
+export function isUsableGameBoxArt(image: Pick<ImageAsset, "width" | "height">, platform: string, layout?: GameBoxArtLayout): boolean {
+  if (!layout) return (gameBoxArtEffectiveHeight(image, platform) ?? 0) >= 560;
+  const { width, height } = image;
+  if (width === null || height === null || !Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+      width < 560 || height < 560) return false;
+  if (layout.playStationModel && (gameCasePlatformKey(platform) !== "playstation" ||
+      (/4|5/u.test(platform) && !platform.endsWith(layout.playStationModel.slice(-1))))) return false;
+  if (layout.mode === "contain") return width / height >= 0.8 && width / height <= 1.25;
+  const [left, top, artWidth, artHeight] = layout.window;
+  if (layout.printedSwitchMark && gameCasePlatformKey(platform) !== "switch") return false;
+  return left + artWidth <= width && top + artHeight <= height &&
+    artHeight >= 560 && artWidth / artHeight >= 0.48 && artWidth / artHeight <= 1.12;
 }
 
 /** Snapshots publish hours and use the exact labels already present on Game. */

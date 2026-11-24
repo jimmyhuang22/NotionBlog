@@ -47,9 +47,26 @@ function Art({ game, width }: { game: Game; width: 400 | 800 }) {
   const [lost, setLost] = useState(false);
   const box = game.boxArt;
   if (!box || lost) return <WideArt game={game} width={width} />;
+  const layout = game.boxArtLayout;
+  if (layout?.mode === "retail" && box.width && box.height) {
+    const [left, top, artWidth, artHeight] = layout.window;
+    const style = {
+      "--retail-aspect": artWidth / artHeight,
+      "--retail-width": `${box.width / artWidth * 100}%`,
+      "--retail-left": `${-left / artWidth * 100}%`,
+      "--retail-top": `${-top / artHeight * 100}%`,
+    } as CSSProperties;
+    return (
+      <span className="game-case__art game-case__art--retail" data-printed-switch-mark={layout.printedSwitchMark || undefined}>
+        <span className="game-case__retail-window" style={style}>
+          <CaseImage key={box.src} image={box} width={width} onLost={() => setLost(true)} />
+        </span>
+      </span>
+    );
+  }
   const position = game.boxArtPosition === "top" || game.boxArtPosition === "bottom" ? game.boxArtPosition : undefined;
   return (
-    <span className="game-case__art" data-position={position}>
+    <span className="game-case__art" data-position={layout ? undefined : position} data-fit={layout?.mode}>
       <CaseImage key={box.src} image={box} width={width} onLost={() => setLost(true)} />
     </span>
   );
@@ -84,7 +101,11 @@ function CaseTop({ face, status }: { face: GameCaseFace; status: ReactNode }) {
  * art below, the time played in its lower left corner. Decorative inside its link, which carries the title.
  */
 export function GameCase({ game, large = false }: { game: Game; large?: boolean }) {
-  const face = gameCaseFace(game);
+  const caseFace = gameCaseFace(game);
+  const model = game.boxArtLayout?.playStationModel;
+  const face = caseFace.look === "ps" && game.boxArt && model
+    ? { ...caseFace, look: model === "PS4" ? "ps4" as const : "ps5" as const }
+    : caseFace;
   const time = cardTimeLabel(game.playedTime);
   const status = face.status ? <span className={`game-case__status${game.status === "platinumed" ? " game-case__status--platinum" : ""}`}>{face.status}</span> : null;
   return (

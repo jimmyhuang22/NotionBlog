@@ -904,6 +904,16 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 }
 .game-case__art { position: absolute; left: 0; right: 0; top: var(--band-h); bottom: 0; display: block; }
 .game-case__art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.game-case__art[data-fit="contain"] img { object-fit: contain; }
+.game-case__art--retail { container-type: size; }
+.game-case__retail-window {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden;
+  width: min(100%, calc(100cqh * var(--retail-aspect))); aspect-ratio: var(--retail-aspect);
+}
+.game-case__retail-window img {
+  position: absolute; left: var(--retail-left); top: var(--retail-top); width: var(--retail-width); height: auto; max-width: none;
+}
+.game-case__insert:has(.game-case__art[data-printed-switch-mark]) .case-mark--switch { display: none; }
 /* The owner's crop per cover: keep the edge its title is printed on (2026-11-24). */
 .game-case__art[data-position="top"] img { object-position: 50% 0; }
 .game-case__art[data-position="bottom"] img { object-position: 50% 100%; }
