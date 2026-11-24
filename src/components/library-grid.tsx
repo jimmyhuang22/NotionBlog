@@ -39,12 +39,11 @@ function CoverPicture({ image, title, previewWidth }: CoverProps) {
 }
 
 /**
- * Under a game's case: its title, then its rating and the other platforms it is on; the case itself shows the
- * platform played longest, the status and the time (the owner's pick 甲, 2026-11-23). Nothing unknown is written.
+ * With a game's name: its rating, when it has one. The case itself shows the platform played longest, the status
+ * and the time (the owner's pick 甲, 2026-11-23); the other platforms are not listed (owner, 2026-11-24).
  */
 function CaseLine({ game }: { game: Game }) {
-  const parts = [game.rating ? ratingLabel(game.rating) : null, ...gameCaseFace(game).others.map(label => `也在 ${label}`)].filter(Boolean);
-  return parts.length ? <span className="library__meta">{parts.map((part, index) => <span key={index}>{part}</span>)}</span> : null;
+  return game.rating ? <span className="library__meta"><span>{ratingLabel(game.rating)}</span></span> : null;
 }
 
 interface Group { key: string; label: string | null; items: LibraryItem[] }
@@ -99,8 +98,8 @@ function WorkLink({ href, className, cover, style, children }: { href: string; c
  * the cases keeping their shape; each year opens with a bookend, its year written down it and the year's count
  * from the server, so a list still loading says the whole year. A bookend is held to the year's first case and
  * never ends a row alone; on a phone it is a full-width line instead. A wishlist, or a list narrowed to one year,
- * has no bookends. A pointer on a case lifts it, dims the rest and shows its name and facts below it; without a
- * pointer the name stays under each case.
+ * has no bookends. A pointer on a case lifts it and brings its name up from the bottom of the case, the rest of the
+ * wall untouched (丙, 2026-11-24); without a pointer the name stays under each case.
  */
 function GameWall({ groups, yearCounts, unit, itemClass, itemStyle }: {
   groups: Group[]; yearCounts?: Record<string, number>; unit: string;

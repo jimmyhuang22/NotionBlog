@@ -831,19 +831,22 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 @media (prefers-reduced-motion: no-preference) { .game-case--waiting { animation: breathe 2.4s ease-in-out infinite; } }
 .library__wall .library__title { font-family: var(--font-hand); line-height: 1.35; }
 .library__wall .library__meta { font-size: var(--text-xs); }
-/* With a pointer: names are a card that appears under the case pointed at, which rises while the rest dim. */
+/* With a pointer (丙, 2026-11-24): the case pointed at rises and its name comes up from the bottom of its window over a
+ * darkening, in place of the time; the rest of the wall stays as it is and nothing covers the row below. The case is
+ * the item's container, so the name is placed in the case's own units, over the window inside the rim. */
 @media (hover: hover) {
-  .library__name { position: absolute; z-index: 5; left: 50%; top: calc(100% + 6px); width: max-content; max-width: min(240px, calc(100% + 48px)); padding: 7px 12px 8px; border-radius: var(--radius-xs);
-    background: var(--ink); color: var(--bg); text-align: center; box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.5); opacity: 0; pointer-events: none; transform: translate(-50%, -4px); }
-  .library__name .library__title { font-size: var(--text-md); color: inherit; }
-  .library__name .library__meta { justify-content: center; color: color-mix(in srgb, var(--bg) 72%, transparent); }
-  .library__wall .library__item:is(:hover, :focus-visible) .library__name { opacity: 1; transform: translate(-50%, 0); }
+  .library__wall .library__item { container-type: inline-size; }
+  .library__name { position: absolute; z-index: 5; left: 5.1cqw; right: 3.4cqw; bottom: 3.4cqw; gap: 2px; padding: 34cqw 7cqw 6cqw; border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+    background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, 0.55) 35%, rgba(8, 9, 12, 0.88)); color: #fff; opacity: 0; pointer-events: none; transform: translateY(2px); }
+  .library__name .library__title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: clamp(12px, 9cqw, 20px); color: inherit; }
+  .library__name .library__meta { padding: 0; font-size: clamp(9.5px, 6cqw, 13px); color: rgba(255, 255, 255, 0.8); }
+  .library__wall .library__item:is(:hover, :focus-visible) .library__name { opacity: 1; transform: translateY(-6px); }
   .library__wall .library__item:is(:hover, :focus-visible) .game-case { transform: translateY(-6px); }
-  .library__wall:has(.library__item:hover) .library__item:not(:hover) { opacity: 0.5; }
+  .library__wall .library__item:is(:hover, :focus-visible) .game-case__time { opacity: 0; }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .library__wall .library__item { transition: opacity 0.2s; }
   .library__wall .game-case, .library__name { transition: opacity 0.15s, transform 0.2s; }
+  .library__wall .game-case__time { transition: opacity 0.15s; }
 }
 /* Without one: the name under each case, on one line. */
 @media (hover: none) {
