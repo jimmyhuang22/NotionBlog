@@ -211,14 +211,14 @@ export async function runGameCommand(args: string[], runId: string) {
           if (!steamForEvening) throw new GameSyncError("STEAM_ALLOWLIST_REQUIRED");
           const policy = await fixedSteamPolicy(root), config = object(await readJson(join(root, "config.json")));
           const steamId = env.STEAM_ID ?? "", apiKey = env.STEAM_WEB_API_KEY ?? "";
-          const ids = selectEveningSteamApps(scope, steamId, policy, config, steamForEvening);
-          if (!ids.length) return null;
+          const targets = selectEveningSteamApps(scope, steamId, policy, config, steamForEvening);
+          if (!targets.length) return null;
           const observedAt = new Date().toISOString();
           const sets = [];
-          for (const appId of ids) {
+          for (const { appId, gameId } of targets) {
             if (signal.aborted) throw new GameSyncError("TIME_LIMIT");
             sets.push(await collectSteamAchievementProgress(apiKey, steamId, policy,
-              { ...config, steamAchievementAppId: appId }, signal));
+              { ...config, bindings: { [`Steam:PC:${appId}`]: gameId }, steamAchievementAppId: appId }, signal));
           }
           return { observedAt, sets };
         },

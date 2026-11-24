@@ -20,7 +20,7 @@ const policy = {
 };
 const gameId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const config = {
-  bindings: Object.fromEntries(appIds.filter(id => id !== 6).map(id => [`Steam:PC:${id}`, gameId])),
+  bindings: { "Steam:PC:6": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
   excluded: ["Steam:PC:5"],
 };
 function steamRow(id: number, lastPlayed: string | null): Observation {
@@ -35,15 +35,15 @@ function steamRow(id: number, lastPlayed: string | null): Observation {
 test("evening Steam selection intersects current playtime, explicit scope, binding and privacy; older titles rotate", () => {
   const latest = new Date(now).toISOString();
   const rows = appIds.filter(id => id !== 7).map(id => steamRow(id, id >= 9 ? latest : null));
-  const permitted = appIds.filter(id => id !== 8);
-  const selected = selectEveningSteamApps(permitted, steamId, policy, config, rows, now);
+  const permitted = Object.fromEntries(appIds.filter(id => id !== 8).map(id => [id, gameId]));
+  const selected = selectEveningSteamApps(permitted, steamId, policy, config, rows, now).map(target => target.appId);
   assert.equal(selected.length, 12);
   assert(selected.every(id => id === 1 || id >= 9));
   assert(selected.some(id => id >= 9));
   const covered = new Set(Array.from({ length: 6 }, (_, index) =>
-    selectEveningSteamApps(permitted, steamId, policy, config, rows, now + index * 86400000)).flat());
+    selectEveningSteamApps(permitted, steamId, policy, config, rows, now + index * 86400000)).flat().map(target => target.appId));
   assert(covered.has(1));
-  assert.throws(() => selectEveningSteamApps([1, 1], steamId, policy, config, rows, now),
+  assert.throws(() => selectEveningSteamApps({ "1": "invalid" }, steamId, policy, config, rows, now),
     { code: "STEAM_ACHIEVEMENT_SCOPE_REQUIRED" });
 });
 
@@ -58,8 +58,8 @@ test("Steam statistics use only the player endpoint and preserve a verified zero
     return Response.json({ playerstats: { success: true, steamID: steamId,
       achievements: [{ apiname: "demo", achieved: 0 }] } });
   };
-  const result = await collectSteamAchievementProgress("a".repeat(32), steamId, policy,
-    { ...config, steamAchievementAppId: 1 }, signal, request);
+  const binding = { ...config, bindings: { "Steam:PC:1": gameId }, steamAchievementAppId: 1 };
+  const result = await collectSteamAchievementProgress("a".repeat(32), steamId, policy, binding, signal, request);
   assert.equal(calls, 1);
   assert.deepEqual([result.earned, result.total, result.latestUnlockAt], [0, 1, null]);
   await assert.rejects(collectSteamAchievementProgress("a".repeat(32), steamId, policy,

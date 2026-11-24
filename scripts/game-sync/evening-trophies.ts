@@ -11,19 +11,25 @@ const dayMs = 24 * 60 * 60 * 1000;
 
 export function selectEveningSteamApps(input: unknown, steamId: string, policy: unknown, config: unknown,
   rows: Observation[], now = Date.now()) {
-  if (!Array.isArray(input) || !input.length || input.length > 10000 ||
-      input.some(id => !Number.isSafeInteger(id) || id <= 0) || new Set(input).size !== input.length) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new GameSyncError("STEAM_ACHIEVEMENT_SCOPE_REQUIRED");
   }
+  const entries = Object.entries(input);
+  if (!entries.length || entries.length > 10000 || entries.some(([id, game]) =>
+    !/^[1-9][0-9]*$/.test(id) || !Number.isSafeInteger(Number(id)) || typeof game !== "string" ||
+    !/^[0-9a-f]{32}$/.test(normalizedId(game)))) {
+    throw new GameSyncError("STEAM_ACHIEVEMENT_SCOPE_REQUIRED");
+  }
+  const scope = new Map(entries.map(([id, game]) => [Number(id), normalizedId(game as string)]));
   const allowed = allowedSteamAchievementApps(steamId, policy, config);
   const bindings = object(object(config).bindings);
   const games = new Map(rows.filter(row => row.provider === "Steam" && row.platform === "PC" &&
     row.visibility === "allowed" && row.productType === "Game").map(row => [Number(row.productId), row]));
-  const candidates = input.filter(appId => {
+  const candidates = [...scope.keys()].filter(appId => {
     const key = `Steam:PC:${appId}`;
     const binding = Object.hasOwn(bindings, key) ? bindings[key] : undefined;
-    return allowed.has(appId) && games.has(appId) && typeof binding === "string" &&
-      /^[0-9a-f]{32}$/.test(normalizedId(binding));
+    return allowed.has(appId) && games.has(appId) &&
+      (binding === undefined || (typeof binding === "string" && normalizedId(binding) === scope.get(appId)));
   }).sort((a, b) => a - b);
   if (!candidates.length) return [];
   const offset = (Math.floor(now / dayMs) * steamRotationSize) % candidates.length;
@@ -34,7 +40,8 @@ export function selectEveningSteamApps(input: unknown, steamId: string, policy: 
   }
   const recent = candidates.filter(appId => lastPlayed(appId) >= now - 2 * dayMs)
     .sort((a, b) => lastPlayed(b) - lastPlayed(a) || a - b);
-  return [...new Set([...rotation, ...recent])].slice(0, steamBatchSize);
+  return [...new Set([...rotation, ...recent])].slice(0, steamBatchSize)
+    .map(appId => ({ appId, gameId: scope.get(appId)! }));
 }
 
 type TrophyStage = (signal: AbortSignal) => Promise<{ observedAt: string; sets: unknown[] } | null>;

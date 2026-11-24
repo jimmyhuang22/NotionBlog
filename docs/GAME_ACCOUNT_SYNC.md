@@ -172,7 +172,7 @@ node scripts/game-sync/cli.ts daily .local/game-sync notify
 
 在 17:00（Australia/Melbourne）的调度中使用 `daily-evening <private-directory>`。07:00 调度继续使用 `daily`。如果生产定时器同时列出两个执行时间，安装时将两个时段分别指向各自的显式入口，切换时确保 17:00 只保留一个触发器。
 
-`daily-evening` 先完成原有三平台 Notion 同步与回读，再在同一个账户锁内采集网站可用范围的统计。PSN 从同一轮已验证账户采集生成各套的奖杯等级、获得数及总数。Steam 用私有目录的 `evening-steam-apps.json`（已发布且已确认作品绑定的 AppID 数组），与当前固定允许／排除名单和本轮游戏平台记录取交集；每轮最多 12 款，保留三个轮查位置，其余优先查最近游玩。没有该文件时 Steam 统计阶段记为跳过。Steam 成就阶段只请求本人进度，不下载图标、定义或全球比例。两阶段共用最多两分钟的额外采集预算，并受原有 15 分钟总时限约束。
+`daily-evening` 先完成原有三平台 Notion 同步与回读，再在同一个账户锁内采集网站可用范围的统计。PSN 从同一轮已验证账户采集生成各套的奖杯等级、获得数及总数。Steam 用私有目录的 `evening-steam-apps.json`（已发布套组的 AppID 到已核对站内游戏 ID 的映射，独立于游玩时长绑定），与当前固定允许／排除名单和本轮游戏平台记录取交集；每轮最多 12 款，保留三个轮查位置，其余优先查最近游玩。没有该文件时 Steam 统计阶段记为跳过。Steam 成就阶段只请求本人进度，不下载图标、定义或全球比例。两阶段共用最多两分钟的额外采集预算，并受原有 15 分钟总时限约束。
 
 `evening-trophy-receipt.json` 记录同一轮的 PSN／Steam 结果与错误码。各平台成功时分别原子替换私有目录的 `evening-psn-trophy-stats.json` 或 `evening-steam-trophy-stats.json`。Steam 文件只包含本次抽查的套组。阶段失败时保留该平台上次成功文件，以回执的 run ID 判断是否属于本轮。网站入库、奖杯明细和双站交付仍使用现有独立流程。
 
