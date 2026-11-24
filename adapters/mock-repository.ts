@@ -8,6 +8,7 @@ import { validateListQuery, validateLibraryYearsQuery } from "../src/lib/content
 import { statusPreview, statusTimeZone, statusYears, type StatusReadOptions } from "../src/lib/content/status.ts";
 import { contentYear, libraryYears, supportsYear } from "../src/lib/content/years.ts";
 import { GAME_DATE_POLICY, gameBrowsingDate, projectGameDates } from "../src/lib/content/game-date.ts";
+import { matchesGamePlatform } from "../src/lib/content/game-case.ts";
 import { contextFromItems } from "../src/lib/content/search-context.ts";
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -37,7 +38,7 @@ function matches(item: AnyContent, query: ListQuery): boolean {
     } else if (item.status !== query.status) return false;
   }
   if (query.type && (item.kind !== "movie" || item.mediaType !== query.type)) return false;
-  if (query.platform && (item.kind !== "game" || !item.platforms.includes(query.platform))) return false;
+  if (query.platform && (item.kind !== "game" || !matchesGamePlatform(item.platforms, query.platform))) return false;
   if (query.semester && (item.kind !== "course" || item.semester !== query.semester)) return false;
   return true;
 }

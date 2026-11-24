@@ -995,7 +995,14 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .recent-games__day b { font-weight: 600; color: var(--ink); }
 /* While the row is read: its name and its height only, so the library below does not move when it arrives. */
 .recent-games--waiting .recent-games__track { height: calc(var(--first-h) + 66px); }
-.recent-games__notice { margin: 0 0 22px; }
+/* Could not be read: the label stays, and a quiet box in place of the cases offers to try again. */
+.recent-games__failed { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-height: 120px; padding: 18px 20px; border: 1px dashed var(--rule); border-radius: var(--radius-md); color: var(--muted); font-size: var(--text-sm); }
+.recent-games__failed p { margin: 0; }
+.recent-games__failed button { flex: none; min-height: 36px; padding: 0 16px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.recent-games__failed button:hover:not(:disabled) { background: var(--soft); }
+.recent-games__failed button:disabled { cursor: progress; opacity: 0.6; }
+/* A day named by how long ago it was ("今天"), its date on hover. */
+.recent-games__day[title] { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 @media (max-width: 640px) {
   .recent-games__track { --row-h: 150px; --first-h: 172px; --fade: 28px; gap: 14px; }
 }
