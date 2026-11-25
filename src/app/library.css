@@ -815,9 +815,10 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
  */
 .game-page { --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --mark-w: 172px; --mark-gap: 28px; position: relative; isolation: isolate; padding-bottom: 96px; }
 /* The stage's colour washes onto the page round it and fades downward, so the stage and the years below are one
- * colour carried on (甲, 2026-11-25); it follows the game chosen. Inside the page's own width, so it never widens it. */
-.game-page::before { content: ""; position: absolute; z-index: -1; inset: 60px 0 auto; height: 1100px; pointer-events: none;
-  background: radial-gradient(70% 55% at 50% 22%, rgb(var(--stage-tint, 32 34 44) / 0.32), transparent 72%); transition: background 0.6s; }
+ * colour carried on (甲, 2026-11-25); it follows the game chosen. An ellipse round the stage that is clear at every
+ * edge of its box (a first version left a hard line above the stage, seen live), inside the page's own width. */
+.game-page::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: 1100px; pointer-events: none;
+  background: radial-gradient(50% 32% at 50% 36%, rgb(var(--stage-tint, 32 34 44) / 0.42), rgb(var(--stage-tint, 32 34 44) / 0.16) 60%, transparent 100%); transition: background 0.6s; }
 
 /* The stage: the chosen game large on a ground blurred from its cover and tinted by it. */
 .stage { --tint: 32 34 44; position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 40px; margin-top: 24px; padding: 30px 40px 28px; overflow: hidden; border-radius: var(--radius-lg); color: #f6f2e9; background: rgb(var(--tint)); box-shadow: 0 40px 80px -40px rgb(var(--tint) / 0.9); transition: background-color 0.6s var(--ease), box-shadow 0.6s var(--ease); }
