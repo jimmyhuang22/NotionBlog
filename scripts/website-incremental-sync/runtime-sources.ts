@@ -55,7 +55,34 @@ export function createRuntimeSources(options: { config: WebsiteNotionConfig; sto
     regular: { async prepare(ticket: QueueTicket, current: PublicationState, signal: AbortSignal) {
       select(current);
       if (options.frozenPageIds?.has(ticket.pageKey)) return { outcome: "unchanged" as const };
-      return createSinglePagePreparationPort({ client: transport(signal).client, config,
+      const client = transport(signal).client;
+      const source = config.sources.find(s => s.key === ticket.sourceKey);
+      if (source?.enabled && source.kind === "status" && source.dataSourceId && ticket.reasons.includes("reconcile") &&
+        !store.readPublished(ticket, current)) {
+        const id = normalizeId(ticket.pageKey);
+        const review = { outcome: "review" as const, code: "SOURCE_SCOPE_UNKNOWN" };
+        if (current.configDigest !== digest || options.deniedPageIds.has(id) ||
+          (source.publication.mode === "allowlist" && !source.publication.allowlistPageIds.includes(id))) return review;
+        const read = async () => {
+          try { return await client.getPage(id); }
+          catch { budget.guard(); signal.throwIfAborted(); return null; }
+        };
+        const samePage = (p: Awaited<ReturnType<typeof read>>) => p && isFullPage(p) && normalizeId(p.id) === id &&
+          p.parent?.type === "data_source_id" && normalizeId(p.parent.data_source_id) === source.dataSourceId;
+        const archived = (p: NonNullable<Awaited<ReturnType<typeof read>>>) =>
+          p.archived === true || p.in_trash === true || p.is_archived === true;
+        const page = await read();
+        if (!page || !samePage(page)) return review;
+        if (archived(page)) {
+          const latest = await read();
+          if (!latest || !samePage(latest)) return review;
+          if (!archived(latest) || latest.last_edited_time !== page.last_edited_time)
+            return { outcome: "retry" as const, code: "SOURCE_CHANGED_DURING_PREPARATION" };
+          budget.guard(); signal.throwIfAborted(); store.assertState(current);
+          return { outcome: "unchanged" as const };
+        }
+      }
+      return createSinglePagePreparationPort({ client, config,
         prepareImage: (input, s) => media.prepare(input, s), prepareDelta: preparePublicationDelta,
         readPublished: async (t, v) => store.readPublished(t, v),
         placement: async (t, v, s) => ({ ...store.placement(t, v, store.readPublished(t, v) ? undefined : await newOrdinal(t, s)), deniedPageIds: options.deniedPageIds }),
