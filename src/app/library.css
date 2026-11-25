@@ -1021,13 +1021,19 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .game-case__art { position: absolute; left: 0; right: 0; top: var(--band-h); bottom: 0; display: block; }
 .game-case__art img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .game-case__art[data-fit="contain"] img { object-fit: contain; }
-.game-case__art--retail { container-type: size; }
-.game-case__retail-window {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden;
-  width: min(100%, calc(100cqh * var(--retail-aspect))); aspect-ratio: var(--retail-aspect);
+/*
+ * A framed picture (a printed front's cover, or a whole square picture): its window fills the case when the shapes
+ * differ by up to about a tenth, trimming at most 6% off each side; beyond that it stays whole and the gaps show the
+ * same window enlarged and blurred, as on the wide fallback. Bars of the plain dark insert read as a missing picture.
+ */
+.game-case__art--framed { container-type: size; overflow: hidden; background: #15171c; }
+.game-case__window {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden; aspect-ratio: var(--frame-aspect);
+  width: min(max(100cqw, calc(100cqh * var(--frame-aspect))), 112cqw, calc(112cqh * var(--frame-aspect)));
 }
-.game-case__retail-window img {
-  position: absolute; left: var(--retail-left); top: var(--retail-top); width: var(--retail-width); height: auto; max-width: none;
+.game-case__window--ground { width: calc(max(100cqw, calc(100cqh * var(--frame-aspect))) * 1.16); filter: blur(12px) saturate(1.15) brightness(0.72); }
+.game-case__window img {
+  position: absolute; left: var(--frame-left); top: var(--frame-top); width: var(--frame-width); height: auto; max-width: none;
 }
 .game-case__insert:has(.game-case__art[data-printed-switch-mark]) .case-mark--switch { display: none; }
 /* The owner's crop per cover: keep the edge its title is printed on (2026-11-24). */
