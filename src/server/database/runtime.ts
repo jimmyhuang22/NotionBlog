@@ -21,6 +21,7 @@ import { readSearchContextMode } from "./search-context.ts";
 import { selfHostedDisplayStore } from "../self-hosted-media/runtime.ts";
 import { displayProjectionSql } from "../self-hosted-media/projection.ts";
 import { displayDeliveryMode, readDisplayMedia } from "./display.ts";
+import { createPublishedDisplayMediaReader } from "./display-media-query.ts";
 import { databaseDisplayProjectionSql, hydrateTimelineDisplayCovers } from "../media/display.ts";
 import type { TimelineEvent } from "../../../contracts/website.ts";
 import { createThumbnailSql } from "./thumbnail-query.ts";
@@ -86,6 +87,8 @@ function createRuntime() {
     readIndex: createWebsiteDatabaseRepository(scopedReader(rawDb,mode), { scoped: true, timeZone: () => getSiteConfig().timeZone }).readIndex!,
     hydrateCovers: (events: TimelineEvent[], version: string) => hydrateTimelineDisplayCovers(rawDb, mode, events, version),
   } : undefined;
-  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:(id:string)=>readDisplayMedia(rawDb,id,mode)}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository,homeTimeline,storage};
+  const displayReader = disk && mode === "published" && projection === "scoped"
+    ? createPublishedDisplayMediaReader(rawDb) : (id: string) => readDisplayMedia(rawDb, id, mode);
+  return {db,thumbnailDb,displayStore,cloudDisplay:cloudDisplay?{read:displayReader}:undefined,cacheStateDb:rawDb,thumbnailStorage,publishedThumbnail:mode==="published"?createPublishedThumbnailReader(rawDb):undefined,repository,homeTimeline,storage};
 }
 export function getDatabaseRuntime() { return measureContentRead("database-runtime", () => runtime??=createRuntime()); }
