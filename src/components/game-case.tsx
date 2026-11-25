@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Game, ImageAsset } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { cardTimeLabel, gameCaseFace, type GameCaseFace } from "../lib/library.ts";
-import { PlayStationBandMark, Switch2BandMark, SwitchTile } from "./game-case-marks";
+import { PlayStationBandMark, Switch2BandMark, SwitchTile, ThreeDsBand } from "./game-case-marks";
 import { GamePlatformIconMark } from "./game-tag";
 import { useFadeIn } from "./use-fade-in";
 import { useImageFailure } from "./use-image-failure";
@@ -79,6 +79,9 @@ function CaseTop({ face, status }: { face: GameCaseFace; status: ReactNode }) {
       return <span className="game-case__band game-case__band--printed"><PlayStationBandMark model={face.look === "ps" ? null : face.look} />{status}</span>;
     case "switch2":
       return <span className="game-case__band game-case__band--printed"><Switch2BandMark />{status}</span>;
+    case "3ds":
+      // The band runs down the right edge; the status takes the art's top right corner, as on Switch.
+      return <><ThreeDsBand />{status ? <span className="game-case__corner">{status}</span> : null}</>;
     case "switch":
       // No band on a Switch case: the tile sits on the art, and the status takes the top right corner.
       return <><SwitchTile />{status ? <span className="game-case__corner">{status}</span> : null}</>;
@@ -96,8 +99,9 @@ function CaseTop({ face, status }: { face: GameCaseFace; status: ReactNode }) {
 /**
  * A game as its case (the owner's pick 甲, 2026-11-23; printed like the real cases since 2026-11-24): the maker's
  * plastic shell in the real case's shape, open on the spine side, and what that case prints at the top: PS5's white
- * band, PS4's blue one, Switch 2's red band, Switch's red corner tile; Steam, PC and 3DS keep a plain band with the
- * platform's name. The status sits at the right end of the band (top right corner on Switch); the upright original
+ * band, PS4's blue one, Switch 2's red band, Switch's red corner tile, the Japanese 3DS case's band down its right edge
+ * (2026-11-25); Steam and PC keep a plain band with the platform's name. The status sits at the right end of the band
+ * (top right corner of the art on Switch and 3DS); the upright original
  * art below, the time played in its lower left corner. Decorative inside its link, which carries the title.
  */
 export function GameCase({ game, overlay }: { game: Game; overlay?: ReactNode }) {

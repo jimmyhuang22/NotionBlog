@@ -157,11 +157,12 @@ export interface GameCaseFace {
   /**
    * Which printed case it copies (the owner's request, 2026-11-24, measured from real cases): PS5's white band, PS4's
    * blue one, plain "ps" when the record does not say which PlayStation (the white band with the PS mark alone, so a
-   * model is never guessed), Switch 2's tall red band, Switch's red corner tile. Steam, PC and 3DS keep the plain band.
+   * model is never guessed), Switch 2's tall red band, Switch's red corner tile, 3DS's band down the right edge of a
+   * case wider than tall (2026-11-25). Steam and PC keep the plain band.
    */
   look: GameCaseLook | null;
 }
-export type GameCaseLook = "ps5" | "ps4" | "ps" | "switch2" | "switch";
+export type GameCaseLook = "ps5" | "ps4" | "ps" | "switch2" | "switch" | "3ds";
 /** The printed case for the exact platform the case shows: "PlayStation 5" or "PS5" is a PS5 case; "PlayStation" alone is not known. */
 export function gameCaseLook(platform: string | null): GameCaseLook | null {
   if (platform === null) return null;
@@ -169,7 +170,7 @@ export function gameCaseLook(platform: string | null): GameCaseLook | null {
   if (/^(?:playstation ?5|ps5)$/u.test(name)) return "ps5";
   if (/^(?:playstation ?4|ps4)$/u.test(name)) return "ps4";
   const key = gameCasePlatformKey(platform);
-  return key === "playstation" ? "ps" : key === "switch2" ? "switch2" : key === "switch" ? "switch" : null;
+  return key === "playstation" ? "ps" : key === "switch2" ? "switch2" : key === "switch" ? "switch" : key === "3ds" ? "3ds" : null;
 }
 const switchFamily = (label: string) => label === "Switch" || label === "Switch 2";
 export function gameCaseFace(item: Game): GameCaseFace {
@@ -179,7 +180,9 @@ export function gameCaseFace(item: Game): GameCaseFace {
   return {
     platform, icon: platform ? gamePlatformIcon(platform.label) : null,
     tone: key === "switch" || key === "switch2" || key === "3ds" ? "nintendo" : key === "playstation" ? "playstation" : "pc",
-    ratio: gameCaseAspectRatio(chosen ?? ""),
+    // The Japanese 3DS case is wider than tall (1.091 on five retail renders, 2026-11-25). The shared ratio, which also
+    // judges whether upright art is tall enough, still says 0.62 for 3DS until the backend takes this up (handoff 23).
+    ratio: key === "3ds" ? 1.091 : gameCaseAspectRatio(chosen ?? ""),
     // Switch and Switch 2 are one family (a Switch game with its Switch 2 upgrade): the case names one, and the other
     // is not said again as "也在 Switch" (owner, 2026-11-23).
     others: platformChips(item.platforms).map(chip => chip.label)
