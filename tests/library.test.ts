@@ -144,14 +144,17 @@ test("a game's case shows the platform played longest in that maker's case, the 
 
 test("a game's case copies the printed case of its exact platform, and never guesses a PlayStation model", async () => {
   const { gameCaseFace, gameCaseLook } = await import("../src/lib/library.ts");
-  assert.deepEqual(["PlayStation 5", "PS5", "playstation5", "PlayStation 4", "PS4", "PlayStation", "Nintendo Switch 2", "Switch 2", "Nintendo Switch", "Steam", "PC", "3DS"].map(gameCaseLook),
-    ["ps5", "ps5", "ps5", "ps4", "ps4", "ps", "switch2", "switch2", "switch", null, null, null]);
+  assert.deepEqual(["PlayStation 5", "PS5", "playstation5", "PlayStation 4", "PS4", "PlayStation", "Nintendo Switch 2", "Switch 2", "Nintendo Switch", "Steam", "PC", "3DS", "Nintendo 3DS"].map(gameCaseLook),
+    ["ps5", "ps5", "ps5", "ps4", "ps4", "ps", "switch2", "switch2", "switch", null, null, "3ds", "3ds"]);
   assert.equal(gameCaseLook(null), null);
   const game = { ...fixtureItems.game[0]!, platforms: ["Steam", "PlayStation 5"], lastPlayedPlatforms: ["PlayStation"], platformPlayTime: null };
   // The last-played label is only "PlayStation"; the case keeps the record's own "PlayStation 5" and is still one PlayStation chip.
   const face = gameCaseFace(game);
   assert.deepEqual([face.look, face.platform?.label, face.tone, face.ratio], ["ps5", "PlayStation", "playstation", 0.79]);
   assert.equal(gameCaseFace({ ...game, platforms: ["PlayStation"] }).look, "ps");
+  // The Japanese 3DS case is wider than tall.
+  const threeDs = gameCaseFace({ ...game, platforms: ["3DS"], lastPlayedPlatforms: null });
+  assert.deepEqual([threeDs.look, threeDs.tone, threeDs.ratio], ["3ds", "nintendo", 1.091]);
 });
 
 test("a work's page says when and what in one sentence, and the rest as words of a line", () => {

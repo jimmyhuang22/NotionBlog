@@ -850,6 +850,9 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .stage__thumb[aria-selected="true"]::after { content: ""; position: absolute; left: 20%; right: 20%; bottom: -8px; height: 3px; border-radius: 999px; background: #fff; transition: left 0.2s var(--ease), right 0.2s var(--ease); }
 .stage__thumb .game-case { width: 68px; height: auto; }
 .stage__thumb :is(.game-case__status, .game-case__time, .game-case__platform) { display: none; }
+/* A 3DS case is wider than tall: sized by width like the rest, it would stand a third lower; these widths give it about a PS case's height. */
+.stage__case .game-case[data-look="3ds"] { width: 200px; }
+.stage__thumb .game-case[data-look="3ds"] { width: 92px; }
 /* While it is read: the stage's ground and height; when it cannot be read: a quiet box in its place. */
 .stage--waiting { min-height: 262px; background: color-mix(in srgb, var(--ink) 7%, var(--bg)); }
 .stage--failed { display: block; padding: 0; color: inherit; background: none; }
@@ -960,6 +963,7 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
   .stage { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 22px 20px 18px; border-radius: var(--radius-lg); }
   .stage__case { display: none; }
   .stage__thumb .game-case { width: 54px; }
+  .stage__thumb .game-case[data-look="3ds"] { width: 74px; }
   .stage__rail { gap: 10px; }
   .stage--waiting { min-height: 270px; }
   .game-tools { margin: 18px 0 0; }
@@ -1064,6 +1068,20 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .case-mark--switch2 { width: 14.55cqw; }
 .case-mark--switch { position: absolute; z-index: 2; left: 0; top: 0; width: 21.18cqw; }
 .game-case__band--printed .game-case__status { position: absolute; right: 4.5cqw; top: 50%; transform: translateY(-50%); }
+/*
+ * 3DS (the owner's request, 2026-11-25), measured on five Japanese retail renders: a case 1.091 wide for 1 tall, a clear shell 2.75% of
+ * the height at the top and 2.9% at the bottom, none on the spine side; square art, then a white band from 86.5% to
+ * 96.85% of the width, then shell. The logo runs from 73.6% up to 24.4% of the case's height, 89.3% to 94.65% across
+ * (its own 132 : 15.6 shape). In cqw of the case: the height is 91.66cqw.
+ */
+.game-case[data-look="3ds"] { --rim-top: 2.52cqw; --rim-right: 3.15cqw; --rim-bottom: 2.66cqw; --band-h: 0px; --band-3ds: 10.35cqw; --case-shell: #e3e5e7; }
+.game-case[data-look="3ds"] .game-case__shell { background: linear-gradient(160deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0) 45%), var(--case-shell); }
+.game-case[data-look="3ds"] .game-case__art { right: var(--band-3ds); }
+.case-band-3ds { position: absolute; z-index: 2; top: 0; right: 0; bottom: 0; width: var(--band-3ds); background: #fff; box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.12); }
+/* Placed from the insert's top (the case's top rim above it), then turned to read bottom to top. */
+.case-mark--3ds { position: absolute; left: 2.8cqw; top: calc(67.44cqw - var(--rim-top)); width: 45.07cqw; height: 5.33cqw; transform-origin: 0 0; transform: rotate(-90deg); }
+.game-case[data-look="3ds"] .game-case__corner { right: calc(var(--band-3ds) + 2.4cqw); top: 2.4cqw; }
+.game-case[data-look="3ds"] .game-case__status:not(.game-case__status--platinum) { background: rgba(20, 22, 27, 0.78); }
 .game-case__corner { position: absolute; z-index: 2; right: 3.5cqw; top: 3.5cqw; display: flex; }
 .game-case__corner .game-case__status { margin: 0; }
 .game-case[data-look="switch"] .game-case__status:not(.game-case__status--platinum) { background: rgba(20, 22, 27, 0.78); }
