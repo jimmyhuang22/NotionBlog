@@ -109,12 +109,17 @@ function useYearRings(line: { current: HTMLDivElement | null }) {
       frame = 0;
       const anchor = window.innerHeight * 0.42;
       const box = element.getBoundingClientRect();
-      element.style.setProperty("--progress", `${Math.max(0, Math.min(box.height, anchor - box.top))}px`);
+      // Written on the drawn line and on each year's number only, never on a box that holds the cases: a value set on
+      // the whole list made every case's style be worked out again on every frame of a scroll (measured live, 2026-11-25).
+      const spine = element.querySelector<HTMLElement>(".game-line__spine i");
+      if (spine) spine.style.transform = `scaleY(${(Math.max(0, Math.min(box.height, anchor - box.top)) / Math.max(1, box.height)).toFixed(4)})`;
       let now: Element | null = null;
       for (const year of element.querySelectorAll<HTMLElement>(".game-year")) {
         const part = year.getBoundingClientRect();
         const read = Math.max(0, Math.min(1, (anchor - part.top) / Math.max(1, part.height)));
-        year.style.setProperty("--fill", read.toFixed(3));
+        const number = year.querySelector<HTMLElement>(".game-year__num");
+        const fill = read.toFixed(3);
+        if (number && number.style.getPropertyValue("--fill") !== fill) number.style.setProperty("--fill", fill);
         year.toggleAttribute("data-read", read >= 1);
         if (read > 0 && read < 1) now = year;
       }
