@@ -24,11 +24,12 @@ async function main() {
     "collect-psn-trophies", "apply-psn-trophies", "collect-psn-trophy-details", "apply-psn-trophy-details",
     "collect-steam-achievements", "apply-steam-achievements", "collect-steam-achievement-batch", "apply-steam-achievement-batch",
     "withdraw-excluded-steam-achievements",
-    "dry-run", "apply", "daily", "unlock-stale"].includes(command)) {
+    "dry-run", "apply", "daily", "daily-evening", "unlock-stale"].includes(command)) {
     throw new GameSyncError("USAGE: node scripts/game-sync/cli.ts <command> <private-directory>");
   }
   if (![24, 25, 26].includes(Number(process.versions.node.split(".")[0]))) throw new GameSyncError("NODE_VERSION_UNSUPPORTED");
-  if (command === "daily" && flag !== undefined && flag !== "notify") throw new GameSyncError("SELECT_PROVIDER");
+  if ((command === "daily" && flag !== undefined && flag !== "notify") ||
+      (command === "daily-evening" && flag !== undefined)) throw new GameSyncError("SELECT_PROVIDER");
   const root = resolve(rootArg), runId = randomUUID();
   if (command === "unlock-stale") { await unlockStale(root); console.log(JSON.stringify({ unlocked: true })); return; }
   const result = await runLockedProcess({ root, runId, timeoutMs: 15 * 60000,

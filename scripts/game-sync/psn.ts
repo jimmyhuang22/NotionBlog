@@ -49,7 +49,7 @@ export async function collectPsnTrophyDetails(npsso: string, onlineId: string, c
   return { summary, details };
 }
 
-async function collectPsnData(npsso: string, onlineId: string, cachePath: string, account: string) {
+export async function collectPsnData(npsso: string, onlineId: string, cachePath: string, account: string) {
   if (!/^[A-Za-z0-9_-]{64}$/.test(npsso) || !onlineId) throw new GameSyncError("LOGIN_REQUIRED");
   const fingerprint = createHash("sha256").update(npsso).digest("hex");
   const cached = await readJson(cachePath);
