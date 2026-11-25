@@ -180,9 +180,7 @@ export function gameCaseFace(item: Game): GameCaseFace {
   return {
     platform, icon: platform ? gamePlatformIcon(platform.label) : null,
     tone: key === "switch" || key === "switch2" || key === "3ds" ? "nintendo" : key === "playstation" ? "playstation" : "pc",
-    // The Japanese 3DS case is wider than tall (1.091 on five retail renders, 2026-11-25). The shared ratio, which also
-    // judges whether upright art is tall enough, still says 0.62 for 3DS until the backend takes this up (handoff 23).
-    ratio: key === "3ds" ? 1.091 : gameCaseAspectRatio(chosen ?? ""),
+    ratio: gameCaseAspectRatio(chosen ?? ""),
     // Switch and Switch 2 are one family (a Switch game with its Switch 2 upgrade): the case names one, and the other
     // is not said again as "也在 Switch" (owner, 2026-11-23).
     others: platformChips(item.platforms).map(chip => chip.label)

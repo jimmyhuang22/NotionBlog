@@ -11,15 +11,45 @@ import { useImageFailure } from "./use-image-failure";
 
 /**
  * One picture in the case, with the shared retry and fade; a lost picture tells its case to fall back. With `backdrop`
- * the same address is drawn a second time behind it, enlarged and blurred (one download: the browser reuses it).
+ * the same address is drawn a second time behind it, enlarged and blurred (one download: the browser reuses it). With
+ * `frame` the picture is shown through a window (a printed front's cover, or a whole square picture), over a blurred
+ * copy of that same window enlarged to fill the case.
  */
-function CaseImage({ image, width, className, backdrop = false, onLost }: { image: ImageAsset; width: 400 | 800; className?: string; backdrop?: boolean; onLost?: () => void }) {
+function CaseImage({ image, width, className, backdrop = false, frame, onLost }: {
+  image: ImageAsset; width: 400 | 800; className?: string; backdrop?: boolean; frame?: CSSProperties; onLost?: () => void;
+}) {
   const fade = useFadeIn();
   const { src, failed, lost } = useImageFailure(imagePreviewSrc(image, width), image.src, fade);
   useEffect(() => { if (failed) onLost?.(); }, [failed, onLost]);
   if (failed) return null;
   const picture = <img ref={fade} className={className} src={src} alt="" loading="lazy" decoding="async" onError={lost} />;
+  if (frame) {
+    return (
+      <>
+        <span className="game-case__window game-case__window--ground" style={frame} aria-hidden="true"><img src={src} alt="" loading="lazy" decoding="async" /></span>
+        <span className="game-case__window" style={frame}>{picture}</span>
+      </>
+    );
+  }
   return backdrop ? <><img className="game-case__backdrop" src={src} alt="" aria-hidden="true" loading="lazy" decoding="async" />{picture}</> : picture;
+}
+
+/**
+ * Where a framed picture's window sits in its image, as the CSS the window reads: a printed front's cover (retail) or
+ * the whole picture (contain). Null when the image has no size, so the plain fit is used.
+ */
+function frameOf(box: ImageAsset, layout: Game["boxArtLayout"]): { style: CSSProperties; share: number } | null {
+  if (!layout || !box.width || !box.height) return null;
+  const [left, top, artWidth, artHeight] = layout.mode === "retail" ? layout.window : [0, 0, box.width, box.height];
+  return {
+    style: {
+      "--frame-aspect": artWidth / artHeight,
+      "--frame-width": `${box.width / artWidth * 100}%`,
+      "--frame-left": `${-left / artWidth * 100}%`,
+      "--frame-top": `${-top / artHeight * 100}%`,
+    } as CSSProperties,
+    share: artWidth / box.width,
+  };
 }
 
 /**
@@ -41,26 +71,22 @@ function WideArt({ game, width }: { game: Game; width: 400 | 800 }) {
 /**
  * Upright art fills its window and is cropped around the middle, unless the owner set the cover to keep its top or
  * its bottom (2026-11-24): a PlayStation window is wider than 2:3 art and loses about a tenth at each end, which is
- * where most covers print their title. Only the upright art follows it; the wide fallback stays centred.
+ * where most covers print their title. Only the upright art follows it; the wide fallback stays centred. A printed
+ * front's cover and a near-square picture go through a window instead (2026-11-25): filled when the shapes are close,
+ * whole over a blurred copy when they are not, and from the 800 preview when the window is a small part of the photo.
  */
 function Art({ game, width }: { game: Game; width: 400 | 800 }) {
   const [lost, setLost] = useState(false);
   const box = game.boxArt;
   if (!box || lost) return <WideArt game={game} width={width} />;
   const layout = game.boxArtLayout;
-  if (layout?.mode === "retail" && box.width && box.height) {
-    const [left, top, artWidth, artHeight] = layout.window;
-    const style = {
-      "--retail-aspect": artWidth / artHeight,
-      "--retail-width": `${box.width / artWidth * 100}%`,
-      "--retail-left": `${-left / artWidth * 100}%`,
-      "--retail-top": `${-top / artHeight * 100}%`,
-    } as CSSProperties;
+  const frame = frameOf(box, layout);
+  if (frame) {
+    // A window that is a small part of a photographed case would be about 250 pixels wide in the 400 preview.
+    const size = frame.share < 0.75 ? 800 : width;
     return (
-      <span className="game-case__art game-case__art--retail" data-printed-switch-mark={layout.printedSwitchMark || undefined}>
-        <span className="game-case__retail-window" style={style}>
-          <CaseImage key={box.src} image={box} width={width} onLost={() => setLost(true)} />
-        </span>
+      <span className="game-case__art game-case__art--framed" data-printed-switch-mark={(layout?.mode === "retail" && layout.printedSwitchMark) || undefined}>
+        <CaseImage key={box.src} image={box} width={size} frame={frame.style} onLost={() => setLost(true)} />
       </span>
     );
   }

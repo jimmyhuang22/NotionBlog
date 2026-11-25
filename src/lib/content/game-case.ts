@@ -31,7 +31,8 @@ export function matchesGamePlatform(platforms: readonly string[], filter: string
 
 export function gameCaseAspectRatio(platform: string): number {
   const key = gameCasePlatformKey(platform);
-  if (key === "switch" || key === "switch2" || key === "3ds") return 0.62;
+  if (key === "3ds") return 1.091;
+  if (key === "switch" || key === "switch2") return 0.62;
   if (key === "playstation") return 0.79;
   return 0.71;
 }
@@ -40,7 +41,10 @@ export function gameCaseAspectRatio(platform: string): number {
 export function gameBoxArtEffectiveHeight(image: Pick<ImageAsset, "width" | "height">, platform: string): number | null {
   const { width, height } = image;
   if (width === null || height === null || !Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
-      width <= 0 || height <= width) return null;
+      width <= 0 || height <= 0) return null;
+  // The Japanese 3DS case has a square art slot beside the platform strip.
+  if (gameCasePlatformKey(platform) === "3ds") return width / height <= 1.25 ? Math.min(width, height) : null;
+  if (height <= width) return null;
   const ratio = gameCaseAspectRatio(platform);
   // The artwork slot sits inside the shell's horizontal (8.5%) and vertical
   // (6.8%) rims and below the platform strip (12.5% of the shell width).
