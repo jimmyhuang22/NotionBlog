@@ -868,6 +868,8 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .game-page .segmented--lift { flex-wrap: nowrap; gap: 2px; padding: 4px; border-radius: 999px; background: var(--card); box-shadow: 0 0 0 1px var(--rule), 0 10px 24px -18px rgb(0 0 0 / 0.45); overflow-x: auto; scrollbar-width: none; }
 .game-page .segmented--lift::-webkit-scrollbar { display: none; }
 .game-page .segmented--lift > a { flex: none; gap: 7px; min-height: 38px; padding: 0 15px; font-weight: 500; color: var(--ink); }
+/* The name and its count read as one: one line of text, the count on the name's baseline and closer to it than the icon is. */
+.game-page .segmented--lift .game-tools__count { margin-left: 4px; }
 .game-page .segmented--lift .segmented__pill { border-radius: 999px; background: var(--ink); box-shadow: 0 4px 10px -4px rgb(0 0 0 / 0.35); }
 .game-page .segmented--lift > a:is([aria-current], [data-picked]) { color: var(--bg); font-weight: 600; background: none; box-shadow: none; }
 .game-page .segmented--lift[data-moving] > a[aria-current]:not([data-picked]) { color: var(--ink); font-weight: 500; }
@@ -883,6 +885,11 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .game-dock .segmented { flex-wrap: nowrap; padding: 0; background: none; box-shadow: none; }
 .game-dock__rule { width: 1px; height: 22px; margin: 0 6px; background: var(--rule); }
 .game-dock .game-tools__count { display: none; }
+/* A status or platform pressed: the list dims at once while the next is read, as the shelves do; the stage stays. The
+ * arrival is played in script (game-wall-motion.ts), so the shelves' rising rows are left out here. */
+.game-page:has(:is(.game-tools, .game-dock) .link-pending[data-pending]) .game-line { opacity: 0.45; }
+@media (prefers-reduced-motion: no-preference) { .game-page .game-line { transition: opacity 0.18s; } }
+.game-line .is-arriving { animation: none; }
 
 /* The years as rings on a line: each year's ring in a column that stays in view, its cases on the right. */
 .game-line { position: relative; margin-top: 40px; }
@@ -971,7 +978,7 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
   .game-page .segmented--lift > a { padding: 0 12px; }
   .game-dock { bottom: 14px; }
   .game-dock:has(.segmented--lift) :is(.game-dock__statuses, .game-dock__rule) { display: none; }
-  .game-dock .segmented--lift > a:not(:first-of-type) .game-tools__name { display: none; }
+  .game-dock .segmented--lift > a:not(:first-of-type) .game-tools__label { display: none; }
   .game-line { margin-top: 26px; }
   .game-line__spine { display: none; }
   .game-year { grid-template-columns: minmax(0, 1fr); gap: 12px; padding-bottom: 32px; }

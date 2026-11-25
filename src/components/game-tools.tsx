@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { GamePlatformCategory } from "../../contracts/content.ts";
 import { GamePlatformIconMark } from "./game-tag";
+import { recordWall } from "./game-wall-motion";
 import { LinkPending } from "./link-pending";
 import { Segments } from "./scrolling-segments";
 
@@ -34,7 +35,14 @@ export function GameTools({ statuses, current, platforms, platform }: {
   }, []);
   // A choice keeps the page where it is and only the list changes (the owner, 2026-11-25). From the dock, far down
   // the old list, the page glides back to where the list starts, so the new one is seen from its top.
+  // Where each case stands at the press, so the next list can move from it (game-wall-motion.ts).
+  const onPress = (event: MouseEvent<HTMLElement>) => {
+    const link = (event.target as Element).closest("a[href]");
+    if (!link || link.hasAttribute("aria-current") || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    recordWall();
+  };
   const toList = (event: MouseEvent<HTMLDivElement>) => {
+    onPress(event);
     if (!(event.target as Element).closest("a[href]") || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     const element = row.current;
     if (!element) return;
@@ -48,18 +56,18 @@ export function GameTools({ statuses, current, platforms, platform }: {
   const platformLinks = platforms?.map(choice => (
     <Link key={choice.value ?? "all"} href={choice.href} scroll={false} aria-current={choice.value === platform ? "true" : undefined}>
       {choice.value ? <GamePlatformIconMark icon={choice.value} /> : null}
-      <span className="game-tools__name">{choice.label}</span>
-      <small className="game-tools__count">{choice.count}<span className="visually-hidden"> 款</span></small>
+      {/* One line of text: the count sits on the name's baseline, just after it. */}
+      <span className="game-tools__label"><span className="game-tools__name">{choice.label}</span><small className="game-tools__count">{choice.count}<span className="visually-hidden"> 款</span></small></span>
       <LinkPending />
     </Link>
   ));
   return (
     <>
-      <div ref={row} className="game-tools">
+      <div ref={row} className="game-tools" onClickCapture={onPress}>
         <Segments label="按状态筛选" current={current} variant="tabs">{statusLinks}</Segments>
         {platformLinks ? <Segments label="按平台筛选" current={platform ?? "all"} variant="lift">{platformLinks}</Segments> : null}
       </div>
-      <div className="game-dock" data-up={docked ? "" : undefined} inert={!docked} onClick={toList}>
+      <div className="game-dock" data-up={docked ? "" : undefined} inert={!docked} onClickCapture={toList}>
         <div className="game-dock__statuses"><Segments label="按状态筛选" current={current}>{statusLinks}</Segments></div>
         {platformLinks ? <><span className="game-dock__rule" aria-hidden="true" /><Segments label="按平台筛选" current={platform ?? "all"} variant="lift">{platformLinks}</Segments></> : null}
       </div>

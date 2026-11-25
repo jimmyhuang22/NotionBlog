@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ImageAsset, Page } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
@@ -12,6 +12,7 @@ import { LinkPending } from "./link-pending";
 import { ListTail } from "./list-tail";
 import { GameCase } from "./game-case";
 import { GamePlatformIconMark } from "./game-tag";
+import { playWall } from "./game-wall-motion";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { useImageFailure } from "./use-image-failure";
 import { useFadeIn } from "./use-fade-in";
@@ -137,16 +138,23 @@ function useYearRings(line: { current: HTMLDivElement | null }) {
  * empty. A list in one run (a wishlist, or an address narrowed to one year) is one part under its own name. A
  * pointer on a case lifts it and brings its name up inside it, the rest of the wall untouched (丙).
  */
-function GameWall({ groups, yearCounts, unit, oneFamily, run, itemClass, itemStyle }: {
+function GameWall({ groups, yearCounts, unit, oneFamily, arriving, run, itemClass, itemStyle }: {
   groups: Group[]; yearCounts?: Record<string, number>; unit: string;
   /** The list is one platform family already, so a year does not count its platforms. */
   oneFamily: boolean;
+  /** This list replaces another on the page (a status or platform chosen): it plays the change (game-wall-motion.ts). */
+  arriving: boolean;
   /** The name and count of a list in one run, which has no years to write. */
   run: { label: string; count: number | null };
   itemClass: (item: LibraryItem) => string; itemStyle: (item: LibraryItem) => CSSProperties;
 }) {
   const line = useRef<HTMLDivElement>(null);
   useYearRings(line);
+  // A list that replaces another plays the change once, as it lands (乙, 2026-11-25).
+  useLayoutEffect(() => {
+    if (arriving && line.current) playWall(line.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const card = (item: LibraryItem) => {
     if (item.kind !== "game") return null;
     const ratio = gameCaseFace(item).ratio;
@@ -236,7 +244,7 @@ export function LibraryGrid({ kind, status, platform = null, year = null, order 
     <>
       {restarted ? <p className="notice" role="status" style={{ marginBottom: 20 }}>列表有更新，已从头重新加载。</p> : null}
       {kind === "game" ? (
-        <GameWall groups={groupByYear(items, timeZone, year !== null)} yearCounts={yearCounts} unit={unit} oneFamily={platform !== null}
+        <GameWall groups={groupByYear(items, timeZone, year !== null)} yearCounts={yearCounts} unit={unit} oneFamily={platform !== null} arriving={arriving}
           run={year ? { label: year === "undated" ? "无日期" : year, count: yearCounts?.[year] ?? total } : { label: runLabel ?? "全部", count: total }}
           itemClass={item => appended.has(item.id) ? "library__item is-appended" : arriving && firstRows.has(item.id) ? "library__item is-arriving" : "library__item"}
           itemStyle={item => (arriving && firstRows.has(item.id) ? arrivalStyle(firstRows.get(item.id)!) : {})} />
