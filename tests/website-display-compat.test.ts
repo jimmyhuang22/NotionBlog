@@ -7,6 +7,9 @@ import type { TimelineEvent } from "../contracts/website.ts";
 import { defaultContentFeatures } from "../config/features.ts";
 import { WEBSITE_SCHEMA_DIGEST } from "../contracts/website-sync.ts";
 import { displayDeliveryMode, readDisplayMedia, validateDisplayAsset } from "../src/server/database/display.ts";
+import { createPublishedDisplayMediaReader } from "../src/server/database/display-media-query.ts";
+import { withMediaReadBudget } from "../src/server/media/read-budget.ts";
+import { contentReadBudgetIdentity } from "../src/server/content-read-budget.ts";
 import { scopedReader } from "../src/server/database/scoped-reads.ts";
 import type { SqlExecutor } from "../src/server/database/sql.ts";
 import { createWebsiteDatabaseRepository } from "../src/server/database/website-repository.ts";
@@ -20,6 +23,11 @@ import { verifyDisplayBytes } from "../src/server/self-hosted-media/files.ts";
 
 const runId = "00000000-0000-0000-0000-000000000001";
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
 async function fixture(animated = false, width = 6) {
   const pixels = Buffer.alloc(width * 2 * 4 * 2, 255); pixels.fill(30, 0, width * 2 * 4);
   const bytes = animated
@@ -134,6 +142,79 @@ test("display media verifies bytes and requalifies after reading without any ori
   const withdrawn = await databaseDisplayResponse(f.asset.assetId, null, { read: async () => ++reads === 1 ? f.projection : null, storage });
   assert.equal(withdrawn.status, 404); assert.equal((await withdrawn.arrayBuffer()).byteLength, 0);
   await assert.rejects(databaseDisplayResponse(f.asset.assetId, null, { read: async () => f.projection, storage: () => ({ read: async () => Buffer.from("corrupt") }) }));
+});
+
+test("30 published private-disk images share one statement per qualification pass", async () => {
+  const { asset, bytes } = await fixture();
+  const ids = Array.from({ length: 30 }, (_, index) => "a1." + index.toString(16).padStart(64, "0"));
+  const batches: string[][] = [];
+  const read = createPublishedDisplayMediaReader({ async query<T>(sql: string, values?: unknown[]) {
+    assert.match(sql, /nb_display_api\.read_assets\(/);
+    assert.match(sql, /nb_read_api\.read_version\('published'\)/);
+    const selected = values?.[0] as string[];
+    batches.push(selected);
+    return { rows: [{ result: { runId, revision: "1", assets: selected.map(assetId => ({ ...asset, assetId })) } }] as T[] };
+  } });
+  const responses = await Promise.all(ids.map(id => databaseDisplayResponse(id, 400, { read, storage: () => ({ read: async () => bytes }) })));
+  assert.deepEqual(batches, [ids, ids]);
+  for (const response of responses) {
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("CDN-Cache-Control"), "no-store");
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+  }
+});
+
+test("display batches recheck withdrawal and preserve the distinction between absent and unready", async () => {
+  const { asset, bytes } = await fixture();
+  const other = "a1." + "e".repeat(64), unready = "a1." + "f".repeat(64);
+  const paused = deferred(), resume = deferred();
+  let denied = false, revision = "1";
+  const read = createPublishedDisplayMediaReader({ async query<T>(sql: string, values?: unknown[]) {
+    if (sql.includes("nb_display_api.read_assets(")) {
+      const selected = values?.[0] as string[];
+      const assets = selected.filter(id => id !== unready && (!denied || id !== asset.assetId)).map(assetId => ({ ...asset, assetId }));
+      return { rows: [{ result: { runId, revision, assets } }] as T[] };
+    }
+    const id = values?.[0];
+    if (id === unready) throw Object.assign(new Error("NB_DISPLAY_MEDIA_NOT_READY"), { code: "P0001" });
+    const result = denied && id === asset.assetId ? null : { asset: { ...asset, assetId: id }, revision, runId };
+    return { rows: [{ result }] as T[] };
+  } });
+  const requested = databaseDisplayResponse(asset.assetId, 400, { read, storage: () => ({ async read() {
+    paused.resolve(); await resume.promise; return bytes;
+  } }) });
+  await paused.promise;
+  denied = true;
+  revision = "2";
+  resume.resolve();
+  const available = databaseDisplayResponse(other, 400, { read, storage: () => ({ read: async () => bytes }) });
+  const rejected = assert.rejects(read(unready), { code: "DISPLAY_MEDIA_NOT_READY" });
+  const blocked = await requested;
+  assert.equal(blocked.status, 404);
+  assert.equal(blocked.headers.get("Cache-Control"), "private, no-store");
+  assert.equal((await blocked.arrayBuffer()).byteLength, 0);
+  assert.equal((await available).status, 200);
+  await rejected;
+});
+
+test("aborting the request that opened a display batch leaves other callers connected", async () => {
+  const { asset, projection } = await fixture();
+  const selected = "a1." + "e".repeat(64), began = deferred(), resume = deferred();
+  const read = createPublishedDisplayMediaReader({ async query<T>(_sql: string, values?: unknown[]) {
+    assert.deepEqual(values?.[0], [asset.assetId, selected]);
+    began.resolve();
+    await resume.promise;
+    assert.equal(contentReadBudgetIdentity()?.signal.aborted, false);
+    return { rows: [{ result: { runId, revision: "1", assets: [asset, { ...asset, assetId: selected }] } }] as T[] };
+  } });
+  const controller = new AbortController();
+  const first = assert.rejects(withMediaReadBudget(controller.signal, () => read(asset.assetId)));
+  const other = withMediaReadBudget(new AbortController().signal, () => read(selected));
+  await began.promise;
+  controller.abort();
+  resume.resolve();
+  await first;
+  assert.deepEqual(await other, { ...projection, asset: { ...asset, assetId: selected } });
 });
 
 test("the website animation reader accepts both reviewed widths and rejects invalid recipes, frames and frame counts", async () => {
