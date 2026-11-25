@@ -901,7 +901,7 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .game-year__mark::before { content: ""; position: absolute; left: -4.5px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--muted); transition: background-color 0.3s, box-shadow 0.3s; }
 .game-year:is([data-read], [data-now]) .game-year__mark::before { background: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
 .game-year[data-now] .game-year__mark::before { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ink) 14%, transparent); }
-.game-year__num { margin: 0; font-family: var(--font-hand); font-weight: 400; font-size: clamp(44px, 3.9vw, 56px); line-height: 0.95; letter-spacing: 0.01em; color: transparent; -webkit-text-stroke: 1.2px color-mix(in srgb, var(--ink) 55%, transparent);
+.game-year__num { margin: 0; font-family: var(--font-hand); font-weight: 400; font-size: clamp(44px, 3.9vw, 56px); line-height: 0.95; letter-spacing: 0.01em; white-space: nowrap; color: transparent; -webkit-text-stroke: 1.2px color-mix(in srgb, var(--ink) 55%, transparent);
   background: linear-gradient(to top, var(--ink) calc(var(--fill, 0) * 100%), transparent calc(var(--fill, 0) * 100%)); -webkit-background-clip: text; background-clip: text; }
 .game-year__num--word { font-size: clamp(28px, 2.5vw, 36px); }
 .game-year__facts, .game-year__platforms { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -909,6 +909,20 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 .game-year__facts { gap: 0; }
 .game-year__platforms span { display: inline-flex; align-items: center; gap: 4px; }
 .game-year__platforms .game-platform__icon { width: 11px; height: 11px; opacity: 0.75; }
+/* Nothing under this status and platform: said as a part of the line, with the way back to every platform. */
+.game-empty { display: grid; justify-items: start; gap: 12px; padding: 8px 0 24px; }
+.game-empty p { margin: 0; font-family: var(--font-hand); font-size: var(--text-xl); color: var(--ink); }
+.game-empty a { display: inline-flex; align-items: center; min-height: 38px; padding: 0 16px; border-radius: 999px; background: var(--soft); color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
+.game-empty a:hover { background: color-mix(in srgb, var(--ink) 10%, var(--soft)); }
+/* A list in one run (a wishlist, an address with one year): the wall alone, full width, no line (甲, 2026-11-25). */
+.game-line--run-wall .game-line__spine { display: none; }
+.game-line--run-wall .game-year--run { grid-template-columns: minmax(0, 1fr); }
+.game-line--run-wall .game-year--run .game-year__mark { display: none; }
+/* The undated part of a long list in rows by platform, in the filter's order (甲, 2026-11-25). */
+.game-year__sub + .game-year__sub { margin-top: 26px; }
+.game-year__sub-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
+.game-year__sub-head .game-platform__icon { width: 14px; height: 14px; }
+.game-year__sub-head small { font-weight: 400; font-variant-numeric: tabular-nums; }
 /* A year of one or two games: each case with its facts beside it. */
 .game-year__few { display: flex; flex-wrap: wrap; gap: 20px 40px; }
 .game-feature { position: relative; display: grid; grid-template-columns: auto minmax(0, 260px); align-items: end; gap: 20px; color: var(--ink); }
@@ -965,6 +979,9 @@ a.game-trophy-sum__row:hover .trophy-platform__name, a.game-trophy-sum__row:focu
 @media (max-width: 900px) {
   .game-page { --mark-w: 128px; --mark-gap: 20px; }
   .stage { gap: 28px; padding: 26px 28px; }
+  /* The column is narrower here: a year in four figures still on one line (it broke as "202 / 6" at 768, 2026-11-25). */
+  .game-year__num { font-size: clamp(30px, 4.4vw, 40px); }
+  .game-year__num--word { font-size: clamp(22px, 3vw, 28px); }
 }
 /* A phone: the stage in one column without the large case, each year's ring a line above it, the dock under the thumb. */
 @media (max-width: 640px) {

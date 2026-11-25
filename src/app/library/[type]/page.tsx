@@ -77,7 +77,8 @@ export default async function LibraryPage({ params, searchParams }: Props) {
           }),
         ] : null} />
       <LibraryGrid key={`${listKey}:${platform ?? "all"}`} kind={section.kind} status={status} platform={platform} year={selected} order={order} unit={section.unit} initial={initial} pageSize={PAGE_SIZE} timeZone={timeZone}
-        yearCounts={yearCounts} runLabel={tabs.find(([value]) => value === status)?.[1] ?? section.label} />
+        yearCounts={yearCounts} runLabel={tabs.find(([value]) => value === status)?.[1] ?? section.label}
+        emptyPlatform={platform ? { label: gamePlatformCategories.find(entry => entry.key === platform)?.label ?? platform, allHref: libraryHref(type, status, order, null, null) } : null} />
     </div>
   );
 
