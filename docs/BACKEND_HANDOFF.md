@@ -478,6 +478,14 @@ Public DTO 为 PublishedSocialCollection，将 originalUrl 放宽到 string|null
 - 这是契约变更，字段名和形状由 Codex 定，定了写进 `contracts/content.ts` 和 fixtures，告诉前端。
 - **交付后告诉前端**：两站上线时间。前端接上 `?platform=` 的地址、平台那一排和底部浮动坞里的平台，并复验各状态、各平台的款数与年份。
 
+### 二十三、3DS 卡盒是横的（2026-11-25，Claude）
+
+**用户已确认**（2026-11-25）：3DS 卡盒照日版实体盒画，见[决策](decisions/2026-11-25-game-case-3ds.md)。前端已接入，不需要改契约。
+
+- **共用比例**：`src/lib/content/game-case.ts` 的 `gameCaseAspectRatio` 仍把 3DS 和 Switch 一起写成 0.62。前端的 `gameCaseFace` 已单独改成 1.091。请把共用的值改成 1.091。`gameBoxArtEffectiveHeight` 里封面框的推算是按“顶条在上、左右有边”写的，3DS 的封面框是正方形（宽度 86.5%、高度扣掉上下约 5.65%），请按这个改；现在的判断会把 3DS 的方形图当成不够高。
+- **3DS 的竖图**：线上 6 款 3DS（众神的三角力量 2、姆吉拉的假面 3D、时之笛 3D、萨姆斯归来、火焰之纹章 if、究极之日／究极之月）都只有横图。日版实体盒正面可以直接用现有的 `boxArtLayout` retail 窗口，窗口取正方形的画面区（不含右边的白色竖条和上下的盒边）。前端原型用的图和窗口参考在本机 `.local/previews/game-case-3ds-20261125/`，例如姆吉拉的假面 1500 × 1372 的图取 `[7, 32, 1291, 1299]`。时之笛 3D 只找到“HAPPY PRICE SELECTION”再版的大图，究极日月只找到带“ダウンロード版”横幅的图，需要另找或裁掉。
+- **交付后告诉前端**：改了哪些游戏、两站同步的时间，前端在正式站点复看 3DS 卡盒。
+
 ## 可直接给 Codex 的启动指令
 
 ```text
