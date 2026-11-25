@@ -39,14 +39,34 @@ export async function readDisplayMedia(db: SqlExecutor, assetId: string, mode: P
   if (!value || Object.keys(value).length !== 3 || !displayRunId(value.runId) || !/^[0-9]+$/.test(value.revision)) throw new DisplayError("DISPLAY_UNAVAILABLE");
   validateDisplayAsset(value.asset);
   if (value.asset.assetId !== assetId) throw new DisplayError("DISPLAY_UNAVAILABLE");
-  return value;
+  return {runId: value.runId, revision: value.revision, asset: value.asset};
 }
+
+interface DisplayAssets {runId: string; revision: string; assets: DisplayAsset[]}
+function validateDisplayAssets(result: DisplayAssets, ids: string[]) {
+  if (!result || Object.keys(result).length !== 3 || !displayRunId(result.runId) || !/^[0-9]+$/.test(result.revision) || !Array.isArray(result.assets) ||
+    result.assets.length > ids.length || new Set(result.assets.map(asset => asset?.assetId)).size !== result.assets.length) throw new DisplayError("DISPLAY_UNAVAILABLE");
+  const requested = new Set(ids);
+  for (const asset of result.assets) {
+    validateDisplayAsset(asset);
+    if (!requested.has(asset.assetId)) throw new DisplayError("DISPLAY_UNAVAILABLE");
+  }
+  return result;
+}
+
 export async function readDisplayAssets(db: SqlExecutor, runId: string, ids: string[], mode: PublicationMode) {
   if (!displayRunId(runId) || ids.length>20000 || ids.some(id=>!displayAssetId(id))) throw new DisplayError("DISPLAY_QUERY_INVALID");
-  const result=await displayQuery<{runId: string;revision: string;assets: DisplayAsset[]}>(db,
+  const result=await displayQuery<DisplayAssets>(db,
     "SELECT nb_display_api.read_assets($1,$2::text[],$3,$4) AS result",[runId,ids,mode,protocolSHA256]);
-  if (!result || Object.keys(result).length!==3 || result.runId!==runId || !/^[0-9]+$/.test(result.revision) || !Array.isArray(result.assets) ||
-    result.assets.length>ids.length || new Set(result.assets.map(a=>a.assetId)).size!==result.assets.length) throw new DisplayError("DISPLAY_UNAVAILABLE");
-  for(const asset of result.assets){validateDisplayAsset(asset);if(!ids.includes(asset.assetId))throw new DisplayError("DISPLAY_UNAVAILABLE");}
-  return result;
+  if (result?.runId !== runId) throw new DisplayError("DISPLAY_UNAVAILABLE");
+  return validateDisplayAssets(result, ids);
+}
+
+/** The two existing STABLE functions see the same statement snapshot. The
+ * display RPC independently confirms the live run and each asset's eligibility. */
+export async function readPublishedDisplayAssets(db: SqlExecutor, ids: string[]) {
+  if (!ids.length || ids.length > 32 || ids.some(id => !displayAssetId(id))) throw new DisplayError("DISPLAY_QUERY_INVALID");
+  const result = await displayQuery<DisplayAssets>(db, `SELECT nb_display_api.read_assets(
+    (nb_read_api.read_version('published')->>'runId')::uuid, $1::text[], 'published', $2) AS result`, [ids, protocolSHA256]);
+  return validateDisplayAssets(result, ids);
 }
