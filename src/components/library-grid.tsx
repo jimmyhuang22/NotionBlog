@@ -6,12 +6,13 @@ import type { ImageAsset, Page } from "../../contracts/content.ts";
 import { imagePreviewSrc } from "../lib/content/image-preview.ts";
 import { dateParts, rangeLabel, ratingLabel } from "../lib/format.ts";
 import { runsBy } from "../lib/runs.ts";
-import { cardParts, cardTimeLabel, coverBadge, gameCaseFace, gameYearFacts, itemDate, knownStatusLabel, platformChips, workSentence, type GamePlatformIcon, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
+import { cardParts, cardTimeLabel, coverBadge, gameCaseFace, gamePlatformCategories, gameYearFacts, itemDate, knownStatusLabel, platformChips, workSentence, type GamePlatformIcon, type LibraryItem, type LibraryOrder } from "../lib/library.ts";
 import type { Game } from "../../contracts/content.ts";
 import { LinkPending } from "./link-pending";
 import { ListTail } from "./list-tail";
 import { GameCase } from "./game-case";
 import { GamePlatformIconMark } from "./game-tag";
+import { gamePlatformCategory, selectGameCasePlatform } from "../lib/content/game-case.ts";
 import { playWall } from "./game-wall-motion";
 import { pagingMessage, usePagedList } from "./use-paged-list";
 import { useImageFailure } from "./use-image-failure";
@@ -194,8 +195,9 @@ function GameWall({ groups, yearCounts, unit, oneFamily, arriving, run, itemClas
       </WorkLink>
     );
   };
+  // A list in one run (a wishlist, an address with one year) has no years to mark: the wall alone, full width (甲, 2026-11-25).
   return (
-    <div ref={line} className="game-line">
+    <div ref={line} className={groups.length === 1 && groups[0]!.label === null ? "game-line game-line--run-wall" : "game-line"}>
       <div className="game-line__spine" aria-hidden="true"><i /></div>
       {groups.map(group => {
         const label = group.label === null ? run.label : group.key === "unknown" ? "无日期" : group.label;
@@ -204,7 +206,7 @@ function GameWall({ groups, yearCounts, unit, oneFamily, arriving, run, itemClas
         const whole = count !== null && games.length >= count;
         const facts = whole ? gameYearFacts(games) : null;
         return (
-          <section key={`${group.key}:${group.items[0]?.id}`} className="game-year">
+          <section key={`${group.key}:${group.items[0]?.id}`} className={group.label === null ? "game-year game-year--run" : "game-year"}>
             <div className="game-year__mark">
               <h2 className={/^\d{4}$/u.test(label) ? "game-year__num" : "game-year__num game-year__num--word"}>{label}</h2>
               <p className="game-year__facts">
@@ -216,7 +218,14 @@ function GameWall({ groups, yearCounts, unit, oneFamily, arriving, run, itemClas
                 </p>
               ) : null}
             </div>
-            {whole && games.length <= 2 ? <div className="game-year__few">{group.items.map(feature)}</div> : <div className="library__wall">{group.items.map(card)}</div>}
+            {whole && games.length <= 2 ? <div className="game-year__few">{group.items.map(feature)}</div>
+              : group.key === "unknown" && !oneFamily && games.length > 12 ? <div>{undatedRows(games).map(row => (
+                <div key={row.key} className="game-year__sub">
+                  <h3 className="game-year__sub-head">{row.icon ? <GamePlatformIconMark icon={row.icon} /> : null}{row.label}<small>{row.items.length} 款</small></h3>
+                  <div className="library__wall">{row.items.map(card)}</div>
+                </div>
+              ))}</div>
+              : <div className="library__wall">{group.items.map(card)}</div>}
           </section>
         );
       })}
@@ -224,9 +233,28 @@ function GameWall({ groups, yearCounts, unit, oneFamily, arriving, run, itemClas
   );
 }
 
+/**
+ * The undated part of a long list in rows by the platform each case is printed for (甲, 2026-11-25), in the order of the
+ * platform filter above it, left to right: Switch (with Switch 2 and 3DS, as the filter counts them), PlayStation, Steam,
+ * PC, then anything else. A case that pages in later joins the end of its row.
+ */
+function undatedRows(games: Game[]): { key: string; label: string; icon: GamePlatformIcon | null; items: Game[] }[] {
+  const rows = new Map<string, Game[]>();
+  for (const game of games) {
+    const printed = selectGameCasePlatform(game);
+    const key = (printed ? gamePlatformCategory(printed) : undefined) ?? "other";
+    rows.set(key, [...rows.get(key) ?? [], game]);
+  }
+  return [...gamePlatformCategories.map(entry => entry.key), "other"].flatMap(key => {
+    const items = rows.get(key);
+    const entry = gamePlatformCategories.find(category => category.key === key);
+    return items?.length ? [{ key, label: entry?.label ?? "其他", icon: entry ? entry.key : null, items }] : [];
+  });
+}
+
 const gamePlatformName = (icon: GamePlatformIcon) => ({ switch: "Switch", playstation: "PlayStation", steam: "Steam", pc: "PC", "3ds": "3DS" })[icon];
 
-export function LibraryGrid({ kind, status, platform = null, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts, runLabel }: {
+export function LibraryGrid({ kind, status, platform = null, year = null, order = null, unit, initial, pageSize, timeZone, yearCounts, runLabel, emptyPlatform = null }: {
   kind: LibraryItem["kind"]; status: string | null;
   /** Games: one platform family ("switch", "playstation", "steam", "pc") or null for every platform. */
   platform?: string | null;
@@ -237,6 +265,8 @@ export function LibraryGrid({ kind, status, platform = null, year = null, order 
   yearCounts?: Record<string, number>;
   /** Games: the name of a list with no years to write (the status, as "想玩"). */
   runLabel?: string;
+  /** Games: the chosen platform's name and the address of every platform, for a list with nothing in it. */
+  emptyPlatform?: { label: string; allHref: string } | null;
 }) {
   const query: Record<string, string> = { limit: String(pageSize), ...(status ? { status } : {}), ...(platform ? { platform } : {}), ...(year ? { year } : {}), ...(order ? { order } : {}) };
   const { items, restarted, total, appendedFrom, paged, ...paging } = usePagedList<LibraryItem>(`/api/content/${kind}`, query, initial);
@@ -244,6 +274,18 @@ export function LibraryGrid({ kind, status, platform = null, year = null, order 
   // After a filter, the first rows come in one after another (motion.css); first visits draw at once.
   const arriving = useFilterArrival();
   const firstRows = new Map(items.slice(0, ARRIVING_ROWS).map((item, index) => [item.id, index]));
+  // Games: nothing under this status and platform is said as a part of the line, with the way back to every platform.
+  if (!items.length && kind === "game") return (
+    <div className="game-line">
+      <section className="game-year game-year--run">
+        <div className="game-year__mark"><h2 className="game-year__num game-year__num--word">{runLabel ?? "全部"}</h2><p className="game-year__facts"><b>0 {unit}</b></p></div>
+        <div className="game-empty" role="status">
+          <p>{emptyPlatform ? `${runLabel ?? ""}里还没有 ${emptyPlatform.label} 游戏。` : year ? "这一年还没有游戏。" : `${runLabel ?? ""}里还没有游戏。`}</p>
+          {emptyPlatform ? <Link href={emptyPlatform.allHref} scroll={false}>看全部平台</Link> : null}
+        </div>
+      </section>
+    </div>
+  );
   if (!items.length) return <div className="state"><p>{year === "undated" ? "这个分类下没有未记日期的内容。" : year ? "这一年在这个分类下没有内容。" : "这个分类下还没有内容。"}</p></div>;
   return (
     <>
